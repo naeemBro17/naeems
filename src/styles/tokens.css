@@ -1,0 +1,98 @@
+:root {
+  /* Brand orange — accent only (prices, active states, primary buttons) */
+  --color-primary:        #F05020;
+  --color-primary-light:  #FF7A50;
+  --color-primary-dark:   #C03C10;
+  --color-primary-bg:     #FDF0EC;
+
+  --color-bg:             #F2F2F7;   /* iOS systemGroupedBackground */
+  --color-surface:        #FFFFFF;
+  --color-border:         #E5E5EA;   /* iOS systemGray5 */
+  --color-border-strong:  #D1D1D6;   /* iOS systemGray4 */
+
+  --color-text-primary:   #1C1C1E;   /* iOS label */
+  --color-text-secondary: #6E6E73;   /* iOS secondaryLabel */
+  --color-text-muted:     #AEAEB2;   /* iOS tertiaryLabel */
+
+  --color-success:        #34C759;   /* iOS systemGreen */
+  --color-success-bg:     #E8F9EC;
+  --color-warning:        #FF9500;   /* iOS systemOrange */
+  --color-warning-bg:     #FFF4E5;
+  --color-danger:         #FF3B30;   /* iOS systemRed */
+  --color-danger-bg:      #FFEBEA;
+
+  /* Out-of-stock image dim + legible scrim behind image-overlay chips */
+  --overlay-dim:          rgba(255, 255, 255, 0.55);
+  --chip-scrim:           rgba(255, 255, 255, 0.85);
+
+  --shadow-xs:     0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:     0 4px 12px rgba(0,0,0,0.10);
+  --shadow-lg:     0 20px 60px rgba(0,0,0,0.15);
+
+  --radius-sm:     10px;
+  --radius-md:     18px;
+  --radius-lg:     24px;
+  --radius-xl:     28px;
+  --radius-pill:   999px;
+
+  --font-sans:     'Inter', system-ui, -apple-system, sans-serif;
+
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 300ms ease;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+}
+
+/* Dark tokens. Applied when the user explicitly chose dark (data-theme),
+   or when the system prefers dark and the user hasn't chosen light.
+   Keep both blocks identical. */
+:root[data-theme='dark'] {
+  --color-primary-bg:     rgba(240, 80, 32, 0.12);
+
+  --color-bg:             #000000;   /* iOS true black for OLED */
+  --color-surface:        #1C1C1E;   /* iOS secondarySystemBackground dark */
+  --color-border:         #38383A;
+  --color-border-strong:  #48484A;
+
+  --color-text-primary:   #FFFFFF;
+  --color-text-secondary: #98989D;
+  --color-text-muted:     #636366;
+
+  --color-success-bg:     rgba(52, 199, 89, 0.15);
+  --color-warning-bg:     rgba(255, 149, 0, 0.15);
+  --color-danger-bg:      rgba(255, 59, 48, 0.15);
+
+  --overlay-dim:          rgba(0, 0, 0, 0.55);
+  --chip-scrim:           rgba(28, 28, 30, 0.72);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-primary-bg:     rgba(240, 80, 32, 0.12);
+
+    --color-bg:             #000000;   /* iOS true black for OLED */
+    --color-surface:        #1C1C1E;   /* iOS secondarySystemBackground dark */
+    --color-border:         #38383A;
+    --color-border-strong:  #48484A;
+
+    --color-text-primary:   #FFFFFF;
+    --color-text-secondary: #98989D;
+    --color-text-muted:     #636366;
+
+    --color-success-bg:     rgba(52, 199, 89, 0.15);
+    --color-warning-bg:     rgba(255, 149, 0, 0.15);
+    --color-danger-bg:      rgba(255, 59, 48, 0.15);
+
+    --overlay-dim:          rgba(0, 0, 0, 0.55);
+    --chip-scrim:           rgba(28, 28, 30, 0.72);
+  }
+}

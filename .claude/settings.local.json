@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -i -pe 's/\\\\.replace\\\\\\(\\\\/\\\\[.*?\\\\]\\\\/g, .....;/.replace\\(\\\\/[\\\\\\\\u0300-\\\\\\\\u036f]\\\\/g, \"\"\\);/ if /replace/' src/lib/format.ts)",
+      "Bash(npm install *)"
+    ]
+  }
+}
