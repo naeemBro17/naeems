@@ -5,6 +5,7 @@ import { ProductList } from '../components/admin/ProductList';
 import { CategoryManager } from '../components/admin/CategoryManager';
 import { CSVImport } from '../components/admin/CSVImport';
 import { WholesalerList } from '../components/admin/WholesalerList';
+import { ReviewsTab } from '../components/admin/ReviewsTab';
 import { SettingsTab } from '../components/admin/SettingsTab';
 import type { WholesalerAccount } from '../types';
 
@@ -40,6 +41,7 @@ export function AdminPage() {
       {activeTab === 'wholesalers' && (
         <WholesalerList accounts={wholesalers} onReload={loadWholesalers} />
       )}
+      {activeTab === 'reviews' && <ReviewsTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </AdminLayout>
   );

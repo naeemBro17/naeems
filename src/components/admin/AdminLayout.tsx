@@ -7,6 +7,7 @@ export type AdminTab =
   | 'categories'
   | 'import-export'
   | 'wholesalers'
+  | 'reviews'
   | 'settings';
 
 interface AdminLayoutProps {
@@ -61,6 +62,15 @@ const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 00-3-3.87" />
         <path d="M16 3.13a4 4 0 010 7.75" />
+      </>
+    ),
+  },
+  {
+    id: 'reviews',
+    label: 'Reviews',
+    iconPath: (
+      <>
+        <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.78L12 16.77l-5.2 2.73.99-5.78-4.21-4.1 5.82-.85L12 3.5z" />
       </>
     ),
   },

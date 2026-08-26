@@ -8,13 +8,67 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { supabase, STORAGE_BUCKET } from '../../lib/supabase';
 import { clearCache } from '../../lib/cache';
+import {
+  BANNER_SLIDES_KEY,
+  CTA_ACTION_LABELS,
+  emptyBannerSlide,
+  serializeBannerSlides,
+} from '../../lib/bannerSlides';
 import { resizeImage, isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
 import { useAuth } from '../../contexts/AuthContext';
-import { useProducts } from '../../contexts/ProductContext';
+import { useProducts, type TextSettingKey } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
+import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
 
 const PASSWORD_MIN_LENGTH = 8;
 const EXPERT_PHOTO_PATH = 'settings/expert-photo.webp';
+
+/** The plain-text expert-profile keys the Settings form edits. */
+const PROFILE_FIELDS = [
+  { key: 'expert_location', label: 'Location', placeholder: 'Dhaka, Bangladesh' },
+  { key: 'expert_title', label: 'Title', placeholder: 'Skincare Expert & Consultant' },
+  {
+    key: 'expert_reply_time',
+    label: 'Reply Time',
+    placeholder: 'Typically replies within a few hours',
+  },
+  { key: 'expert_facebook_url', label: 'Facebook URL', placeholder: 'https://facebook.com/...' },
+  {
+    key: 'expert_whatsapp_url',
+    label: 'WhatsApp (link or phone number)',
+    placeholder: '8801XXXXXXXXX',
+  },
+  { key: 'expert_instagram_url', label: 'Instagram URL', placeholder: 'https://instagram.com/...' },
+  { key: 'expert_instagram_handle', label: 'Instagram Handle', placeholder: '@naeem.skin' },
+  { key: 'expert_threads_url', label: 'Threads URL', placeholder: 'https://threads.net/...' },
+  { key: 'expert_threads_handle', label: 'Threads Handle', placeholder: '@naeem.skin' },
+  { key: 'expert_youtube_url', label: 'YouTube URL', placeholder: 'https://youtube.com/@...' },
+  {
+    key: 'expert_appointment_url',
+    label: 'Appointment Booking URL',
+    placeholder: 'https://calendly.com/...',
+  },
+  { key: 'expert_stat_1_value', label: 'Stat 1 Value', placeholder: '500+' },
+  { key: 'expert_stat_1_label', label: 'Stat 1 Label', placeholder: 'Happy Clients' },
+  { key: 'expert_stat_2_value', label: 'Stat 2 Value', placeholder: '5+' },
+  { key: 'expert_stat_2_label', label: 'Stat 2 Label', placeholder: 'Rating' },
+  { key: 'expert_stat_3_value', label: 'Stat 3 Value', placeholder: '3yr' },
+  { key: 'expert_stat_3_label', label: 'Stat 3 Label', placeholder: 'Expertise' },
+] as const satisfies readonly { key: TextSettingKey; label: string; placeholder: string }[];
+
+type ProfileFieldKey = (typeof PROFILE_FIELDS)[number]['key'];
+
+function blankProfileFields(): Record<ProfileFieldKey, string> {
+  const blank = {} as Record<ProfileFieldKey, string>;
+  for (const { key } of PROFILE_FIELDS) blank[key] = '';
+  return blank;
+}
+
+function readProfileFields(settings: AppSettings): Record<ProfileFieldKey, string> {
+  const values = {} as Record<ProfileFieldKey, string>;
+  for (const { key } of PROFILE_FIELDS) values[key] = settings[key];
+  return values;
+}
 
 /** Expert contact settings — powers the /contact page and the floating button. */
 function ExpertSettingsPanel() {
@@ -25,6 +79,11 @@ function ExpertSettingsPanel() {
   const [messengerLink, setMessengerLink] = useState('');
   const [expertName, setExpertName] = useState('');
   const [expertBio, setExpertBio] = useState('');
+  // Every additional expert-profile key, kept in one record so the form and
+  // the save payload stay in step as fields are added.
+  const [profileFields, setProfileFields] = useState<Record<ProfileFieldKey, string>>(
+    () => blankProfileFields()
+  );
   const [storedPhotoUrl, setStoredPhotoUrl] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
@@ -37,6 +96,7 @@ function ExpertSettingsPanel() {
     setMessengerLink(settings.messenger_link);
     setExpertName(settings.expert_name);
     setExpertBio(settings.expert_bio);
+    setProfileFields(readProfileFields(settings));
     setStoredPhotoUrl(settings.expert_photo_url);
     setPendingFile(null);
     setPendingPreview(null);
@@ -109,29 +169,24 @@ function ExpertSettingsPanel() {
           { key: 'expert_name', value: expertName.trim() },
           { key: 'expert_bio', value: expertBio },
           { key: 'expert_photo_url', value: finalPhotoUrl },
+          ...PROFILE_FIELDS.map(({ key }) => ({
+            key,
+            value: profileFields[key].trim(),
+          })),
         ],
         { onConflict: 'key' }
       );
       if (error) throw error;
 
       await refetch();
-showToast("Contact settings saved");
-} catch (error) {
-  alert(
-    "SETTINGS SAVE ERROR:\n\n" +
-    JSON.stringify(error, null, 2)
-  );
-
-  console.error("Settings save failed:", error);
-
-  showToast(
-    "Could not save contact settings. Please try again.",
-    "error"
-  );
-} finally {
-  setIsSaving(false);
-}
-};
+      showToast('Contact settings saved');
+    } catch (error) {
+      console.error('Settings save failed:', error);
+      showToast('Could not save contact settings. Please try again.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="admin-panel">
@@ -236,10 +291,342 @@ showToast("Contact settings saved");
           )}
         </div>
 
+        {PROFILE_FIELDS.map(({ key, label, placeholder }) => (
+          <div className="form-field" key={key}>
+            <label className="form-label" htmlFor={`settings-${key}`}>
+              {label}
+            </label>
+            <input
+              id={`settings-${key}`}
+              type="text"
+              className="form-input"
+              placeholder={placeholder}
+              value={profileFields[key]}
+              onChange={(e) =>
+                setProfileFields((current) => ({ ...current, [key]: e.target.value }))
+              }
+            />
+          </div>
+        ))}
+
         <button type="submit" className="button button--primary" disabled={isSaving}>
           {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
         </button>
       </form>
+    </div>
+  );
+}
+
+/** Hero banner slides — the swipeable card at the top of the homepage. */
+function BannerSlidesPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+
+  const [slides, setSlides] = useState<BannerSlide[]>([]);
+  const [draft, setDraft] = useState<BannerSlide | null>(null);
+  /** Index the draft will be written back to, or null when adding a new slide. */
+  const [draftIndex, setDraftIndex] = useState<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setSlides(settings.banner_slides);
+    setDraft(null);
+    setDraftIndex(null);
+  }, [settings]);
+
+  const persist = async (next: BannerSlide[]) => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert(
+          [{ key: BANNER_SLIDES_KEY, value: serializeBannerSlides(next) }],
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+      setSlides(next);
+      await refetch();
+      showToast('Banner slides saved');
+      return true;
+    } catch (error) {
+      console.error('Banner slides save failed:', error);
+      showToast('Could not save banner slides. Please try again.', 'error');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleActive = (index: number) => {
+    void persist(
+      slides.map((s, i) => (i === index ? { ...s, is_active: !s.is_active } : s))
+    );
+  };
+
+  const handleDelete = (index: number) => {
+    void persist(slides.filter((_, i) => i !== index));
+  };
+
+  const handleDrop = (targetIndex: number) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+    const next = [...slides];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    setDragIndex(null);
+    void persist(next);
+  };
+
+  const handleSaveDraft = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!draft) return;
+    const next =
+      draftIndex === null
+        ? [...slides, draft]
+        : slides.map((s, i) => (i === draftIndex ? draft : s));
+    const ok = await persist(next);
+    if (ok) {
+      setDraft(null);
+      setDraftIndex(null);
+    }
+  };
+
+  const updateDraft = (patch: Partial<BannerSlide>) => {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Banner Slides</h3>
+      <p className="admin-panel__description">
+        The swipeable hero banner on the homepage. Drag the handle to reorder —
+        slides show in this order.
+      </p>
+
+      {slides.length === 0 ? (
+        <p className="banner-admin__empty">No slides yet.</p>
+      ) : (
+        <ul className="banner-admin__list">
+          {slides.map((slide, index) => (
+            <li
+              key={`${slide.title}-${index}`}
+              className={`banner-admin__row${
+                dragIndex === index ? ' banner-admin__row--dragging' : ''
+              }`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(index)}
+            >
+              <span
+                className="banner-admin__handle"
+                draggable
+                onDragStart={() => setDragIndex(index)}
+                onDragEnd={() => setDragIndex(null)}
+                aria-label={`Reorder ${slide.title || 'untitled slide'}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" />
+                </svg>
+              </span>
+
+              <span className="banner-admin__preview">
+                {slide.title || 'Untitled slide'}
+              </span>
+
+              <button
+                type="button"
+                className={`toggle toggle--small${slide.is_active ? ' toggle--on' : ''}`}
+                onClick={() => handleToggleActive(index)}
+                disabled={isSaving}
+                role="switch"
+                aria-checked={slide.is_active}
+                aria-label={`${slide.is_active ? 'Hide' : 'Show'} ${
+                  slide.title || 'untitled slide'
+                }`}
+              >
+                <span className="toggle__thumb" />
+              </button>
+
+              <button
+                type="button"
+                className="button button--secondary button--small"
+                onClick={() => {
+                  setDraft(slide);
+                  setDraftIndex(index);
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="button button--danger-outline button--small"
+                onClick={() => handleDelete(index)}
+                disabled={isSaving}
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {draft === null ? (
+        <button
+          type="button"
+          className="button button--secondary"
+          onClick={() => {
+            setDraft(emptyBannerSlide());
+            setDraftIndex(null);
+          }}
+        >
+          Add Slide
+        </button>
+      ) : (
+        <form onSubmit={handleSaveDraft} className="form banner-admin__form" noValidate>
+          <h4 className="banner-admin__form-title">
+            {draftIndex === null ? 'New Slide' : 'Edit Slide'}
+          </h4>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="banner-eyebrow">
+              Eyebrow Text
+            </label>
+            <input
+              id="banner-eyebrow"
+              type="text"
+              className="form-input"
+              placeholder="🇦🇺 Direct from Australia"
+              value={draft.eyebrow_text}
+              onChange={(e) => updateDraft({ eyebrow_text: e.target.value })}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="banner-title">
+              Headline <span className="form-required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="banner-title"
+              type="text"
+              className="form-input"
+              placeholder="Premium Skincare at Your Fingertips"
+              value={draft.title}
+              onChange={(e) => updateDraft({ title: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="banner-cta-text">
+              CTA Button Text
+            </label>
+            <input
+              id="banner-cta-text"
+              type="text"
+              className="form-input"
+              placeholder="Shop Now →"
+              value={draft.cta_button_text}
+              onChange={(e) => updateDraft({ cta_button_text: e.target.value })}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="banner-cta-action">
+              CTA Action
+            </label>
+            <select
+              id="banner-cta-action"
+              className="form-input"
+              value={draft.cta_action}
+              onChange={(e) =>
+                updateDraft({ cta_action: e.target.value as BannerCtaAction })
+              }
+            >
+              {(
+                Object.keys(CTA_ACTION_LABELS) as BannerCtaAction[]
+              ).map((action) => (
+                <option key={action} value={action}>
+                  {CTA_ACTION_LABELS[action]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {draft.cta_action === 'open_url' && (
+            <div className="form-field">
+              <label className="form-label" htmlFor="banner-cta-url">
+                CTA Link <span className="form-required" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="banner-cta-url"
+                type="url"
+                className="form-input"
+                placeholder="https://example.com"
+                value={draft.cta_url}
+                onChange={(e) => updateDraft({ cta_url: e.target.value })}
+                required
+              />
+            </div>
+          )}
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="banner-bg">
+              Background Colour
+            </label>
+            <input
+              id="banner-bg"
+              type="text"
+              className="form-input"
+              placeholder="#FFF3EE"
+              value={draft.background_color}
+              onChange={(e) => updateDraft({ background_color: e.target.value })}
+            />
+          </div>
+
+          <div className="form-field form-field--toggle">
+            <span className="toggle-label">Active</span>
+            <button
+              type="button"
+              className={`toggle${draft.is_active ? ' toggle--on' : ''}`}
+              onClick={() => updateDraft({ is_active: !draft.is_active })}
+              role="switch"
+              aria-checked={draft.is_active}
+              aria-label="Slide active"
+            >
+              <span className="toggle__thumb" />
+            </button>
+          </div>
+
+          <div className="banner-admin__form-actions">
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={isSaving || draft.title.trim() === ''}
+            >
+              {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save Slide'}
+            </button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => {
+                setDraft(null);
+                setDraftIndex(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -298,6 +685,8 @@ export function SettingsTab() {
       </header>
 
       <ExpertSettingsPanel />
+
+      <BannerSlidesPanel />
 
       <div className="admin-panel">
         <h3 className="admin-panel__title">Change Password</h3>

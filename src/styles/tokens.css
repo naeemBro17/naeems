@@ -5,10 +5,19 @@
   --color-primary-dark:   #C03C10;
   --color-primary-bg:     #FDF0EC;
 
-  --color-bg:             #F2F2F7;   /* iOS systemGroupedBackground */
+  /* Redesign accent — used by the banner, bento tiles, prices and nav. */
+  --color-accent:         #FF7A45;
+  --color-accent-soft:    #FFF3EE;
+
+  --color-bg:             #FFFFFF;
+  /* Recessed surfaces: search input, story circles, bento front faces, chips */
+  --color-bg-secondary:   #F5F5F7;
+  /* One step deeper — bento back faces, pressed states */
+  --color-bg-tertiary:    #EDEDF0;
   --color-surface:        #FFFFFF;
   --color-border:         #E5E5EA;   /* iOS systemGray5 */
   --color-border-strong:  #D1D1D6;   /* iOS systemGray4 */
+  --color-border-warm:    #FFD4BC;
 
   --color-text-primary:   #1C1C1E;   /* iOS label */
   --color-text-secondary: #6E6E73;   /* iOS secondaryLabel */
@@ -21,14 +30,41 @@
   --color-danger:         #FF3B30;   /* iOS systemRed */
   --color-danger-bg:      #FFEBEA;
 
+  /* Card stock dots — flat hues, identical in both themes. */
+  --color-stock-in:       #22C55E;
+  --color-stock-out:      #EF4444;
+
   /* Out-of-stock image dim + legible scrim behind image-overlay chips */
   --overlay-dim:          rgba(255, 255, 255, 0.55);
   --chip-scrim:           rgba(255, 255, 255, 0.85);
+
+  /* Product card overlays */
+  --card-dim:             rgba(255, 255, 255, 0.5);
+  --card-badge-scrim:     rgba(255, 255, 255, 0.88);
+  --card-dots-scrim:      rgba(0, 0, 0, 0.18);
+  --card-dots-fg:         #FFFFFF;
+
+  /* Offer "Save X%" pill on cards */
+  --save-pill-bg:         #FFF0EA;
+  --save-pill-border:     #FFD4BC;
+
+  /* Hero banner + expert bento tile warm grounds */
+  --banner-bg:            #FFF3EE;
+  --expert-tile-bg:       #FFF3EE;
+
+  /* Filter button — inverted against the page in both themes */
+  --filter-btn-bg:        #1C1C1E;
+  --filter-btn-fg:        #FFFFFF;
+
+  /* Frosted bottom navigation */
+  --nav-glass:            rgba(255, 255, 255, 0.75);
+  --nav-border:           rgba(128, 128, 128, 0.1);
 
   --shadow-xs:     0 1px 2px rgba(0,0,0,0.05);
   --shadow-sm:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md:     0 4px 12px rgba(0,0,0,0.10);
   --shadow-lg:     0 20px 60px rgba(0,0,0,0.15);
+  --shadow-circle: 0 2px 8px rgba(0,0,0,0.06);
 
   --radius-sm:     10px;
   --radius-md:     18px;
@@ -36,7 +72,9 @@
   --radius-xl:     28px;
   --radius-pill:   999px;
 
-  --font-sans:     'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans:     'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  /* Renders the Bengali taka sign (৳) correctly — used on every price. */
+  --font-price:    'Hind Siliguri', 'Plus Jakarta Sans', system-ui, sans-serif;
 
   --transition-fast: 100ms ease;
   --transition-base: 150ms ease;
@@ -50,6 +88,9 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+
+  /* Height of the fixed bottom nav, so pages can pad clear of it. */
+  --bottom-nav-height: calc(58px + max(18px, env(safe-area-inset-bottom)));
 }
 
 /* Dark tokens. Applied when the user explicitly chose dark (data-theme),
@@ -57,11 +98,15 @@
    Keep both blocks identical. */
 :root[data-theme='dark'] {
   --color-primary-bg:     rgba(240, 80, 32, 0.12);
+  --color-accent-soft:    #1C1410;
 
   --color-bg:             #000000;   /* iOS true black for OLED */
+  --color-bg-secondary:   #161616;
+  --color-bg-tertiary:    #1F1F1F;
   --color-surface:        #1C1C1E;   /* iOS secondarySystemBackground dark */
   --color-border:         #38383A;
   --color-border-strong:  #48484A;
+  --color-border-warm:    #5A2A10;
 
   --color-text-primary:   #FFFFFF;
   --color-text-secondary: #98989D;
@@ -73,16 +118,39 @@
 
   --overlay-dim:          rgba(0, 0, 0, 0.55);
   --chip-scrim:           rgba(28, 28, 30, 0.72);
+
+  --card-dim:             rgba(0, 0, 0, 0.5);
+  --card-badge-scrim:     rgba(22, 22, 22, 0.88);
+  --card-dots-scrim:      rgba(255, 255, 255, 0.12);
+  --card-dots-fg:         #FFFFFF;
+
+  --save-pill-bg:         #2A1A10;
+  --save-pill-border:     #5A2A10;
+
+  --banner-bg:            #1C1410;
+  --expert-tile-bg:       #1A1210;
+
+  --filter-btn-bg:        #EFEFEF;
+  --filter-btn-fg:        #1C1C1E;
+
+  --nav-glass:            rgba(12, 12, 12, 0.75);
+  --nav-border:           rgba(128, 128, 128, 0.1);
+
+  --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --color-primary-bg:     rgba(240, 80, 32, 0.12);
+    --color-accent-soft:    #1C1410;
 
     --color-bg:             #000000;   /* iOS true black for OLED */
+    --color-bg-secondary:   #161616;
+    --color-bg-tertiary:    #1F1F1F;
     --color-surface:        #1C1C1E;   /* iOS secondarySystemBackground dark */
     --color-border:         #38383A;
     --color-border-strong:  #48484A;
+    --color-border-warm:    #5A2A10;
 
     --color-text-primary:   #FFFFFF;
     --color-text-secondary: #98989D;
@@ -94,5 +162,24 @@
 
     --overlay-dim:          rgba(0, 0, 0, 0.55);
     --chip-scrim:           rgba(28, 28, 30, 0.72);
+
+    --card-dim:             rgba(0, 0, 0, 0.5);
+    --card-badge-scrim:     rgba(22, 22, 22, 0.88);
+    --card-dots-scrim:      rgba(255, 255, 255, 0.12);
+    --card-dots-fg:         #FFFFFF;
+
+    --save-pill-bg:         #2A1A10;
+    --save-pill-border:     #5A2A10;
+
+    --banner-bg:            #1C1410;
+    --expert-tile-bg:       #1A1210;
+
+    --filter-btn-bg:        #EFEFEF;
+    --filter-btn-fg:        #1C1C1E;
+
+    --nav-glass:            rgba(12, 12, 12, 0.75);
+    --nav-border:           rgba(128, 128, 128, 0.1);
+
+    --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
   }
 }

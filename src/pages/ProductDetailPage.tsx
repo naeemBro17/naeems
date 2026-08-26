@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../contexts/ProductContext';
-import { productImages } from '../lib/productImages';
+import { coverImage, productImages } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
@@ -16,6 +16,20 @@ import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import type { Product } from '../types';
 
 const COPIED_RESET_MS = 2000;
+
+/** App-wide og: values from index.html, restored when the detail page unmounts. */
+const DEFAULT_OG = {
+  title: "Naeem's Price Hub",
+  description: 'Premium Australian skincare — check prices instantly',
+  image: '/og-image.png',
+  url: window.location.origin + '/',
+};
+
+function setOgTag(property: string, content: string): void {
+  document
+    .querySelector(`meta[property="og:${property}"]`)
+    ?.setAttribute('content', content);
+}
 
 const STOCK_CONFIG: Record<
   Product['stock_status'],
@@ -249,6 +263,24 @@ export function ProductDetailPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [sku]);
+
+  // Keep the og: tags in step with the product so a shared link previews it.
+  useEffect(() => {
+    if (!product) return;
+    const price = formatTaka(getDisplayPrice(product).mainPrice);
+    const note = product.note ?? '';
+    setOgTag('title', product.name);
+    setOgTag('description', note === '' ? price : `${price} — ${note}`);
+    setOgTag('image', coverImage(product) ?? DEFAULT_OG.image);
+    setOgTag('url', window.location.href);
+
+    return () => {
+      setOgTag('title', DEFAULT_OG.title);
+      setOgTag('description', DEFAULT_OG.description);
+      setOgTag('image', DEFAULT_OG.image);
+      setOgTag('url', DEFAULT_OG.url);
+    };
+  }, [product]);
 
   const showLoading = !product && (isLoading || isFetching);
 

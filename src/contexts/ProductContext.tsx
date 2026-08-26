@@ -10,6 +10,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { saveCache, loadCache } from '../lib/cache';
 import { useAuth } from './AuthContext';
+import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
 import type { Product, Category, AppSettings } from '../types';
 
 interface ProductContextValue {
@@ -46,17 +47,70 @@ export const DEFAULT_SETTINGS: AppSettings = {
   expert_name: 'Naeem',
   expert_bio: '',
   expert_photo_url: '',
+  banner_slides: [],
+
+  expert_location: '',
+  expert_title: '',
+  expert_reply_time: '',
+  expert_whatsapp_url: '',
+  expert_instagram_url: '',
+  expert_instagram_handle: '',
+  expert_facebook_url: '',
+  expert_threads_url: '',
+  expert_threads_handle: '',
+  expert_youtube_url: '',
+  expert_appointment_url: '',
+  expert_stat_1_value: '',
+  expert_stat_1_label: '',
+  expert_stat_2_value: '',
+  expert_stat_2_label: '',
+  expert_stat_3_value: '',
+  expert_stat_3_label: '',
 };
+
+/**
+ * Every plain-text setting key. Each falls back to its DEFAULT_SETTINGS value
+ * when the row is absent, so a project that hasn't run the seed migration yet
+ * still renders.
+ */
+const TEXT_SETTING_KEYS = [
+  'messenger_link',
+  'expert_name',
+  'expert_bio',
+  'expert_photo_url',
+  'expert_location',
+  'expert_title',
+  'expert_reply_time',
+  'expert_whatsapp_url',
+  'expert_instagram_url',
+  'expert_instagram_handle',
+  'expert_facebook_url',
+  'expert_threads_url',
+  'expert_threads_handle',
+  'expert_youtube_url',
+  'expert_appointment_url',
+  'expert_stat_1_value',
+  'expert_stat_1_label',
+  'expert_stat_2_value',
+  'expert_stat_2_label',
+  'expert_stat_3_value',
+  'expert_stat_3_label',
+] as const satisfies readonly (keyof AppSettings)[];
+
+export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];
 
 /** Fold app_settings key/value rows into a typed AppSettings object. */
 function rowsToSettings(rows: { key: string; value: string | null }[]): AppSettings {
   const map = new Map(rows.map((r) => [r.key, r.value ?? '']));
-  return {
-    messenger_link: map.get('messenger_link') ?? DEFAULT_SETTINGS.messenger_link,
-    expert_name: map.get('expert_name') ?? DEFAULT_SETTINGS.expert_name,
-    expert_bio: map.get('expert_bio') ?? DEFAULT_SETTINGS.expert_bio,
-    expert_photo_url: map.get('expert_photo_url') ?? DEFAULT_SETTINGS.expert_photo_url,
+  const settings: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    banner_slides: parseBannerSlides(map.get(BANNER_SLIDES_KEY) ?? ''),
   };
+  for (const key of TEXT_SETTING_KEYS) {
+    const value = map.get(key);
+    if (value !== undefined) settings[key] = value;
+  }
+  return settings;
 }
 
 /**
@@ -135,7 +189,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       if (cached) {
         setProducts(cached.products);
         setCategories(cached.categories);
-        setSettings(cached.settings ?? DEFAULT_SETTINGS);
+        setSettings({ ...DEFAULT_SETTINGS, ...(cached.settings ?? {}) });
         setIsOffline(true);
       } else {
         setLoadFailed(true);

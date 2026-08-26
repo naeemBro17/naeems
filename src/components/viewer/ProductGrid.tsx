@@ -1,11 +1,9 @@
-import { useMemo } from 'react';
-import type { Product, Category } from '../../types';
+import type { Product } from '../../types';
 import { ProductCard } from './ProductCard';
 import { SkeletonCard } from '../shared/SkeletonCard';
 
 interface ProductGridProps {
   products: Product[];
-  categories: Category[];
   isLoading: boolean;
   searchQuery: string;
   selectedCategoryId: string | null;
@@ -47,19 +45,11 @@ function EmptyState({
 
 export function ProductGrid({
   products,
-  categories,
   isLoading,
   searchQuery,
   selectedCategoryId,
   onClearSearch,
 }: ProductGridProps) {
-  // Category id → index in the sorted category list, for deterministic badge colors.
-  const categoryIndexById = useMemo(() => {
-    const map = new Map<string, number>();
-    categories.forEach((c, i) => map.set(c.id, i));
-    return map;
-  }, [categories]);
-
   if (isLoading) {
     return (
       <div className="product-grid" aria-label="Loading products">
@@ -88,15 +78,7 @@ export function ProductGrid({
   return (
     <div className="product-grid">
       {products.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-          categoryIndex={
-            product.category_id !== null
-              ? categoryIndexById.get(product.category_id) ?? 0
-              : 0
-          }
-        />
+        <ProductCard key={product.id} product={product} />
       ))}
     </div>
   );

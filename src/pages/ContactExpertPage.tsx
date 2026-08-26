@@ -1,89 +1,310 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { useProducts } from '../contexts/ProductContext';
-import { ThemeToggle } from '../components/shared/ThemeToggle';
-import { BackButton } from '../components/shared/BackButton';
+import { useToast } from '../hooks/useToast';
+import { averageRating, REVIEW_SELECT } from '../lib/reviews';
+import { openExternal, whatsAppUrl } from '../lib/expertLinks';
+import { CollapsingHeader } from '../components/expert/CollapsingHeader';
+import { StatsRow } from '../components/expert/StatsRow';
+import { SocialLinks } from '../components/expert/SocialLinks';
+import { ReviewCard } from '../components/expert/ReviewCard';
+import { ReviewSubmitSheet } from '../components/expert/ReviewSubmitSheet';
+import { StarRating } from '../components/expert/StarRating';
+import type { Review } from '../types';
 
-/** Neutral placeholder avatar shown when no expert photo is set. */
-function AvatarPlaceholder() {
+/** Initials shown when no expert photo is set. */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return parts
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
+function MapPinIcon() {
   return (
     <svg
+      className="exp-pill__icon"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1" />
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+function PersonPlusIcon() {
+  return (
+    <svg
+      className="exp-pill__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+      <circle cx="8.5" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
     </svg>
   );
 }
 
 export function ContactExpertPage() {
   const { settings } = useProducts();
-  const { messenger_link, expert_name, expert_bio, expert_photo_url } = settings;
+  const { showToast } = useToast();
 
-  const canMessage = messenger_link.trim() !== '';
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
 
-  const handleMessage = () => {
-    if (!canMessage) return;
-    window.open(messenger_link, '_blank');
-  };
+  // Approved, visible reviews in the order the admin arranged them.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select(REVIEW_SELECT)
+        .eq('is_approved', true)
+        .eq('is_visible', true)
+        .order('sort_order', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error('Review load failed:', error);
+        return;
+      }
+      setReviews((data ?? []) as Review[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const {
+    expert_name,
+    expert_photo_url,
+    expert_bio,
+    expert_location,
+    expert_title,
+    expert_reply_time,
+    expert_facebook_url,
+    expert_appointment_url,
+    expert_whatsapp_url,
+  } = settings;
+
+  // A newly saved photo gets a fresh chance to load.
+  useEffect(() => {
+    setHeroImageFailed(false);
+  }, [expert_photo_url]);
+
+  const stats = useMemo(
+    () => [
+      { value: settings.expert_stat_1_value, label: settings.expert_stat_1_label },
+      { value: settings.expert_stat_2_value, label: settings.expert_stat_2_label },
+      { value: settings.expert_stat_3_value, label: settings.expert_stat_3_label },
+    ],
+    [settings]
+  );
+
+  const average = averageRating(reviews);
+  const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 1);
+  const whatsapp = whatsAppUrl(expert_whatsapp_url);
+
+  const handleFollow = useCallback(() => {
+    const url = expert_facebook_url.trim();
+    if (url === '') {
+      showToast('Coming Soon');
+      return;
+    }
+    openExternal(url);
+  }, [expert_facebook_url, showToast]);
+
+  const handleBook = useCallback(() => {
+    const url = expert_appointment_url.trim();
+    if (url === '') {
+      showToast('Coming Soon');
+      return;
+    }
+    openExternal(url);
+  }, [expert_appointment_url, showToast]);
 
   return (
-    <div className="viewer-shell detail-shell">
-      <header className="detail-header">
-        <BackButton />
-        <div className="detail-header__actions">
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="expert-page">
+      <CollapsingHeader expertName={expert_name} expertPhotoUrl={expert_photo_url} />
 
-      <main className="contact-main">
-        <div className="contact-card">
-          <div className="contact-photo">
-            {expert_photo_url ? (
-              <img
-                src={expert_photo_url}
-                alt={expert_name}
-                className="contact-photo__img"
-              />
-            ) : (
-              <div className="contact-photo__placeholder">
-                <AvatarPlaceholder />
-              </div>
-            )}
+      <div className="exp-hero">
+        {expert_photo_url !== '' && !heroImageFailed ? (
+          <img
+            className="exp-hero__photo"
+            src={expert_photo_url}
+            alt={expert_name}
+            onError={() => setHeroImageFailed(true)}
+          />
+        ) : (
+          <div className="exp-hero__fallback" aria-hidden="true">
+            <span className="exp-hero__initials">{initialsOf(expert_name)}</span>
           </div>
+        )}
 
-          <h1 className="contact-headline">Wanna talk with an expert?</h1>
+        <div className="exp-hero__scrim" aria-hidden="true" />
 
-          {expert_name.trim() !== '' && (
-            <p className="contact-byline">— {expert_name}</p>
+        {expert_location.trim() !== '' && (
+          <span className="exp-pill exp-pill--location">
+            <MapPinIcon />
+            {expert_location}
+          </span>
+        )}
+
+        <button type="button" className="exp-pill exp-pill--follow" onClick={handleFollow}>
+          <PersonPlusIcon />
+          Follow
+        </button>
+
+        <div className="exp-hero__name-block">
+          <h1 className="exp-hero__name">{expert_name}</h1>
+          {expert_title.trim() !== '' && (
+            <p className="exp-hero__subtitle">{expert_title}</p>
           )}
+        </div>
+      </div>
 
-          {expert_bio.trim() !== '' && (
-            <p className="contact-bio">{expert_bio}</p>
-          )}
+      {expert_reply_time.trim() !== '' && (
+        <div className="exp-reply">
+          <span className="exp-reply__dot" aria-hidden="true" />
+          <span className="exp-reply__text">{expert_reply_time}</span>
+        </div>
+      )}
 
+      <StatsRow stats={stats} />
+
+      {expert_bio.trim() !== '' && (
+        <section className="exp-section">
+          <h2 className="exp-label">About</h2>
+          <p className="exp-bio">{expert_bio}</p>
+        </section>
+      )}
+
+      <SocialLinks settings={settings} />
+
+      <section className="exp-section exp-actions">
+        <button type="button" className="exp-book" onClick={handleBook}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M3 11h18" />
+          </svg>
+          Book Appointment
+        </button>
+
+        {whatsapp !== null && (
           <button
             type="button"
-            className="button button--primary button--full contact-cta"
-            onClick={handleMessage}
-            disabled={!canMessage}
+            className="exp-message"
+            onClick={() => openExternal(whatsapp)}
           >
             <svg
-              className="contact-cta__icon"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M12 2C6.48 2 2 6.13 2 11.25c0 2.92 1.46 5.52 3.75 7.22V22l3.42-1.88c.91.25 1.87.38 2.83.38 5.52 0 10-4.13 10-9.25S17.52 2 12 2zm1.01 12.44l-2.55-2.72-4.98 2.72 5.48-5.82 2.61 2.72 4.92-2.72-5.48 5.82z" />
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
             </svg>
-            Message on Messenger
+            Message on WhatsApp
           </button>
+        )}
+      </section>
+
+      <section className="exp-section">
+        <div className="exp-reviews__header">
+          <h2 className="exp-reviews__title">Client Reviews</h2>
+          {average !== null && (
+            <span className="exp-reviews__rating">
+              <span className="exp-reviews__average">{average.toFixed(1)}</span>
+              <StarRating rating={average} />
+            </span>
+          )}
         </div>
-      </main>
+
+        {reviews.length === 0 ? (
+          <p className="exp-reviews__empty">No reviews yet — be the first to share one.</p>
+        ) : (
+          <div className="exp-reviews__list">
+            {visibleReviews.map((review) => (
+              <ReviewCard key={review.id} review={review} />
+            ))}
+          </div>
+        )}
+
+        {!showAllReviews && reviews.length > 1 && (
+          <button
+            type="button"
+            className="exp-reviews__expand"
+            onClick={() => setShowAllReviews(true)}
+          >
+            See all {reviews.length} reviews
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="exp-share-experience"
+          onClick={() => setSubmitOpen(true)}
+        >
+          <span className="exp-share-experience__icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </span>
+          <span className="exp-share-experience__text">
+            <span className="exp-share-experience__title">Share your experience</span>
+            <span className="exp-share-experience__sub">
+              Help others find the right products
+            </span>
+          </span>
+          <svg
+            className="exp-share-experience__arrow"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </button>
+      </section>
+
+      <ReviewSubmitSheet isOpen={submitOpen} onClose={() => setSubmitOpen(false)} />
     </div>
   );
 }
