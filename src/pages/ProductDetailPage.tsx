@@ -139,6 +139,10 @@ function DetailContent({ product }: { product: Product }) {
         </div>
       )}
 
+      {product.brand?.trim() && (
+        <p className="product-detail__brand">{product.brand.trim()}</p>
+      )}
+
       <h1 className="product-detail__name">{product.name}</h1>
 
       {product.description && (

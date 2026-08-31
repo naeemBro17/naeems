@@ -37,6 +37,7 @@ function emptyForm(): ProductFormData {
   return {
     sku: '',
     name: '',
+    brand: '',
     description: '',
     category_id: '',
     retail_price: '',
@@ -65,6 +66,7 @@ function formFromProduct(product: Product): ProductFormData {
   return {
     sku: product.sku,
     name: product.name,
+    brand: product.brand ?? '',
     description: product.description ?? '',
     category_id: product.category_id ?? '',
     retail_price: String(product.retail_price),
@@ -293,6 +295,7 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
     const payload = {
       sku: finalSku,
       name: form.name.trim(),
+      brand: form.brand.trim() === '' ? null : form.brand.trim(),
       description: form.description.trim() === '' ? null : form.description.trim(),
       category_id: form.category_id === '' ? null : form.category_id,
       retail_price: Number(form.retail_price),
@@ -383,6 +386,20 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
               {fieldError('name')}
             </p>
           )}
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-brand">
+            Brand
+          </label>
+          <input
+            id="pf-brand"
+            type="text"
+            className="form-input"
+            placeholder="e.g. CeraVe — shown above the product name"
+            value={form.brand}
+            onChange={(e) => setField('brand', e.target.value)}
+          />
         </div>
 
         <div className="form-field">

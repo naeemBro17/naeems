@@ -683,6 +683,20 @@ textarea {
   background: var(--color-primary);
 }
 
+/* Brand eyebrow above the product name. Hidden when no brand is set. */
+.product-detail__brand {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-muted);
+  margin-top: var(--space-3);
+}
+
+.product-detail__brand + .product-detail__name {
+  margin-top: 2px;
+}
+
 .product-detail__name {
   font-size: 18px;
   font-weight: 600;

@@ -9,6 +9,11 @@ export interface Product {
   id: string;
   sku: string;
   name: string;
+  /**
+   * Manufacturer / brand name, shown above the product name. Optional, and
+   * absent (undefined) in cached data written before migration-007.
+   */
+  brand: string | null;
   /** Longer free-text shown only on the detail page, under the name. */
   description: string | null;
   category_id: string | null;
@@ -43,6 +48,7 @@ export type StockStatus = Product['stock_status'];
 export interface ProductFormData {
   sku: string;
   name: string;
+  brand: string;
   description: string;
   category_id: string;
   retail_price: string;

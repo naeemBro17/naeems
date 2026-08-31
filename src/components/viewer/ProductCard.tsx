@@ -61,6 +61,8 @@ export function ProductCard({ product }: ProductCardProps) {
   const outOfStock = isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
   const categoryName = product.category?.name ?? null;
+  // Absent until a brand is entered — the category still shows in the badge.
+  const brand = product.brand?.trim() || null;
 
   return (
     <article
@@ -107,7 +109,7 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="product-card__body">
-        {categoryName && <p className="product-card__brand">{categoryName}</p>}
+        {brand && <p className="product-card__brand">{brand}</p>}
 
         <h3 className="product-card__name">{product.name}</h3>
 
