@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
-import { useAuthModal } from '../contexts/AuthModalContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useSearch } from '../hooks/useSearch';
 import { SearchBar } from '../components/viewer/SearchBar';
+import { HeroBanner } from '../components/viewer/HeroBanner';
+import { BrowseCircles } from '../components/viewer/BrowseCircles';
+import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
 import { ProductGrid } from '../components/viewer/ProductGrid';
-import { ContactButton } from '../components/viewer/ContactButton';
-import { ThemeToggle } from '../components/shared/ThemeToggle';
+import { BottomNav, type NavTab } from '../components/viewer/BottomNav';
+import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
+import { AccountSheet } from '../components/viewer/AccountSheet';
+import { ThemeIcon } from '../components/shared/ThemeToggle';
 
 function OfflineBanner() {
   return (
@@ -37,17 +40,38 @@ function OfflineBanner() {
 }
 
 export function ViewerPage() {
-  const { session, isAdmin } = useAuth();
-  const navigate = useNavigate();
-  const { openAuth } = useAuthModal();
-  const { products, categories, isLoading, isOffline, loadFailed, refetch } =
+  const { theme, toggleTheme } = useTheme();
+  const { products, categories, settings, isLoading, isOffline, loadFailed, refetch } =
     useProducts();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<NavTab>('home');
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const productsRef = useRef<HTMLElement>(null);
+
+  // Coming back from a product detail page: put the grid back where it was.
+  // Runs after products land so the list is tall enough to scroll into.
+  useEffect(() => {
+    const fromProduct = sessionStorage.getItem('grid_nav_from_product');
+    const savedY = sessionStorage.getItem('grid_scroll_y');
+    if (fromProduct === 'true' && savedY) {
+      sessionStorage.removeItem('grid_nav_from_product');
+      sessionStorage.removeItem('grid_scroll_y');
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          window.scrollTo({ top: parseInt(savedY, 10), behavior: 'instant' });
+        }, 80);
+      });
+    }
+  }, [products]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).
-  const activeProducts = products.filter((p) => p.is_active);
+  const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
   // Featured-first only in the default "All" view — the first impression every
   // new visitor gets. Within a specific category, keep the existing sort.
   const orderedProducts = useMemo(
@@ -57,22 +81,46 @@ export function ViewerPage() {
   );
   const filteredProducts = useSearch(orderedProducts, searchQuery, selectedCategoryId);
 
-  const handleLockTap = () => {
-    if (isAdmin) {
-      navigate('/admin');
-    } else if (session) {
-      // Logged in but not an admin (a wholesaler) — show account status/sign-out.
-      openAuth('status');
-    } else {
-      openAuth('choice');
-    }
-  };
+  const scrollToProducts = useCallback(() => {
+    productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  // The Browse circles and the chips write the same filter, so selecting in
+  // either place lights up the other.
+  const handleSelectCategory = useCallback(
+    (id: string | null) => {
+      setSelectedCategoryId(id);
+      scrollToProducts();
+    },
+    [scrollToProducts]
+  );
 
   const handleRetry = async () => {
     setIsRetrying(true);
     await refetch();
     setIsRetrying(false);
   };
+
+  const handleHomeTab = () => {
+    setActiveTab('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSearchTab = () => {
+    setActiveTab('search');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    searchInputRef.current?.focus();
+  };
+
+  const handleAccountTab = () => {
+    setActiveTab('account');
+    setAccountOpen(true);
+  };
+
+  const closeAccount = useCallback(() => {
+    setAccountOpen(false);
+    setActiveTab('home');
+  }, []);
 
   if (loadFailed) {
     return (
@@ -113,47 +161,74 @@ export function ViewerPage() {
 
   return (
     <div className="viewer-shell">
-      <header className="viewer-header">
-        <h1 className="viewer-header__title">Naeem's</h1>
-        <div className="viewer-header__actions">
-          <ThemeToggle />
-          <button
-            type="button"
-            className="icon-button icon-button--circle"
-            onClick={handleLockTap}
-            aria-label={isAdmin ? 'Open admin panel' : 'Sign in'}
+      <header className="app-header">
+        <button
+          type="button"
+          className="app-header__hamburger"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0110 0v4" />
-            </svg>
-          </button>
-        </div>
+            <path d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+        </button>
+
+        <h1 className="app-header__wordmark">Naeem&apos;s</h1>
+
+        <button
+          type="button"
+          className="app-header__theme"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <ThemeIcon theme={theme} />
+        </button>
       </header>
 
       {isOffline && <OfflineBanner />}
 
-      <div className="viewer-controls">
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
-        <CategoryChips
-          categories={categories}
-          selectedId={selectedCategoryId}
-          onSelect={setSelectedCategoryId}
+      <div className="home-search">
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          inputRef={searchInputRef}
         />
       </div>
 
-      <main className="viewer-main">
+      <HeroBanner
+        slides={settings.banner_slides}
+        onScrollToProducts={scrollToProducts}
+      />
+
+      <BrowseCircles
+        categories={categories}
+        products={activeProducts}
+        selectedId={selectedCategoryId}
+        onSelect={handleSelectCategory}
+      />
+
+      <BentoGrid products={activeProducts} settings={settings} />
+
+      <div className="home-chips">
+        <CategoryChips
+          categories={categories}
+          selectedId={selectedCategoryId}
+          onSelect={handleSelectCategory}
+        />
+      </div>
+
+      <main className="viewer-main" ref={productsRef}>
+        <h2 className="home-section-title">All Products</h2>
         <ProductGrid
           products={filteredProducts}
-          categories={categories}
           isLoading={isLoading}
           searchQuery={searchQuery}
           selectedCategoryId={selectedCategoryId}
@@ -161,7 +236,15 @@ export function ViewerPage() {
         />
       </main>
 
-      <ContactButton />
+      <BottomNav
+        activeTab={activeTab}
+        onHome={handleHomeTab}
+        onSearch={handleSearchTab}
+        onAccount={handleAccountTab}
+      />
+
+      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
+      <AccountSheet isOpen={accountOpen} onClose={closeAccount} />
     </div>
   );
 }

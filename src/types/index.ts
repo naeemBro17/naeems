@@ -9,6 +9,11 @@ export interface Product {
   id: string;
   sku: string;
   name: string;
+  /**
+   * Manufacturer / brand name, shown above the product name. Optional, and
+   * absent (undefined) in cached data written before migration-007.
+   */
+  brand: string | null;
   /** Longer free-text shown only on the detail page, under the name. */
   description: string | null;
   category_id: string | null;
@@ -43,6 +48,7 @@ export type StockStatus = Product['stock_status'];
 export interface ProductFormData {
   sku: string;
   name: string;
+  brand: string;
   description: string;
   category_id: string;
   retail_price: string;
@@ -81,12 +87,83 @@ export interface WholesalerAccount {
   approved_at: string | null;
 }
 
-/** Single-value settings from the app_settings key/value table. */
+/** What a hero banner slide's CTA button does when tapped. */
+export type BannerCtaAction = 'scroll_to_products' | 'open_contact' | 'open_url';
+
+/** One hero banner slide, stored in app_settings under the 'banner_slides' key. */
+export interface BannerSlide {
+  eyebrow_text: string;
+  /** Headline — clamped to 2 lines in the banner. */
+  title: string;
+  cta_button_text: string;
+  cta_action: BannerCtaAction;
+  /** Destination for cta_action 'open_url'; ignored otherwise. */
+  cta_url: string;
+  /** Hex background reserved for future per-slide custom grounds. */
+  background_color: string;
+  is_active: boolean;
+}
+
+/** Settings from the app_settings key/value table. */
 export interface AppSettings {
   messenger_link: string;
   expert_name: string;
   expert_bio: string;
   expert_photo_url: string;
+  /** Parsed from the JSON array stored under the 'banner_slides' key. */
+  banner_slides: BannerSlide[];
+
+  /* --- Expert profile page (/contact) --- */
+  expert_location: string;
+  expert_title: string;
+  expert_reply_time: string;
+  /** Either a full URL or a bare phone number (turned into a wa.me link). */
+  expert_whatsapp_url: string;
+  expert_instagram_url: string;
+  /** @handle shown as the Instagram button's sub-text. */
+  expert_instagram_handle: string;
+  expert_facebook_url: string;
+  expert_threads_url: string;
+  /** @handle shown as the Threads button's sub-text. */
+  expert_threads_handle: string;
+  expert_youtube_url: string;
+  expert_appointment_url: string;
+  expert_stat_1_value: string;
+  expert_stat_1_label: string;
+  expert_stat_2_value: string;
+  expert_stat_2_label: string;
+  expert_stat_3_value: string;
+  expert_stat_3_label: string;
+}
+
+/** One client review shown on the expert profile page. */
+export interface Review {
+  id: string;
+  name: string;
+  country: string | null;
+  /** ISO 3166-1 alpha-2, lowercase — drives the flag-icons class. */
+  country_code: string | null;
+  star_rating: number | null;
+  quote: string;
+  photo_url: string | null;
+  sort_order: number;
+  /** Public submissions land as false and need an admin to approve them. */
+  is_approved: boolean;
+  is_visible: boolean;
+  submitted_by: string | null;
+  created_at: string;
+}
+
+/** The review fields an admin edits (everything except id/created_at). */
+export interface ReviewFormData {
+  name: string;
+  country: string;
+  country_code: string;
+  star_rating: number;
+  quote: string;
+  sort_order: string;
+  is_approved: boolean;
+  is_visible: boolean;
 }
 
 /** One image slot in the product form: an already-uploaded URL or a pending file. */

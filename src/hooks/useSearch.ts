@@ -7,7 +7,7 @@ const SEARCH_DEBOUNCE_MS = 150;
 
 /**
  * Client-side product search — zero database calls per keystroke.
- * Matches against name, SKU, category name, and note,
+ * Matches against name, SKU, brand, category name, and note,
  * case-insensitive and accent-insensitive. Also filters by category.
  */
 export function useSearch(
@@ -27,7 +27,13 @@ export function useSearch(
     const q = normalizeText(debouncedQuery.trim());
     if (q) {
       result = result.filter((p) => {
-        const haystack = [p.name, p.sku, p.category?.name ?? '', p.note ?? '']
+        const haystack = [
+          p.name,
+          p.sku,
+          p.brand ?? '',
+          p.category?.name ?? '',
+          p.note ?? '',
+        ]
           .map(normalizeText)
           .join(' ');
         return haystack.includes(q);

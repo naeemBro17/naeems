@@ -137,30 +137,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ): Promise<AuthResult> => {
       const { data, error } = await supabase.auth.signUp({ email, password });
 
-if (error) {
-  alert(
-    "SIGNUP ERROR:\n\n" +
-    JSON.stringify(error, null, 2)
-  );
+      if (error) {
+        console.error('Signup failed:', error);
+        const message = /already|exist/i.test(error.message)
+          ? 'An account with this email already exists. Try signing in instead.'
+          : 'Could not create the account. Please try again.';
+        return { error: message, profile: null };
+      }
 
-  console.error("Signup failed:", error);
-
-  const message = /already|exist/i.test(error.message)
-    ? "An account with this email already exists. Try signing in instead."
-    : "Could not create the account. Please try again.";
-
-  return {
-    error: message,
-    profile: null,
-  };
-}
-
-if (!data.user) {
-  return {
-    error: "Could not create the account. Please try again.",
-    profile: null,
-  };
-}
+      if (!data.user) {
+        return {
+          error: 'Could not create the account. Please try again.',
+          profile: null,
+        };
+      }
 
       // With email confirmation off, signUp returns an active session, so this
       // INSERT runs as the authenticated new user and satisfies profiles_self_insert.
@@ -172,18 +162,12 @@ if (!data.user) {
         phone,
       });
       if (profileError) {
-  alert(
-    "PROFILE INSERT ERROR:\n\n" +
-    JSON.stringify(profileError, null, 2)
-  );
-
-  console.error("Profile insert failed:", profileError);
-
-  return {
-    error: "Account created, but saving your details failed. Please contact us.",
-    profile: null,
-  };
-}
+        console.error('Profile insert failed:', profileError);
+        return {
+          error: 'Account created, but saving your details failed. Please contact us.',
+          profile: null,
+        };
+      }
 
       const p = await fetchProfile(data.user.id);
       setProfile(p);
