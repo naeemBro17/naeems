@@ -451,6 +451,17 @@ textarea {
   padding-left: var(--space-8);
 }
 
+/* Non-editable value shown in place of an input (e.g. a generated SKU). */
+.form-readonly {
+  font-family: var(--font-price);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
 .form-helper {
   font-size: 12px;
   color: var(--color-text-muted);
@@ -616,28 +627,29 @@ textarea {
   }
 }
 
-/* ---------- Product detail (modal) ---------- */
+/* ---------- Product detail ---------- */
 
 .product-detail {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
-.product-detail__carousel-wrap {
+/* The gallery sits inside a rounded card with breathing room on both sides
+   rather than running edge to edge. */
+.product-detail__gallery {
   position: relative;
-  width: 100%;
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius-md);
+  margin: var(--space-4) var(--space-4) 0;
+  border-radius: 20px;
   overflow: hidden;
   background: #fff;
 }
 
-/* No-image fallback reuses the card placeholder inside the carousel frame */
-.product-detail__carousel-wrap.product-card__placeholder {
+/* No-image fallback reuses the card placeholder inside the gallery frame */
+.product-detail__gallery.product-card__placeholder {
   aspect-ratio: 1 / 1;
   height: auto;
-  background: var(--color-bg);
+  background: var(--color-bg-secondary);
 }
 
 .product-detail__carousel {
@@ -683,46 +695,44 @@ textarea {
   background: var(--color-primary);
 }
 
-/* Brand eyebrow above the product name. Hidden when no brand is set. */
-.product-detail__brand {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--color-text-muted);
-  margin-top: var(--space-3);
+.product-detail__info {
+  padding: var(--space-4);
 }
 
-.product-detail__brand + .product-detail__name {
-  margin-top: 2px;
+/* Brand eyebrow above the product name. Hidden when no brand is set. */
+.product-detail__brand {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
 }
 
 .product-detail__name {
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.3;
-  margin-top: var(--space-2);
-}
-
-.product-detail__sku {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-top: 3px;
 }
 
 .product-detail__price {
+  font-family: var(--font-price);
   font-size: 26px;
-  font-weight: 700;
-  color: var(--color-primary);
-  margin-top: var(--space-2);
+  font-weight: 900;
+  color: var(--color-accent);
+  letter-spacing: -0.5px;
 }
 
-.product-detail .wholesale-row {
-  margin-top: var(--space-1);
+/* Strike-through + save pill drop to their own row under the offer price. */
+.price-block__sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-basis: 100%;
 }
 
 .product-detail .stock-row {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .product-detail__note {
@@ -733,7 +743,143 @@ textarea {
 }
 
 .product-detail .copy-button {
-  margin-top: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+.product-detail .wholesale-row {
+  margin-top: var(--space-3);
+}
+
+/* ---------- Detail sections + divider ---------- */
+
+.section-divider {
+  height: 8px;
+  width: 100%;
+  background: var(--color-bg-secondary);
+}
+
+.product-detail__section {
+  padding: var(--space-4);
+}
+
+.product-detail__section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Accordion (detail page) ---------- */
+
+.accordion {
+  padding: 0 var(--space-4);
+}
+
+.accordion__item + .accordion__item {
+  border-top: 1px solid var(--color-border);
+}
+
+.accordion__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4) 0;
+  text-align: left;
+}
+
+.accordion__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.accordion__chevron {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 250ms ease;
+}
+
+.accordion__item--open .accordion__chevron {
+  transform: rotate(180deg);
+}
+
+/* max-height (not display) so both directions animate. visibility keeps the
+   collapsed content out of the tab order and the accessibility tree. */
+.accordion__body {
+  max-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: max-height 300ms ease, visibility 0s linear 300ms;
+}
+
+.accordion__item--open .accordion__body {
+  max-height: 400px;
+  visibility: visible;
+  transition: max-height 300ms ease, visibility 0s;
+}
+
+.accordion__content {
+  padding-bottom: var(--space-4);
+}
+
+.accordion__text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* ---------- Video review card ---------- */
+
+.video-review {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  text-align: left;
+}
+
+.video-review__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-accent);
+}
+
+.video-review__thumb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.video-review__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.video-review__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.video-review__sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* ---------- Skeleton loading ---------- */
@@ -1488,7 +1634,8 @@ textarea {
 }
 
 .product-detail .price-block {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
+  gap: var(--space-1) var(--space-2);
 }
 
 .price-block__strike {
@@ -1638,23 +1785,11 @@ textarea {
 }
 
 .product-detail__description {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-secondary);
-  line-height: 1.6;
+  line-height: 1.7;
   white-space: pre-wrap;
   margin-top: var(--space-2);
-}
-
-.product-detail__meta-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.product-detail__meta-row .product-detail__sku {
-  margin-top: 0;
 }
 
 /* ---------- Admin: featured quick-toggle star (Fix 4) ---------- */
@@ -1809,24 +1944,6 @@ textarea {
 .auth-status__value {
   font-size: 14px;
   font-weight: 600;
-}
-
-/* ---------- Wholesale row extra states (Part 8) ---------- */
-
-.wholesale-row--cta:active {
-  transform: scale(0.98);
-}
-
-.wholesale-row__cta {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
-.wholesale-row__muted {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-muted);
 }
 
 /* ---------- Status badges (approval states) ---------- */
@@ -2513,17 +2630,169 @@ textarea {
   grid-row: 1;
 }
 
-.bento-tile--expert {
+.bento-tile--carousel {
   grid-column: 2;
   grid-row: 2;
+  overflow: hidden;
+  /* Keeps a horizontal swipe inside the tile instead of scrolling the page. */
+  touch-action: none;
+}
+
+/* ---------- Left tile: manual vertical swipe stack ---------- */
+
+.bento-tile--stack {
+  overflow: hidden;
+  /* Keeps a vertical swipe inside the tile instead of scrolling the page. */
+  touch-action: none;
+}
+
+.bento-stack__track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bento-stack__slide {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.bento-stack__dots {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bento-stack__dot {
+  width: 3px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--color-border-strong);
+  transition: height var(--transition-base), background-color var(--transition-base);
+}
+
+.bento-stack__dot--active {
+  height: 14px;
+  background: var(--color-accent);
+}
+
+/* ---------- Right bottom tile: manual horizontal carousel ---------- */
+
+.bento-carousel__track {
+  display: flex;
+  height: 100%;
+  transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bento-carousel__slide {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+}
+
+.bento-carousel__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5px;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bento-carousel__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+  transition: width var(--transition-base), background-color var(--transition-base);
+}
+
+.bento-carousel__dot--active {
+  width: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.bento-expert {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  width: 100%;
+  height: 100%;
   padding: 10px 11px;
   border-radius: var(--radius-md);
   background: var(--expert-tile-bg);
   border: 1px solid var(--color-border-warm);
   text-align: left;
+}
+
+/* ---------- Custom link tiles ---------- */
+
+.bento-custom {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 11px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  text-align: left;
+  overflow: hidden;
+}
+
+.bento-custom--image {
+  background-size: cover;
+  background-position: center;
+  border-color: transparent;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Scrim so the title stays legible over any photo. */
+.bento-custom--image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05));
+  z-index: -1;
+}
+
+.bento-custom__title {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bento-custom__subtitle {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bento-custom--image .bento-custom__title,
+.bento-custom--image .bento-custom__subtitle {
+  color: #fff;
 }
 
 .bento-flipper {
@@ -2532,11 +2801,6 @@ textarea {
   height: 100%;
   transform-style: preserve-3d;
   animation: bentoFlip 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-/* Offsets the shared cycle so the two tiles never flip at the same moment. */
-.bento-flipper--stagger {
-  animation-delay: -4s;
 }
 
 /* Only one product available for this tile — nothing to flip to. */
@@ -2573,6 +2837,13 @@ textarea {
 
 .bento-face--front {
   background: var(--color-bg-secondary);
+}
+
+/* Inside the swipe stack the slides are flow-laid-out by the track, not
+   stacked on top of each other like the flip tile's two faces. */
+.bento-stack__slide.bento-face {
+  position: relative;
+  inset: auto;
 }
 
 .bento-face--back {
@@ -2731,7 +3002,6 @@ textarea {
 }
 
 .stock-dot--green { background: var(--color-success); }
-.stock-dot--amber { background: var(--color-warning); }
 .stock-dot--red   { background: var(--color-danger); }
 
 .stock-row__text {
@@ -2739,24 +3009,50 @@ textarea {
   color: var(--color-text-secondary);
 }
 
+/* Only ever rendered for an admin or an approved wholesaler — for everyone
+   else the value is absent from the API response, not merely hidden. */
+.wholesale-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  text-align: left;
+}
+
 .wholesale-row__label {
   font-size: 10px;
+  font-weight: 700;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
 }
 
 .wholesale-row__value {
   font-family: var(--font-price);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
   filter: blur(0);
   transition: filter 200ms ease;
 }
 
 .wholesale-row__value--blurred {
-  filter: blur(4px);
+  filter: blur(5px);
+  user-select: none;
+}
+
+.wholesale-row__lock {
+  display: flex;
+  margin-left: auto;
+  color: var(--color-text-muted);
+}
+
+.wholesale-row__lock svg {
+  width: 15px;
+  height: 15px;
 }
 
 /* ---------- Category badge (detail page + admin list) ---------- */
@@ -2965,7 +3261,7 @@ textarea {
   min-height: 46px;
   gap: var(--space-2);
   font-size: 14px;
-  border-radius: var(--radius-pill);
+  border-radius: 30px;
 }
 
 .copy-button__icon {
@@ -4152,4 +4448,209 @@ textarea {
 .review-admin__form-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+/* ============================================================
+   Session 4 Part 6 — site-wide animation polish
+   ============================================================ */
+
+/* ---------- Page transitions ---------- */
+
+.page-transition {
+  /* No fill-mode: the transform is gone once the animation ends, so fixed
+     children (bottom nav, sticky headers) position against the viewport
+     again rather than against a transformed ancestor. */
+  animation: pageSlideForward 200ms ease-out;
+}
+
+.page-transition--back {
+  animation-name: pageSlideBack;
+}
+
+@keyframes pageSlideForward {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes pageSlideBack {
+  from { transform: translateX(-8%); }
+  to   { transform: translateX(0); }
+}
+
+/* ---------- Button press ---------- */
+
+.button,
+.copy-button,
+.chip,
+.bottom-nav__tab,
+.exp-social,
+.exp-book,
+.exp-message,
+.bento-custom,
+.bento-expert,
+.icon-button,
+.filter-button,
+.share-button,
+.detail-header__back,
+.video-review,
+.wholesale-row {
+  transition: transform 120ms ease-out, background-color var(--transition-base),
+    color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.button:active:not(:disabled),
+.copy-button:active:not(:disabled),
+.chip:active,
+.bottom-nav__tab:active,
+.exp-social:active,
+.exp-book:active,
+.exp-message:active,
+.bento-custom:active,
+.bento-expert:active,
+.icon-button:active,
+.filter-button:active,
+.share-button:active,
+.detail-header__back:active,
+.video-review:active,
+.wholesale-row:active {
+  transform: scale(0.96);
+  transition-duration: 80ms;
+  transition-timing-function: ease-in;
+}
+
+/* ---------- Product card press ---------- */
+
+.product-card {
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.product-card:active {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-md);
+  transition-duration: 80ms;
+  transition-timing-function: ease-in;
+}
+
+/* The card's own controls must not scale the whole card with them. */
+.product-card .copy-button:active,
+.product-card .card-menu__trigger:active {
+  transform: scale(0.96);
+}
+
+/* ---------- Category chip tap ---------- */
+
+.chip {
+  transition: background-color 150ms ease, color 150ms ease, transform 120ms ease-out;
+}
+
+.chip:active {
+  animation: chipPulse 120ms ease-out;
+}
+
+@keyframes chipPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.05); }
+  100% { transform: scale(0.96); }
+}
+
+/* ---------- Copy Price success ---------- */
+
+.copy-button--copied {
+  animation: copyPop 200ms ease-out;
+}
+
+@keyframes copyPop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Bottom nav tab switch ---------- */
+
+.bottom-nav__icon {
+  transition: color var(--transition-base);
+}
+
+.bottom-nav__tab--active .bottom-nav__icon {
+  animation: navBounce 150ms ease-out;
+}
+
+@keyframes navBounce {
+  0%   { transform: scale(1); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Search focus ---------- */
+
+.search-bar {
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.search-bar:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.12);
+}
+
+/* ---------- Sheet close ---------- */
+
+.sheet-backdrop--closing {
+  animation: sheetFadeOut 220ms ease-in forwards;
+}
+
+.sheet-panel--closing {
+  animation: sheetSlideDown 220ms ease-in forwards;
+}
+
+@keyframes sheetFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes sheetSlideDown {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .chip:active,
+  .copy-button--copied,
+  .bottom-nav__tab--active .bottom-nav__icon,
+  .sheet-backdrop--closing,
+  .sheet-panel--closing {
+    animation: none;
+  }
+
+  .button:active:not(:disabled),
+  .copy-button:active:not(:disabled),
+  .chip:active,
+  .bottom-nav__tab:active,
+  .exp-social:active,
+  .exp-book:active,
+  .exp-message:active,
+  .bento-custom:active,
+  .bento-expert:active,
+  .icon-button:active,
+  .filter-button:active,
+  .share-button:active,
+  .detail-header__back:active,
+  .video-review:active,
+  .wholesale-row:active,
+  .product-card:active {
+    transform: none;
+  }
+
+  .bento-stack__track,
+  .bento-carousel__track {
+    transition: none;
+  }
+
+  /* The sheet still needs to disappear when its closing class is applied. */
+  .sheet-panel--closing,
+  .sheet-backdrop--closing {
+    opacity: 0;
+  }
 }

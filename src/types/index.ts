@@ -7,7 +7,13 @@ export interface Category {
 
 export interface Product {
   id: string;
+  /** Internal reference, auto-generated. Never shown in the public UI. */
   sku: string;
+  /**
+   * URL-friendly identifier for /product/:slug. Absent (undefined) on rows
+   * cached before migration-008 — fall back to sku when resolving a route.
+   */
+  slug: string | null;
   name: string;
   /**
    * Manufacturer / brand name, shown above the product name. Optional, and
@@ -26,6 +32,12 @@ export interface Product {
   stock_status: 'in_stock' | 'low_stock' | 'out_of_stock';
   stock_quantity: number | null;
   note: string | null;
+  /** Detail-page accordion: application instructions. Hidden when empty. */
+  how_to_use: string | null;
+  /** Detail-page accordion: active ingredients. Hidden when empty. */
+  key_ingredients: string | null;
+  /** Detail-page accordion: link to a review video. Hidden when empty. */
+  youtube_url: string | null;
   /** Featured products sort first in the default homepage view. */
   is_featured: boolean;
   /**
@@ -46,10 +58,14 @@ export interface Product {
 export type StockStatus = Product['stock_status'];
 
 export interface ProductFormData {
+  /** Read-only in edit mode; auto-generated on create. */
   sku: string;
   name: string;
   brand: string;
   description: string;
+  how_to_use: string;
+  key_ingredients: string;
+  youtube_url: string;
   category_id: string;
   retail_price: string;
   offer_price: string;
@@ -134,6 +150,30 @@ export interface AppSettings {
   expert_stat_2_label: string;
   expert_stat_3_value: string;
   expert_stat_3_label: string;
+}
+
+/** One admin-managed card in the homepage bento carousel. */
+export interface BentoTile {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  /** Background image for the card; a neutral ground is used when absent. */
+  image_url: string | null;
+  /** Internal route when it starts with '/', otherwise an external URL. */
+  link_url: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** The bento tile fields an admin edits. */
+export interface BentoTileFormData {
+  title: string;
+  subtitle: string;
+  image_url: string;
+  link_url: string;
+  sort_order: string;
+  is_active: boolean;
 }
 
 /** One client review shown on the expert profile page. */

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSearch } from '../hooks/useSearch';
+import { takeGridScroll } from '../lib/gridScroll';
 import { SearchBar } from '../components/viewer/SearchBar';
 import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
@@ -57,17 +58,13 @@ export function ViewerPage() {
   // Coming back from a product detail page: put the grid back where it was.
   // Runs after products land so the list is tall enough to scroll into.
   useEffect(() => {
-    const fromProduct = sessionStorage.getItem('grid_nav_from_product');
-    const savedY = sessionStorage.getItem('grid_scroll_y');
-    if (fromProduct === 'true' && savedY) {
-      sessionStorage.removeItem('grid_nav_from_product');
-      sessionStorage.removeItem('grid_scroll_y');
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          window.scrollTo({ top: parseInt(savedY, 10), behavior: 'instant' });
-        }, 80);
-      });
-    }
+    const savedY = takeGridScroll();
+    if (savedY === null) return;
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        window.scrollTo({ top: savedY, behavior: 'instant' });
+      }, 80);
+    });
   }, [products]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).

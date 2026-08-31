@@ -1,10 +1,11 @@
 import type { Product, ToastType } from '../types';
 import { getDisplayPrice } from './pricing';
 import { formatTaka } from './format';
+import { productPath } from './slugify';
 
 /** Canonical public URL for a product's detail page. */
 export function productUrl(product: Product): string {
-  return `${window.location.origin}/product/${product.sku}`;
+  return `${window.location.origin}${productPath(product)}`;
 }
 
 /**
