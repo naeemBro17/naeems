@@ -150,6 +150,16 @@ export interface AppSettings {
   expert_stat_2_label: string;
   expert_stat_3_value: string;
   expert_stat_3_label: string;
+
+  /* --- Inline admin editing (Session 5) --- */
+  /** Second line of the bento expert card ("Skincare Expert"). */
+  bento_expert_subtitle: string;
+  /** JSON array of product ids: slide order of the swipeable left tile. */
+  bento_left_order: string;
+  /** JSON array of product ids: faces of the auto-flip right-top tile. */
+  bento_right_top_order: string;
+  /** JSON array of category ids: visible Browse circles, left to right. */
+  browse_categories_order: string;
 }
 
 /** One admin-managed card in the homepage bento carousel. */

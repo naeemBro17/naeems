@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAdminEdit } from '../../contexts/AdminEditContext';
+import { EditButton } from '../admin/EditButton';
+import { BannerEditSheet } from '../admin/edit-sheets/BannerEditSheet';
 import type { BannerSlide } from '../../types';
 
 interface HeroBannerProps {
@@ -15,6 +18,8 @@ const INTERACTION_PAUSE_MS = 10000;
 
 export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
   const navigate = useNavigate();
+  const { isEditMode } = useAdminEdit();
+  const [editorOpen, setEditorOpen] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   // Mirrors activeIndex for the interval, which must not read stale state and
@@ -73,7 +78,27 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
     onScrollToProducts();
   };
 
-  if (slideCount === 0) return null;
+  const editor = (
+    <>
+      <EditButton
+        label="Edit banner slides"
+        className="edit-btn--banner"
+        onClick={() => setEditorOpen(true)}
+      />
+      <BannerEditSheet isOpen={editorOpen} onClose={() => setEditorOpen(false)} />
+    </>
+  );
+
+  if (slideCount === 0) {
+    // Nothing for customers; in Edit Mode the admin still needs a way in.
+    if (!isEditMode) return null;
+    return (
+      <section className="hero-banner hero-banner--empty" aria-label="Promotions">
+        <p className="hero-banner__empty-text">No active banner slides</p>
+        {editor}
+      </section>
+    );
+  }
 
   return (
     <section className="hero-banner" aria-label="Promotions">
@@ -132,6 +157,8 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
           ))}
         </div>
       )}
+
+      {editor}
     </section>
   );
 }

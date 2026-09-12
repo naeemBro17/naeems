@@ -10,6 +10,13 @@ import { SocialLinks } from '../components/expert/SocialLinks';
 import { ReviewCard } from '../components/expert/ReviewCard';
 import { ReviewSubmitSheet } from '../components/expert/ReviewSubmitSheet';
 import { StarRating } from '../components/expert/StarRating';
+import { useAdminEdit } from '../contexts/AdminEditContext';
+import { EditButton } from '../components/admin/EditButton';
+import { EditModeToggle } from '../components/admin/EditModeToggle';
+import {
+  ExpertEditSheet,
+  type ExpertEditSection,
+} from '../components/admin/edit-sheets/ExpertEditSheet';
 import type { Review } from '../types';
 
 /** Initials shown when no expert photo is set. */
@@ -60,7 +67,9 @@ function PersonPlusIcon() {
 export function ContactExpertPage() {
   const { settings } = useProducts();
   const { showToast } = useToast();
+  const { isEditMode } = useAdminEdit();
 
+  const [editSection, setEditSection] = useState<ExpertEditSection | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [heroImageFailed, setHeroImageFailed] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
@@ -174,6 +183,12 @@ export function ContactExpertPage() {
             <p className="exp-hero__subtitle">{expert_title}</p>
           )}
         </div>
+
+        <EditButton
+          label="Edit profile and photo"
+          className="edit-btn--hero"
+          onClick={() => setEditSection('hero')}
+        />
       </div>
 
       {expert_reply_time.trim() !== '' && (
@@ -183,18 +198,48 @@ export function ContactExpertPage() {
         </div>
       )}
 
-      <StatsRow stats={stats} />
+      <div className="exp-stats-wrap">
+        <StatsRow stats={stats} />
+        <EditButton
+          label="Edit stats"
+          className="edit-btn--stats"
+          onClick={() => setEditSection('stats')}
+        />
+      </div>
 
-      {expert_bio.trim() !== '' && (
+      {(expert_bio.trim() !== '' || isEditMode) && (
         <section className="exp-section">
-          <h2 className="exp-label">About</h2>
-          <p className="exp-bio">{expert_bio}</p>
+          <div className="exp-label-row">
+            <h2 className="exp-label">About</h2>
+            <EditButton
+              label="Edit bio"
+              className="edit-btn--inline"
+              onClick={() => setEditSection('bio')}
+            />
+          </div>
+          <p className="exp-bio">
+            {expert_bio.trim() !== '' ? expert_bio : 'No bio yet.'}
+          </p>
         </section>
       )}
 
-      <SocialLinks settings={settings} />
+      <SocialLinks
+        settings={settings}
+        editControl={
+          <EditButton
+            label="Edit social links"
+            className="edit-btn--inline"
+            onClick={() => setEditSection('socials')}
+          />
+        }
+      />
 
       <section className="exp-section exp-actions">
+        <EditButton
+          label="Edit action buttons"
+          className="edit-btn--actions"
+          onClick={() => setEditSection('actions')}
+        />
         <button type="button" className="exp-book" onClick={handleBook}>
           <svg
             viewBox="0 0 24 24"
@@ -305,6 +350,10 @@ export function ContactExpertPage() {
       </section>
 
       <ReviewSubmitSheet isOpen={submitOpen} onClose={() => setSubmitOpen(false)} />
+
+      {/* Admin-only; render nothing for everyone else. */}
+      <EditModeToggle />
+      <ExpertEditSheet section={editSection} onClose={() => setEditSection(null)} />
     </div>
   );
 }

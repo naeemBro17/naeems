@@ -4,6 +4,8 @@ import { openExternal, whatsAppUrl } from '../../lib/expertLinks';
 
 interface SocialLinksProps {
   settings: AppSettings;
+  /** Edit Mode pencil; when present the section renders even with no links. */
+  editControl?: ReactNode;
 }
 
 const ICON_PROPS = {
@@ -83,7 +85,7 @@ interface SocialEntry {
  * Two-up grid of platform links. Only platforms with a configured URL render,
  * so the grid never shows a dead button.
  */
-export function SocialLinks({ settings }: SocialLinksProps) {
+export function SocialLinks({ settings, editControl }: SocialLinksProps) {
   const handleFallback = (handle: string) =>
     handle.trim() === '' ? 'Follow us' : handle.trim();
 
@@ -146,11 +148,15 @@ export function SocialLinks({ settings }: SocialLinksProps) {
     });
   }
 
-  if (entries.length === 0) return null;
+  if (entries.length === 0 && !editControl) return null;
 
   return (
     <section className="exp-section">
-      <h2 className="exp-label">Connect</h2>
+      <div className="exp-label-row">
+        <h2 className="exp-label">Connect</h2>
+        {editControl}
+      </div>
+      {entries.length === 0 && <p className="exp-bio">No links added yet.</p>}
       <div className="exp-socials">
         {entries.map((entry) => (
           <button

@@ -124,3 +124,9 @@ END $$;
 
 -- Admins need to see inactive tiles in the management list, which the
 -- public read policy filters out; bento_tiles_admin_all covers that.
+
+-- Table privileges are granted explicitly. This project's default privileges
+-- did not carry over to the reviews table (see migration-011), so nothing here
+-- relies on them. RLS above still decides which rows each role can see.
+GRANT SELECT ON bento_tiles TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON bento_tiles TO authenticated;

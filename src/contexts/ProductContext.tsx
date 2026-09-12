@@ -66,6 +66,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   expert_stat_2_label: '',
   expert_stat_3_value: '',
   expert_stat_3_label: '',
+
+  bento_expert_subtitle: '',
+  bento_left_order: '',
+  bento_right_top_order: '',
+  browse_categories_order: '',
 };
 
 /**
@@ -95,6 +100,10 @@ const TEXT_SETTING_KEYS = [
   'expert_stat_2_label',
   'expert_stat_3_value',
   'expert_stat_3_label',
+  'bento_expert_subtitle',
+  'bento_left_order',
+  'bento_right_top_order',
+  'browse_categories_order',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];
