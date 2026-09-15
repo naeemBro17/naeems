@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AppSettings, BentoTile, Product } from '../../types';
 import { getDisplayPrice } from '../../lib/pricing';
@@ -7,9 +7,19 @@ import { isOutOfStock } from '../../lib/stockStatus';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
-import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
+import { applyIdOrder, parseIdList, saveSettings, serializeIdList } from '../../lib/settingsLists';
+import {
+  bentoPlacements,
+  DEFAULT_BENTO_ORDER,
+  readOrder,
+  type BentoTileId,
+} from '../../lib/layoutOrder';
 import { supabase } from '../../lib/supabase';
 import { useSwipe } from '../../hooks/useSwipe';
+import { useDragReorder } from '../../hooks/useDragReorder';
+import { useProducts } from '../../contexts/ProductContext';
+import { useAdminEdit } from '../../contexts/AdminEditContext';
+import { useToast } from '../../hooks/useToast';
 import { BentoCustomTile } from './BentoCustomTile';
 import { EditButton } from '../admin/EditButton';
 import { BentoEditSheet, type BentoEditTarget } from '../admin/edit-sheets/BentoEditSheet';
@@ -68,10 +78,13 @@ function SwipeStackTile({
   products,
   onOpen,
   onEdit,
+  swipeEnabled,
 }: {
   products: Product[];
   onOpen: (product: Product) => void;
   onEdit: () => void;
+  /** Off while Edit Mode is on, where a press on the tile begins a drag. */
+  swipeEnabled: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const count = products.length;
@@ -83,7 +96,7 @@ function SwipeStackTile({
 
   const swipeRef = useSwipe<HTMLDivElement>({
     axis: 'y',
-    enabled: count > 1,
+    enabled: count > 1 && swipeEnabled,
     onSwipe: (direction) =>
       setIndex((current) => Math.min(count - 1, Math.max(0, current + direction))),
   });
@@ -245,11 +258,13 @@ function CarouselTile({
   tiles,
   onOpenExpert,
   onEdit,
+  swipeEnabled,
 }: {
   settings: AppSettings;
   tiles: BentoTile[];
   onOpenExpert: () => void;
   onEdit: () => void;
+  swipeEnabled: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const count = tiles.length + 1;
@@ -260,7 +275,7 @@ function CarouselTile({
 
   const swipeRef = useSwipe<HTMLDivElement>({
     axis: 'x',
-    enabled: count > 1,
+    enabled: count > 1 && swipeEnabled,
     onSwipe: (direction) =>
       setIndex((current) => Math.min(count - 1, Math.max(0, current + direction))),
   });
@@ -309,10 +324,46 @@ function CarouselTile({
  * swiped vertically, the short tile flips on its own, and the bottom-right
  * tile is a horizontal carousel of the expert CTA plus custom link tiles.
  */
+/** Long press that turns a tile into a draggable, per Session 6 Part 1. */
+const TILE_LONG_PRESS_MS = 500;
+
 export function BentoGrid({ products, settings }: BentoGridProps) {
   const navigate = useNavigate();
+  const { refetch } = useProducts();
+  const { isEditMode } = useAdminEdit();
+  const { showToast } = useToast();
   const [tiles, setTiles] = useState<BentoTile[]>([]);
   const [editTarget, setEditTarget] = useState<BentoEditTarget | null>(null);
+
+  // Which grid position each tile occupies. Identity travels with content.
+  const tileOrder = useMemo(
+    () => readOrder<BentoTileId>(settings.bento_tile_order, DEFAULT_BENTO_ORDER),
+    [settings.bento_tile_order]
+  );
+  const placements = bentoPlacements(tileOrder);
+
+  const handleSwap = useCallback(
+    async (next: BentoTileId[]) => {
+      const error = await saveSettings({ bento_tile_order: serializeIdList(next) });
+      if (error) {
+        console.error('Bento tile order save failed:', error);
+        showToast('Could not save the tile layout', 'error');
+        throw error;
+      }
+      await refetch();
+      showToast('Saved');
+    },
+    [refetch, showToast]
+  );
+
+  const drag = useDragReorder<BentoTileId>({
+    items: tileOrder,
+    onReorder: handleSwap,
+    mode: 'swap',
+    enabled: isEditMode,
+    longPressMs: TILE_LONG_PRESS_MS,
+    ignoreSelector: '.edit-btn',
+  });
 
   // All tiles, including inactive ones (which the editor needs to list); the
   // carousel filters to active. The public read policy already hides inactive
@@ -372,19 +423,20 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
       ? applyIdOrder(featured, rightOrder, true).slice(0, FACES_PER_TILE)
       : defaultFlip;
 
-  return (
-    <section className="bento" aria-label="Featured products">
-      {stackProducts.length > 0 ? (
+  const tileContent: Record<BentoTileId, JSX.Element> = {
+    left:
+      stackProducts.length > 0 ? (
         <SwipeStackTile
           products={stackProducts}
           onOpen={openProduct}
           onEdit={() => setEditTarget('left')}
+          swipeEnabled={!isEditMode}
         />
       ) : (
         <SkeletonTile size="tall" onEdit={() => setEditTarget('left')} />
-      )}
-
-      {flipFaces.length > 0 ? (
+      ),
+    right_top:
+      flipFaces.length > 0 ? (
         <FlipTile
           faces={flipFaces}
           onOpen={openProduct}
@@ -392,14 +444,50 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
         />
       ) : (
         <SkeletonTile size="short" onEdit={() => setEditTarget('right-top')} />
-      )}
-
+      ),
+    right_bottom: (
       <CarouselTile
         settings={settings}
         tiles={activeTiles}
         onOpenExpert={() => navigate('/contact')}
         onEdit={() => setEditTarget('bottom')}
+        swipeEnabled={!isEditMode}
       />
+    ),
+  };
+
+  const isDragActive = drag.dragIndex !== null;
+
+  return (
+    <section
+      className={`bento${isEditMode ? ' bento--editing' : ''}`}
+      aria-label="Featured products"
+    >
+      {tileOrder.map((id, index) => {
+        const isDragged = drag.dragIndex === index;
+        const isHover = drag.hoverIndex === index;
+        const isTarget = isDragActive && !isDragged;
+        const style: CSSProperties = { ...placements[id] };
+        if (isDragged) {
+          style.transform = `translate(${drag.delta.x}px, ${drag.delta.y}px) scale(1.03)`;
+        }
+        return (
+          <div
+            key={id}
+            data-tile={id}
+            ref={(el) => {
+              drag.registerItem(index)(el);
+              drag.registerHandle(index)(el);
+            }}
+            className={`bento-slot${isDragged ? ' bento-slot--dragging' : ''}${
+              isDragged && drag.isDragging ? ' bento-slot--live' : ''
+            }${isTarget ? ' bento-slot--target' : ''}${isHover ? ' bento-slot--hover' : ''}`}
+            style={style}
+          >
+            {tileContent[id]}
+          </div>
+        );
+      })}
 
       <BentoEditSheet
         target={editTarget}

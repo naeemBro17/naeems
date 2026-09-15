@@ -2621,27 +2621,64 @@ textarea {
   margin: 0 var(--space-4) var(--space-5);
 }
 
+/* Grid placement lives on the slot (inline, from bentoPlacements) so tiles
+   can trade positions; the tile inside just fills its slot. */
+.bento-slot {
+  position: relative;
+  border-radius: var(--radius-md);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
 .bento-tile {
   position: relative;
+  height: 100%;
   perspective: 900px;
   border-radius: var(--radius-md);
 }
 
-.bento-tile--tall {
-  grid-row: 1 / 3;
-}
-
-.bento-tile--short {
-  grid-column: 2;
-  grid-row: 1;
-}
-
 .bento-tile--carousel {
-  grid-column: 2;
-  grid-row: 2;
   overflow: hidden;
   /* Keeps a horizontal swipe inside the tile instead of scrolling the page. */
   touch-action: none;
+}
+
+/* ---------- Edit Mode: long-press drag-swap ---------- */
+
+/* While editing, a press anywhere on a tile may become a drag, so the
+   browser must not scroll, select text or open a callout for it. */
+.bento--editing .bento-tile {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.bento-slot--dragging {
+  z-index: 20;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Following the finger: no easing between frames. */
+.bento-slot--live {
+  transition: none;
+}
+
+.bento-slot--target::after,
+.bento-slot--hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.bento-slot--target::after {
+  border: 2px dashed var(--color-accent);
+}
+
+.bento-slot--hover::after {
+  background: rgba(255, 122, 69, 0.15);
 }
 
 /* ---------- Left tile: manual vertical swipe stack ---------- */
@@ -5167,6 +5204,99 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .edit-btn,
   .edit-btn--off {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   Session 6 — homepage section reorder (admin Edit Mode only)
+   ============================================================ */
+
+.home-section {
+  position: relative;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.home-section--dragging {
+  z-index: 30;
+  box-shadow: var(--shadow-lg);
+  background: var(--color-bg);
+}
+
+.home-section--live {
+  transition: none;
+}
+
+/* While editing, section content steps right so the handle doesn't sit on
+   a title or the banner eyebrow. The bento tiles are already inset. */
+.home-section--editing .browse__head,
+.home-section--editing .home-chips {
+  padding-left: 46px;
+}
+
+.home-section--editing .hero-banner__content {
+  padding-left: 40px;
+}
+
+/* Six-dot grab handle at the top-left of a movable section. 44px target,
+   28px disc, same fade as the section pencils. */
+.section-handle {
+  position: absolute;
+  top: 4px;
+  left: 2px;
+  z-index: 6;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  opacity: 1;
+  transition: opacity 200ms ease, visibility 0s;
+}
+
+.section-handle::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--edit-btn-bg, rgba(0, 0, 0, 0.6));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.section-handle svg {
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.section-handle--off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+
+:root[data-theme='dark'] .section-handle {
+  --edit-btn-bg: rgba(255, 255, 255, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .section-handle {
+    --edit-btn-bg: rgba(255, 255, 255, 0.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-section,
+  .bento-slot,
+  .section-handle,
+  .section-handle--off {
     transition: none;
   }
 }

@@ -1,8 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useAdminEdit } from '../contexts/AdminEditContext';
 import { useSearch } from '../hooks/useSearch';
+import { useDragReorder } from '../hooks/useDragReorder';
+import { useToast } from '../hooks/useToast';
 import { takeGridScroll } from '../lib/gridScroll';
+import { saveSettings, serializeIdList } from '../lib/settingsLists';
+import {
+  DEFAULT_SECTION_ORDER,
+  readOrder,
+  REORDERABLE_SECTIONS,
+  type HomeSectionId,
+} from '../lib/layoutOrder';
 import { SearchBar } from '../components/viewer/SearchBar';
 import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
@@ -42,8 +61,26 @@ function OfflineBanner() {
   );
 }
 
+type ReorderableSection = (typeof REORDERABLE_SECTIONS)[number];
+
+function DragHandleGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.7" />
+      <circle cx="15" cy="6" r="1.7" />
+      <circle cx="9" cy="12" r="1.7" />
+      <circle cx="15" cy="12" r="1.7" />
+      <circle cx="9" cy="18" r="1.7" />
+      <circle cx="15" cy="18" r="1.7" />
+    </svg>
+  );
+}
+
 export function ViewerPage() {
   const { theme, toggleTheme } = useTheme();
+  const { isAdmin } = useAuth();
+  const { isEditMode } = useAdminEdit();
+  const { showToast } = useToast();
   const { products, categories, settings, isLoading, isOffline, loadFailed, refetch } =
     useProducts();
 
@@ -120,6 +157,40 @@ export function ViewerPage() {
     setAccountOpen(false);
     setActiveTab('home');
   }, []);
+
+  // Homepage section order. 'products' is pinned last and never dragged, so
+  // only the four movable sections take part in the drag.
+  const sectionOrder = useMemo(
+    () => readOrder<HomeSectionId>(settings.homepage_section_order, DEFAULT_SECTION_ORDER, 'products'),
+    [settings.homepage_section_order]
+  );
+  const movableSections = useMemo(
+    () => sectionOrder.filter((id): id is ReorderableSection => id !== 'products'),
+    [sectionOrder]
+  );
+
+  const handleSectionReorder = useCallback(
+    async (next: ReorderableSection[]) => {
+      const error = await saveSettings({
+        homepage_section_order: serializeIdList([...next, 'products']),
+      });
+      if (error) {
+        console.error('Section order save failed:', error);
+        showToast('Could not save the section order', 'error');
+        throw error;
+      }
+      await refetch();
+      showToast('Saved');
+    },
+    [refetch, showToast]
+  );
+
+  const sectionDrag = useDragReorder<ReorderableSection>({
+    items: movableSections,
+    onReorder: handleSectionReorder,
+    mode: 'move',
+    enabled: isEditMode,
+  });
 
   if (loadFailed) {
     return (
@@ -202,27 +273,70 @@ export function ViewerPage() {
         />
       </div>
 
-      <HeroBanner
-        slides={settings.banner_slides}
-        onScrollToProducts={scrollToProducts}
-      />
-
-      <BrowseCircles
-        categories={categories}
-        products={activeProducts}
-        selectedId={selectedCategoryId}
-        onSelect={handleSelectCategory}
-      />
-
-      <BentoGrid products={activeProducts} settings={settings} />
-
-      <div className="home-chips">
-        <CategoryChips
-          categories={categories}
-          selectedId={selectedCategoryId}
-          onSelect={handleSelectCategory}
-        />
-      </div>
+      {movableSections.map((id, index) => {
+        const content: Record<ReorderableSection, ReactNode> = {
+          hero: (
+            <HeroBanner
+              slides={settings.banner_slides}
+              onScrollToProducts={scrollToProducts}
+            />
+          ),
+          browse: (
+            <BrowseCircles
+              categories={categories}
+              products={activeProducts}
+              selectedId={selectedCategoryId}
+              onSelect={handleSelectCategory}
+            />
+          ),
+          bento: <BentoGrid products={activeProducts} settings={settings} />,
+          chips: (
+            <div className="home-chips">
+              <CategoryChips
+                categories={categories}
+                selectedId={selectedCategoryId}
+                onSelect={handleSelectCategory}
+              />
+            </div>
+          ),
+        };
+        const isDragged = sectionDrag.dragIndex === index;
+        const style: CSSProperties = {};
+        if (isDragged) {
+          style.transform = `translateY(${sectionDrag.delta.y}px) scale(1.02)`;
+        } else {
+          const shift = sectionDrag.shiftFor(index);
+          if (shift !== 0) style.transform = `translateY(${shift}px)`;
+        }
+        return (
+          <div
+            key={id}
+            data-section={id}
+            ref={sectionDrag.registerItem(index)}
+            className={`home-section${isEditMode ? ' home-section--editing' : ''}${
+              isDragged ? ' home-section--dragging' : ''
+            }${
+              isDragged && sectionDrag.isDragging ? ' home-section--live' : ''
+            }`}
+            style={style}
+          >
+            {/* Admin-only handle; faded and inert while Edit Mode is off. */}
+            {isAdmin && (
+              <button
+                type="button"
+                ref={sectionDrag.registerHandle(index)}
+                className={`section-handle${isEditMode ? '' : ' section-handle--off'}`}
+                aria-label={`Drag to reorder the ${id} section`}
+                aria-hidden={!isEditMode}
+                tabIndex={-1}
+              >
+                <DragHandleGlyph />
+              </button>
+            )}
+            {content[id]}
+          </div>
+        );
+      })}
 
       <main className="viewer-main" ref={productsRef}>
         <h2 className="home-section-title">All Products</h2>
