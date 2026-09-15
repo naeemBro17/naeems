@@ -143,3 +143,68 @@ VERIFIED (Playwright, 393x852, synthetic TouchEvents)
   release saves ["bento","hero","browse","chips","products"], toast
   "Saved". A forced 500 leaves the order unchanged with a red toast.
 - Reload: both saved orders come back from app_settings; Edit Mode is off.
+
+
+Session 7 (Search Intelligence), 2026-09-15
+============================================
+ACTION REQUIRED
+---------------
+[ ] supabase/migration-012-skin-fields.sql — run AFTER migration-008.
+    The brief named it supabase/migrations/migration-006-skin-fields.sql;
+    this project keeps migrations in supabase/ (no subfolder) and 006 was
+    already taken (reviews), so the real file is migration-012. It also
+    republishes products_view with the two new columns and re-runs the
+    per-column grant so they're readable whether or not 009 has been applied.
+    Until it runs, saving from the inline product sheet fails (the PATCH
+    includes skin_types / skin_conditions).
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. Fuse keys are exactly name / brand / category name, as specified. The old
+   search also matched SKU and the short note; those are no longer searched.
+   SKUs are hidden from customers anyway.
+
+2. A one-character query shows the full default grid, not an empty one. The
+   brief asks for the dropdown "after 1 character" but also sets Fuse's
+   minMatchCharLength to 2, so a single character can never match anything.
+   Rather than flash "no results" between the first and second keystroke,
+   sub-2-character queries behave like an empty query; the dropdown appears
+   from the second character.
+
+3. Fuse runs with ignoreLocation: true (not in the brief). Without it a match
+   has to sit near the start of the name, so "refill" would miss
+   "CeraVe Foaming Cleanser Eco-Recharge Refill 473mL".
+
+4. Tapping a recent term fills the bar, runs the search and closes the
+   keyboard (blurs the input) so the results are visible. The dropdown does
+   not re-open for that term until the user types again.
+
+5. The X clear button empties the bar; with the bar still focused and empty
+   the Recent panel then shows, per the Part 3 rules. The autocomplete
+   dropdown disappears because there is no longer a query.
+
+6. Both panels overlay the page (absolute, z-index 100). The brief only
+   required this of the autocomplete; the Recent panel does the same so the
+   hero banner never jumps when the bar gains focus.
+
+7. The skin-tag chips sit at the very bottom of the inline product sheet,
+   after Images, per "at the bottom of the product edit form". They are not
+   in Admin → Products (the full-page form) — that form leaves the columns
+   untouched on save, so nothing is lost.
+
+8. The 150ms search debounce was removed. Fuse over ~100 products is well
+   under a millisecond, and the suggestions need to feel instant.
+
+VERIFIED (Playwright, 393x852)
+------------------------------
+- "serave" → 15 CeraVe products; "avene" → Avène; "joseon" (a brand) → 4.
+- Dropdown: absolute, z-index 100, 8px radius, 48px rows, 32px thumbs, five
+  rows max, hero banner position unchanged while open (no layout shift).
+  Arrow keys highlight, Escape closes, Enter on a highlight opens the
+  product page.
+- Recent: saved on Enter and on a chosen suggestion, newest first, duplicate
+  moves to top, per-item remove, Clear all, survives a reload.
+- Category chip + search combine (13 in category → 4 matching "cream").
+- Skin tags: absent from the homepage and detail DOM; present in the admin
+  sheet as 6 + 8 pill chips (32px), orange when selected; PATCH carries
+  brand, skin_types and skin_conditions.
