@@ -1,7 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
+import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
+import { useProducts } from '../../contexts/ProductContext';
+import { useAdminEdit } from '../../contexts/AdminEditContext';
+import { EditButton } from '../admin/EditButton';
+import { BrowseEditSheet } from '../admin/edit-sheets/BrowseEditSheet';
 
 interface BrowseCirclesProps {
   categories: Category[];
@@ -228,6 +233,15 @@ export function BrowseCircles({
   onSelect,
 }: BrowseCirclesProps) {
   const navigate = useNavigate();
+  const { settings } = useProducts();
+  const { isEditMode } = useAdminEdit();
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  // Saved visibility/order from Edit Mode. Empty → the curated default.
+  const savedOrder = useMemo(
+    () => parseIdList(settings.browse_categories_order),
+    [settings.browse_categories_order]
+  );
 
   const entries = useMemo<CircleEntry[]>(() => {
     const featuredCategoryIds = new Set<string>();
@@ -258,7 +272,20 @@ export function BrowseCircles({
       });
     };
 
-    // Curated five first, in the specified order, skipping any this store
+    const iconFor = (category: Category) => {
+      const name = normalizeText(category.name).trim();
+      return CURATED.find((c) => c.aliases.includes(name))?.icon ?? GenericIcon;
+    };
+
+    if (savedOrder.length > 0) {
+      // The admin chose which circles show and in what order.
+      for (const category of applyIdOrder(categories, savedOrder, true)) {
+        push(category, iconFor(category));
+      }
+      return ordered;
+    }
+
+    // Curated first, in the specified order, skipping any this store
     // doesn't stock.
     for (const { aliases, icon } of CURATED) {
       const match = aliases.map((a) => byName.get(a)).find((c) => c !== undefined);
@@ -270,13 +297,28 @@ export function BrowseCircles({
     }
 
     return ordered;
-  }, [categories, products]);
+  }, [categories, products, savedOrder]);
 
-  if (entries.length === 0) return null;
+  const displayed = useMemo(
+    () =>
+      entries
+        .map((e) => categories.find((c) => c.id === e.categoryId))
+        .filter((c): c is Category => c !== undefined),
+    [entries, categories]
+  );
+
+  if (entries.length === 0 && !isEditMode) return null;
 
   return (
     <section className="browse" aria-label="Browse by category">
-      <h2 className="browse__title">Browse</h2>
+      <div className="browse__head">
+        <h2 className="browse__title">Browse</h2>
+        <EditButton
+          label="Edit Browse categories"
+          className="edit-btn--inline"
+          onClick={() => setEditorOpen(true)}
+        />
+      </div>
       <div className="browse__row">
         {entries.map((entry) => {
           const Icon = entry.icon;
@@ -319,6 +361,12 @@ export function BrowseCircles({
           <span className="browse-item__label">Expert</span>
         </button>
       </div>
+
+      <BrowseEditSheet
+        isOpen={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        displayed={displayed}
+      />
     </section>
   );
 }

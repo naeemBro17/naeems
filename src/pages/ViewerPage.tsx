@@ -13,6 +13,8 @@ import { BottomNav, type NavTab } from '../components/viewer/BottomNav';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { AccountSheet } from '../components/viewer/AccountSheet';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
+import { EditModeToggle } from '../components/admin/EditModeToggle';
+import { ProductEditSheet } from '../components/admin/edit-sheets/ProductEditSheet';
 
 function OfflineBanner() {
   return (
@@ -242,6 +244,10 @@ export function ViewerPage() {
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <AccountSheet isOpen={accountOpen} onClose={closeAccount} />
+
+      {/* Both render nothing for anyone who isn't an approved admin. */}
+      <EditModeToggle />
+      <ProductEditSheet />
     </div>
   );
 }

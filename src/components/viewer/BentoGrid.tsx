@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AppSettings, BentoTile, Product } from '../../types';
 import { getDisplayPrice } from '../../lib/pricing';
@@ -7,9 +7,12 @@ import { isOutOfStock } from '../../lib/stockStatus';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
+import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
 import { supabase } from '../../lib/supabase';
 import { useSwipe } from '../../hooks/useSwipe';
 import { BentoCustomTile } from './BentoCustomTile';
+import { EditButton } from '../admin/EditButton';
+import { BentoEditSheet, type BentoEditTarget } from '../admin/edit-sheets/BentoEditSheet';
 
 interface BentoGridProps {
   products: Product[];
@@ -64,9 +67,11 @@ function ProductFaceBody({ product }: { product: Product }) {
 function SwipeStackTile({
   products,
   onOpen,
+  onEdit,
 }: {
   products: Product[];
   onOpen: (product: Product) => void;
+  onEdit: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const count = products.length;
@@ -124,6 +129,8 @@ function SwipeStackTile({
           ))}
         </div>
       )}
+
+      <EditButton label="Edit left tile products" onClick={onEdit} />
     </div>
   );
 }
@@ -137,13 +144,16 @@ function SwipeStackTile({
 function FlipTile({
   faces,
   onOpen,
+  onEdit,
 }: {
   faces: Product[];
   onOpen: (product: Product) => void;
+  onEdit: () => void;
 }) {
   const [front, back] = faces;
   return (
     <div className="bento-tile bento-tile--short">
+      <EditButton label="Edit right top tile products" onClick={onEdit} />
       <div className={`bento-flipper${back ? '' : ' bento-flipper--static'}`}>
         <div
           className="bento-face bento-face--front"
@@ -168,15 +178,16 @@ function FlipTile({
   );
 }
 
-function SkeletonTile({ size }: { size: 'tall' | 'short' }) {
+function SkeletonTile({ size, onEdit }: { size: 'tall' | 'short'; onEdit: () => void }) {
   return (
-    <div className={`bento-tile bento-tile--${size}`} aria-hidden="true">
-      <div className="bento-face bento-face--front bento-face--skeleton">
+    <div className={`bento-tile bento-tile--${size}`}>
+      <div className="bento-face bento-face--front bento-face--skeleton" aria-hidden="true">
         <span className="skeleton bento-skeleton__category" />
         <span className="skeleton bento-skeleton__name" />
         <span className="skeleton bento-skeleton__name bento-skeleton__name--short" />
         <span className="skeleton bento-skeleton__price" />
       </div>
+      <EditButton label="Choose products for this tile" onClick={onEdit} />
     </div>
   );
 }
@@ -190,7 +201,8 @@ function ExpertCard({
   settings: AppSettings;
   onOpen: () => void;
 }) {
-  const { expert_name, expert_photo_url } = settings;
+  const { expert_name, expert_photo_url, bento_expert_subtitle } = settings;
+  const subtitle = bento_expert_subtitle.trim() || 'Skincare Expert';
   return (
     <button type="button" className="bento-expert" onClick={onOpen}>
       <div className="bento-expert__head">
@@ -217,7 +229,7 @@ function ExpertCard({
           <span className="bento-expert__name">{expert_name}</span>
         </span>
       </div>
-      <span className="bento-expert__cta">Skincare Expert →</span>
+      <span className="bento-expert__cta">{subtitle} →</span>
     </button>
   );
 }
@@ -232,10 +244,12 @@ function CarouselTile({
   settings,
   tiles,
   onOpenExpert,
+  onEdit,
 }: {
   settings: AppSettings;
   tiles: BentoTile[];
   onOpenExpert: () => void;
+  onEdit: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const count = tiles.length + 1;
@@ -282,6 +296,8 @@ function CarouselTile({
           ))}
         </div>
       )}
+
+      <EditButton label="Edit bottom carousel" onClick={onEdit} />
     </div>
   );
 }
@@ -296,29 +312,30 @@ function CarouselTile({
 export function BentoGrid({ products, settings }: BentoGridProps) {
   const navigate = useNavigate();
   const [tiles, setTiles] = useState<BentoTile[]>([]);
+  const [editTarget, setEditTarget] = useState<BentoEditTarget | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from('bento_tiles')
-        .select(BENTO_TILE_SELECT)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        // The table may not exist yet (migration-008 not run). The carousel
-        // still works — it just shows the expert CTA on its own.
-        console.warn('Bento tiles unavailable:', error.message);
-        return;
-      }
-      setTiles((data ?? []) as BentoTile[]);
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // All tiles, including inactive ones (which the editor needs to list); the
+  // carousel filters to active. The public read policy already hides inactive
+  // rows from non-admins, so customers only ever receive active tiles.
+  const loadTiles = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('bento_tiles')
+      .select(BENTO_TILE_SELECT)
+      .order('sort_order', { ascending: true });
+    if (error) {
+      // The table may not exist yet (migration-008 not run). The carousel
+      // still works — it just shows the expert CTA on its own.
+      console.warn('Bento tiles unavailable:', error.message);
+      return;
+    }
+    setTiles((data ?? []) as BentoTile[]);
   }, []);
 
+  useEffect(() => {
+    void loadTiles();
+  }, [loadTiles]);
+
+  const activeTiles = useMemo(() => tiles.filter((t) => t.is_active), [tiles]);
   const featured = useMemo(() => products.filter((p) => p.is_featured), [products]);
 
   const openProduct = (product: Product) => {
@@ -327,36 +344,70 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
     navigate(productPath(product));
   };
 
-  // The flip tile takes the last two featured products and the stack takes the
-  // rest, so with a normal-sized featured list no product shows up in both
-  // tiles at once. Below four featured the lists have to overlap — showing a
-  // product twice beats leaving a tile empty.
+  // Default allocation when the admin hasn't arranged the tiles: the flip
+  // tile takes the last two featured products and the stack the rest, so with
+  // a normal-sized featured list no product shows up in both tiles. Below
+  // four featured the lists overlap — a repeated product beats an empty tile.
   const canSplit = featured.length >= STACK_SIZE;
-  const flipFaces = canSplit
-    ? featured.slice(-FACES_PER_TILE)
-    : featured.slice(0, FACES_PER_TILE);
-  const stackProducts = canSplit
-    ? featured.slice(0, Math.min(STACK_SIZE, featured.length - FACES_PER_TILE))
-    : featured;
+  const defaultFlip = useMemo(
+    () => (canSplit ? featured.slice(-FACES_PER_TILE) : featured.slice(0, FACES_PER_TILE)),
+    [featured, canSplit]
+  );
+  const defaultStack = useMemo(
+    () =>
+      canSplit
+        ? featured.slice(0, Math.min(STACK_SIZE, featured.length - FACES_PER_TILE))
+        : featured,
+    [featured, canSplit]
+  );
+
+  // A saved order wins over the default, restricted to products that are
+  // still featured; a product un-featured since falls out automatically.
+  const leftOrder = parseIdList(settings.bento_left_order);
+  const rightOrder = parseIdList(settings.bento_right_top_order);
+  const stackProducts =
+    leftOrder.length > 0 ? applyIdOrder(featured, leftOrder, true) : defaultStack;
+  const flipFaces =
+    rightOrder.length > 0
+      ? applyIdOrder(featured, rightOrder, true).slice(0, FACES_PER_TILE)
+      : defaultFlip;
 
   return (
     <section className="bento" aria-label="Featured products">
       {stackProducts.length > 0 ? (
-        <SwipeStackTile products={stackProducts} onOpen={openProduct} />
+        <SwipeStackTile
+          products={stackProducts}
+          onOpen={openProduct}
+          onEdit={() => setEditTarget('left')}
+        />
       ) : (
-        <SkeletonTile size="tall" />
+        <SkeletonTile size="tall" onEdit={() => setEditTarget('left')} />
       )}
 
       {flipFaces.length > 0 ? (
-        <FlipTile faces={flipFaces} onOpen={openProduct} />
+        <FlipTile
+          faces={flipFaces}
+          onOpen={openProduct}
+          onEdit={() => setEditTarget('right-top')}
+        />
       ) : (
-        <SkeletonTile size="short" />
+        <SkeletonTile size="short" onEdit={() => setEditTarget('right-top')} />
       )}
 
       <CarouselTile
         settings={settings}
-        tiles={tiles}
+        tiles={activeTiles}
         onOpenExpert={() => navigate('/contact')}
+        onEdit={() => setEditTarget('bottom')}
+      />
+
+      <BentoEditSheet
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        tiles={tiles}
+        onTilesChanged={loadTiles}
+        defaultLeft={defaultStack}
+        defaultRightTop={defaultFlip}
       />
     </section>
   );

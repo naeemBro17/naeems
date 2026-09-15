@@ -3,6 +3,7 @@ import type { Product } from '../../types';
 import { productUrl, shareProduct } from '../../lib/share';
 import { copyToClipboard } from '../../lib/clipboard';
 import { useToast } from '../../hooks/useToast';
+import { useAdminEdit } from '../../contexts/AdminEditContext';
 
 /**
  * The "..." overlay on a product card image and its popup. Every handler stops
@@ -10,6 +11,7 @@ import { useToast } from '../../hooks/useToast';
  */
 export function CardMenu({ product }: { product: Product }) {
   const { showToast } = useToast();
+  const { isEditMode, openProductEdit } = useAdminEdit();
   const [isOpen, setIsOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,12 @@ export function CardMenu({ product }: { product: Product }) {
     void shareProduct(product, showToast);
   };
 
+  const handleEdit = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    openProductEdit(product);
+  };
+
   const handleCopyLink = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setIsOpen(false);
@@ -68,6 +76,17 @@ export function CardMenu({ product }: { product: Product }) {
 
       {isOpen && (
         <div className="card-menu__popup" role="menu">
+          {/* Admin-only, and only while Edit Mode is on. */}
+          {isEditMode && (
+            <button
+              type="button"
+              className="card-menu__item card-menu__item--edit"
+              role="menuitem"
+              onClick={handleEdit}
+            >
+              Edit Product
+            </button>
+          )}
           <button
             type="button"
             className="card-menu__item"

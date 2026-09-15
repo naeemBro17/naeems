@@ -1,0 +1,86 @@
+Naeem's Price Hub — decisions and follow-ups for Naeem
+=======================================================
+Session 5 (Inline Admin Editing), 2026-09-12.
+Each entry is a judgment call that changed what was specified, or something
+found along the way that needs your action. Minor decisions are not listed.
+
+ACTION REQUIRED — run these in the Supabase SQL Editor, in order
+------------------------------------------------------------------
+[ ] migration-008-detail-slug-bento.sql   (Session 4 — still not run; the admin
+                                           product form fails to save until it is)
+[ ] migration-009-wholesale-column-lock.sql (Session 4 — still not run; wholesale
+                                           prices are STILL readable with the
+                                           public anon key — verified today)
+[ ] migration-010-expert-photos-bucket.sql (Session 5 — the /contact photo picker
+                                           uploads to this bucket)
+[ ] migration-011-reviews-grants.sql       (found today: /contact reviews are
+                                           silently empty for every visitor —
+                                           anon has no SELECT on the table)
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. Context file lives at src/contexts/AdminEditContext.tsx, not src/context/.
+   The project already has src/contexts/ (Auth, Product, Theme); a second
+   folder differing by one letter would be a trap.
+
+2. AdminEditProvider wraps the whole router (App.tsx), not just ViewerPage.
+   Otherwise Edit Mode switches itself off every time you move between the
+   homepage and /contact, because each route remounts. It still resets on
+   reload and sign-out as specified.
+
+3. Product edit sheet: "Description / note" became two fields, Note and
+   Description. They are separate columns with separate jobs (note = short
+   line under the price, description = "About this product"). Merging them
+   would have destroyed data.
+
+4. Product edit sheet regenerates the URL slug when the name changes, same as
+   the admin form does. A renamed product gets a matching URL; old shared
+   links still resolve through the SKU fallback.
+
+5. Reorder lists have up/down arrow buttons in addition to the drag handle.
+   HTML5 drag-and-drop does not fire on touch screens, and this UI is used
+   on a phone. Both work; the arrows are the reliable one on mobile.
+
+6. Bottom Carousel sheet: Section A (expert card) is saved by the Save button;
+   Section B (custom tiles) saves each change immediately — toggle, delete,
+   reorder, and the add/edit form each write straight to bento_tiles. The
+   spec said "updates app_settings and bento_tiles as needed", and mixing
+   both into one Save would have meant a partial-failure mess.
+
+7. Expert card "subtitle" is a new app_settings key, bento_expert_subtitle.
+   The card previously hard-coded "Skincare Expert". Empty = that default.
+
+8. Expert photo: uploads to the new 'expert-photos' bucket at a fixed path
+   (expert-photo.webp, overwritten each time, cache-busted by query string).
+   The upload happens on file selection with a progress overlay; the URL is
+   written to app_settings on Save. Admin → Settings still uses the older
+   path in product-images. Both write the same key, so either works.
+
+9. Wholesale price in the product sheet is editable, but the value shown when
+   the sheet opens comes from products_view — which only returns it to an
+   admin. That is by design (the same security boundary as everywhere else).
+
+10. Left/right-top bento tiles: the sheet lists what the tile currently shows
+    (default allocation, or your saved order). A product you un-feature later
+    drops out of the saved order automatically rather than leaving a hole.
+
+11. Edit pencils fade out (not just disappear) when Edit Mode turns off. To do
+    that they stay mounted for an admin. For anyone who is not an admin they
+    are not rendered at all — verified by checking the anonymous DOM.
+
+VERIFIED TODAY (Playwright, 393x852)
+------------------------------------
+- Anonymous visitor: zero edit controls in the DOM on / and /contact, with
+  and without the card "..." menu open; innerHTML contains no edit markup.
+- Admin (mocked session): toggle at bottom 90px / right 18px / z 200 / 48px;
+  on = orange + 3px top bar; 5 pencils on the homepage, 5 on /contact; each
+  opens the correct sheet; "Edit Product" appears at the top of the card
+  menu only while Edit Mode is on; product sheet opens fully populated.
+- Pessimistic save: a forced 500 on app_settings left the sheet open, showed
+  the red toast, and changed nothing on the page.
+
+NOT DONE / OUT OF SCOPE
+-----------------------
+- Product images "+" adds by URL, as specified. There is no file upload in
+  the inline sheet; use Admin → Products for that.
+- A drag on a touch screen does not reorder (see 5); the arrows do.

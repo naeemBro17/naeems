@@ -2130,7 +2130,7 @@ textarea {
 .sheet-panel {
   width: 100%;
   max-width: 480px;
-  max-height: 82vh;
+  max-height: 80vh;
   overflow-y: auto;
   background: var(--color-surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -2509,9 +2509,15 @@ textarea {
   margin-bottom: var(--space-5);
 }
 
-.browse__title {
+.browse__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: 0 var(--space-4);
   margin-bottom: var(--space-3);
+}
+
+.browse__title {
   font-size: 13px;
   font-weight: 800;
   color: var(--color-text-primary);
@@ -3949,6 +3955,25 @@ textarea {
   margin-bottom: 10px;
 }
 
+.exp-label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.exp-label-row .exp-label {
+  margin-bottom: 0;
+}
+
+.exp-label-row + .exp-bio,
+.exp-label-row + .exp-socials {
+  margin-top: 10px;
+}
+
+.exp-stats-wrap {
+  position: relative;
+}
+
 .exp-bio {
   font-size: 14px;
   line-height: 1.8;
@@ -4024,6 +4049,7 @@ textarea {
 /* ---------- Action buttons ---------- */
 
 .exp-actions {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4652,5 +4678,495 @@ textarea {
   .sheet-panel--closing,
   .sheet-backdrop--closing {
     opacity: 0;
+  }
+}
+
+/* ============================================================
+   Session 5 — inline admin editing
+   Every rule here targets markup that only an approved admin receives.
+   ============================================================ */
+
+/* ---------- Edit Mode toggle ---------- */
+
+.edit-mode-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 90px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--filter-btn-bg);
+  color: var(--filter-btn-fg);
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-base), color var(--transition-base),
+    transform 120ms ease-out;
+}
+
+.edit-mode-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.edit-mode-toggle--on {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.edit-mode-toggle:active {
+  transform: scale(0.94);
+}
+
+/* Thin orange band across the top of the viewport while Edit Mode is on. */
+.edit-mode-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-accent);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* ---------- Section edit buttons ---------- */
+
+.edit-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+  /* 44px tap target around a 28px visual disc. */
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  opacity: 1;
+  transition: opacity 200ms ease, visibility 0s;
+}
+
+/* Edit Mode off: faded out and inert, but still mounted so it can fade in. */
+.edit-btn--off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+
+.edit-btn::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--edit-btn-bg, rgba(0, 0, 0, 0.6));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.edit-btn svg {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+
+.edit-btn:active::before {
+  transform: scale(0.92);
+}
+
+:root[data-theme='dark'] .edit-btn {
+  --edit-btn-bg: rgba(255, 255, 255, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .edit-btn {
+    --edit-btn-bg: rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* Banner: a 32px white/dark disc with a light shadow, inside the card. */
+.edit-btn--banner {
+  top: 4px;
+  right: 4px;
+  color: var(--color-text-primary);
+}
+
+.edit-btn--banner::before {
+  inset: 6px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Beside a section title rather than over a card. Stays `relative`, never
+   `static`: the ::before disc is absolutely positioned and must resolve
+   against the button, not the page. */
+.edit-btn--inline {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+}
+
+.edit-btn--inline::before {
+  inset: 4px;
+}
+
+.edit-btn--inline svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Hero photo: clear of the location pill and the collapsing header. */
+.edit-btn--hero {
+  top: 66px;
+  right: 14px;
+}
+
+.edit-btn--stats {
+  top: 12px;
+  right: 10px;
+}
+
+.edit-btn--actions {
+  top: -46px;
+  right: 10px;
+}
+
+.hero-banner--empty {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-bg-secondary);
+}
+
+.hero-banner__empty-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.card-menu__item--edit {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* ---------- Edit sheets ---------- */
+
+.edit-sheet {
+  padding-bottom: var(--space-2);
+}
+
+.edit-sheet__subtitle {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-top: var(--space-2);
+}
+
+.edit-sheet__hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.edit-sheet__empty {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  padding: var(--space-3) 0;
+}
+
+.edit-sheet__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.edit-sheet__cancel {
+  align-self: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-pill);
+}
+
+.edit-sheet__cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.edit-sheet__save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 30px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.edit-sheet__save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.edit-sheet__color {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.edit-sheet__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---------- Reorderable lists ---------- */
+
+.edit-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-list--busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 8px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid transparent;
+}
+
+.edit-row--dragging {
+  opacity: 0.5;
+  border-color: var(--color-accent);
+}
+
+.edit-row--muted .edit-row__text {
+  color: var(--color-text-muted);
+}
+
+.edit-row--fixed {
+  border-style: dashed;
+  border-color: var(--color-border);
+  background: transparent;
+}
+
+.edit-row__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.edit-row__handle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.edit-row__handle--disabled {
+  visibility: hidden;
+}
+
+.edit-row__body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.edit-row__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edit-row__sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edit-row__thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+}
+
+.edit-row__arrows {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.edit-row__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  color: var(--color-text-secondary);
+  border-radius: 6px;
+}
+
+.edit-row__arrow:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.edit-row__arrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.edit-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+}
+
+.edit-row__icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.edit-row__icon--danger {
+  color: var(--color-danger);
+}
+
+.edit-row__icon:active {
+  background: var(--color-bg-tertiary);
+}
+
+/* Searchable product picker inside the bento sheet. */
+.edit-picker {
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.edit-picker__item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.edit-picker li:last-child .edit-picker__item {
+  border-bottom: none;
+}
+
+.edit-picker__item:active {
+  background: var(--color-bg-secondary);
+}
+
+/* ---------- Expert photo picker ---------- */
+
+.edit-photo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+  border: 2px dashed var(--color-border-strong);
+}
+
+.edit-photo:disabled {
+  cursor: default;
+}
+
+.edit-photo__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-photo__empty {
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.edit-photo__progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edit-btn,
+  .edit-btn--off {
+    transition: none;
   }
 }
