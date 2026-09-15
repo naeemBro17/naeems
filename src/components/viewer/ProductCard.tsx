@@ -9,6 +9,8 @@ import { rememberGridScroll } from '../../lib/gridScroll';
 import { coverImage } from '../../lib/productImages';
 import { buildCopyText, copyToClipboard } from '../../lib/clipboard';
 import { useToast } from '../../hooks/useToast';
+import { useProducts } from '../../contexts/ProductContext';
+import { lowestVariantPrice } from '../../lib/variants';
 import { CardMenu } from './CardMenu';
 
 interface ProductCardProps {
@@ -21,6 +23,7 @@ const COPIED_RESET_MS = 600;
 export function ProductCard({ product }: ProductCardProps) {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { variantsFor } = useProducts();
   const [imageFailed, setImageFailed] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number>();
@@ -37,9 +40,13 @@ export function ProductCard({ product }: ProductCardProps) {
     navigate(productPath(product));
   };
 
+  // A product with variants shows its cheapest option as a "from" price; the
+  // full Region → Size picker lives on the detail page.
+  const fromPrice = lowestVariantPrice(variantsFor(product.id));
+
   const handleCopy = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    const ok = await copyToClipboard(buildCopyText(product));
+    const ok = await copyToClipboard(buildCopyText(product, fromPrice ?? undefined));
     if (ok) {
       setCopied(true);
       showToast('Copied to clipboard');
@@ -115,7 +122,18 @@ export function ProductCard({ product }: ProductCardProps) {
 
         <h3 className="product-card__name">{product.name}</h3>
 
-        {strikePrice !== null ? (
+        {fromPrice !== null ? (
+          <div className="product-card__prices">
+            <span
+              className={`product-card__price${
+                outOfStock ? ' product-card__price--out' : ''
+              }`}
+            >
+              <span className="product-card__from">from</span>
+              {formatTaka(fromPrice)}
+            </span>
+          </div>
+        ) : strikePrice !== null ? (
           <div className="product-card__prices">
             <span
               className={`product-card__price${

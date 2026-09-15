@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
 import { useAuth } from '../../contexts/AuthContext';
+
+interface WholesaleRevealProps {
+  /** Whether a wholesale price exists at all (value may still be withheld). */
+  hasWholesale: boolean;
+  /** The price, or null when the API withheld it from this viewer. */
+  price: number | null | undefined;
+}
 
 const WHOLESALE_REVEAL_MS = 5000;
 
 /**
- * The wholesale row on the product detail page.
+ * The wholesale row on the product detail page, for the product itself or
+ * for the selected variant.
  *
- * Access is enforced in the database, not here: products_view only computes
- * wholesale_price for is_wholesaler_or_admin(), and the base table's column is
- * REVOKEd from anon and authenticated (migration-004). So for a signed-out
- * visitor, or a signed-in customer who is not an approved wholesaler or admin,
- * the value is genuinely absent from the API response — and this component
- * renders nothing at all rather than a placeholder that would hint the price
- * exists.
+ * Access is enforced in the database, not here: products_view and
+ * product_variants_view only compute wholesale_price for
+ * is_wholesaler_or_admin(), and the base tables' column is not readable by
+ * any API role. So for a signed-out visitor, or a signed-in customer who is
+ * not an approved wholesaler or admin, the value is genuinely absent from the
+ * API response — and this component renders nothing at all rather than a
+ * placeholder that would hint the price exists.
  */
-export function WholesaleReveal({ product }: { product: Product }) {
+export function WholesaleReveal({ hasWholesale, price }: WholesaleRevealProps) {
   const { session } = useAuth();
   const [revealed, setRevealed] = useState(false);
   const timerRef = useRef<number>();
@@ -25,10 +32,13 @@ export function WholesaleReveal({ product }: { product: Product }) {
     return () => window.clearTimeout(timerRef.current);
   }, []);
 
-  const price = product.wholesale_price;
+  // Re-blur whenever the row switches to a different price (variant change).
+  useEffect(() => {
+    setRevealed(false);
+  }, [price]);
 
   // No wholesale price, signed out, or signed in without approval → no row.
-  if (!product.has_wholesale) return null;
+  if (!hasWholesale) return null;
   if (session === null) return null;
   if (price === null || price === undefined) return null;
 

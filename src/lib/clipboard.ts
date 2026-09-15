@@ -8,8 +8,9 @@ import { getDisplayPrice } from './pricing';
  * Uses getDisplayPrice, so an active offer copies the offer price automatically.
  * Example: "Aveeno Hair Oat Milk Blend Conditioner — ৳1,999"
  */
-export function buildCopyText(product: Product): string {
-  const { mainPrice } = getDisplayPrice(product);
+export function buildCopyText(product: Product, price?: number): string {
+  // A selected variant (or a card's "from" price) supplies its own figure.
+  const mainPrice = price ?? getDisplayPrice(product).mainPrice;
   const formattedPrice = '৳' + mainPrice.toLocaleString('en-IN');
   return product.name + ' — ' + formattedPrice;
 }

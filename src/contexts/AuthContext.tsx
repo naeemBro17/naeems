@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -59,6 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileChecked, setProfileChecked] = useState(false);
+  // Which user the current profile answer belongs to. Between a session
+  // arriving and its profile fetch starting there is one render where
+  // profileChecked is still true from the signed-out state; without this,
+  // that render reads as "loaded, not admin" and a cold load of /admin
+  // redirects a real admin to the homepage.
+  const profileForUserRef = useRef<string | null>(null);
 
   // Track the session. onAuthStateChange also fires an initial event, but
   // getSession resolves the first paint deterministically.
@@ -85,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // deadlock when calling the client from within onAuthStateChange.
   useEffect(() => {
     if (!userId) {
+      profileForUserRef.current = null;
       setProfile(null);
       setProfileChecked(true);
       return;
@@ -94,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       const p = await fetchProfile(userId);
       if (!active) return;
+      profileForUserRef.current = userId;
       setProfile(p);
       setProfileChecked(true);
     })();
@@ -121,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: 'Incorrect email or password', profile: null };
       }
       const p = await fetchProfile(data.user.id);
+      profileForUserRef.current = data.user.id;
       setProfile(p);
       setProfileChecked(true);
       return { error: null, profile: p };
@@ -170,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const p = await fetchProfile(data.user.id);
+      profileForUserRef.current = data.user.id;
       setProfile(p);
       setProfileChecked(true);
       return { error: null, profile: p };
@@ -183,7 +194,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isAdmin = profile?.role === 'admin' && profile?.status === 'approved';
-  const isLoading = !sessionChecked || !profileChecked;
+  // Loading until the session is known AND the profile answer is for this
+  // very user — a stale "no profile" from the signed-out state doesn't count.
+  const isLoading =
+    !sessionChecked ||
+    !profileChecked ||
+    (userId !== null && profileForUserRef.current !== userId);
 
   return (
     <AuthContext.Provider
