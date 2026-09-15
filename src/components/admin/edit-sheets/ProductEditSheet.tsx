@@ -7,6 +7,7 @@ import { useReorder } from '../../../hooks/useReorder';
 import { productImages } from '../../../lib/productImages';
 import { statusFromQuantity } from '../../../lib/stockStatus';
 import { uniqueProductSlug } from '../../../lib/slugify';
+import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../../lib/skinFields';
 import { BottomSheet } from '../../shared/BottomSheet';
 import {
   CloseGlyph,
@@ -32,6 +33,9 @@ interface ProductDraft {
   youtube_url: string;
   is_featured: boolean;
   images: string[];
+  /** Admin-only tags; never rendered for customers. */
+  skin_types: string[];
+  skin_conditions: string[];
 }
 
 function draftFrom(product: Product): ProductDraft {
@@ -53,7 +57,48 @@ function draftFrom(product: Product): ProductDraft {
     youtube_url: product.youtube_url ?? '',
     is_featured: product.is_featured,
     images: productImages(product),
+    skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
+    skin_conditions: sanitizeSkinValues(product.skin_conditions, SKIN_CONDITIONS),
   };
+}
+
+function toggleValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
+/** Multi-select pill chips for one of the skin tag groups. */
+function ChipGroup({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: readonly string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="form-field">
+      <span className="form-label">{label}</span>
+      <div className="chip-group" role="group" aria-label={label}>
+        {options.map((option) => {
+          const on = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              className={`chip-select${on ? ' chip-select--on' : ''}`}
+              aria-pressed={on}
+              onClick={() => onChange(toggleValue(selected, option))}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const nullable = (value: string): string | null => (value.trim() === '' ? null : value.trim());
@@ -155,6 +200,8 @@ export function ProductEditSheet() {
       key_ingredients: nullable(draft.key_ingredients),
       youtube_url: nullable(draft.youtube_url),
       is_featured: draft.is_featured,
+      skin_types: draft.skin_types,
+      skin_conditions: draft.skin_conditions,
       image_urls: draft.images,
       image_url: draft.images[0] ?? null,
       updated_at: new Date().toISOString(),
@@ -409,6 +456,20 @@ export function ProductEditSheet() {
               </button>
             </div>
           </div>
+
+          <ChipGroup
+            label="Skin Type (optional)"
+            options={SKIN_TYPES}
+            selected={draft.skin_types}
+            onChange={(skin_types) => patch({ skin_types })}
+          />
+
+          <ChipGroup
+            label="Skin Condition (optional)"
+            options={SKIN_CONDITIONS}
+            selected={draft.skin_conditions}
+            onChange={(skin_conditions) => patch({ skin_conditions })}
+          />
 
           <SheetFooter onCancel={closeProductEdit} isSaving={isSaving} />
         </form>

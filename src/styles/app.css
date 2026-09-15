@@ -5300,3 +5300,186 @@ textarea {
     transition: none;
   }
 }
+
+/* ============================================================
+   Session 7 — search intelligence
+   ============================================================ */
+
+/* Both panels float over the page from the bottom edge of the search bar. */
+.home-search {
+  position: relative;
+}
+
+.search-panel {
+  position: absolute;
+  top: calc(100% - var(--space-2));
+  left: var(--space-4);
+  /* Same width as the search bar: the row minus the filter button + gap. */
+  right: calc(var(--space-4) + 48px + var(--space-2));
+  z-index: 100;
+  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* ---------- Autocomplete ---------- */
+
+.search-suggestions {
+  list-style: none;
+}
+
+.search-suggestions li + li .search-suggestion {
+  border-top: 1px solid var(--color-border);
+}
+
+.search-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 48px;
+  padding: 0 12px;
+  text-align: left;
+  color: var(--color-text-primary);
+  transition: background-color var(--transition-fast);
+}
+
+.search-suggestion--active,
+.search-suggestion:active {
+  background: var(--color-bg-secondary);
+}
+
+.search-suggestion__thumb {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--color-bg-tertiary);
+}
+
+.search-suggestion__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Recent searches ---------- */
+
+.search-recent {
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.search-recent__label {
+  padding: 0 12px var(--space-1);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.search-recent__list {
+  list-style: none;
+}
+
+.search-recent__row {
+  display: flex;
+  align-items: center;
+}
+
+.search-recent__term {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  text-align: left;
+  color: var(--color-text-primary);
+}
+
+.search-recent__term:active {
+  background: var(--color-bg-secondary);
+}
+
+.search-recent__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.search-recent__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-recent__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.search-recent__remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.search-recent__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 4px;
+}
+
+.search-recent__clear {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- Admin: skin tag chips ---------- */
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-select {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background-color var(--transition-base), color var(--transition-base),
+    transform 120ms ease-out;
+}
+
+.chip-select--on {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.chip-select:active {
+  transform: scale(0.96);
+}

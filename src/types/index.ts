@@ -38,6 +38,12 @@ export interface Product {
   key_ingredients: string | null;
   /** Detail-page accordion: link to a review video. Hidden when empty. */
   youtube_url: string | null;
+  /**
+   * Admin-only tags for a future smart filter; never shown to customers.
+   * Absent (undefined) on rows cached before migration-012.
+   */
+  skin_types: string[] | null;
+  skin_conditions: string[] | null;
   /** Featured products sort first in the default homepage view. */
   is_featured: boolean;
   /**

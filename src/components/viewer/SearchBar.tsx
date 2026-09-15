@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react';
+import { useRef, type KeyboardEvent, type RefObject } from 'react';
 import { useToast } from '../../hooks/useToast';
 
 interface SearchBarProps {
@@ -6,9 +6,25 @@ interface SearchBarProps {
   onChange: (value: string) => void;
   /** Lets the bottom nav's Search tab focus this input. */
   inputRef?: RefObject<HTMLInputElement>;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** The X button. Replaces onChange('') when the owner keeps extra state. */
+  onClear?: () => void;
+  /** True while the autocomplete list is showing, for aria-expanded. */
+  isExpanded?: boolean;
 }
 
-export function SearchBar({ value, onChange, inputRef }: SearchBarProps) {
+export function SearchBar({
+  value,
+  onChange,
+  inputRef,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  onClear,
+  isExpanded = false,
+}: SearchBarProps) {
   const { showToast } = useToast();
   const localRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? localRef;
@@ -38,7 +54,14 @@ export function SearchBar({ value, onChange, inputRef }: SearchBarProps) {
           placeholder="Search products..."
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          onKeyDown={onKeyDown}
           aria-label="Search products"
+          role="combobox"
+          aria-expanded={isExpanded}
+          aria-controls="search-suggestions"
+          aria-autocomplete="list"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -47,8 +70,10 @@ export function SearchBar({ value, onChange, inputRef }: SearchBarProps) {
           <button
             type="button"
             className="search-bar__clear"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              onChange('');
+              if (onClear) onClear();
+              else onChange('');
               ref.current?.focus();
             }}
             aria-label="Clear search"

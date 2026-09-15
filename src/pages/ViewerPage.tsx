@@ -11,10 +11,12 @@ import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminEdit } from '../contexts/AdminEditContext';
+import { useNavigate } from 'react-router-dom';
 import { useSearch } from '../hooks/useSearch';
 import { useDragReorder } from '../hooks/useDragReorder';
 import { useToast } from '../hooks/useToast';
-import { takeGridScroll } from '../lib/gridScroll';
+import { rememberGridScroll, takeGridScroll } from '../lib/gridScroll';
+import { productPath } from '../lib/slugify';
 import { saveSettings, serializeIdList } from '../lib/settingsLists';
 import {
   DEFAULT_SECTION_ORDER,
@@ -22,7 +24,9 @@ import {
   REORDERABLE_SECTIONS,
   type HomeSectionId,
 } from '../lib/layoutOrder';
+import type { Product } from '../types';
 import { SearchBar } from '../components/viewer/SearchBar';
+import { SearchPanels } from '../components/viewer/SearchPanels';
 import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
 import { BentoGrid } from '../components/viewer/BentoGrid';
@@ -77,6 +81,7 @@ function DragHandleGlyph() {
 }
 
 export function ViewerPage() {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { isAdmin } = useAuth();
   const { isEditMode } = useAdminEdit();
@@ -84,7 +89,6 @@ export function ViewerPage() {
   const { products, categories, settings, isLoading, isOffline, loadFailed, refetch } =
     useProducts();
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -115,7 +119,30 @@ export function ViewerPage() {
       selectedCategoryId === null ? sortFeaturedFirst(activeProducts) : activeProducts,
     [activeProducts, selectedCategoryId]
   );
-  const filteredProducts = useSearch(orderedProducts, searchQuery, selectedCategoryId);
+  // Choosing a suggestion opens that product, like tapping its card.
+  const openSuggestedProduct = useCallback(
+    (product: Product) => {
+      rememberGridScroll();
+      navigate(productPath(product));
+    },
+    [navigate]
+  );
+
+  const search = useSearch({
+    products: activeProducts,
+    defaultOrdered: orderedProducts,
+    categoryId: selectedCategoryId,
+    onSelectSuggestion: openSuggestedProduct,
+  });
+  const filteredProducts = search.results;
+
+  const handleRecent = useCallback(
+    (term: string) => {
+      search.applyTerm(term);
+      searchInputRef.current?.blur();
+    },
+    [search]
+  );
 
   const scrollToProducts = useCallback(() => {
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -267,10 +294,16 @@ export function ViewerPage() {
 
       <div className="home-search">
         <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
+          value={search.query}
+          onChange={search.setQuery}
           inputRef={searchInputRef}
+          onFocus={search.onFocus}
+          onBlur={search.onBlur}
+          onKeyDown={search.onKeyDown}
+          onClear={search.clear}
+          isExpanded={search.isDropdownOpen}
         />
+        <SearchPanels search={search} onRecent={handleRecent} />
       </div>
 
       {movableSections.map((id, index) => {
@@ -343,9 +376,9 @@ export function ViewerPage() {
         <ProductGrid
           products={filteredProducts}
           isLoading={isLoading}
-          searchQuery={searchQuery}
+          searchQuery={search.query}
           selectedCategoryId={selectedCategoryId}
-          onClearSearch={() => setSearchQuery('')}
+          onClearSearch={search.clear}
         />
       </main>
 
