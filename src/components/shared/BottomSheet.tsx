@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -11,14 +11,38 @@ interface BottomSheetProps {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Must match the .sheet-panel--closing animation duration in app.css. */
+const CLOSE_ANIMATION_MS = 220;
+
 /**
  * Sheet that slides up from the bottom edge over a dimmed backdrop. Traps
  * focus, closes on Escape or a backdrop tap, and locks page scroll while open.
- * Shared by the hamburger menu and the bottom-nav account sheet.
+ * Shared by the hamburger menu, the bottom-nav account sheet and the review
+ * submission form.
+ *
+ * Closing keeps the sheet mounted for one animation so it slides back down
+ * instead of vanishing.
  */
 export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRendered(true);
+      setIsClosing(false);
+      return;
+    }
+    if (!isRendered) return;
+    setIsClosing(true);
+    const timer = window.setTimeout(() => {
+      setIsRendered(false);
+      setIsClosing(false);
+    }, CLOSE_ANIMATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, isRendered]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -61,18 +85,18 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
 
   return (
     <div
-      className="sheet-backdrop"
+      className={`sheet-backdrop${isClosing ? ' sheet-backdrop--closing' : ''}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         ref={panelRef}
-        className="sheet-panel"
+        className={`sheet-panel${isClosing ? ' sheet-panel--closing' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

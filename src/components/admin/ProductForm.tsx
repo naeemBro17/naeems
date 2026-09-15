@@ -7,8 +7,11 @@ import {
 } from '../../lib/supabase';
 import { resizeImage } from '../../lib/imageResize';
 import { slugify } from '../../lib/format';
+import { uniqueProductSlug } from '../../lib/slugify';
+import { nextSku } from '../../lib/sku';
+import { statusFromQuantity } from '../../lib/stockStatus';
 import { productImages } from '../../lib/productImages';
-import { useProducts, PRODUCTS_VIEW } from '../../contexts/ProductContext';
+import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { Modal } from '../shared/Modal';
 import { ImageUploader } from './ImageUploader';
@@ -23,9 +26,12 @@ interface ProductFormProps {
 
 const NOTE_MAX_LENGTH = 200;
 const CREATE_CATEGORY_VALUE = '__create__';
+/** Retries when a concurrent insert claims the generated SKU first. */
+const SKU_ATTEMPTS = 5;
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
 
 type FieldName =
-  | 'sku'
   | 'name'
   | 'retail_price'
   | 'offer_price'
@@ -39,6 +45,9 @@ function emptyForm(): ProductFormData {
     name: '',
     brand: '',
     description: '',
+    how_to_use: '',
+    key_ingredients: '',
+    youtube_url: '',
     category_id: '',
     retail_price: '',
     offer_price: '',
@@ -68,6 +77,9 @@ function formFromProduct(product: Product): ProductFormData {
     name: product.name,
     brand: product.brand ?? '',
     description: product.description ?? '',
+    how_to_use: product.how_to_use ?? '',
+    key_ingredients: product.key_ingredients ?? '',
+    youtube_url: product.youtube_url ?? '',
     category_id: product.category_id ?? '',
     retail_price: String(product.retail_price),
     offer_price: product.offer_price !== null ? String(product.offer_price) : '',
@@ -84,9 +96,6 @@ function formFromProduct(product: Product): ProductFormData {
 
 function validate(form: ProductFormData): FieldErrors {
   const errors: FieldErrors = {};
-  if (form.sku.trim() === '') {
-    errors.sku = 'SKU is required';
-  }
   if (form.name.trim() === '') {
     errors.name = 'Product name is required';
   }
@@ -133,7 +142,6 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
   const [form, setForm] = useState<ProductFormData>(emptyForm());
   const [images, setImages] = useState<FormImage[]>([]);
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
-  const [skuTakenError, setSkuTakenError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -147,15 +155,18 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
     setForm(product ? formFromProduct(product) : emptyForm());
     setImages(existingImages(product));
     setTouched({});
-    setSkuTakenError(null);
     setUploadError(null);
     setShowNewCategory(false);
     setNewCategoryName('');
   }, [isOpen, product]);
 
   const errors = validate(form);
-  const hasBlockingErrors =
-    Object.keys(errors).length > 0 || skuTakenError !== null;
+  const hasBlockingErrors = Object.keys(errors).length > 0;
+
+  // Availability follows the quantity whenever one is entered; the manual
+  // select only applies to products whose exact count isn't tracked.
+  const derivedStatus = statusFromQuantity(form.stock_quantity, form.stock_status);
+  const quantityDrivesStatus = form.stock_quantity.trim() !== '';
 
   const setField = <K extends keyof ProductFormData>(
     field: K,
@@ -170,21 +181,6 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
 
   const fieldError = (field: FieldName): string | null =>
     touched[field] && errors[field] ? errors[field] ?? null : null;
-
-  const checkSkuUniqueness = async () => {
-    markTouched('sku');
-    const sku = form.sku.trim();
-    setSkuTakenError(null);
-    if (sku === '' || (product && sku === product.sku)) return;
-    const { data, error } = await supabase
-      .from(PRODUCTS_VIEW)
-      .select('id')
-      .eq('sku', sku)
-      .limit(1);
-    if (!error && data && data.length > 0 && data[0].id !== product?.id) {
-      setSkuTakenError('This SKU is already in use');
-    }
-  };
 
   const handleCategoryChange = (value: string) => {
     if (value === CREATE_CATEGORY_VALUE) {
@@ -270,7 +266,6 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setTouched({
-      sku: true,
       name: true,
       retail_price: true,
       offer_price: true,
@@ -281,7 +276,6 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
 
     setIsSaving(true);
     setUploadError(null);
-    const finalSku = form.sku.trim();
 
     let imageUrls: string[];
     try {
@@ -292,17 +286,26 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
       return;
     }
 
+    const name = form.name.trim();
+    // Slug follows the name, so renaming a product updates its URL.
+    const slug = await uniqueProductSlug(supabase, name, product?.id);
+
     const payload = {
-      sku: finalSku,
-      name: form.name.trim(),
+      name,
+      slug,
       brand: form.brand.trim() === '' ? null : form.brand.trim(),
       description: form.description.trim() === '' ? null : form.description.trim(),
+      how_to_use: form.how_to_use.trim() === '' ? null : form.how_to_use.trim(),
+      key_ingredients:
+        form.key_ingredients.trim() === '' ? null : form.key_ingredients.trim(),
+      youtube_url: form.youtube_url.trim() === '' ? null : form.youtube_url.trim(),
       category_id: form.category_id === '' ? null : form.category_id,
       retail_price: Number(form.retail_price),
       offer_price: form.offer_price.trim() === '' ? null : Number(form.offer_price),
       wholesale_price:
         form.wholesale_price.trim() === '' ? null : Number(form.wholesale_price),
-      stock_status: form.stock_status,
+      // Derived, never set independently — a quantity of 0 forces out_of_stock.
+      stock_status: derivedStatus,
       stock_quantity:
         form.stock_quantity.trim() === '' ? null : Number(form.stock_quantity),
       note: form.note.trim() === '' ? null : form.note.trim(),
@@ -312,12 +315,24 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
       is_active: form.is_active,
     };
 
-    const result = product
-      ? await supabase
-          .from('products')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', product.id)
-      : await supabase.from('products').insert(payload);
+    let result;
+    if (product) {
+      result = await supabase
+        .from('products')
+        .update({ ...payload, updated_at: new Date().toISOString() })
+        .eq('id', product.id);
+    } else {
+      // SKU is generated here, never typed. A concurrent insert can claim the
+      // same number, so a unique-violation is retried with a fresh one.
+      const categoryName =
+        categories.find((c) => c.id === form.category_id)?.name ?? null;
+      result = { error: null } as { error: { code?: string } | null };
+      for (let attempt = 0; attempt < SKU_ATTEMPTS; attempt += 1) {
+        const sku = await nextSku(supabase, categoryName);
+        result = await supabase.from('products').insert({ ...payload, sku });
+        if (!result.error || result.error.code !== UNIQUE_VIOLATION) break;
+      }
+    }
 
     setIsSaving(false);
     if (result.error) {
@@ -331,9 +346,7 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
   };
 
   const requiredEmpty =
-    form.sku.trim() === '' ||
-    form.name.trim() === '' ||
-    form.retail_price.trim() === '';
+    form.name.trim() === '' || form.retail_price.trim() === '';
 
   return (
     <Modal
@@ -343,29 +356,15 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
       fullScreenOnMobile
     >
       <form onSubmit={handleSubmit} className="form" noValidate>
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-sku">
-            SKU <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="pf-sku"
-            type="text"
-            className={`form-input${fieldError('sku') || skuTakenError ? ' form-input--error' : ''}`}
-            value={form.sku}
-            onChange={(e) => {
-              setField('sku', e.target.value);
-              setSkuTakenError(null);
-            }}
-            onBlur={checkSkuUniqueness}
-            required
-            aria-required="true"
-          />
-          {(fieldError('sku') || skuTakenError) && (
-            <p className="form-error" role="alert">
-              {skuTakenError ?? fieldError('sku')}
+        {product && (
+          <div className="form-field">
+            <span className="form-label">SKU</span>
+            <p className="form-readonly">{product.sku}</p>
+            <p className="form-helper">
+              Generated automatically and kept for reference. Not shown to viewers.
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="form-field">
           <label className="form-label" htmlFor="pf-name">
@@ -414,6 +413,60 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
             value={form.description}
             onChange={(e) => setField('description', e.target.value)}
           />
+          <p className="form-helper">
+            Shown on the detail page under "About this product".
+          </p>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-how-to-use">
+            How to Use
+          </label>
+          <textarea
+            id="pf-how-to-use"
+            className="form-input form-textarea"
+            rows={3}
+            placeholder="Apply morning and night to clean, dry skin…"
+            value={form.how_to_use}
+            onChange={(e) => setField('how_to_use', e.target.value)}
+          />
+          <p className="form-helper">
+            Detail-page accordion. Leave blank to hide the section.
+          </p>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-key-ingredients">
+            Key Ingredients
+          </label>
+          <textarea
+            id="pf-key-ingredients"
+            className="form-input form-textarea"
+            rows={3}
+            placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
+            value={form.key_ingredients}
+            onChange={(e) => setField('key_ingredients', e.target.value)}
+          />
+          <p className="form-helper">
+            Detail-page accordion. Leave blank to hide the section.
+          </p>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-youtube">
+            Video Review URL
+          </label>
+          <input
+            id="pf-youtube"
+            type="url"
+            className="form-input"
+            placeholder="https://youtube.com/watch?v=…"
+            value={form.youtube_url}
+            onChange={(e) => setField('youtube_url', e.target.value)}
+          />
+          <p className="form-helper">
+            Detail-page accordion. Leave blank to hide the section.
+          </p>
         </div>
 
         <div className="form-field">
@@ -556,7 +609,8 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
             <select
               id="pf-stock-status"
               className="form-input form-select"
-              value={form.stock_status}
+              value={derivedStatus}
+              disabled={quantityDrivesStatus}
               onChange={(e) =>
                 setField('stock_status', e.target.value as ProductFormData['stock_status'])
               }
@@ -565,6 +619,11 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
               <option value="low_stock">Low Stock</option>
               <option value="out_of_stock">Out of Stock</option>
             </select>
+            <p className="form-helper">
+              {quantityDrivesStatus
+                ? 'Set automatically from the stock quantity.'
+                : 'Used only while no exact quantity is tracked.'}
+            </p>
           </div>
 
           <div className="form-field">

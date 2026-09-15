@@ -4,6 +4,8 @@ import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
 import { getDisplayPrice } from '../../lib/pricing';
 import { isOutOfStock } from '../../lib/stockStatus';
+import { productPath } from '../../lib/slugify';
+import { rememberGridScroll } from '../../lib/gridScroll';
 import { coverImage } from '../../lib/productImages';
 import { buildCopyText, copyToClipboard } from '../../lib/clipboard';
 import { useToast } from '../../hooks/useToast';
@@ -13,7 +15,8 @@ interface ProductCardProps {
   product: Product;
 }
 
-const COPIED_RESET_MS = 2000;
+/** How long the button holds its success state (Part 6 animation polish). */
+const COPIED_RESET_MS = 600;
 
 export function ProductCard({ product }: ProductCardProps) {
   const navigate = useNavigate();
@@ -30,9 +33,8 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const openDetail = () => {
     // Remember where the grid was so Back can restore it instead of jumping to top.
-    sessionStorage.setItem('grid_scroll_y', String(window.scrollY));
-    sessionStorage.setItem('grid_nav_from_product', 'true');
-    navigate(`/product/${product.sku}`);
+    rememberGridScroll();
+    navigate(productPath(product));
   };
 
   const handleCopy = async (e: MouseEvent<HTMLButtonElement>) => {
@@ -162,7 +164,25 @@ export function ProductCard({ product }: ProductCardProps) {
             onClick={handleCopy}
             aria-label={`Copy name and price of ${product.name}`}
           >
-            {copied ? '✓ Copied!' : 'Copy Price'}
+            {copied ? (
+              <>
+                <svg
+                  className="copy-button__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Copied!
+              </>
+            ) : (
+              'Copy Price'
+            )}
           </button>
         )}
       </div>

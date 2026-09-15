@@ -1,16 +1,24 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AppSettings, Product } from '../../types';
+import type { AppSettings, BentoTile, Product } from '../../types';
 import { getDisplayPrice } from '../../lib/pricing';
 import { formatTaka } from '../../lib/format';
 import { isOutOfStock } from '../../lib/stockStatus';
+import { productPath } from '../../lib/slugify';
+import { rememberGridScroll } from '../../lib/gridScroll';
+import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
+import { supabase } from '../../lib/supabase';
+import { useSwipe } from '../../hooks/useSwipe';
+import { BentoCustomTile } from './BentoCustomTile';
 
 interface BentoGridProps {
   products: Product[];
   settings: AppSettings;
 }
 
-/** Faces per rotating tile — the flip animation shows exactly two. */
+/** Slides in the swipeable left tile. */
+const STACK_SIZE = 4;
+/** Faces in the auto-flipping right tile — the CSS animation shows exactly two. */
 const FACES_PER_TILE = 2;
 
 function PriceLine({ product }: { product: Product }) {
@@ -34,58 +42,127 @@ function PriceLine({ product }: { product: Product }) {
   );
 }
 
-function TileFace({
-  product,
-  onOpen,
-  face,
-}: {
-  product: Product;
-  onOpen: (sku: string) => void;
-  face: 'front' | 'back';
-}) {
+function ProductFaceBody({ product }: { product: Product }) {
   return (
-    <div
-      className={`bento-face bento-face--${face}`}
-      role="button"
-      tabIndex={-1}
-      onClick={() => onOpen(product.sku)}
-    >
+    <>
       {product.category && (
         <span className="bento-tile__category">{product.category.name}</span>
       )}
       <h3 className="bento-tile__name">{product.name}</h3>
       <PriceLine product={product} />
+    </>
+  );
+}
+
+/* ---------- Left tile: manual vertical swipe ---------- */
+
+/**
+ * A vertical stack of featured products. It never auto-advances — the inner
+ * track is translated by exactly one tile height per swipe, and the gesture is
+ * captured so it can't scroll the page behind it.
+ */
+function SwipeStackTile({
+  products,
+  onOpen,
+}: {
+  products: Product[];
+  onOpen: (product: Product) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const count = products.length;
+
+  // A shrinking featured list must never leave the track parked past its end.
+  useEffect(() => {
+    setIndex((current) => Math.min(current, Math.max(0, count - 1)));
+  }, [count]);
+
+  const swipeRef = useSwipe<HTMLDivElement>({
+    axis: 'y',
+    enabled: count > 1,
+    onSwipe: (direction) =>
+      setIndex((current) => Math.min(count - 1, Math.max(0, current + direction))),
+  });
+
+  return (
+    <div className="bento-tile bento-tile--tall bento-tile--stack" ref={swipeRef}>
+      <div
+        className="bento-stack__track"
+        style={{
+          height: `${count * 100}%`,
+          transform: `translateY(-${(index * 100) / count}%)`,
+        }}
+      >
+        {products.map((product) => (
+          <div
+            className="bento-face bento-face--front bento-stack__slide"
+            key={product.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(product)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen(product);
+              }
+            }}
+            aria-label={`View details for ${product.name}`}
+          >
+            <ProductFaceBody product={product} />
+          </div>
+        ))}
+      </div>
+
+      {count > 1 && (
+        <div className="bento-stack__dots" aria-hidden="true">
+          {products.map((product, i) => (
+            <span
+              key={product.id}
+              className={`bento-stack__dot${
+                i === index ? ' bento-stack__dot--active' : ''
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
+/* ---------- Right top tile: automatic flip ---------- */
+
 /**
- * One rotating tile. Both faces exist in the DOM at once and the wrapper is
- * flipped around the X axis by CSS, so the two products alternate without any
- * JavaScript timer.
+ * Both faces exist in the DOM at once and the wrapper is flipped around the X
+ * axis by CSS, so the two products alternate without any JavaScript timer.
  */
 function FlipTile({
   faces,
-  size,
-  stagger,
   onOpen,
 }: {
   faces: Product[];
-  size: 'tall' | 'short';
-  /** Offsets the shared 8s animation so the two tiles never flip together. */
-  stagger: boolean;
-  onOpen: (sku: string) => void;
+  onOpen: (product: Product) => void;
 }) {
   const [front, back] = faces;
   return (
-    <div className={`bento-tile bento-tile--${size}`}>
-      <div
-        className={`bento-flipper${stagger ? ' bento-flipper--stagger' : ''}${
-          back ? '' : ' bento-flipper--static'
-        }`}
-      >
-        <TileFace product={front} onOpen={onOpen} face="front" />
-        {back && <TileFace product={back} onOpen={onOpen} face="back" />}
+    <div className="bento-tile bento-tile--short">
+      <div className={`bento-flipper${back ? '' : ' bento-flipper--static'}`}>
+        <div
+          className="bento-face bento-face--front"
+          role="button"
+          tabIndex={-1}
+          onClick={() => onOpen(front)}
+        >
+          <ProductFaceBody product={front} />
+        </div>
+        {back && (
+          <div
+            className="bento-face bento-face--back"
+            role="button"
+            tabIndex={-1}
+            onClick={() => onOpen(back)}
+          >
+            <ProductFaceBody product={back} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -104,7 +181,9 @@ function SkeletonTile({ size }: { size: 'tall' | 'short' }) {
   );
 }
 
-function ExpertTile({
+/* ---------- Right bottom tile: manual horizontal carousel ---------- */
+
+function ExpertCard({
   settings,
   onOpen,
 }: {
@@ -113,7 +192,7 @@ function ExpertTile({
 }) {
   const { expert_name, expert_photo_url } = settings;
   return (
-    <button type="button" className="bento-tile bento-tile--expert" onClick={onOpen}>
+    <button type="button" className="bento-expert" onClick={onOpen}>
       <div className="bento-expert__head">
         <span className="bento-expert__avatar">
           {expert_photo_url !== '' ? (
@@ -144,40 +223,141 @@ function ExpertTile({
 }
 
 /**
- * Live tiles above the catalog: a tall tile and a short tile that each flip
- * between two featured products, plus a static expert CTA. Falls back to
- * skeletons when fewer than two featured products are available, so the grid
- * never renders an empty box.
+ * The expert CTA plus any admin-configured custom tiles, swiped horizontally.
+ * With a single card there is nothing to swipe to, so both the gesture and the
+ * pagination dots are switched off rather than advertising an interaction that
+ * does nothing.
+ */
+function CarouselTile({
+  settings,
+  tiles,
+  onOpenExpert,
+}: {
+  settings: AppSettings;
+  tiles: BentoTile[];
+  onOpenExpert: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const count = tiles.length + 1;
+
+  useEffect(() => {
+    setIndex((current) => Math.min(current, count - 1));
+  }, [count]);
+
+  const swipeRef = useSwipe<HTMLDivElement>({
+    axis: 'x',
+    enabled: count > 1,
+    onSwipe: (direction) =>
+      setIndex((current) => Math.min(count - 1, Math.max(0, current + direction))),
+  });
+
+  return (
+    <div className="bento-tile bento-tile--carousel" ref={swipeRef}>
+      <div
+        className="bento-carousel__track"
+        style={{
+          width: `${count * 100}%`,
+          transform: `translateX(-${(index * 100) / count}%)`,
+        }}
+      >
+        <div className="bento-carousel__slide">
+          <ExpertCard settings={settings} onOpen={onOpenExpert} />
+        </div>
+        {tiles.map((tile) => (
+          <div className="bento-carousel__slide" key={tile.id}>
+            <BentoCustomTile tile={tile} />
+          </div>
+        ))}
+      </div>
+
+      {count > 1 && (
+        <div className="bento-carousel__dots" aria-hidden="true">
+          {Array.from({ length: count }, (_, i) => (
+            <span
+              key={i}
+              className={`bento-carousel__dot${
+                i === index ? ' bento-carousel__dot--active' : ''
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Grid ---------- */
+
+/**
+ * Live tiles above the catalog. Three distinct interactions: the tall tile is
+ * swiped vertically, the short tile flips on its own, and the bottom-right
+ * tile is a horizontal carousel of the expert CTA plus custom link tiles.
  */
 export function BentoGrid({ products, settings }: BentoGridProps) {
   const navigate = useNavigate();
+  const [tiles, setTiles] = useState<BentoTile[]>([]);
 
-  const featured = useMemo(
-    () => products.filter((p) => p.is_featured).slice(0, FACES_PER_TILE * 2),
-    [products]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('bento_tiles')
+        .select(BENTO_TILE_SELECT)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        // The table may not exist yet (migration-008 not run). The carousel
+        // still works — it just shows the expert CTA on its own.
+        console.warn('Bento tiles unavailable:', error.message);
+        return;
+      }
+      setTiles((data ?? []) as BentoTile[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const openProduct = (sku: string) => navigate(`/product/${sku}`);
+  const featured = useMemo(() => products.filter((p) => p.is_featured), [products]);
 
-  const hasEnough = featured.length >= 2;
-  // Products alternate between the two tiles so each tile's pair is distinct.
-  const tallFaces = featured.filter((_, i) => i % 2 === 0);
-  const shortFaces = featured.filter((_, i) => i % 2 === 1);
+  const openProduct = (product: Product) => {
+    // Same Back-restores-position contract the product grid follows.
+    rememberGridScroll();
+    navigate(productPath(product));
+  };
+
+  // The flip tile takes the last two featured products and the stack takes the
+  // rest, so with a normal-sized featured list no product shows up in both
+  // tiles at once. Below four featured the lists have to overlap — showing a
+  // product twice beats leaving a tile empty.
+  const canSplit = featured.length >= STACK_SIZE;
+  const flipFaces = canSplit
+    ? featured.slice(-FACES_PER_TILE)
+    : featured.slice(0, FACES_PER_TILE);
+  const stackProducts = canSplit
+    ? featured.slice(0, Math.min(STACK_SIZE, featured.length - FACES_PER_TILE))
+    : featured;
 
   return (
     <section className="bento" aria-label="Featured products">
-      {hasEnough ? (
-        <>
-          <FlipTile faces={tallFaces} size="tall" stagger={false} onOpen={openProduct} />
-          <FlipTile faces={shortFaces} size="short" stagger onOpen={openProduct} />
-        </>
+      {stackProducts.length > 0 ? (
+        <SwipeStackTile products={stackProducts} onOpen={openProduct} />
       ) : (
-        <>
-          <SkeletonTile size="tall" />
-          <SkeletonTile size="short" />
-        </>
+        <SkeletonTile size="tall" />
       )}
-      <ExpertTile settings={settings} onOpen={() => navigate('/contact')} />
+
+      {flipFaces.length > 0 ? (
+        <FlipTile faces={flipFaces} onOpen={openProduct} />
+      ) : (
+        <SkeletonTile size="short" />
+      )}
+
+      <CarouselTile
+        settings={settings}
+        tiles={tiles}
+        onOpenExpert={() => navigate('/contact')}
+      />
     </section>
   );
 }

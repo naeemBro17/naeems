@@ -6,28 +6,22 @@ import { formatTaka, normalizeText } from '../../lib/format';
 import { productImages, coverImage } from '../../lib/productImages';
 import { ProductForm } from './ProductForm';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { isOutOfStock } from '../../lib/stockStatus';
 import type { Product } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
-const STOCK_DOT_CLASS: Record<Product['stock_status'], string> = {
-  in_stock: 'stock-dot--green',
-  low_stock: 'stock-dot--amber',
-  out_of_stock: 'stock-dot--red',
-};
-
-const STOCK_LABEL: Record<Product['stock_status'], string> = {
-  in_stock: 'In Stock',
-  low_stock: 'Low Stock',
-  out_of_stock: 'Out of Stock',
-};
-
+/**
+ * Availability comes from isOutOfStock(), which derives it from
+ * stock_quantity — so a row with 0 in stock can never read "In Stock" here
+ * either. The exact count stays visible: this is the admin's own inventory view.
+ */
 function stockText(product: Product): string {
-  const label = STOCK_LABEL[product.stock_status];
-  if (product.stock_status !== 'out_of_stock' && product.stock_quantity !== null) {
-    return `${label} · ${product.stock_quantity} pcs`;
+  const label = isOutOfStock(product) ? 'Out of Stock' : 'In Stock';
+  if (product.stock_quantity === null || product.stock_quantity === undefined) {
+    return label;
   }
-  return label;
+  return `${label} · ${product.stock_quantity} pcs`;
 }
 
 export function ProductList() {
@@ -238,7 +232,9 @@ export function ProductList() {
                 </p>
                 <p className="stock-row">
                   <span
-                    className={`stock-dot ${STOCK_DOT_CLASS[product.stock_status]}`}
+                    className={`stock-dot ${
+                      isOutOfStock(product) ? 'stock-dot--red' : 'stock-dot--green'
+                    }`}
                     aria-hidden="true"
                   />
                   <span className="stock-row__text">{stockText(product)}</span>

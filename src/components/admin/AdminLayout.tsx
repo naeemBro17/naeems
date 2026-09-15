@@ -8,6 +8,7 @@ export type AdminTab =
   | 'import-export'
   | 'wholesalers'
   | 'reviews'
+  | 'bento'
   | 'settings';
 
 interface AdminLayoutProps {
@@ -71,6 +72,17 @@ const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
     iconPath: (
       <>
         <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.78L12 16.77l-5.2 2.73.99-5.78-4.21-4.1 5.82-.85L12 3.5z" />
+      </>
+    ),
+  },
+  {
+    id: 'bento',
+    label: 'Bento Tiles',
+    iconPath: (
+      <>
+        <rect x="3" y="3" width="8" height="18" rx="1.5" />
+        <rect x="13" y="3" width="8" height="8" rx="1.5" />
+        <rect x="13" y="13" width="8" height="8" rx="1.5" />
       </>
     ),
   },
