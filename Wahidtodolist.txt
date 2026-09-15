@@ -84,3 +84,62 @@ NOT DONE / OUT OF SCOPE
 - Product images "+" adds by URL, as specified. There is no file upload in
   the inline sheet; use Admin → Products for that.
 - A drag on a touch screen does not reorder (see 5); the arrows do.
+
+
+Session 6 (Bento & Section Reorder), 2026-09-15
+================================================
+No new migrations. Both new settings keys (bento_tile_order,
+homepage_section_order) are plain app_settings rows created on first save.
+The Session 4/5 migrations listed above are STILL pending — nothing here
+depends on them, but the wholesale leak and the empty reviews section do.
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. What "swap" means with a tall tile. The left tile always spans both rows,
+   so it owns a whole column. Swapping it with a short tile moves it to the
+   other column and stacks the two short tiles in the column it left. The
+   saved order ["right_top","left","right_bottom"] therefore renders as:
+   right_top top-left, right_bottom bottom-left, left (tall) on the right.
+   Placement is computed from the order (src/lib/layoutOrder.ts), never
+   hard-coded, per the "use grid-row span" instruction.
+
+2. Swiping inside the bento tiles is paused while Edit Mode is on. A press
+   on a tile may become a 500ms long-press drag, and letting the same touch
+   also drive the stack/carousel swipe produced accidental slide changes.
+   Turn Edit Mode off to preview the swipes.
+
+3. Mouse drag works too. The brief said touch, "not mouse events only"; the
+   hook wires mousedown/mousemove/mouseup to the same flow so the feature is
+   usable at a desk. Touch remains the primary, tested path.
+
+4. Pessimistic save without a flicker. On release the dragged item snaps to
+   its destination and stays there while the save runs; the real reorder
+   applies when the refetched settings arrive, and the held transform is
+   cleared in the same paint. If the save fails the item slides back and a
+   red toast appears. Nothing is reordered in local state before the
+   server confirms.
+
+5. Section handles overlay content, so while Edit Mode is on the "Browse"
+   title, the chip row and the banner text step right by ~44px to make room.
+   Customers never see this shift.
+
+6. While a section is being dragged the page cannot scroll (the touch is
+   captured). All four movable sections fit on one screen, so no
+   auto-scroll was built.
+
+VERIFIED (Playwright, 393x852, synthetic TouchEvents)
+-----------------------------------------------------
+- Anonymous: no handles, no drag classes, no edit markup; a 650ms press on
+  a tile does nothing.
+- Admin, Edit Mode off: handles mounted but faded/inert; long press inert.
+- Bento: nothing at 200ms; at 500ms the tile lifts (scale 1.03, shadow),
+  the other two show the dashed orange border; touchmove is cancelled
+  (page can't scroll); hovering a tile shows the 15% orange overlay;
+  release swaps, saves ["right_top","left","right_bottom"], toast "Saved",
+  tall tile keeps 208px in column 2. Release outside any tile: no change,
+  no request. Moving the finger before 500ms aborts the press.
+- Sections: handle drag starts immediately; touchmove cancelled; the other
+  sections shift by the dragged section's height (228px) to open the gap;
+  release saves ["bento","hero","browse","chips","products"], toast
+  "Saved". A forced 500 leaves the order unchanged with a red toast.
+- Reload: both saved orders come back from app_settings; Edit Mode is off.

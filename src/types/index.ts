@@ -160,6 +160,12 @@ export interface AppSettings {
   bento_right_top_order: string;
   /** JSON array of category ids: visible Browse circles, left to right. */
   browse_categories_order: string;
+
+  /* --- Bento & section reorder (Session 6) --- */
+  /** JSON array of bento tile ids: which grid position each tile occupies. */
+  bento_tile_order: string;
+  /** JSON array of homepage section ids, top to bottom; 'products' is always last. */
+  homepage_section_order: string;
 }
 
 /** One admin-managed card in the homepage bento carousel. */
