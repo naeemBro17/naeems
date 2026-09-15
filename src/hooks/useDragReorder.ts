@@ -27,6 +27,11 @@ export interface DragReorderOptions<T> {
   onReorder: (next: T[], from: number, to: number) => Promise<void> | void;
   /** 'swap' exchanges two items; 'move' lifts one item and inserts it at the target. */
   mode: DragReorderMode;
+  /**
+   * Axis a 'move' list runs along: 'y' for a stacked list (default), 'x' for
+   * a horizontal strip such as image thumbnails. Ignored for 'swap'.
+   */
+  axis?: 'x' | 'y';
   /** No listeners are attached while false. */
   enabled: boolean;
   /** Hold time before a drag begins. 0 starts on first touch (for a handle). */
@@ -46,7 +51,7 @@ export interface DragReorderState {
   isDragging: boolean;
   /** Translation to apply to the dragged item. */
   delta: Point;
-  /** Vertical shift for a non-dragged item in 'move' mode (the gap opening). */
+  /** Shift along the list axis for a non-dragged item in 'move' mode (the gap opening). */
   shiftFor: (index: number) => number;
   /** Ref callback for the element the drag is started from. */
   registerHandle: (index: number) => (el: HTMLElement | null) => void;
@@ -94,6 +99,7 @@ export function useDragReorder<T>({
   items,
   onReorder,
   mode,
+  axis = 'y',
   enabled,
   longPressMs = 0,
   keyOf = (item) => String(item),
@@ -168,12 +174,13 @@ export function useDragReorder<T>({
   const shiftFor = useCallback(
     (index: number): number => {
       if (mode !== 'move' || dragIndex === null || hoverIndex === null) return 0;
-      const height = rects.current[dragIndex]?.height ?? 0;
-      if (dragIndex < hoverIndex && index > dragIndex && index <= hoverIndex) return -height;
-      if (hoverIndex < dragIndex && index >= hoverIndex && index < dragIndex) return height;
+      const r = rects.current[dragIndex];
+      const extent = r ? (axis === 'x' ? r.width : r.height) : 0;
+      if (dragIndex < hoverIndex && index > dragIndex && index <= hoverIndex) return -extent;
+      if (hoverIndex < dragIndex && index >= hoverIndex && index < dragIndex) return extent;
       return 0;
     },
-    [mode, dragIndex, hoverIndex]
+    [mode, axis, dragIndex, hoverIndex]
   );
 
   useEffect(() => {
@@ -200,17 +207,20 @@ export function useDragReorder<T>({
         );
         return hit === -1 ? null : hit;
       }
-      // 'move': resolve on the vertical axis only, clamped to the list ends.
-      const inside = all.findIndex((r) => point.y >= r.top && point.y <= r.bottom);
+      // 'move': resolve along the list axis only, clamped to the list ends.
+      const pos = axis === 'x' ? point.x : point.y;
+      const startOf = (r: PageRect) => (axis === 'x' ? r.left : r.top);
+      const endOf = (r: PageRect) => (axis === 'x' ? r.right : r.bottom);
+      const inside = all.findIndex((r) => pos >= startOf(r) && pos <= endOf(r));
       let target: number;
       if (inside !== -1) target = inside;
-      else if (point.y < all[0].top) target = 0;
-      else if (point.y > all[all.length - 1].bottom) target = all.length - 1;
+      else if (pos < startOf(all[0])) target = 0;
+      else if (pos > endOf(all[all.length - 1])) target = all.length - 1;
       else {
         let best = 0;
         let bestDist = Number.POSITIVE_INFINITY;
         all.forEach((r, i) => {
-          const d = Math.abs((r.top + r.bottom) / 2 - point.y);
+          const d = Math.abs((startOf(r) + endOf(r)) / 2 - pos);
           if (d < bestDist) {
             bestDist = d;
             best = i;
@@ -293,7 +303,10 @@ export function useDragReorder<T>({
       // Snap the dragged item onto its destination while the save runs.
       const a = rects.current[from];
       const b = rects.current[to];
-      if (mode === 'move') {
+      if (mode === 'move' && axis === 'x') {
+        const newLeft = to > from ? b.right - a.width : b.left;
+        setDelta({ x: newLeft - a.left, y: 0 });
+      } else if (mode === 'move') {
         const newTop = to > from ? b.bottom - a.height : b.top;
         setDelta({ x: 0, y: newTop - a.top });
       } else {
@@ -375,7 +388,7 @@ export function useDragReorder<T>({
       }
       session.current = null;
     };
-  }, [enabled, items.length, mode, longPressMs, ignoreSelector, reset]);
+  }, [enabled, items.length, mode, axis, longPressMs, ignoreSelector, reset]);
 
   return {
     dragIndex,

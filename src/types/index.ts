@@ -174,6 +174,35 @@ export interface AppSettings {
   homepage_section_order: string;
 }
 
+/**
+ * One Region+Size combination of a product, with its own prices and stock.
+ * Read from product_variants_view: wholesale_price is present only for an
+ * approved wholesaler or admin, NULL otherwise, exactly like Product.
+ */
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  region: string;
+  size: string;
+  retail_price: number;
+  offer_price: number | null;
+  wholesale_price: number | null;
+  has_wholesale: boolean;
+  in_stock: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+/** The variant fields the admin edits in the inline sub-form. */
+export interface VariantFormData {
+  region: string;
+  size: string;
+  retail_price: string;
+  offer_price: string;
+  wholesale_price: string;
+  in_stock: boolean;
+}
+
 /** One admin-managed card in the homepage bento carousel. */
 export interface BentoTile {
   id: string;

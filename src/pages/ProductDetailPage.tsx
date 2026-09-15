@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type UIEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,13 +8,20 @@ import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
 import { buildCopyText, copyToClipboard } from '../lib/clipboard';
+import {
+  regionsOf,
+  sortVariants,
+  VARIANT_SELECT,
+  VARIANTS_VIEW,
+  variantDisplayPrice,
+} from '../lib/variants';
 import { useToast } from '../hooks/useToast';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
-import type { Product } from '../types';
+import type { Product, ProductVariant } from '../types';
 
 /** How long the Copy Price button holds its success state. */
 const COPIED_RESET_MS = 600;
@@ -79,11 +86,94 @@ function VideoReviewCard({ url }: { url: string }) {
   );
 }
 
-function DetailContent({ product }: { product: Product }) {
+/** One row of pill chips — regions or the sizes within a region. */
+function ChipRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="variant-row" role="group" aria-label={label}>
+      <span className="variant-row__label">{label}</span>
+      <div className="variant-row__chips">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`chip-select${option === selected ? ' chip-select--on' : ''}`}
+            aria-pressed={option === selected}
+            onClick={() => onSelect(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Region → Size picker, rendered only when the product has variants. The
+ * chosen combination drives the price block, stock row, Copy Price and the
+ * wholesale row below it.
+ */
+function VariantSelector({
+  variants,
+  selected,
+  onSelect,
+}: {
+  variants: ProductVariant[];
+  selected: ProductVariant;
+  onSelect: (variant: ProductVariant) => void;
+}) {
+  const regions = regionsOf(variants);
+  const sizes = variants.filter((v) => v.region === selected.region);
+
+  const pickRegion = (region: string) => {
+    const first = variants.find((v) => v.region === region);
+    if (first) onSelect(first);
+  };
+
+  return (
+    <div className="variant-selector">
+      <ChipRow label="Region" options={regions} selected={selected.region} onSelect={pickRegion} />
+      <ChipRow
+        label="Size"
+        options={sizes.map((v) => v.size)}
+        selected={selected.size}
+        onSelect={(size) => {
+          const match = sizes.find((v) => v.size === size);
+          if (match) onSelect(match);
+        }}
+      />
+    </div>
+  );
+}
+
+function DetailContent({
+  product,
+  variants,
+}: {
+  product: Product;
+  variants: ProductVariant[];
+}) {
   const { showToast } = useToast();
   const [activeImage, setActiveImage] = useState(0);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number>();
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+
+  // Default to the first variant in sort order; re-resolve if the list changes.
+  const selectedVariant = useMemo(() => {
+    if (variants.length === 0) return null;
+    return variants.find((v) => v.id === selectedVariantId) ?? variants[0];
+  }, [variants, selectedVariantId]);
 
   useEffect(() => {
     return () => {
@@ -92,8 +182,15 @@ function DetailContent({ product }: { product: Product }) {
   }, []);
 
   const images = productImages(product);
-  const outOfStock = isOutOfStock(product);
-  const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
+  // With a variant selected, everything price/stock-related follows it.
+  const outOfStock = selectedVariant ? !selectedVariant.in_stock : isOutOfStock(product);
+  const { mainPrice, strikePrice, savePercent } = selectedVariant
+    ? variantDisplayPrice(selectedVariant)
+    : getDisplayPrice(product);
+  const hasWholesale = selectedVariant ? selectedVariant.has_wholesale : product.has_wholesale;
+  const wholesalePrice = selectedVariant
+    ? selectedVariant.wholesale_price
+    : product.wholesale_price;
   const brand = product.brand?.trim() ?? '';
   // `note` is the short line under the price; `description` is the long copy.
   const about = product.description?.trim() ?? '';
@@ -109,7 +206,7 @@ function DetailContent({ product }: { product: Product }) {
   };
 
   const handleCopy = async () => {
-    const ok = await copyToClipboard(buildCopyText(product));
+    const ok = await copyToClipboard(buildCopyText(product, mainPrice));
     if (ok) {
       setCopied(true);
       showToast('Copied to clipboard');
@@ -169,6 +266,14 @@ function DetailContent({ product }: { product: Product }) {
         {brand !== '' && <p className="product-detail__brand">{brand}</p>}
 
         <h1 className="product-detail__name">{product.name}</h1>
+
+        {selectedVariant && (
+          <VariantSelector
+            variants={variants}
+            selected={selectedVariant}
+            onSelect={(v) => setSelectedVariantId(v.id)}
+          />
+        )}
 
         <div className={`price-block${outOfStock ? ' price-block--out' : ''}`}>
           <span className="product-detail__price">{formatTaka(mainPrice)}</span>
@@ -244,7 +349,7 @@ function DetailContent({ product }: { product: Product }) {
           </button>
         )}
 
-        <WholesaleReveal product={product} />
+        <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
       </div>
 
       {about !== '' && (
@@ -286,8 +391,9 @@ function DetailContent({ product }: { product: Product }) {
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { isAdmin } = useAuth();
-  const { products, isLoading } = useProducts();
+  const { products, isLoading, variantsFor } = useProducts();
   const [fetchedProduct, setFetchedProduct] = useState<Product | null>(null);
+  const [fetchedVariants, setFetchedVariants] = useState<ProductVariant[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
 
@@ -351,6 +457,35 @@ export function ProductDetailPage() {
     };
   }, [slug, isLoading, isAdmin, fromContext, fetchedProduct]);
 
+  // The context already holds every product's variants; a product that had
+  // to be fetched directly (not in the loaded batch) fetches its own.
+  const fetchedId = fetchedProduct?.id ?? null;
+  useEffect(() => {
+    if (fromContext || fetchedId === null) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from(VARIANTS_VIEW)
+        .select(VARIANT_SELECT)
+        .eq('product_id', fetchedId);
+      if (cancelled) return;
+      if (error) {
+        console.warn('Product variants unavailable:', error.message);
+        return;
+      }
+      setFetchedVariants(sortVariants((data ?? []) as ProductVariant[]));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fromContext, fetchedId]);
+
+  const variants = product
+    ? fromContext
+      ? variantsFor(product.id)
+      : fetchedVariants
+    : [];
+
   // Scroll to top whenever the viewed product changes.
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -388,7 +523,7 @@ export function ProductDetailPage() {
 
       <main className="detail-main">
         {product ? (
-          <DetailContent key={product.id} product={product} />
+          <DetailContent key={product.id} product={product} variants={variants} />
         ) : showLoading ? (
           <div className="full-screen-center">
             <span className="spinner spinner--large" aria-hidden="true" />

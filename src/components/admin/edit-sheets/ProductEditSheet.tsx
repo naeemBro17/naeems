@@ -3,19 +3,14 @@ import { supabase } from '../../../lib/supabase';
 import { useProducts } from '../../../contexts/ProductContext';
 import { useAdminEdit } from '../../../contexts/AdminEditContext';
 import { useToast } from '../../../hooks/useToast';
-import { useReorder } from '../../../hooks/useReorder';
 import { productImages } from '../../../lib/productImages';
 import { statusFromQuantity } from '../../../lib/stockStatus';
 import { uniqueProductSlug } from '../../../lib/slugify';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../../lib/skinFields';
 import { BottomSheet } from '../../shared/BottomSheet';
-import {
-  CloseGlyph,
-  ReorderRow,
-  RowIconButton,
-  SheetFooter,
-  Toggle,
-} from './SheetChrome';
+import { SheetFooter, Toggle } from './SheetChrome';
+import { ImageStrip } from './ImageStrip';
+import { VariantEditor } from './VariantEditor';
 import type { Product } from '../../../types';
 
 interface ProductDraft {
@@ -150,7 +145,6 @@ export function ProductEditSheet() {
 
   const setImages = (images: string[]) =>
     setDraft((current) => (current ? { ...current, images } : current));
-  const reorder = useReorder(draft?.images ?? [], setImages);
 
   const patch = (changes: Partial<ProductDraft>) =>
     setDraft((current) => (current ? { ...current, ...changes } : current));
@@ -222,7 +216,7 @@ export function ProductEditSheet() {
 
   return (
     <BottomSheet isOpen={isOpen} onClose={closeProductEdit} title="Edit Product">
-      {draft && (
+      {draft && editingProduct && (
         <form className="form edit-sheet" onSubmit={handleSubmit} noValidate>
           <div className="form-field">
             <label className="form-label" htmlFor="pe-name">
@@ -403,34 +397,15 @@ export function ProductEditSheet() {
             {draft.images.length === 0 ? (
               <p className="edit-sheet__empty">No images yet.</p>
             ) : (
-              <ul className="edit-list">
-                {draft.images.map((url, index) => (
-                  <ReorderRow
-                    key={url}
-                    index={index}
-                    count={draft.images.length}
-                    dragIndex={reorder.dragIndex}
-                    onDragStart={reorder.setDragIndex}
-                    onDragEnd={() => reorder.setDragIndex(null)}
-                    onDrop={reorder.dropOn}
-                    onMove={reorder.move}
-                    label={`image ${index + 1}`}
-                  >
-                    <img className="edit-row__thumb" src={url} alt="" />
-                    <span className="edit-row__text">
-                      {index === 0 ? 'Cover image' : `Image ${index + 1}`}
-                    </span>
-                    <RowIconButton
-                      label={`Remove image ${index + 1}`}
-                      variant="danger"
-                      onClick={() => setImages(draft.images.filter((u) => u !== url))}
-                    >
-                      <CloseGlyph />
-                    </RowIconButton>
-                  </ReorderRow>
-                ))}
-              </ul>
+              <ImageStrip
+                images={draft.images}
+                onChange={setImages}
+                onRemove={(url) => setImages(draft.images.filter((u) => u !== url))}
+              />
             )}
+            <p className="form-helper">
+              The first image is the cover. Hold a handle to drag an image into a new spot.
+            </p>
             <div className="inline-mini-form">
               <input
                 type="url"
@@ -470,6 +445,8 @@ export function ProductEditSheet() {
             selected={draft.skin_conditions}
             onChange={(skin_conditions) => patch({ skin_conditions })}
           />
+
+          <VariantEditor productId={editingProduct.id} />
 
           <SheetFooter onCancel={closeProductEdit} isSaving={isSaving} />
         </form>

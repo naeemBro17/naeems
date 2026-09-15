@@ -208,3 +208,91 @@ VERIFIED (Playwright, 393x852)
 - Skin tags: absent from the homepage and detail DOM; present in the admin
   sheet as 6 + 8 pill chips (32px), orange when selected; PATCH carries
   brand, skin_types and skin_conditions.
+
+
+Session 8 (Product Management), 2026-09-15
+===========================================
+ACTION REQUIRED
+---------------
+[ ] supabase/migration-013-variants.sql — run AFTER migration-012.
+    The brief named it supabase/migrations/migration-007-variants.sql; this
+    project keeps migrations in supabase/ and 007 was already the brand
+    column, so the real file is migration-013. Until it runs, the app treats
+    every product as a single item (the view 404 is caught and logged) and
+    the Variants editor can't save.
+
+PART 3 VERIFICATION RESULTS
+---------------------------
+- SKU auto-generate: WORKING. Admin → Products → Add Product has no SKU
+  input; choosing "Baby Care" and saving sent sku "BA-001" (and slug
+  "test-auto-sku-product"). Nothing changed.
+- Brand: WORKING. Saves from both product forms; renders from the brand
+  column on the card (small, muted, above the name) and on the detail page.
+  Re-checked with a mocked brand on a live product. Nothing changed.
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. Variant wholesale prices use exactly the products pattern rather than a
+   separate SECURITY DEFINER function: product_variants_view computes
+   wholesale_price with the existing is_wholesaler_or_admin() helper (which
+   IS the SECURITY DEFINER function) and returns NULL to everyone else, and
+   the base table's column is locked to all API roles. One query serves
+   customers, wholesalers and admins; the brief's "fetch wholesale_price
+   separately" step isn't needed. There is no database role for "admin" in
+   Supabase — admins are authenticated users with a profile row — so
+   "admin gets SELECT on the base table including wholesale_price" cannot
+   be expressed as a grant; admins read it through the view like
+   wholesalers do, and the editor pre-fills from that.
+
+2. Variants are loaded once for the whole catalog (one query on the view,
+   alongside products) so the card can show "from ৳X" without a request per
+   card. The detail page reads the same data; a product that had to be
+   fetched directly (not in the loaded list) fetches its own variants.
+
+3. A product's variant editor saves each variant immediately, as specified,
+   then reloads the shared variant list — so the card's "from" price and the
+   detail page follow at once without a full product refetch.
+
+4. The card's Copy Price copies the "from" price when the product has
+   variants, matching what the card shows. The detail page copies the
+   selected variant's price.
+
+5. The variant's in_stock flag drives the detail page's stock row and Copy
+   Price when a variant is selected; the product-level stock_quantity is
+   ignored there. The card still shows product-level stock.
+
+6. Region is stored uppercased ("us" → "US") so chips read consistently.
+
+7. The variant sub-form is a div, not a <form>: it sits inside the product
+   sheet's form and nested forms are invalid HTML. Enter in any of its
+   fields saves the variant, not the product.
+
+FOUND AND FIXED ALONG THE WAY
+-----------------------------
+- Cold-loading /admin (refresh, or opening the URL directly) bounced a real
+  admin back to the homepage. AuthContext reported "not loading" for one
+  render between the session arriving and the profile fetch starting, and
+  ProtectedRoute redirected in that gap. It now waits until the profile
+  answer belongs to the signed-in user.
+
+VERIFIED (Playwright, 393x852, mocked variants view)
+----------------------------------------------------
+- Card: "from ৳1,700" (lowest offer across variants) on the one product
+  with variants, nothing on the others.
+- Detail: Region AU/UK and Size chips (orange when selected); 340g → ৳1,850
+  struck ৳2,100 Save 12%, In Stock; 454g → ৳2,600, Out of Stock, Copy
+  disabled; UK → 250ml only, ৳1,700; Copy Price copies the selected
+  variant's price; a product without variants keeps the static block; a
+  hard refresh on the URL shows the selector.
+- Wholesale: as anon, zero .wholesale-row elements and the sentinel value
+  never appears anywhere in the DOM; as admin, the row shows the selected
+  variant's value blurred and re-blurs when the size changes.
+- Image strip: Cover label (white on 60% black, 10px, 4px padding, 4px
+  radius) on the first thumb; a 500ms hold on a handle lifts the thumb
+  (nothing at 200ms); touchmove is cancelled; neighbours slide by the
+  thumb's width; release reorders and the Cover label moves; no request is
+  sent until Save, whose PATCH carries the new image_urls order.
+- Variant editor: rows with region / size / price / stock toggle / edit /
+  delete; Add Variant opens an inline sub-form (no new sheet); saving sends
+  the row and toasts "Variant saved"; delete asks "Delete this variant?"
+  first.

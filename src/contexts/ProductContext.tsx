@@ -11,7 +11,8 @@ import { supabase } from '../lib/supabase';
 import { saveCache, loadCache } from '../lib/cache';
 import { useAuth } from './AuthContext';
 import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
-import type { Product, Category, AppSettings } from '../types';
+import { sortVariants, VARIANT_SELECT, VARIANTS_VIEW } from '../lib/variants';
+import type { Product, Category, AppSettings, ProductVariant } from '../types';
 
 interface ProductContextValue {
   /** All fetched products. Admin sessions include inactive products. */
@@ -28,6 +29,10 @@ interface ProductContextValue {
   refetch: () => Promise<void>;
   /** Optimistically patch one product in local state (no network call). */
   patchProductLocal: (id: string, patch: Partial<Product>) => void;
+  /** Region/size variants of one product, in display order. Empty when none. */
+  variantsFor: (productId: string) => ProductVariant[];
+  /** Re-read product_variants_view only (after the admin edits a variant). */
+  reloadVariants: () => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextValue | null>(null);
@@ -41,6 +46,9 @@ export const PRODUCTS_VIEW = 'products_view';
 
 /** Shared product select — reused by the single-product fetch on the detail page. */
 export const PRODUCT_SELECT = '*, category:categories(id, name, slug)';
+
+/** Stable empty list so consumers' memo deps don't churn for variant-less products. */
+const EMPTY_VARIANTS: ProductVariant[] = [];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   messenger_link: '',
@@ -149,6 +157,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [variantsByProduct, setVariantsByProduct] = useState<Map<string, ProductVariant[]>>(
+    () => new Map()
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -211,9 +222,27 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Variants are non-critical and fetched apart from the product batch: a
+  // missing view (migration-013 not run) must not take the catalog down.
+  const reloadVariants = useCallback(async () => {
+    const { data, error } = await supabase.from(VARIANTS_VIEW).select(VARIANT_SELECT);
+    if (error) {
+      console.warn('Product variants unavailable:', error.message);
+      return;
+    }
+    const grouped = new Map<string, ProductVariant[]>();
+    for (const row of (data ?? []) as ProductVariant[]) {
+      const list = grouped.get(row.product_id) ?? [];
+      list.push(row);
+      grouped.set(row.product_id, list);
+    }
+    for (const [id, list] of grouped) grouped.set(id, sortVariants(list));
+    setVariantsByProduct(grouped);
+  }, []);
+
   const refetch = useCallback(async () => {
-    await fetchData();
-  }, [fetchData]);
+    await Promise.all([fetchData(), reloadVariants()]);
+  }, [fetchData, reloadVariants]);
 
   // Initial load + reload whenever auth changes. Admins see inactive rows; any
   // login/logout also changes whether products_view returns wholesale_price, so
@@ -222,13 +251,13 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     if (authLoading) return;
     let cancelled = false;
     setIsLoading(true);
-    fetchData().finally(() => {
+    Promise.all([fetchData(), reloadVariants()]).finally(() => {
       if (!cancelled) setIsLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAdmin, session?.user.id, fetchData]);
+  }, [authLoading, isAdmin, session?.user.id, fetchData, reloadVariants]);
 
   // Auto-dismiss the offline banner when connectivity restores.
   useEffect(() => {
@@ -244,6 +273,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }, []);
 
+  const variantsFor = useCallback(
+    (productId: string) => variantsByProduct.get(productId) ?? EMPTY_VARIANTS,
+    [variantsByProduct]
+  );
+
   return (
     <ProductContext.Provider
       value={{
@@ -255,6 +289,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         loadFailed,
         refetch,
         patchProductLocal,
+        variantsFor,
+        reloadVariants,
       }}
     >
       {children}
