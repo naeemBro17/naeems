@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Product } from '../../types';
 import { productUrl, shareProduct } from '../../lib/share';
-import { copyToClipboard } from '../../lib/clipboard';
+import { buildCopyText, copyToClipboard } from '../../lib/clipboard';
 import { useToast } from '../../hooks/useToast';
 import { useAdminEdit } from '../../contexts/AdminEditContext';
+
+interface CardMenuProps {
+  product: Product;
+  /** The card's displayed price (its "from" price when it has variants) — same
+   *  figure the removed card button used to copy. */
+  copyPrice: number;
+  outOfStock: boolean;
+}
 
 /**
  * The "..." overlay on a product card image and its popup. Every handler stops
  * propagation so opening the menu never navigates to the product detail page.
  */
-export function CardMenu({ product }: { product: Product }) {
+export function CardMenu({ product, copyPrice, outOfStock }: CardMenuProps) {
   const { showToast } = useToast();
   const { isEditMode, openProductEdit } = useAdminEdit();
   const [isOpen, setIsOpen] = useState(false);
@@ -53,6 +61,13 @@ export function CardMenu({ product }: { product: Product }) {
     setIsOpen(false);
     const ok = await copyToClipboard(productUrl(product));
     showToast(ok ? 'Link copied' : 'Could not copy link', ok ? 'success' : 'error');
+  };
+
+  const handleCopyPrice = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    const ok = await copyToClipboard(buildCopyText(product, copyPrice));
+    showToast(ok ? 'Copied to clipboard' : 'Could not copy', ok ? 'success' : 'error');
   };
 
   return (
@@ -103,6 +118,21 @@ export function CardMenu({ product }: { product: Product }) {
           >
             Copy Link
           </button>
+          {outOfStock ? (
+            <span className="card-menu__item card-menu__item--disabled" aria-disabled="true">
+              Copy Price
+              <span className="card-menu__hint">Out of Stock</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="card-menu__item"
+              role="menuitem"
+              onClick={handleCopyPrice}
+            >
+              Copy Price
+            </button>
+          )}
           <span className="card-menu__item card-menu__item--disabled" aria-disabled="true">
             Save
             <span className="card-menu__hint">Coming Soon</span>

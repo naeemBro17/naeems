@@ -1754,6 +1754,20 @@ textarea {
   gap: var(--space-2);
 }
 
+/* Balances the back button's 44px so a title between them (e.g. CartPage)
+   sits centered instead of drifting toward the actions side. */
+.detail-header__actions:empty {
+  width: 44px;
+}
+
+.detail-header__title {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
 .detail-header__back {
   display: inline-flex;
   align-items: center;
@@ -1782,6 +1796,111 @@ textarea {
 .detail-main {
   flex: 1;
   padding: var(--space-4) var(--space-4) var(--space-10);
+}
+
+/* ---------- Cart page (placeholder — Session 9) ---------- */
+
+.cart-page__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cart-page__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cart-page__thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+
+.cart-page__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cart-page__thumb-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cart-page__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cart-page__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cart-page__qty {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.cart-page__row-end {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.cart-page__line-total {
+  font-family: var(--font-price);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.cart-page__remove {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.cart-page__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.cart-page__subtotal {
+  font-family: var(--font-price);
+  color: var(--color-accent);
+}
+
+.cart-page__note {
+  margin-top: var(--space-3);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .product-detail__description {
@@ -3181,11 +3300,31 @@ textarea {
   backdrop-filter: blur(6px);
 }
 
+/* Two-zone layout: a text column plus a fixed-width cart-button column, so
+   the button has its own reserved space and text can never flow under it. */
 .product-card__body {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  flex: 1;
+  padding: 9px 10px 10px;
+}
+
+.product-card__info {
   display: flex;
   flex-direction: column;
   flex: 1;
-  padding: 9px 10px 10px;
+  min-width: 0;
+}
+
+.product-card__cart-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  width: 42px;
+  flex-shrink: 0;
 }
 
 .product-card__brand {
@@ -3276,8 +3415,59 @@ textarea {
 .product-card__dot--in  { background: var(--color-stock-in); }
 .product-card__dot--out { background: var(--color-stock-out); }
 
-/* margin-top:auto pins the button to the card bottom whatever the name
-   length, so cards in a row end level. */
+/* Cart button, own column — see .product-card__cart-slot. */
+.cart-button {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(255, 122, 69, 0.35);
+  transition: transform var(--transition-fast), background-color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+.cart-button__icon {
+  width: 19px;
+  height: 19px;
+}
+
+.cart-button--added {
+  background: var(--color-success);
+  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.35);
+}
+
+.cart-button:disabled {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* One-shot ring: a fresh span is mounted per tap (keyed) so the keyframe
+   animation restarts even on rapid repeat taps, then it fades out for good. */
+.cart-button__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-success);
+  pointer-events: none;
+  animation: cartPulseRing 550ms ease-out forwards;
+}
+
+@keyframes cartPulseRing {
+  0%   { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* Detail page's full-size Copy Price button (unchanged by the card redesign);
+   margin-top:auto pins it to the bottom of a flex-column ancestor when there
+   is one. */
 .copy-button {
   margin-top: auto;
   display: flex;
@@ -3291,11 +3481,6 @@ textarea {
   font-size: 10.5px;
   font-weight: 700;
   transition: transform var(--transition-fast), background-color var(--transition-base);
-}
-
-/* Minimum breathing room above the button when the card body is short. */
-.product-card__stock {
-  margin-bottom: 10px;
 }
 
 /* The detail page's full-size variant also carries .button. */
@@ -3409,7 +3594,7 @@ textarea {
   width: 100%;
   max-width: 480px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: var(--nav-glass);
   border-top: 1px solid var(--nav-border);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
@@ -3435,6 +3620,27 @@ textarea {
 .bottom-nav__icon {
   width: 21px;
   height: 21px;
+}
+
+.bottom-nav__icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.bottom-nav__badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
 }
 
 .bottom-nav__label {
@@ -4544,6 +4750,7 @@ textarea {
 
 .button,
 .copy-button,
+.cart-button,
 .chip,
 .bottom-nav__tab,
 .exp-social,
@@ -4563,6 +4770,7 @@ textarea {
 
 .button:active:not(:disabled),
 .copy-button:active:not(:disabled),
+.cart-button:active:not(:disabled),
 .chip:active,
 .bottom-nav__tab:active,
 .exp-social:active,
@@ -4596,6 +4804,7 @@ textarea {
 
 /* The card's own controls must not scale the whole card with them. */
 .product-card .copy-button:active,
+.product-card .cart-button:active:not(:disabled),
 .product-card .card-menu__trigger:active {
   transform: scale(0.96);
 }
@@ -4681,6 +4890,7 @@ textarea {
   .page-transition,
   .chip:active,
   .copy-button--copied,
+  .cart-button__pulse,
   .bottom-nav__tab--active .bottom-nav__icon,
   .sheet-backdrop--closing,
   .sheet-panel--closing {
@@ -4689,6 +4899,7 @@ textarea {
 
   .button:active:not(:disabled),
   .copy-button:active:not(:disabled),
+  .cart-button:active:not(:disabled),
   .chip:active,
   .bottom-nav__tab:active,
   .exp-social:active,

@@ -296,3 +296,73 @@ VERIFIED (Playwright, 393x852, mocked variants view)
   delete; Add Variant opens an inline sub-form (no new sheet); saving sends
   the row and toasts "Variant saved"; delete asks "Delete this variant?"
   first.
+
+
+Session 10 (Cart Button Groundwork), 2026-09-16
+================================================
+This branch (feature/cart-button) was cut from main, so it does NOT include
+the product-card save-badge wrap fix from the still-unmerged
+fix/product-detail-bugs branch. Whichever branch merges second should take
+the other's src/styles/app.css changes into account — they touch nearby
+rules (.product-card__body, .product-card__price-sub) but not the same
+lines, so a merge conflict is unlikely, just worth a look.
+No new migrations.
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. Card body split into two flex children — .product-card__info (text) and
+   .product-card__cart-slot (fixed 42px) — rather than a CSS Grid. The
+   existing card CSS is flex-based throughout; this was the "pick whichever
+   fits the existing structure" option the brief explicitly allowed.
+
+2. "Added to cart" feedback uses the existing toast (showToast), not an
+   in-card floating label. The brief's own Part 3.4 says to fall back to a
+   toast when the card clips overflow for its rounded corners — this card
+   has had overflow: hidden from the start, so that fallback always applies
+   here, never the floating label.
+
+3. Copy Price in the "..." menu, when the product is out of stock, renders
+   as a disabled item with an "Out of Stock" hint — the same visual pattern
+   the menu already uses for "Save — Coming Soon" — rather than hiding the
+   item outright. Matches the old card button's behavior (out of stock =
+   can't copy) using an existing UI pattern instead of a new one.
+
+4. The cart button's price argument is fromPrice ?? mainPrice — the exact
+   figure the card displays and the exact figure the old Copy Price button
+   copied. A variant product adds its cheapest variant's price to the cart.
+
+5. /cart is intentionally a read-only-ish placeholder: a plain list (thumb,
+   name, qty × unit price, line total) with a Remove link per row, an
+   item-count + subtotal summary, and "Checkout is coming soon." No
+   quantity stepper — the brief called for "a plain list," and the
+   checkout session replaces this page entirely regardless. Remove was
+   kept (not in the brief) only because leaving items permanently stuck
+   with zero way to clear them felt like a trap, not a feature; it's a
+   thin wrapper over CartContext.removeItem, not new state.
+
+6. Bottom nav's Cart tab navigates via useNavigate('/cart') directly inside
+   BottomNav, unlike Home/Search/Account which call back up to ViewerPage.
+   Those three act on the current page (scroll, focus, open a sheet); Cart
+   is a real route change, so it didn't fit the callback-prop pattern.
+
+7. CartProvider sits inside ProductProvider in App.tsx's tree (order does
+   not matter functionally — CartContext doesn't read ProductContext) but
+   outside AdminEditProvider, next to where the other page-level providers
+   already sit.
+
+VERIFIED
+--------
+Verified with a static harness reusing the real compiled CSS + component
+markup (not the live app — the dev server needs Supabase credentials I
+don't have): cart button never overlaps price/save badge/stock text at
+~160-180px card width across short/long name+brand, high-discount, and
+out-of-stock cases; disabled (out-of-stock) button renders grey/inert;
+"added" state renders green with the checkmark icon and the pulse-ring
+keyframe in place; the "..." menu's new Copy Price item matches the
+existing item styling; bottom nav renders 4 evenly spaced tabs with the
+cart badge positioned correctly and hidden at 0 (tested at 3). Tap
+animations, haptics, the toast, and localStorage persistence are wired
+per-code and follow this codebase's existing timer/cleanup patterns
+(ProductCard's old copy-timeout, ThemeContext's localStorage try/catch)
+but weren't interaction-tested live, since that requires the real app
+running against Supabase. `npm run build` passes with zero errors.

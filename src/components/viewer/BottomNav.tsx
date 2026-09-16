@@ -1,4 +1,8 @@
-export type NavTab = 'home' | 'search' | 'account';
+import { useNavigate } from 'react-router-dom';
+import { useCart } from '../../contexts/CartContext';
+import { CartIcon } from './CartButton';
+
+export type NavTab = 'home' | 'search' | 'cart' | 'account';
 
 interface BottomNavProps {
   activeTab: NavTab;
@@ -64,11 +68,30 @@ function AccountIcon() {
   );
 }
 
-/** Fixed frosted-glass tab bar. Home and Search act on the page, not the router. */
+/**
+ * Fixed frosted-glass tab bar. Home, Search and Account act on the current
+ * page (see ViewerPage); Cart is a real route and navigates the router.
+ */
 export function BottomNav({ activeTab, onHome, onSearch, onAccount }: BottomNavProps) {
+  const navigate = useNavigate();
+  const { itemCount } = useCart();
+
   const tabs = [
     { id: 'home' as const, label: 'Home', icon: <HomeIcon />, onClick: onHome },
     { id: 'search' as const, label: 'Search', icon: <SearchIcon />, onClick: onSearch },
+    {
+      id: 'cart' as const,
+      label: 'Cart',
+      icon: (
+        <span className="bottom-nav__icon-wrap">
+          <CartIcon className="bottom-nav__icon" />
+          {itemCount > 0 && (
+            <span className="bottom-nav__badge">{itemCount > 99 ? '99+' : itemCount}</span>
+          )}
+        </span>
+      ),
+      onClick: () => navigate('/cart'),
+    },
     {
       id: 'account' as const,
       label: 'Account',
