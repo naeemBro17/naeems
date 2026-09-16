@@ -296,3 +296,49 @@ VERIFIED (Playwright, 393x852, mocked variants view)
   delete; Add Variant opens an inline sub-form (no new sheet); saving sends
   the row and toasts "Variant saved"; delete asks "Delete this variant?"
   first.
+
+
+Session 9 (Product Card Cart-Button/Badge Overlap), 2026-09-16
+================================================================
+No new migrations.
+
+SIGNIFICANT DEVIATION FROM THE BRIEF
+-------------------------------------
+The brief described a bug where the cart button is
+`position: absolute; bottom: 12px; right: 12px` and overlaps the "Save X%"
+badge, and asked for a CSS Grid/Flexbox two-zone rewrite reserving a 42px
+right column for the button. That bug did not exist in this codebase:
+- There is no "cart" anywhere in the app (grepped the whole src/ tree).
+- The card's action element is `.copy-button` ("Copy Price" / "Copied!"),
+  full-width, sitting in its OWN row below the stock row via
+  `flex-direction: column` + `margin-top: auto` on `.copy-button`
+  (src/styles/app.css:3281). It is not absolutely positioned and cannot
+  overlap the price/save badge above it — they're stacked in normal flow,
+  not side by side.
+
+Rewriting the button into a small 42px grid-column icon slot as literally
+specified would have deleted the "Copy Price"/"Copied!" text states (no
+room for the label) and removed a working, previously-verified feature for
+no functional gain, since there was no overlap to fix.
+
+What I actually did: the one real, applicable defect was Part 3's concern —
+`.product-card__price-sub` (retail strike price + save badge) had no
+`flex-wrap`, and the card's outer `overflow: hidden` (for rounded corners)
+meant a long strike price + a high discount badge (e.g. "Save 45%") could
+in theory get clipped at the ~160-180px 2-column mobile card width. Fixed
+by adding `flex-wrap: wrap` (+ `white-space: nowrap` on each child so they
+don't break mid-token, + `flex-shrink: 0` on the save pill) to
+`.product-card__price-sub` in src/styles/app.css. Retail price now wraps to
+its own line with the save badge below it if the row genuinely runs out of
+room, instead of clipping.
+
+Verified at real ~160-180px 2-column card width using a static harness
+(reused the actual compiled CSS + markup, not the live app — the dev
+server requires Supabase credentials I don't have) with all four specified
+data cases (short name/brand, long name/brand, high discount "Save 45%",
+no discount at all) plus adversarial extreme values (very long strike
+price + "Save 99.99%") to confirm the wrap fallback actually engages when
+needed. In every case the button never overlapped text (structurally
+impossible, separate flow row) and the badge never clipped.
+
+`npm run build` passes with zero errors.
