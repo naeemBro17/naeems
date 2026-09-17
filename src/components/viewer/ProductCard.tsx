@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -21,11 +21,18 @@ export function ProductCard({ product }: ProductCardProps) {
   const navigate = useNavigate();
   const { variantsFor } = useProducts();
   const [imageFailed, setImageFailed] = useState(false);
+  const imageWrapRef = useRef<HTMLDivElement>(null);
 
   const openDetail = () => {
     // Remember where the grid was so Back can restore it instead of jumping to top.
     rememberGridScroll();
-    navigateToProductWithHero(navigate, productPath(product));
+    // Tag only THIS card's image box for the shared-element transition, set
+    // imperatively at tap time rather than on every card up front — tagging
+    // all ~100+ grid cards at once forces the browser to snapshot every one
+    // of them for a transition only one of them is actually part of, which
+    // is exactly what was making the tap-to-open feel slow.
+    imageWrapRef.current?.style.setProperty('view-transition-name', productHeroName(product.id));
+    navigateToProductWithHero(navigate, productPath(product), product);
   };
 
   // A product with variants shows its cheapest option as a "from" price; the
@@ -55,8 +62,8 @@ export function ProductCard({ product }: ProductCardProps) {
       aria-label={`View details for ${product.name}`}
     >
       <div
+        ref={imageWrapRef}
         className={`product-card__image-wrap${outOfStock ? ' product-media--out' : ''}`}
-        style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
       >
         {showImage ? (
           <img
@@ -116,7 +123,7 @@ export function ProductCard({ product }: ProductCardProps) {
               <span className="product-card__price-sub">
                 <span className="product-card__strike">{formatTaka(strikePrice)}</span>
                 {savePercent !== null && !outOfStock && (
-                  <span className="product-card__save">Save {savePercent}%</span>
+                  <span className="product-card__save">-{savePercent}%</span>
                 )}
               </span>
             </div>

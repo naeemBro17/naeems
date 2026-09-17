@@ -306,3 +306,224 @@ Highest impact first.
    cap or expiry. Not urgent at ~150 SKUs, but worth a note for later.
 
 ====================================================================
+
+
+====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-2-card-and-transition
+====================================================================
+
+This session worked through "Batch 2 — Instant Product Open + Product Card
+Layout" (3 parts). The .env file now has real credentials, so — unlike last
+session — everything below was actually run and looked at in a browser, not
+just read in the code. Where I say "verified," I mean I saw it on screen.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Instant product open (the 2-second delay)
+
+Found the real cause, and it was not what the task guessed. The theory was
+that the detail page waits on a Supabase fetch before it can paint. I checked:
+when you tap a card from the grid, that exact product is already sitting in
+the app's in-memory catalog (the same list that rendered the card), so the
+detail page was already resolving it instantly with no network call — that
+part was never actually the bottleneck.
+
+The real cause: last session's hero transition (the card image morphing into
+the detail page image) tagged EVERY product card in the grid — all ~100+ of
+them — with the marker the browser uses to know what to animate, not just the
+one being tapped. Every single tap, the browser had to prepare an individual
+animation snapshot for all ~100+ real product photos before it could show
+anything, even though only one of them was actually going to move. That is a
+well-known, expensive mistake with this browser feature, and it would be far
+worse on a phone's GPU than in a desktop browser — matching exactly the "taps
+and stares at the old screen" symptom.
+
+Fixed it at the source: only the card actually tapped gets tagged now, set at
+the instant of the tap rather than in advance on every card. Confirmed by
+directly counting tagged elements before and after a tap: 105 before this fix,
+1 after. Confirmed by clicking a real card in the running app: the URL and the
+new page both update within the same tick, no visible delay.
+
+On top of that fix, I also built what the task asked for directly, as
+genuine extra insurance (and because a couple of its individual requirements
+were real, even though the "waiting on a fetch" theory wasn't the main
+story):
+  - The exact product row a tapped card was already showing is now handed to
+    the detail page through the navigation itself (router state), so the
+    very first render has real data to paint from no matter what — it
+    doesn't have to depend on the catalog context noticing in time.
+  - The transition is never awaited on anything — it starts in the same
+    click handler that changes the page, before any network activity.
+  - Opening the same product again is already instant and always was — nothing
+    is re-fetched, since the catalog is loaded once and kept in memory for the
+    whole visit.
+  - Direct/shared-link opens (no card to inherit data from) still go through
+    the original fetch-then-render path — but that full-page spinner has been
+    replaced with a shaped skeleton (an image-sized block, name-sized bars, a
+    price-sized bar) that matches the real layout, so it doesn't jump around
+    once the real content arrives.
+
+One thing genuinely does not apply to this app and I did not force it in: the
+task asks for "the top paints instantly, the bottom fills in afterward with
+its own skeleton." This app fetches a product's entire row in one query —
+image, name, price AND description, how-to-use, ingredients, video, variants
+— there is no second, slower fetch for the lower half of the page to begin
+with. Building a fake split-loading state for data that already arrives
+together would have added real complexity for no actual benefit, so I didn't.
+
+Also found and fixed a real bug while looking at the rendered detail page for
+the first time: the "Copy Price" button was still rendering orange (it was
+supposed to become the neutral secondary action once "Add to Cart" became
+the primary one, from last session's checkout-colour work). The CSS rule that
+made it neutral existed, but was declared BEFORE the button's base style in
+the stylesheet, so the base orange was winning. Moved it after. Confirmed on
+screen: Add to Cart is now the only orange element on the page, Copy Price is
+neutral grey, and the green "Copied!" flash still works on both states.
+
+PART 2 — Product card layout
+
+Verified on a REAL narrow viewport this time (see section 3 below for exactly
+how, since the standard browser tools here can't shrink below ~650px). Tested
+at 320px, 360px, 375px and 390px — the full realistic phone range, not just
+the 160-180px the task asked for.
+
+What I actually found, measured directly against every rendered card rather
+than guessed:
+  - The price-wrapping bug (Problem B) and the badge/cart-button collision
+    (Problem C) did NOT reproduce at 375-390px (a modern phone) with the code
+    as merged from last session — but they reproduced on EVERY single card
+    once the viewport dropped to 320px (an older/smaller phone), which is
+    still a real device width. So the bug was real, just narrower than where
+    it was originally seen — plausibly the live phone tested against had a
+    slightly narrower effective width, or different font metrics, than my
+    360-390px checks alone would have caught.
+  - Fixed it at the root instead of chasing the exact width: shortened the
+    save badge from "Save 12%" to "-12%" (same idea the task offered as the
+    fallback) on every card, consistently, and added `white-space: nowrap`
+    to the price, the struck-through retail price and the badge so none of
+    them can ever break internally again, at any width. Also shrank the cart
+    button a little further (30px, then 28px) exactly as the task allowed,
+    to free more room.
+  - Re-measured after the fix at all four widths: zero cards wrap at any of
+    them, and the gap between the badge and the cart button is never below
+    7px even at the extreme 320px width (it's 35-42px at realistic
+    375-390px widths). No collisions found anywhere in the ~105-product
+    catalogue.
+  - Problem A (names truncating early) is real but only partly fixable with
+    CSS alone. I confirmed exactly why: with a long name like "CeraVe Foaming
+    Cleanser Eco-Recharge Refill 473mL" at card width, the word "Recharge"
+    (8 letters) simply doesn't fit in what's left of the second line after
+    "Cleanser Eco-", so it wraps whole to a third line that then gets cut —
+    leaving a visible gap on line 2 before the ellipsis. I tried both
+    automatic hyphenation (`hyphens: auto`) and character-level breaking
+    (`word-break`) directly in the running browser to see if either would
+    tighten that gap — neither changed the outcome, because browsers only
+    break inside a word when the word cannot fit ANYWHERE on its own, never
+    just to pack a line more tightly. That is a hard limit of how text
+    wrapping works, not a bug in this app, and the task explicitly ruled out
+    the other usual fix (shrinking the font). What I could do — and did — is
+    free up real width by shrinking the cart button further, which reduces
+    how often this happens without touching font size. A handful of the
+    longest names in the catalogue will still show a modest gap on their
+    second line; renaming those specific products to something shorter is
+    the only way to fully close that gap, and that's a content decision, not
+    a code one.
+  - Checked every required case by hand at 375px: longest name (Aveeno Baby
+    Daily Moisture Fragrance Free Lotion), long name with a hyphenated word
+    (CeraVe Foaming Cleanser Eco-Recharge), medium name (Beauty of Joseon Red
+    Bean Water Gel), short out-of-stock name (Bio Oil | 200mL — confirmed its
+    save badge correctly disappears because it's out of stock, and the cart
+    button shows disabled), and the largest discount badges in the catalogue
+    (all "-XX%" now, same width regardless of the digits). Also confirmed a
+    genuinely no-discount product shows just its price with no leftover gap.
+
+PART 3 — Verifying two things from last session
+
+3A. SKU hidden from customers — CONFIRMED, still correct. I did not just
+    re-read the code this time: I loaded a real product page as a signed-out
+    visitor and searched the entire rendered page (every accordion section,
+    and the full HTML including anything hidden) for anything matching the
+    SKU pattern this app generates (e.g. "FC-0366"). Nothing found anywhere.
+    Nothing to fix.
+
+3B. Product image edge-to-edge — CONFIRMED, correct, saw it directly on
+    screen at phone width: the image touches both the left and right edges
+    with no visible gap and no rounded corner cutting into it, and the text
+    below it still has its normal padding. No change needed.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed. Nothing in this session touched the database or its schema.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+Nothing outstanding from the three parts asked for. One honest limitation in
+how I verified Part 2: the browser tooling available in this environment
+would not resize down to a true 375px window (it kept reporting ~650-770px
+wide no matter what I asked for — some kind of minimum-window-size floor).
+I worked around it by loading the real running site inside a same-origin
+iframe pinned to the exact widths I needed (320/360/375/390px) and measuring
+every card's actual rendered dimensions in the real browser engine, which is
+why I'm confident in the specific pixel numbers reported above — but it's
+still worth you double-checking on your own phone, since nothing beats the
+real device. If anything looks off there that doesn't match what's described
+above, that's the first place to look.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- The "Copy Price is still orange" bug described in Part 1 above is the kind
+  of thing that will keep happening at the edges of the checkout/detail
+  colour work from two sessions ago, precisely because that work was never
+  seen running until today. It's worth a quick visual pass over the rest of
+  last session's colour changes (dark mode especially) next time you're in
+  the app, since I only spot-checked the pages this batch's tasks touched.
+- The product grid holds ~105 products in memory at once, all rendered
+  simultaneously (no virtualization/windowing). That's fine at this catalogue
+  size and is not slowing anything down today, but it's the kind of thing
+  that would start to matter if the catalogue grows substantially — noting
+  it now rather than after it becomes a problem.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Save badge format ("-12%" instead of "Save 12%"): applied to the product
+  card only, not the product detail page or the homepage bento tiles, which
+  have real room to spare and where the fuller wording reads better. The task
+  asked for one consistent format "for all cards," which I read as the grid
+  card specifically, not every place a discount appears anywhere in the app.
+- Cart button size: shrank it twice this session (34px → 30px → 28px) chasing
+  the narrowest realistic width before any collision appeared. It's now
+  smaller than a typical comfortable tap target, which the task explicitly
+  accepted as a trade-off ("it is already only an icon") — worth knowing the
+  whole card is still tappable as a fallback if a thumb narrowly misses it.
+- Kept the router-state data-passing and skeleton work from Part 1's brief
+  even though my own measurement shows the grid-tap path didn't strictly need
+  it for speed (the catalog context already had the data instantly). It's
+  cheap, it's exactly what was asked for, and it's genuine insurance against
+  edge cases (a momentarily-stale context, a future change to how products
+  load) — but I want you to know the honest reason it was built, not just
+  that it was.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Code health — small] Now that CSS bugs are only ever going to be caught
+   by actually looking at the running app, it may be worth asking whichever
+   session next touches the visual side of the site to do a full click-
+   through of every screen (not just the ones that changed) once, the way
+   this session did for checkout — a cheap way to catch the "looked right in
+   the code, wrong on screen" class of bug before it ships.
+2. [Content — small] A handful of product names are long enough that even a
+   well-tuned two-line card can't show them in full (see Problem A above).
+   Not a bug to fix in code — worth a look at whether a few of the longest
+   names (there are maybe half a dozen) could be shortened in the catalogue
+   itself for a cleaner card, e.g. dropping a redundant size/variant suffix
+   already shown elsewhere.
+
+====================================================================
