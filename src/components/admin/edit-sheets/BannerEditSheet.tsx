@@ -10,6 +10,7 @@ import {
 } from '../../../lib/bannerSlides';
 import { saveSettings } from '../../../lib/settingsLists';
 import { BottomSheet } from '../../shared/BottomSheet';
+import { AdminImagePicker } from '../AdminImagePicker';
 import {
   PencilGlyph,
   ReorderRow,
@@ -133,6 +134,28 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
           </div>
 
           <div className="form-field">
+            <span className="form-label">Banner image (optional)</span>
+            <AdminImagePicker
+              path={`banners/${slideDraft.id}.webp`}
+              value={slideDraft.image_url}
+              onChange={(image_url) => patchSlide({ image_url })}
+              shape="rect"
+              label="Banner slide image"
+              placeholderIcon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              }
+            />
+            <p className="form-helper">
+              With no image, the banner shows its plain default background. With
+              one, it fills the slide with a dark scrim behind the text.
+            </p>
+          </div>
+
+          <div className="form-field">
             <label className="form-label" htmlFor="bs-cta-text">CTA button text</label>
             <input
               id="bs-cta-text"
@@ -227,7 +250,7 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
             <ul className="edit-list">
               {slides.map((slide, index) => (
                 <ReorderRow
-                  key={`${slide.title}-${index}`}
+                  key={slide.id}
                   index={index}
                   count={slides.length}
                   dragIndex={reorder.dragIndex}

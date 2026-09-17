@@ -2,6 +2,10 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  /** Optional photo for the homepage Browse circle; null (or absent/undefined
+   *  on rows cached before migration-015) falls back to the curated/generic
+   *  SVG icon exactly as before this column existed. */
+  image_url: string | null;
   created_at: string;
 }
 
@@ -116,6 +120,10 @@ export type BannerCtaAction = 'scroll_to_products' | 'open_contact' | 'open_url'
 
 /** One hero banner slide, stored in app_settings under the 'banner_slides' key. */
 export interface BannerSlide {
+  /** Stable id, generated client-side — doubles as the slide's image storage
+   *  path (banners/{id}.webp) so replacing the photo overwrites in place
+   *  rather than leaving the old upload orphaned in Storage. */
+  id: string;
   eyebrow_text: string;
   /** Headline — clamped to 2 lines in the banner. */
   title: string;
@@ -125,6 +133,9 @@ export interface BannerSlide {
   cta_url: string;
   /** Hex background reserved for future per-slide custom grounds. */
   background_color: string;
+  /** Optional photo behind the slide's text; null shows the plain default
+   *  background exactly as before this field existed. */
+  image_url: string | null;
   is_active: boolean;
 }
 

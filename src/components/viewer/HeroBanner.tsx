@@ -111,12 +111,28 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
       >
         {activeSlides.map((slide, index) => (
           <article
-            key={`${slide.title}-${index}`}
-            className="hero-banner__slide"
+            key={slide.id}
+            className={`hero-banner__slide${slide.image_url ? ' hero-banner__slide--photo' : ''}`}
             aria-label={`Slide ${index + 1} of ${slideCount}`}
           >
-            <span className="hero-banner__circle hero-banner__circle--one" aria-hidden="true" />
-            <span className="hero-banner__circle hero-banner__circle--two" aria-hidden="true" />
+            {slide.image_url ? (
+              <>
+                <img
+                  className="hero-banner__image"
+                  src={slide.image_url}
+                  alt=""
+                  aria-hidden="true"
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+                {/* Scrim behind the text so it stays legible over any photo. */}
+                <div className="hero-banner__scrim" aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <span className="hero-banner__circle hero-banner__circle--one" aria-hidden="true" />
+                <span className="hero-banner__circle hero-banner__circle--two" aria-hidden="true" />
+              </>
+            )}
             <div className="hero-banner__content">
               {slide.eyebrow_text !== '' && (
                 <p className="hero-banner__eyebrow">{slide.eyebrow_text}</p>

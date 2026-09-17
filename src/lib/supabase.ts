@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { resizeImage } from './imageResize';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -36,4 +37,22 @@ export function storagePathFromUrl(url: string): string | null {
   if (index === -1) return null;
   const path = url.slice(index + marker.length).split('?')[0];
   return path === '' ? null : decodeURIComponent(path);
+}
+
+/**
+ * Shared single-image upload used by every admin "one photo" field (banner
+ * slide image, category image, expert photo) — resizes client-side, then
+ * upserts to a fixed path in the product-images bucket so replacing a photo
+ * overwrites in place instead of leaving the old upload orphaned. Returns a
+ * cache-busted public URL so the new photo shows immediately despite the
+ * stable path.
+ */
+export async function uploadAdminImage(path: string, file: File): Promise<string> {
+  const blob = await resizeImage(file);
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, blob, { contentType: 'image/webp', upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
 }

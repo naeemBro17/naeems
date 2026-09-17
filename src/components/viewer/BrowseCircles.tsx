@@ -222,6 +222,8 @@ interface CircleEntry {
   label: string;
   categoryId: string;
   icon: () => JSX.Element;
+  /** Admin-uploaded photo for this category; null shows the icon instead. */
+  imageUrl: string | null;
   isHot: boolean;
   isNew: boolean;
 }
@@ -267,6 +269,7 @@ export function BrowseCircles({
         label: category.name,
         categoryId: category.id,
         icon,
+        imageUrl: category.image_url,
         isHot: featuredCategoryIds.has(category.id),
         isNew: freshCategoryIds.has(category.id),
       });
@@ -337,7 +340,11 @@ export function BrowseCircles({
                   isSelected ? ' browse-circle--selected' : ''
                 }`}
               >
-                <Icon />
+                {entry.imageUrl ? (
+                  <img className="browse-circle__image" src={entry.imageUrl} alt="" />
+                ) : (
+                  <Icon />
+                )}
                 {entry.isNew && (
                   <span className="browse-circle__badge" aria-hidden="true">
                     NEW

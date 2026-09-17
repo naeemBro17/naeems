@@ -4,7 +4,18 @@ import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { slugify } from '../../lib/format';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { AdminImagePicker } from './AdminImagePicker';
 import type { Category } from '../../types';
+
+function CategoryIconGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
 
 export function CategoryManager() {
   const { categories, products, refetch } = useProducts();
@@ -14,6 +25,7 @@ export function CategoryManager() {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
 
@@ -47,6 +59,7 @@ export function CategoryManager() {
   const startEdit = (category: Category) => {
     setEditingId(category.id);
     setEditingName(category.name);
+    setEditingImageUrl(category.image_url);
   };
 
   const handleSaveEdit = async (category: Category) => {
@@ -55,11 +68,11 @@ export function CategoryManager() {
     setIsSavingEdit(true);
     const { error } = await supabase
       .from('categories')
-      .update({ name, slug: slugify(name) })
+      .update({ name, slug: slugify(name), image_url: editingImageUrl })
       .eq('id', category.id);
     setIsSavingEdit(false);
     if (error) {
-      showToast('Could not rename category — the name may already exist', 'error');
+      showToast('Could not save category — the name may already exist', 'error');
       return;
     }
     setEditingId(null);
@@ -131,31 +144,48 @@ export function CategoryManager() {
               <li key={category.id} className="admin-category-row">
                 {isEditing ? (
                   <div className="admin-category-row__edit">
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      aria-label={`Rename category ${category.name}`}
+                    <AdminImagePicker
+                      path={`categories/${category.id}.webp`}
+                      value={editingImageUrl}
+                      onChange={setEditingImageUrl}
+                      shape="circle"
+                      label={`${category.name} image`}
+                      placeholderIcon={<CategoryIconGlyph />}
                     />
-                    <button
-                      type="button"
-                      className="button button--primary button--small"
-                      onClick={() => handleSaveEdit(category)}
-                      disabled={isSavingEdit || editingName.trim() === ''}
-                    >
-                      {isSavingEdit ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button--secondary button--small"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </button>
+                    <div className="admin-category-row__edit-fields">
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        aria-label={`Rename category ${category.name}`}
+                      />
+                      <button
+                        type="button"
+                        className="button button--primary button--small"
+                        onClick={() => handleSaveEdit(category)}
+                        disabled={isSavingEdit || editingName.trim() === ''}
+                      >
+                        {isSavingEdit ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary button--small"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
+                    <span className="admin-category-row__thumb" aria-hidden="true">
+                      {category.image_url ? (
+                        <img src={category.image_url} alt="" />
+                      ) : (
+                        <CategoryIconGlyph />
+                      )}
+                    </span>
                     <div className="admin-category-row__info">
                       <p className="admin-category-row__name">{category.name}</p>
                       <p className="admin-category-row__slug">{category.slug}</p>
