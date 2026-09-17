@@ -653,6 +653,65 @@ textarea {
   background: var(--color-bg-secondary);
 }
 
+/* ---------- Product detail: whole-page skeleton (direct-nav fallback only) ---------- */
+
+.product-detail-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.product-detail-skeleton__image {
+  aspect-ratio: 1 / 1;
+  margin: 0 calc(-1 * var(--space-4)) 0 calc(-1 * var(--space-4));
+  border-radius: 0;
+}
+
+.product-detail-skeleton__info {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.product-detail-skeleton__bar {
+  height: 14px;
+  width: 100%;
+}
+
+.product-detail-skeleton__bar--brand {
+  height: 10px;
+  width: 30%;
+}
+
+.product-detail-skeleton__bar--name {
+  height: 20px;
+  width: 85%;
+  margin-top: var(--space-1);
+}
+
+.product-detail-skeleton__bar--name-short {
+  height: 20px;
+  width: 55%;
+}
+
+.product-detail-skeleton__bar--price {
+  height: 28px;
+  width: 40%;
+  margin-top: var(--space-2);
+}
+
+.product-detail-skeleton__bar--stock {
+  height: 12px;
+  width: 35%;
+}
+
+.product-detail-skeleton__bar--button {
+  height: 46px;
+  width: 100%;
+  border-radius: 30px;
+  margin-top: var(--space-2);
+}
+
 .product-detail__carousel {
   display: flex;
   overflow-x: auto;
@@ -759,13 +818,6 @@ textarea {
 
 .product-detail__actions .copy-button:first-child {
   margin-top: var(--space-4);
-}
-
-/* Copy Price is a secondary action now that Add to Cart is the primary one —
-   only one orange element per screen (see CLAUDE.md). */
-.copy-button--secondary {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
 }
 
 .product-detail .wholesale-row {
@@ -3203,7 +3255,7 @@ textarea {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 6px;
+  gap: 8px;
   flex: 1;
   padding: 9px 10px 10px;
 }
@@ -3220,7 +3272,7 @@ textarea {
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  width: 34px;
+  width: 28px;
   flex-shrink: 0;
 }
 
@@ -3251,6 +3303,8 @@ textarea {
   letter-spacing: -0.5px;
   color: #FF7A45;
   line-height: 1.15;
+  /* A price must never break — see CLAUDE.md's card spec. */
+  white-space: nowrap;
 }
 
 .product-card__price--out {
@@ -3262,6 +3316,9 @@ textarea {
   align-items: center;
   gap: 5px;
   margin-top: 2px;
+  /* Never let the retail price + badge drop to a second line. */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .product-card__strike {
@@ -3269,16 +3326,20 @@ textarea {
   font-size: 10px;
   color: var(--color-text-muted);
   text-decoration: line-through;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .product-card__save {
-  font-size: 8px;
+  font-size: 8.5px;
   font-weight: 800;
   color: #FF7A45;
   background: var(--save-pill-bg);
   border: 1px solid var(--save-pill-border);
   border-radius: 20px;
   padding: 2px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .product-card__stock {
@@ -3304,8 +3365,8 @@ textarea {
 /* Cart button, own column — see .product-card__cart-slot. */
 .cart-button {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3319,8 +3380,8 @@ textarea {
 }
 
 .cart-button__icon {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
 }
 
 .cart-button--added {
@@ -3385,6 +3446,15 @@ textarea {
 
 .copy-button:active {
   transform: scale(0.97);
+}
+
+/* Copy Price is a secondary action now that Add to Cart is the primary one —
+   only one orange element per screen (see CLAUDE.md). Declared after the
+   base .copy-button rule (equal specificity) so it actually wins — but
+   before --copied below, so the "Copied!" flash still goes green here too. */
+.copy-button--secondary {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
 }
 
 .copy-button--copied {

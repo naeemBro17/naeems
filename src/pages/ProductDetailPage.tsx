@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -441,8 +441,31 @@ function DetailContent({
   );
 }
 
+/**
+ * Whole-page loading placeholder, shaped like the real layout. Only ever
+ * shown for a direct/shared-link open where there is no card data to paint
+ * from immediately — never for the normal tap-from-grid path, which renders
+ * the real content (and starts the hero transition) on the very first frame.
+ */
+function ProductDetailSkeleton() {
+  return (
+    <div className="product-detail-skeleton" aria-hidden="true">
+      <div className="skeleton product-detail-skeleton__image" />
+      <div className="product-detail-skeleton__info">
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--brand" />
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--name" />
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--name-short" />
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--price" />
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--stock" />
+        <div className="skeleton product-detail-skeleton__bar product-detail-skeleton__bar--button" />
+      </div>
+    </div>
+  );
+}
+
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
   const { isAdmin } = useAuth();
   const { products, isLoading, variantsFor } = useProducts();
   const [fetchedProduct, setFetchedProduct] = useState<Product | null>(null);
@@ -454,16 +477,26 @@ export function ProductDetailPage() {
    *  migration (and cached rows that predate it) keep working. */
   const matches = (p: Product): boolean => p.slug === slug || p.sku === slug;
 
-  const fromContext = products.find(matches) ?? null;
-  const product =
-    fromContext ?? (fetchedProduct && matches(fetchedProduct) ? fetchedProduct : null);
+  // The exact row the tapped card was already showing (see
+  // navigateToProductWithHero) — lets the very first render paint real
+  // content instead of waiting on the catalog context or a network fetch.
+  // Only trusted when it actually matches the current :slug, so navigating
+  // from one product's page to a related one can't flash stale data.
+  const navProduct = (location.state as { product?: Product } | null)?.product ?? null;
+  const fromNavState = navProduct && matches(navProduct) ? navProduct : null;
 
-  // Hard-refresh fallback: if the product isn't in the loaded batch, fetch just
-  // this one directly so a shared /product/:slug URL renders correctly.
+  const fromContext = products.find(matches) ?? null;
+  const fromCatalog = fromContext ?? fromNavState;
+  const product =
+    fromCatalog ?? (fetchedProduct && matches(fetchedProduct) ? fetchedProduct : null);
+
+  // Hard-refresh fallback: if the product isn't in the loaded batch AND
+  // wasn't handed to us by the card that was tapped, fetch just this one
+  // directly so a shared /product/:slug URL renders correctly.
   useEffect(() => {
     if (!slug) return;
     if (isLoading) return;
-    if (fromContext) return;
+    if (fromCatalog) return;
     if (fetchedProduct && matches(fetchedProduct)) return;
 
     const identifier = safeIdentifier(slug);
@@ -508,13 +541,14 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, isLoading, isAdmin, fromContext, fetchedProduct]);
+  }, [slug, isLoading, isAdmin, fromCatalog, fetchedProduct]);
 
-  // The context already holds every product's variants; a product that had
-  // to be fetched directly (not in the loaded batch) fetches its own.
+  // The context already holds every product's variants (or will shortly,
+  // for the nav-state case); a product that had to be fetched directly (not
+  // in the loaded batch, and no card handed it to us) fetches its own.
   const fetchedId = fetchedProduct?.id ?? null;
   useEffect(() => {
-    if (fromContext || fetchedId === null) return;
+    if (fromCatalog || fetchedId === null) return;
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
@@ -531,10 +565,10 @@ export function ProductDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [fromContext, fetchedId]);
+  }, [fromCatalog, fetchedId]);
 
   const variants = product
-    ? fromContext
+    ? fromCatalog
       ? variantsFor(product.id)
       : fetchedVariants
     : [];
@@ -578,9 +612,7 @@ export function ProductDetailPage() {
         {product ? (
           <DetailContent key={product.id} product={product} variants={variants} />
         ) : showLoading ? (
-          <div className="full-screen-center">
-            <span className="spinner spinner--large" aria-hidden="true" />
-          </div>
+          <ProductDetailSkeleton />
         ) : (
           <div className="empty-state">
             <div className="empty-state__icon" aria-hidden="true">
