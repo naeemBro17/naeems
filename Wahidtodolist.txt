@@ -296,3 +296,152 @@ VERIFIED (Playwright, 393x852, mocked variants view)
   delete; Add Variant opens an inline sub-form (no new sheet); saving sends
   the row and toasts "Variant saved"; delete asks "Delete this variant?"
   first.
+
+
+Session 10 (Cart Button Groundwork), 2026-09-16
+================================================
+This branch (feature/cart-button) was cut from main, so it does NOT include
+the product-card save-badge wrap fix from the still-unmerged
+fix/product-detail-bugs branch. Whichever branch merges second should take
+the other's src/styles/app.css changes into account — they touch nearby
+rules (.product-card__body, .product-card__price-sub) but not the same
+lines, so a merge conflict is unlikely, just worth a look.
+No new migrations.
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. Card body split into two flex children — .product-card__info (text) and
+   .product-card__cart-slot (fixed 42px) — rather than a CSS Grid. The
+   existing card CSS is flex-based throughout; this was the "pick whichever
+   fits the existing structure" option the brief explicitly allowed.
+
+2. "Added to cart" feedback uses the existing toast (showToast), not an
+   in-card floating label. The brief's own Part 3.4 says to fall back to a
+   toast when the card clips overflow for its rounded corners — this card
+   has had overflow: hidden from the start, so that fallback always applies
+   here, never the floating label.
+
+3. Copy Price in the "..." menu, when the product is out of stock, renders
+   as a disabled item with an "Out of Stock" hint — the same visual pattern
+   the menu already uses for "Save — Coming Soon" — rather than hiding the
+   item outright. Matches the old card button's behavior (out of stock =
+   can't copy) using an existing UI pattern instead of a new one.
+
+4. The cart button's price argument is fromPrice ?? mainPrice — the exact
+   figure the card displays and the exact figure the old Copy Price button
+   copied. A variant product adds its cheapest variant's price to the cart.
+
+5. /cart is intentionally a read-only-ish placeholder: a plain list (thumb,
+   name, qty × unit price, line total) with a Remove link per row, an
+   item-count + subtotal summary, and "Checkout is coming soon." No
+   quantity stepper — the brief called for "a plain list," and the
+   checkout session replaces this page entirely regardless. Remove was
+   kept (not in the brief) only because leaving items permanently stuck
+   with zero way to clear them felt like a trap, not a feature; it's a
+   thin wrapper over CartContext.removeItem, not new state.
+
+6. Bottom nav's Cart tab navigates via useNavigate('/cart') directly inside
+   BottomNav, unlike Home/Search/Account which call back up to ViewerPage.
+   Those three act on the current page (scroll, focus, open a sheet); Cart
+   is a real route change, so it didn't fit the callback-prop pattern.
+
+7. CartProvider sits inside ProductProvider in App.tsx's tree (order does
+   not matter functionally — CartContext doesn't read ProductContext) but
+   outside AdminEditProvider, next to where the other page-level providers
+   already sit.
+
+VERIFIED
+--------
+Verified with a static harness reusing the real compiled CSS + component
+markup (not the live app — the dev server needs Supabase credentials I
+don't have): cart button never overlaps price/save badge/stock text at
+~160-180px card width across short/long name+brand, high-discount, and
+out-of-stock cases; disabled (out-of-stock) button renders grey/inert;
+"added" state renders green with the checkmark icon and the pulse-ring
+keyframe in place; the "..." menu's new Copy Price item matches the
+existing item styling; bottom nav renders 4 evenly spaced tabs with the
+cart badge positioned correctly and hidden at 0 (tested at 3). Tap
+animations, haptics, the toast, and localStorage persistence are wired
+per-code and follow this codebase's existing timer/cleanup patterns
+(ProductCard's old copy-timeout, ThemeContext's localStorage try/catch)
+but weren't interaction-tested live, since that requires the real app
+running against Supabase. `npm run build` passes with zero errors.
+
+
+Session 11 (Cart & Checkout Flow), 2026-09-16
+==============================================
+ACTION REQUIRED — run in the Supabase SQL Editor, after migration-013
+------------------------------------------------------------------
+[ ] supabase/migration-014-promo-codes.sql — creates promo_codes,
+    increment_promo_usage(), and seeds the shop_whatsapp_number
+    app_settings row. Until it runs: Admin → Promo Codes can't load or
+    save, applying any code on Order Summary always shows "Invalid or
+    expired code", and Settings → Checkout WhatsApp Number can't save.
+    Also set a real number in Settings → Checkout WhatsApp Number once
+    it's run — "Send on WhatsApp" is disabled until one is saved there.
+
+DECISIONS MADE WITHOUT ASKING
+-----------------------------
+1. promo_codes RLS goes further than the brief's column-only ask: the
+   public SELECT policy's row filter also hides any code that is
+   inactive, past its expiry, or at its usage cap — not just the columns.
+   A raw REST call can no longer enumerate which codes exist or why one
+   failed; the client-side "Invalid or expired code" behavior is
+   unchanged either way (findValidPromoCode already treated a hidden row
+   the same as a missing one).
+
+2. Code lookup is an exact match on the code uppercased (both when a
+   customer applies one and when the admin saves one), not a SQL ILIKE.
+   ILIKE's wildcard characters (%, _) are meaningful to Postgres — a code
+   containing one could match more rows than intended. Uppercasing both
+   sides gives the same "case-insensitive" behavior the brief asked for
+   without that risk.
+
+3. jsPDF pulls in html2canvas (~230kB) as a hard dependency of a plugin
+   this app never calls, and together they'd add ~360kB gzipped to the
+   bundle every visitor downloads just to shop. lib/orderExport.ts
+   dynamically imports jsPDF instead, so that weight is only fetched when
+   a customer actually taps "Save as PDF" on the confirmation screen.
+
+4. The PDF renders prices as "Tk 1,250" rather than "৳ 1,250" — jsPDF's
+   built-in fonts only cover WinAnsi and can't draw the Bengali Taka
+   glyph (it comes out blank/garbled). The WhatsApp message text still
+   uses the real ৳ symbol; that's plain UTF-8 WhatsApp renders natively,
+   no font involved.
+
+5. The promo-applied success message dropped the "✓" the brief's own
+   example text used (`"✓ CODE10 applied — ৳X off"`). The zero-tolerance
+   rule for this session says no emoji anywhere in the checkout UI,
+   "including OrderSuccessPage" — read as illustrative wording, not a
+   literal requirement, since it would otherwise contradict the rule two
+   paragraphs later in the same brief.
+
+6. src/pages/CartPage.tsx (the Session 10 placeholder at /cart) is
+   deleted outright, along with its .cart-page__* CSS block — this
+   session's CartPage.tsx replaces it exactly as that file's own comment
+   said it would.
+
+7. The empty-cart button routes to "/" — the brief said "/shop" but this
+   app's homepage (the shop itself) has always lived at "/"; there is no
+   separate /shop route anywhere in the router.
+
+8. "Send on WhatsApp" disables itself (rather than erroring on click)
+   when Settings → Checkout WhatsApp Number is blank, since whatsAppUrl()
+   already returns null for an empty setting and a disabled button reads
+   clearer than a click that silently does nothing.
+
+9. Delivery zone, address, applied promo, and the last placed order are
+   persisted to sessionStorage (key nph_checkout_state) — same rationale
+   as CartContext's own localStorage persistence, so a reload mid-flow
+   (or on the confirmation screen) doesn't lose progress. It clears on
+   tab close, unlike the cart itself which survives via localStorage.
+
+NOT VERIFIED LIVE
+------------------
+Everything above was checked with `npx tsc --noEmit` and `npm run build`
+(both pass with zero errors) but not against a running Supabase project —
+I don't have credentials for one. Before relying on this in production,
+run migration-014, then click through all four screens once for real:
+add an item, pick a zone, submit an address, apply a real promo code,
+place the order, and confirm both "Save as PDF" and "Send on WhatsApp"
+produce what's expected.

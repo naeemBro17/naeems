@@ -9,6 +9,7 @@ export type AdminTab =
   | 'wholesalers'
   | 'reviews'
   | 'bento'
+  | 'promo-codes'
   | 'settings';
 
 interface AdminLayoutProps {
@@ -83,6 +84,16 @@ const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
         <rect x="3" y="3" width="8" height="18" rx="1.5" />
         <rect x="13" y="3" width="8" height="8" rx="1.5" />
         <rect x="13" y="13" width="8" height="8" rx="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'promo-codes',
+    label: 'Promo Codes',
+    iconPath: (
+      <>
+        <path d="M20.59 13.41L11 3.83A2 2 0 009.59 3H4a1 1 0 00-1 1v5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.59-4.59a2 2 0 000-2.83z" />
+        <circle cx="7.5" cy="7.5" r="1.5" />
       </>
     ),
   },

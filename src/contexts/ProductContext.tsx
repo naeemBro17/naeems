@@ -82,6 +82,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   bento_tile_order: '',
   homepage_section_order: '',
+
+  shop_whatsapp_number: '',
 };
 
 /**
@@ -117,6 +119,7 @@ const TEXT_SETTING_KEYS = [
   'browse_categories_order',
   'bento_tile_order',
   'homepage_section_order',
+  'shop_whatsapp_number',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];

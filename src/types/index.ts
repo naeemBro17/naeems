@@ -172,6 +172,10 @@ export interface AppSettings {
   bento_tile_order: string;
   /** JSON array of homepage section ids, top to bottom; 'products' is always last. */
   homepage_section_order: string;
+
+  /* --- Cart & checkout (Session 11) --- */
+  /** Bare phone number or full wa.me link the checkout flow sends orders to. */
+  shop_whatsapp_number: string;
 }
 
 /**
@@ -306,4 +310,33 @@ export interface ImportSummary {
   added: number;
   updated: number;
   failed: { rowNumber: number; sku: string; reason: string }[];
+}
+
+export type PromoDiscountType = 'fixed' | 'percent';
+
+/** One admin-managed promo code (migration-014). Customers redeem these on
+ *  the checkout Order Summary screen; usage is capped by max_uses. */
+export interface PromoCode {
+  id: string;
+  code: string;
+  discount_amount: number;
+  discount_type: PromoDiscountType;
+  /** Total redemptions ever allowed; null = unlimited. */
+  max_uses: number | null;
+  times_used: number;
+  expires_at: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+/** The promo code fields an admin edits. */
+export interface PromoCodeFormData {
+  code: string;
+  discount_amount: string;
+  discount_type: PromoDiscountType;
+  /** Blank = unlimited; the "Add code" form defaults this to '50'. */
+  max_uses: string;
+  /** datetime-local input value, or '' for no expiry. */
+  expires_at: string;
+  active: boolean;
 }

@@ -317,6 +317,64 @@ function ExpertSettingsPanel() {
   );
 }
 
+/** The WhatsApp number OrderSuccessPage sends the manual order handoff to. */
+function ShopWhatsAppPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+
+  const [whatsAppNumber, setWhatsAppNumber] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setWhatsAppNumber(settings.shop_whatsapp_number);
+  }, [settings]);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'shop_whatsapp_number', value: whatsAppNumber.trim() }], {
+        onConflict: 'key',
+      });
+    setIsSaving(false);
+    if (error) {
+      console.error('WhatsApp number save failed:', error);
+      showToast('Could not save the WhatsApp number. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast('WhatsApp number saved');
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Checkout WhatsApp Number</h3>
+      <p className="admin-panel__description">
+        Customers send their order summary here from the checkout confirmation screen.
+      </p>
+      <form onSubmit={handleSave} className="form" noValidate>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-shop-whatsapp">
+            WhatsApp number (or link)
+          </label>
+          <input
+            id="settings-shop-whatsapp"
+            type="text"
+            className="form-input"
+            placeholder="8801XXXXXXXXX"
+            value={whatsAppNumber}
+            onChange={(e) => setWhatsAppNumber(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="button button--primary" disabled={isSaving}>
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 /** Hero banner slides — the swipeable card at the top of the homepage. */
 function BannerSlidesPanel() {
   const { settings, refetch } = useProducts();
@@ -685,6 +743,8 @@ export function SettingsTab() {
       </header>
 
       <ExpertSettingsPanel />
+
+      <ShopWhatsAppPanel />
 
       <BannerSlidesPanel />
 
