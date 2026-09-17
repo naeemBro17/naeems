@@ -1,0 +1,308 @@
+====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-1-functionality
+====================================================================
+
+This session worked through "Batch 1 — Functionality Fixes + Card Cleanup +
+Design Authority" (10 parts). Everything below is written for a non-technical
+reader — see the code comments for the technical detail.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Promo code usage limit (the money bug)
+I checked the whole path end to end before changing anything, as instructed.
+The validation logic, the database function that increments times_used, and
+the page that calls it were ALL already written correctly:
+  - Applying a code checks active + max_uses/times_used + expiry (lib/promoCodes.ts).
+  - migration-014-promo-codes.sql already defines increment_promo_usage() as a
+    SECURITY DEFINER function that atomically re-checks and increments —
+    exactly what the task asked for.
+  - OrderSuccessPage already calls it exactly once (a ref guards against
+    double-firing) when the success screen mounts.
+So the code was not the bug. The far more likely explanation, per the
+project's own known failure pattern, is that migration-014 (or the specific
+function inside it) was never actually run against the live database — a
+missing RPC function fails silently, which looks exactly like "the limit
+isn't enforced." I hardened the one weak spot I found: the call to
+increment_promo_usage was pure fire-and-forget with no error visibility at
+all, so a missing function would fail completely silently forever. It now
+logs to the console on failure (still doesn't change what the customer sees,
+per the existing design — the discount already shown is honoured either way).
+ACTION NEEDED FROM YOU: see the SQL section below — please re-run
+migration-014 and then do the test the task described (max_uses = 1, order
+once, try a second time) to confirm.
+
+PART 2 — Back button from product edit goes to Home
+Root cause found: every sheet/modal in the app (the product edit form, the
+inline product editor, confirm dialogs, the hamburger menu, etc.) is pure
+on-screen state — it never told the browser "something opened." So pressing
+the phone's back button had nothing to close; it skipped straight past the
+sheet to whatever page was open before you ever opened /admin (often Home).
+Fixed with one small shared hook (src/hooks/useModalBackClose.ts) wired into
+the two components every sheet/modal in the app is built from
+(components/shared/Modal.tsx and BottomSheet.tsx). Opening a sheet now
+registers one invisible "back stop" with the browser; back closes the sheet
+instead of leaving the page, and closing any other way (Cancel, tapping
+outside, Escape) cleans that stop up automatically so you never need an extra
+back-press afterwards. Because this lives in the two shared building blocks,
+it fixes the bug everywhere at once — not just the product editor — without
+touching each sheet individually.
+Filter/search/scroll state was already preserved (the admin list never
+actually unmounts when a sheet opens), so nothing else was needed there.
+The product detail page uses real page navigation (not a sheet) and already
+had correct back + scroll-restore behaviour — verified, left alone.
+
+PART 3 — No way back to Home from checkout
+Cart, Delivery Details and Order Summary already had a back arrow in the
+header (BackButton, already wired correctly, and cart contents are never
+cleared just by navigating away). The one real gap was the final success
+screen — it had no way out at all besides two action buttons. Added a
+"Continue Shopping" button back to the product grid, right below the
+WhatsApp/PDF actions, per the spec.
+
+PART 4 — Expert card blocks page scrolling
+Found the exact bug: the shared swipe hook (hooks/useSwipe.ts), used by the
+bottom-right carousel tile (the expert card + any custom tiles) and the
+featured-products stack tile, called preventDefault() on every touchmove the
+instant a finger touched it — before it even knew whether the gesture was
+horizontal or vertical. That's the exact anti-pattern flagged in CLAUDE.md.
+Rewrote it to be direction-aware: it now waits until movement is clearly
+along its own axis (more than ~10px and clearly more than the other axis)
+before capturing the gesture at all. A finger that lands on the expert card
+and moves vertically now scrolls the page normally; only a genuine
+horizontal swipe is captured. Also changed the carousel tile's CSS from
+touch-action: none to touch-action: pan-y, so the browser handles vertical
+panning natively as a second line of defence, per CLAUDE.md's rule.
+Checked every other horizontally-swipeable element on the site: the product
+image carousel and the hero banner both use plain native horizontal scroll
+(no JS touch capture at all), and the category rows (Browse circles, chips)
+do too — none of them had this bug.
+
+PART 5 — "Added to cart" toast removed
+Deleted the showToast('Added to cart') call from the cart button (the only
+place it fired). The card's checkmark animation and the cart badge already
+give sufficient feedback, per the task. The toast system itself is used
+elsewhere for real errors and promo/order messages, so it was left in place
+— only this one call was removed.
+
+PART 6 — Admin/Wholesaler links in the hamburger menu
+Added an "Admin Panel" row (admins only, links to /admin) and a "Wholesale
+Account" row (approved wholesalers only, links to /wholesaler-access) to the
+hamburger menu, styled to match the existing rows. Both are gated on the real
+session role from AuthContext (the same source of truth used everywhere
+else) — never CSS, never guesswork. Anonymous visitors see neither.
+
+PART 7 — Product variants + skin type/condition fields
+Important finding: this was already much further along than the task
+assumed. A previous session had already built:
+  - The product_variants table + secure view (migration-013, already in the repo).
+  - A full admin Variant editor (add/edit/delete Region+Size rows with their
+    own prices and stock) — components/admin/edit-sheets/VariantEditor.tsx.
+  - Skin Type / Skin Condition multi-select chips in an admin editor.
+  - A Region → Size picker on the product detail page that already updates
+    price/stock and defaults sensibly for products with no variants.
+The catch: all of that only existed in the editor you reach from the live
+site's "Edit Mode" (the "..." menu on a product card, admin only) — NOT in
+the editor behind the main /admin panel's Products tab, which is what you
+actually use day to day. That second, older editor (ProductForm.tsx) had
+none of it. That is almost certainly why it looked like nothing had been
+built. I did not rebuild anything that already existed — I pulled the same
+Variant editor and the same Skin Type/Condition chips into the /admin panel's
+product editor too (sharing the exact same components, so there's only one
+implementation to maintain), so both places now offer the same functionality.
+Also completed the actual buying side of variants, which was still missing:
+  - Cart lines now remember which variant was chosen (not just the product).
+  - The product detail page now has a proper "Add to Cart" button (there
+    wasn't one before — only "Copy Price"). Selecting a Region/Size and
+    adding to cart adds that specific variant; a product with no variants
+    behaves exactly as before.
+  - Cart, Order Summary, the WhatsApp message and the PDF all now show the
+    chosen variant (e.g. "AU · 340g") next to the item.
+  - Tapping a card's cart button for a product WITH variants now opens the
+    product page to choose one, instead of silently guessing the cheapest
+    option — the old behaviour would have quietly added the wrong item.
+
+PART 8 — Product card cleanup
+  - Removed the category tag pill and the brand line from the card face.
+  - Shrunk the cart button (42px → 34px) and its slot, freeing horizontal
+    room next to the price/save-badge row.
+  - Product name already had 2-line clamping with reserved height in the
+    code (min-height for 2 lines) — this looked correct as written; freeing
+    the extra room from the removed elements should resolve the truncation
+    you saw. Please double check this one on a real phone since I could not
+    load the live app this session (see section 3).
+  - Save badge + strikethrough already sit on one flex row with no wrapping
+    enabled; the extra room from the above changes gives them space to fit.
+
+PART 9 — Product detail page
+  9A. Verified: the SKU is never rendered anywhere on the public detail page
+      (checked the whole file) — it's used only internally to resolve the
+      /product/:slug route. Nothing to fix here.
+  9B. The image now runs full-bleed edge-to-edge again. It was inset with a
+      margin plus a 20px rounded corner (a deliberate earlier redesign,
+      per its own code comment) — reverted just that, without touching the
+      shared "text content" padding used by the rest of the page (and by
+      the checkout pages, which reuse the same class).
+  9C. Replaced the card→detail slide with a shared-element ("hero") transition:
+      the tapped card's image box now visually expands into the detail
+      page's image box, while the rest of the page fades and lifts in. This
+      uses the browser's native View Transitions API (the modern, correct
+      way to do this — no hand-rolled animation coordination between two
+      separate pages). It automatically falls back to an instant, unanimated
+      change on browsers that don't support it yet and whenever the reader
+      has "reduce motion" turned on, exactly as the task allows. I could not
+      test this live in a real browser this session (see section 3) — this
+      is the single change I'd most want you to eyeball on your phone before
+      trusting it completely.
+
+PART 10 — Checkout visual redesign
+Went through CLAUDE.md's colour rule screen by screen. The checkout flow was
+using the brand orange in far more places than "one action per screen":
+progress bar fill, every price, the delivery zone's selected state, the
+promo "Apply" button, and the success checkmark badge — on top of the actual
+primary buttons. Fixed all of it:
+  - Progress bar: now fills in near-black, not orange (progress bars were
+    explicitly called out in CLAUDE.md as one of the overused spots).
+  - Cart line totals and the delivery zone's price: near-black and bold, per
+    "prices are near-black, not orange."
+  - Selected delivery zone: neutral border/background plus a small check
+    icon, instead of an orange border — so "Save and continue" is the only
+    orange element on that screen.
+  - Order Summary's promo "Apply" button: neutral, so "Pay and Order" is the
+    only orange element on that screen.
+  - Success screen's checkmark badge: success green (semantically correct
+    for a checkmark) instead of orange, so "Send on WhatsApp" is the only
+    orange element there.
+  - The dark "receipt" summary card was hardcoded to one fixed dark colour
+    regardless of light/dark mode — in dark mode it barely showed up against
+    the page's true-black background. It now uses its own small set of
+    tokens that shift to a slightly lighter charcoal in dark mode, so the
+    card stays visibly a card in both themes.
+  - General polish pass: tidier spacing/rhythm in the cart list, a rounded
+    top edge on the sticky checkout bar, slightly larger/bolder totals for
+    clearer hierarchy, consistent thumbnail borders.
+Nothing about the functional flow, routes, delivery prices, promo logic, PDF
+export or WhatsApp send was touched — only how these four screens look.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+No NEW migration files were created this session — everything Part 7 needed
+(product_variants, skin_types/skin_conditions) already existed as migration
+files in the repo. But per the project's #1 recurring failure mode, please
+verify these have actually been run in the Supabase SQL Editor (all are
+explicitly safe to re-run — each says so in its own header):
+
+  1. supabase/migration-012-skin-fields.sql   (skin_types/skin_conditions columns)
+  2. supabase/migration-013-variants.sql      (product_variants table + view)
+  3. supabase/migration-014-promo-codes.sql   (THIS IS THE LIKELY FIX FOR PART 1
+                                                — it creates increment_promo_usage())
+
+Run them in that numeric order if you're not sure which have been applied.
+No other SQL is needed for anything else in this session.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+This environment has no Supabase credentials (.env only has the example
+file), so the app cannot actually load real data here — I confirmed it fails
+immediately with "Missing Supabase configuration" in the browser console.
+That means I could build and type-check everything (npm run build passes
+with zero errors, confirmed twice), but I could NOT visually test any of
+this in a real browser or on a phone this session, per CLAUDE.md's own rule
+that I should say so plainly rather than claim it works.
+
+Please specifically eyeball, on a real phone, before fully trusting them:
+  - The new card → detail hero transition (Part 9C) — the riskiest, newest
+    piece of code this session.
+  - The product card layout at real narrow width (Part 8) — two columns,
+    ~160-180px each.
+  - The expert card / bento carousel still scrolling correctly (Part 4).
+  - The variant picker + Add to Cart on the product detail page, end to end
+    into the cart and WhatsApp message (Part 7).
+  - The Part 1 promo code fix, after you've re-run migration-014.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- There are two separate product editors in the codebase: the one behind
+  /admin → Products (ProductForm.tsx) and a more modern one reached from
+  the live grid's "Edit Mode" (ProductEditSheet.tsx). They now both have
+  variants and skin fields, but they're still two separate forms with some
+  duplicated fields (e.g. images, description). Worth consolidating into one
+  editor in a future session — right now it's possible to update a product
+  in one and not notice the other exists.
+- CartContext's cart items are stored in localStorage with no expiry and no
+  price re-validation against the current catalog until checkout. Not a bug,
+  just worth knowing: a cart sitting untouched for a long time could carry a
+  stale price snapshot until the customer reaches checkout, where the real
+  product is re-resolved anyway.
+- .env is genuinely absent from this environment (only .env.example exists),
+  which is why nothing could be visually verified — flagging in case that's
+  unexpected on your end too.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS (where I had freedom)
+--------------------------------------------------------------------
+- Part 7 cart-button-on-card behaviour for variant products: rather than
+  silently adding the cheapest variant (which could ship the wrong size/
+  region), tapping the cart button on a card for a product WITH variants now
+  opens the product page so the customer picks one. This matches how the
+  card already shows a "from" price for such products.
+- Part 9C: chose the browser's native View Transitions API over a hand-built
+  FLIP animation. It's the standard, well-supported modern approach for
+  exactly this "shared element" pattern, needs far less custom coordination
+  code, and comes with an automatic, correct instant-fallback for
+  unsupported browsers and reduced-motion users built in — which is exactly
+  what CLAUDE.md's fallback clause asks for.
+- Part 10's "receipt" dark card on Order Summary: kept the existing dark
+  overlay-card look (it's a common, credible pattern for a final order
+  review) rather than converting it to a plain light card, but made it
+  properly theme-aware since it wasn't before.
+- Part 8: chose to fully remove the category badge / brand line from the
+  card (not just hide them conditionally) since CLAUDE.md's card spec
+  explicitly lists both as "not on the card."
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+Highest impact first.
+
+1. [Conversion / trust — medium] No order records anywhere. As CLAUDE.md
+   already notes, an order today only exists as a WhatsApp message and a
+   PDF — if a customer's message gets lost, or WhatsApp misbehaves, there is
+   no record on your side at all. An orders/order_items table with price
+   snapshots (already flagged as the next major planned feature) would also
+   let you eventually show "order history" and would make the promo code
+   usage count auditable against real orders instead of trusted blindly.
+
+2. [Code health — medium] Two parallel product editors (see section 4).
+   Confusing to maintain, and a real risk that a field gets added to one and
+   forgotten in the other (skin fields being the field that WAS forgotten,
+   which is exactly why this session existed).
+
+3. [Conversion — small/medium] Site-wide orange overuse, per CLAUDE.md's own
+   audit, still exists everywhere OUTSIDE the checkout flow — product card
+   prices, save badges, stock dots, nav tabs are still orange across the
+   rest of the site. This session deliberately did not touch that (out of
+   scope per your own instructions), but it's the same issue Part 10 just
+   fixed for checkout, applied everywhere else.
+
+4. [Accessibility — small] Several icon-only buttons (cart button, card
+   menu trigger) already have aria-labels, which is good — but the new
+   variant chip selectors (Region/Size) rely on colour + a filled pill for
+   "selected" state with no additional text cue for screen readers beyond
+   aria-pressed. Low priority, already functional, just not best-in-class.
+
+5. [Performance — small] The production build reports one JS chunk over
+   500KB (mostly jsPDF + html2canvas, pulled in for the PDF export). It's
+   already lazy-loaded (only downloaded when someone taps "Save as PDF"),
+   so this isn't hurting first load — just flagging since the build tool
+   warns about it.
+
+6. [Data model — small] Cart items persist forever in localStorage with no
+   cap or expiry. Not urgent at ~150 SKUs, but worth a note for later.
+
+====================================================================

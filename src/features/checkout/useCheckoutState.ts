@@ -70,8 +70,8 @@ interface CheckoutStateValue {
   setPromo: (promo: AppliedPromo | null) => void;
   discount: number;
   total: number;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeItem: (productId: string) => void;
+  updateQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
+  removeItem: (productId: string, variantId?: string | null) => void;
   lastOrder: OrderSnapshot | null;
   /** Captures the current cart/zone/address/promo into lastOrder. Called the
    *  instant "Pay and Order" is tapped, before the cart is touched. */
@@ -110,7 +110,15 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       rawItems.flatMap((item) => {
         const product = products.find((p) => p.id === item.productId);
         return product
-          ? [{ product, quantity: item.quantity, unitPrice: item.priceAtAdd }]
+          ? [
+              {
+                product,
+                quantity: item.quantity,
+                unitPrice: item.priceAtAdd,
+                variantId: item.variantId,
+                variantLabel: item.variantLabel,
+              },
+            ]
           : [];
       }),
     [rawItems, products]

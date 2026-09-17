@@ -23,12 +23,18 @@ export function PageTransition({ children }: { children: ReactNode }) {
   isFirstRender.current = false;
 
   const direction = navigationType === 'POP' ? 'back' : 'forward';
+  // Set by navigateToProductWithHero — a native View Transition is already
+  // driving this navigation's motion (the card's image morphing into the
+  // detail gallery), so the usual slide-in would just run underneath it.
+  const isHeroTransition = (location.state as { hero?: boolean } | null)?.hero === true;
 
   return (
     <div
       key={location.pathname}
       className={
-        animate ? `page-transition page-transition--${direction}` : undefined
+        animate && !isHeroTransition
+          ? `page-transition page-transition--${direction}`
+          : undefined
       }
     >
       {children}

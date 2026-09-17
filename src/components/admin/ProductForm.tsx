@@ -11,10 +11,13 @@ import { uniqueProductSlug } from '../../lib/slugify';
 import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
 import { productImages } from '../../lib/productImages';
+import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { Modal } from '../shared/Modal';
 import { ImageUploader } from './ImageUploader';
+import { ChipGroup } from './edit-sheets/SheetChrome';
+import { VariantEditor } from './edit-sheets/VariantEditor';
 import type { Product, ProductFormData, FormImage } from '../../types';
 
 interface ProductFormProps {
@@ -57,6 +60,8 @@ function emptyForm(): ProductFormData {
     note: '',
     is_featured: false,
     is_active: true,
+    skin_types: [],
+    skin_conditions: [],
   };
 }
 
@@ -91,6 +96,8 @@ function formFromProduct(product: Product): ProductFormData {
     note: product.note ?? '',
     is_featured: product.is_featured,
     is_active: product.is_active,
+    skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
+    skin_conditions: sanitizeSkinValues(product.skin_conditions, SKIN_CONDITIONS),
   };
 }
 
@@ -310,6 +317,8 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
         form.stock_quantity.trim() === '' ? null : Number(form.stock_quantity),
       note: form.note.trim() === '' ? null : form.note.trim(),
       is_featured: form.is_featured,
+      skin_types: form.skin_types,
+      skin_conditions: form.skin_conditions,
       image_urls: imageUrls,
       image_url: imageUrls[0] ?? null,
       is_active: form.is_active,
@@ -519,6 +528,20 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
           )}
         </div>
 
+        <ChipGroup
+          label="Skin Type (optional)"
+          options={SKIN_TYPES}
+          selected={form.skin_types}
+          onChange={(skin_types) => setField('skin_types', skin_types)}
+        />
+
+        <ChipGroup
+          label="Skin Condition (optional)"
+          options={SKIN_CONDITIONS}
+          selected={form.skin_conditions}
+          onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
+        />
+
         <div className="form-row">
           <div className="form-field">
             <label className="form-label" htmlFor="pf-retail">
@@ -690,6 +713,10 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
             uploadError={uploadError}
           />
         </div>
+
+        {/* Variants only make sense for a product that already exists —
+            a newly-created one has no id to attach them to yet. */}
+        {product && <VariantEditor productId={product.id} />}
 
         <div className="form-field form-field--toggle">
           <label className="toggle-label" htmlFor="pf-featured">

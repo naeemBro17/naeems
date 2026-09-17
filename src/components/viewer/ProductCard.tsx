@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -9,6 +9,7 @@ import { rememberGridScroll } from '../../lib/gridScroll';
 import { coverImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { lowestVariantPrice } from '../../lib/variants';
+import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
 
@@ -24,7 +25,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const openDetail = () => {
     // Remember where the grid was so Back can restore it instead of jumping to top.
     rememberGridScroll();
-    navigate(productPath(product));
+    navigateToProductWithHero(navigate, productPath(product));
   };
 
   // A product with variants shows its cheapest option as a "from" price; the
@@ -43,9 +44,6 @@ export function ProductCard({ product }: ProductCardProps) {
   const showImage = cover !== null && !imageFailed;
   const outOfStock = isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
-  const categoryName = product.category?.name ?? null;
-  // Absent until a brand is entered — the category still shows in the badge.
-  const brand = product.brand?.trim() || null;
 
   return (
     <article
@@ -58,6 +56,7 @@ export function ProductCard({ product }: ProductCardProps) {
     >
       <div
         className={`product-card__image-wrap${outOfStock ? ' product-media--out' : ''}`}
+        style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
       >
         {showImage ? (
           <img
@@ -84,9 +83,6 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {categoryName && (
-          <span className="product-card__badge">{categoryName}</span>
-        )}
         {/* The menu stays functional on out-of-stock cards. */}
         <CardMenu product={product} copyPrice={fromPrice ?? mainPrice} outOfStock={outOfStock} />
       </div>
@@ -95,8 +91,6 @@ export function ProductCard({ product }: ProductCardProps) {
         {/* Reserving a dedicated column (not absolute positioning) for the cart
             button means text here physically cannot flow under it. */}
         <div className="product-card__info">
-          {brand && <p className="product-card__brand">{brand}</p>}
-
           <h3 className="product-card__name">{product.name}</h3>
 
           {fromPrice !== null ? (
@@ -155,6 +149,8 @@ export function ProductCard({ product }: ProductCardProps) {
             productName={product.name}
             price={fromPrice ?? mainPrice}
             outOfStock={outOfStock}
+            hasVariants={fromPrice !== null}
+            onRequiresVariant={openDetail}
           />
         </div>
       </div>

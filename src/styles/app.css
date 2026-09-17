@@ -635,12 +635,13 @@ textarea {
   align-items: stretch;
 }
 
-/* The gallery sits inside a rounded card with breathing room on both sides
-   rather than running edge to edge. */
+/* Full bleed to the screen width: cancel out .detail-main's own horizontal
+   padding rather than touching that shared class (checkout screens use it
+   too) so only the image area goes edge to edge — the text content below
+   keeps its padding. */
 .product-detail__gallery {
   position: relative;
-  margin: var(--space-4) var(--space-4) 0;
-  border-radius: 20px;
+  margin: 0 calc(-1 * var(--space-4)) 0 calc(-1 * var(--space-4));
   overflow: hidden;
   background: #fff;
 }
@@ -744,6 +745,27 @@ textarea {
 
 .product-detail .copy-button {
   margin-top: var(--space-4);
+}
+
+.product-detail__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.product-detail__actions .copy-button {
+  margin-top: 0;
+}
+
+.product-detail__actions .copy-button:first-child {
+  margin-top: var(--space-4);
+}
+
+/* Copy Price is a secondary action now that Add to Cart is the primary one —
+   only one orange element per screen (see CLAUDE.md). */
+.copy-button--secondary {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
 }
 
 .product-detail .wholesale-row {
@@ -2652,8 +2674,9 @@ textarea {
 
 .bento-tile--carousel {
   overflow: hidden;
-  /* Keeps a horizontal swipe inside the tile instead of scrolling the page. */
-  touch-action: none;
+  /* Horizontal swipe is captured in JS (direction-aware); vertical panning
+     stays native so a finger resting here can still scroll the page. */
+  touch-action: pan-y;
 }
 
 /* ---------- Edit Mode: long-press drag-swap ---------- */
@@ -3174,27 +3197,6 @@ textarea {
   height: 40%;
 }
 
-.product-card__badge {
-  position: absolute;
-  top: 7px;
-  left: 7px;
-  z-index: 2;
-  max-width: calc(100% - 46px);
-  padding: 3px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--card-badge-scrim);
-  color: var(--color-text-primary);
-  font-size: 7.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-
 /* Two-zone layout: a text column plus a fixed-width cart-button column, so
    the button has its own reserved space and text can never flow under it. */
 .product-card__body {
@@ -3218,19 +3220,8 @@ textarea {
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  width: 42px;
+  width: 34px;
   flex-shrink: 0;
-}
-
-.product-card__brand {
-  font-size: 8.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .product-card__name {
@@ -3313,8 +3304,8 @@ textarea {
 /* Cart button, own column — see .product-card__cart-slot. */
 .cart-button {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3322,14 +3313,14 @@ textarea {
   flex-shrink: 0;
   background: var(--color-accent);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(255, 122, 69, 0.35);
+  box-shadow: 0 3px 10px rgba(255, 122, 69, 0.35);
   transition: transform var(--transition-fast), background-color var(--transition-base),
     box-shadow var(--transition-base);
 }
 
 .cart-button__icon {
-  width: 19px;
-  height: 19px;
+  width: 15px;
+  height: 15px;
 }
 
 .cart-button--added {
@@ -4641,6 +4632,42 @@ textarea {
   to   { transform: translateX(0); }
 }
 
+/* ---------- Product card → detail: shared-element (hero) transition ----------
+   Triggered only by navigateToProductWithHero (lib/viewTransition.ts): the
+   tapped card's image box and the detail page's gallery box share a
+   view-transition-name, so the browser morphs one into the other natively.
+   Everything else on the page (the "root" group) fades and lifts in instead
+   of the site's usual slide, which PageTransition skips for this navigation. */
+::view-transition-group(*) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(root) {
+  animation: detail-hero-root-out 220ms ease both;
+}
+
+::view-transition-new(root) {
+  animation: detail-hero-root-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes detail-hero-root-out {
+  to { opacity: 0; }
+}
+
+@keyframes detail-hero-root-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
 /* ---------- Button press ---------- */
 
 .button,
@@ -5841,6 +5868,8 @@ textarea {
 
 /* ---------- Shared progress bar ---------- */
 
+/* Neutral by design — CLAUDE.md's colour rule reserves orange for the one
+   primary action per screen (the CTA button below), not status chrome. */
 .checkout-progress {
   padding: var(--space-3) var(--space-4) 0;
 }
@@ -5855,17 +5884,18 @@ textarea {
   height: 4px;
   border-radius: var(--radius-pill);
   background: var(--color-border);
+  transition: background-color var(--transition-slow);
 }
 
 .checkout-progress__segment--filled {
-  background: var(--color-accent);
+  background: var(--color-text-primary);
 }
 
 .checkout-progress__label {
   margin-top: var(--space-2);
   font-size: 12px;
   font-weight: 700;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
 }
 
 /* ---------- Step 1: Cart ---------- */
@@ -5874,7 +5904,7 @@ textarea {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   padding-bottom: 96px;
 }
 
@@ -5882,17 +5912,23 @@ textarea {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--color-border);
 }
 
+.checkout-cart__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .checkout-cart__thumb {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
 }
 
 .checkout-cart__thumb img {
@@ -5916,7 +5952,7 @@ textarea {
 }
 
 .checkout-cart__name {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--color-text-primary);
   overflow: hidden;
@@ -5924,9 +5960,14 @@ textarea {
   white-space: nowrap;
 }
 
-.checkout-cart__unit-price {
+.checkout-cart__variant {
   font-size: 11.5px;
   color: var(--color-text-secondary);
+}
+
+.checkout-cart__unit-price {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
 }
 
 .checkout-cart__row-end {
@@ -5973,9 +6014,10 @@ textarea {
 
 .checkout-cart__line-total {
   font-family: var(--font-price);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
-  color: var(--color-accent);
+  /* Prices are near-black and bold, not orange — see CLAUDE.md. */
+  color: var(--color-text-primary);
 }
 
 .checkout-cart__sticky-bar {
@@ -5988,10 +6030,11 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
   background: var(--color-bg);
   border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-lg);
 }
 
@@ -6008,8 +6051,9 @@ textarea {
 
 .checkout-cart__sticky-amount {
   font-family: var(--font-price);
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 800;
+  letter-spacing: -0.3px;
   color: var(--color-text-primary);
 }
 
@@ -6023,55 +6067,100 @@ textarea {
 }
 
 .checkout-zone-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
   padding: var(--space-4);
   border-radius: var(--radius-md);
-  border: 2px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
   background: var(--color-surface);
   text-align: left;
   transition: border-color var(--transition-base), background-color var(--transition-base);
 }
 
+/* The selected state reads through weight + a check, not a second orange
+   element — the screen's one orange stays on "Save and continue" below. */
 .checkout-zone-card--selected {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.checkout-zone-card__check {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-text-primary);
+  color: var(--color-bg);
+}
+
+.checkout-zone-card__check svg {
+  width: 11px;
+  height: 11px;
 }
 
 .checkout-zone-card__label {
   font-size: 14px;
   font-weight: 700;
   color: var(--color-text-primary);
+  padding-right: var(--space-4);
 }
 
 .checkout-zone-card__fee {
   font-family: var(--font-price);
   font-size: 15px;
   font-weight: 800;
-  color: var(--color-accent);
+  /* Prices are near-black and bold, not orange — see CLAUDE.md. */
+  color: var(--color-text-primary);
 }
 
 .checkout-delivery-form__submit {
   width: 100%;
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 /* ---------- Step 3: Order summary ---------- */
 
+/* A deliberately inverted "receipt" card — the one screen where the review
+   itself is the focal point. Its own tokens (not the site's light/dark
+   tokens) so it stays a dark card in both themes, but pick a lighter charcoal
+   under dark mode so it doesn't disappear into the page's true-black ground. */
 .checkout-summary-card {
-  background: #1a1a1a;
-  color: #ffffff;
-  border-radius: 20px;
+  --receipt-bg: #1C1C1E;
+  --receipt-fg: #FFFFFF;
+  --receipt-fg-muted: rgba(255, 255, 255, 0.6);
+  --receipt-border: rgba(255, 255, 255, 0.12);
+  --receipt-field-bg: rgba(255, 255, 255, 0.07);
+  background: var(--receipt-bg);
+  color: var(--receipt-fg);
+  border-radius: var(--radius-lg);
   padding: var(--space-5);
   margin-bottom: var(--space-5);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='dark'] .checkout-summary-card {
+  --receipt-bg: #2C2C2E;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .checkout-summary-card {
+    --receipt-bg: #2C2C2E;
+  }
 }
 
 .checkout-summary-card__title {
   font-size: 15px;
   font-weight: 800;
   margin-bottom: var(--space-4);
+  color: var(--receipt-fg);
 }
 
 .checkout-summary-card__items {
@@ -6094,7 +6183,8 @@ textarea {
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--receipt-field-bg);
+  border: 1px solid var(--receipt-border);
 }
 
 .checkout-summary-card__thumb img {
@@ -6122,10 +6212,17 @@ textarea {
   gap: 6px;
 }
 
+.checkout-summary-card__item-variant {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--receipt-fg-muted);
+}
+
 .checkout-summary-card__item-qty {
   flex-shrink: 0;
   font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--receipt-fg-muted);
 }
 
 .checkout-summary-card__item-price {
@@ -6133,6 +6230,7 @@ textarea {
   font-family: var(--font-price);
   font-size: 13px;
   font-weight: 700;
+  color: var(--receipt-fg);
 }
 
 .checkout-summary-card__promo {
@@ -6144,30 +6242,32 @@ textarea {
 .checkout-summary-card__promo-input {
   flex: 1;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--receipt-field-bg);
+  border: 1px solid var(--receipt-border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 13px;
-  color: #ffffff;
+  color: var(--receipt-fg);
 }
 
 .checkout-summary-card__promo-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--receipt-fg-muted);
 }
 
+/* Neutral, not orange — "Pay and Order" below is this screen's one primary
+   action; a second orange button here would compete with it. */
 .checkout-summary-card__promo-apply {
   flex-shrink: 0;
   padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: #ffffff;
+  background: var(--receipt-fg);
+  color: var(--receipt-bg);
   font-size: 13px;
   font-weight: 700;
 }
 
 .checkout-summary-card__promo-apply:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .checkout-summary-card__promo-message {
@@ -6185,8 +6285,8 @@ textarea {
 
 .checkout-summary-card__divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: var(--space-3) 0;
+  background: var(--receipt-border);
+  margin: var(--space-4) 0;
 }
 
 .checkout-summary-card__row {
@@ -6194,7 +6294,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--receipt-fg-muted);
   padding: 4px 0;
 }
 
@@ -6205,10 +6305,10 @@ textarea {
 .checkout-summary-card__row--total {
   margin-top: var(--space-2);
   padding-top: var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 16px;
+  border-top: 1px solid var(--receipt-border);
+  font-size: 17px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--receipt-fg);
 }
 
 .checkout-summary-page__pay {
@@ -6240,7 +6340,9 @@ textarea {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid var(--color-accent);
+  /* Success green, not the brand orange — this is a status, not the screen's
+     action; "Send on WhatsApp" below stays the one orange element here. */
+  border: 2px solid var(--color-success);
   animation: checkout-success-pulse 1800ms ease-out infinite;
 }
 
@@ -6250,7 +6352,7 @@ textarea {
   height: 88px;
   padding: 24px;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--color-success);
   box-shadow: var(--shadow-md);
 }
 
@@ -6300,13 +6402,14 @@ textarea {
 }
 
 .checkout-success__instructions {
-  background: var(--color-accent-soft);
+  background: var(--color-bg-secondary);
   border-radius: var(--radius-md);
   padding: var(--space-4);
   font-size: 13px;
   line-height: 1.6;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   margin-bottom: var(--space-6);
+  text-align: left;
 }
 
 .checkout-success__actions {
@@ -6317,4 +6420,8 @@ textarea {
 
 .checkout-success__actions .button {
   flex: 1;
+}
+
+.checkout-success__continue {
+  margin-top: var(--space-3);
 }

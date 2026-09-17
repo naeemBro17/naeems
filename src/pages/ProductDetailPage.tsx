@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../contexts/ProductContext';
 import { coverImage, productImages } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
@@ -15,10 +16,12 @@ import {
   VARIANTS_VIEW,
   variantDisplayPrice,
 } from '../lib/variants';
+import { productHeroName } from '../lib/viewTransition';
 import { useToast } from '../hooks/useToast';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
+import { CartIcon } from '../components/viewer/CartButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
 import type { Product, ProductVariant } from '../types';
@@ -164,9 +167,12 @@ function DetailContent({
   variants: ProductVariant[];
 }) {
   const { showToast } = useToast();
+  const { addItem } = useCart();
   const [activeImage, setActiveImage] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [justAddedToCart, setJustAddedToCart] = useState(false);
   const copyTimerRef = useRef<number>();
+  const cartTimerRef = useRef<number>();
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   // Default to the first variant in sort order; re-resolve if the list changes.
@@ -178,6 +184,7 @@ function DetailContent({
   useEffect(() => {
     return () => {
       window.clearTimeout(copyTimerRef.current);
+      window.clearTimeout(cartTimerRef.current);
     };
   }, []);
 
@@ -205,6 +212,23 @@ function DetailContent({
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
 
+  const handleAddToCart = () => {
+    const variant = selectedVariant
+      ? { id: selectedVariant.id, label: `${selectedVariant.region} · ${selectedVariant.size}` }
+      : null;
+    addItem(product.id, mainPrice, variant);
+    if (typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(15);
+      } catch {
+        // Some embedded webviews advertise vibrate but reject the call.
+      }
+    }
+    setJustAddedToCart(true);
+    window.clearTimeout(cartTimerRef.current);
+    cartTimerRef.current = window.setTimeout(() => setJustAddedToCart(false), COPIED_RESET_MS);
+  };
+
   const handleCopy = async () => {
     const ok = await copyToClipboard(buildCopyText(product, mainPrice));
     if (ok) {
@@ -224,6 +248,7 @@ function DetailContent({
           className={`product-detail__gallery${
             outOfStock ? ' product-media--out' : ''
           }`}
+          style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
           <div
             className="product-detail__carousel"
@@ -257,6 +282,7 @@ function DetailContent({
         <div
           className="product-detail__gallery product-card__placeholder"
           aria-hidden="true"
+          style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
           <PlaceholderIcon />
         </div>
@@ -311,42 +337,69 @@ function DetailContent({
             Out of Stock
           </button>
         ) : (
-          <button
-            type="button"
-            className={`button copy-button${copied ? ' copy-button--copied' : ''}`}
-            onClick={handleCopy}
-            aria-label={`Copy name and price of ${product.name}`}
-          >
-            {copied ? 'Copied!' : 'Copy Price'}
-            {copied ? (
-              <svg
-                className="copy-button__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            ) : (
-              <svg
-                className="copy-button__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-              </svg>
-            )}
-          </button>
+          <div className="product-detail__actions">
+            <button
+              type="button"
+              className={`button copy-button${justAddedToCart ? ' copy-button--copied' : ''}`}
+              onClick={handleAddToCart}
+              aria-label={`Add ${product.name} to cart`}
+            >
+              {justAddedToCart ? 'Added!' : 'Add to Cart'}
+              {justAddedToCart ? (
+                <svg
+                  className="copy-button__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : (
+                <CartIcon className="copy-button__icon" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={`button copy-button copy-button--secondary${copied ? ' copy-button--copied' : ''}`}
+              onClick={handleCopy}
+              aria-label={`Copy name and price of ${product.name}`}
+            >
+              {copied ? 'Copied!' : 'Copy Price'}
+              {copied ? (
+                <svg
+                  className="copy-button__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : (
+                <svg
+                  className="copy-button__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              )}
+            </button>
+          </div>
         )}
 
         <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />

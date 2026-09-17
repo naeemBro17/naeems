@@ -75,7 +75,10 @@ export function OrderSummaryPage() {
 
           <ul className="checkout-summary-card__items">
             {items.map((item) => (
-              <li key={item.product.id} className="checkout-summary-card__item">
+              <li
+                key={`${item.product.id}::${item.variantId ?? ''}`}
+                className="checkout-summary-card__item"
+              >
                 <span className="checkout-summary-card__thumb">
                   {coverImage(item.product) ? (
                     <img src={coverImage(item.product) ?? ''} alt={item.product.name} />
@@ -85,6 +88,11 @@ export function OrderSummaryPage() {
                 </span>
                 <span className="checkout-summary-card__item-name">
                   {item.product.name}
+                  {item.variantLabel && (
+                    <span className="checkout-summary-card__item-variant">
+                      {item.variantLabel}
+                    </span>
+                  )}
                   <span className="checkout-summary-card__item-qty">&times;{item.quantity}</span>
                 </span>
                 <span className="checkout-summary-card__item-price">

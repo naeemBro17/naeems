@@ -72,6 +72,13 @@ export function DeliveryDetailsPage() {
               onClick={() => setZoneId(option.id)}
               aria-pressed={zoneId === option.id}
             >
+              {zoneId === option.id && (
+                <span className="checkout-zone-card__check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </span>
+              )}
               <span className="checkout-zone-card__label">{option.label}</span>
               <span className="checkout-zone-card__fee">{formatTaka(option.fee)}</span>
             </button>

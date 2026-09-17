@@ -8,7 +8,7 @@ import { statusFromQuantity } from '../../../lib/stockStatus';
 import { uniqueProductSlug } from '../../../lib/slugify';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../../lib/skinFields';
 import { BottomSheet } from '../../shared/BottomSheet';
-import { SheetFooter, Toggle } from './SheetChrome';
+import { ChipGroup, SheetFooter, Toggle } from './SheetChrome';
 import { ImageStrip } from './ImageStrip';
 import { VariantEditor } from './VariantEditor';
 import type { Product } from '../../../types';
@@ -55,45 +55,6 @@ function draftFrom(product: Product): ProductDraft {
     skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
     skin_conditions: sanitizeSkinValues(product.skin_conditions, SKIN_CONDITIONS),
   };
-}
-
-function toggleValue(list: string[], value: string): string[] {
-  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
-}
-
-/** Multi-select pill chips for one of the skin tag groups. */
-function ChipGroup({
-  label,
-  options,
-  selected,
-  onChange,
-}: {
-  label: string;
-  options: readonly string[];
-  selected: string[];
-  onChange: (next: string[]) => void;
-}) {
-  return (
-    <div className="form-field">
-      <span className="form-label">{label}</span>
-      <div className="chip-group" role="group" aria-label={label}>
-        {options.map((option) => {
-          const on = selected.includes(option);
-          return (
-            <button
-              key={option}
-              type="button"
-              className={`chip-select${on ? ' chip-select--on' : ''}`}
-              aria-pressed={on}
-              onClick={() => onChange(toggleValue(selected, option))}
-            >
-              {option}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 const nullable = (value: string): string | null => (value.trim() === '' ? null : value.trim());

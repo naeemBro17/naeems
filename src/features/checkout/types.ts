@@ -14,6 +14,9 @@ export interface CartItem {
   quantity: number;
   /** Unit price captured when the item was added; immune to later price edits. */
   unitPrice: number;
+  variantId: string | null;
+  /** e.g. "AU · 340g" — snapshot label, shown in cart/summary/WhatsApp/PDF. */
+  variantLabel: string | null;
 }
 
 export type DeliveryZoneId = 'inside_dhaka' | 'outside_dhaka';

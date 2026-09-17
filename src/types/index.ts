@@ -81,6 +81,8 @@ export interface ProductFormData {
   note: string;
   is_featured: boolean;
   is_active: boolean;
+  skin_types: string[];
+  skin_conditions: string[];
 }
 
 export type UserRole = 'wholesaler' | 'admin';
