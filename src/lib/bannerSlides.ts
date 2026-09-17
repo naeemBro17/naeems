@@ -15,15 +15,18 @@ export const CTA_ACTION_LABELS: Record<BannerCtaAction, string> = {
   open_url: 'Open a link',
 };
 
-/** A blank slide for the admin "add new" form. */
+/** A blank slide for the admin "add new" form. The id is generated once
+ *  here and kept for the slide's lifetime — see BannerSlide's doc comment. */
 export function emptyBannerSlide(): BannerSlide {
   return {
+    id: crypto.randomUUID(),
     eyebrow_text: '',
     title: '',
     cta_button_text: 'Shop Now →',
     cta_action: 'scroll_to_products',
     cta_url: '',
     background_color: '#FFF3EE',
+    image_url: null,
     is_active: true,
   };
 }
@@ -52,12 +55,17 @@ export function parseBannerSlides(raw: string): BannerSlide[] {
   if (!Array.isArray(decoded)) return [];
 
   return decoded.filter(isRecord).map((entry) => ({
+    // Older saved slides predate this field — give them a fresh id so they
+    // at least have one from here on; it only becomes their real image
+    // path once an admin uploads a photo and the slide is saved again.
+    id: typeof entry.id === 'string' && entry.id !== '' ? entry.id : crypto.randomUUID(),
     eyebrow_text: asString(entry.eyebrow_text, ''),
     title: asString(entry.title, ''),
     cta_button_text: asString(entry.cta_button_text, 'Shop Now →'),
     cta_action: asCtaAction(entry.cta_action),
     cta_url: asString(entry.cta_url, ''),
     background_color: asString(entry.background_color, '#FFF3EE'),
+    image_url: typeof entry.image_url === 'string' && entry.image_url !== '' ? entry.image_url : null,
     is_active: entry.is_active !== false,
   }));
 }

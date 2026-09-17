@@ -123,7 +123,7 @@ export function ProductCard({ product }: ProductCardProps) {
               <span className="product-card__price-sub">
                 <span className="product-card__strike">{formatTaka(strikePrice)}</span>
                 {savePercent !== null && !outOfStock && (
-                  <span className="product-card__save">-{savePercent}%</span>
+                  <span className="product-card__save">Save {savePercent}%</span>
                 )}
               </span>
             </div>

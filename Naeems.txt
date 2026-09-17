@@ -527,3 +527,272 @@ above, that's the first place to look.
    already shown elsewhere.
 
 ====================================================================
+
+
+====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-3-card-and-images
+====================================================================
+
+This session worked through "Batch 3 — Card Text, Save Badge, Banner and
+Category Images" (4 parts). Parts 1 and 2 were verified by eye in a real
+running browser at 320/360/390px, same as last session. Part 3 was also
+verified by eye. Part 4's customer-facing side was verified by eye; its
+admin side could not be — see section 3.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Card names wasting the first line
+
+Confirmed the bug exactly as described, at 375-390px: "Aveeno Daily" filled
+maybe two-thirds of line 1 and then jumped "Moisturising" whole to line 2,
+leaving real empty space behind. Measured it precisely before touching
+anything: the word "Moisturising" (12 letters) simply didn't fit in what was
+left of line 1, so the browser moved the entire word down rather than
+splitting it — normal, correct CSS text-wrapping behaviour, just not the
+behaviour this card needs.
+
+The task suggested `overflow-wrap: anywhere` as the fix. I tried it, then
+checked with an isolated test in the real browser engine whether it actually
+changed anything — it did not. I want to be precise about why, since it
+matters for any future styling decision like this: `overflow-wrap` (in
+either its `break-word` or `anywhere` form) only ever breaks a word that
+doesn't fit ANYWHERE — i.e. is wider than the whole line box on its own. It
+does not break a word that merely doesn't fit in what's left of a
+partially-filled line but WOULD fit comfortably starting fresh on the next
+line — and "Moisturising" easily fits on its own line at this card width, so
+neither property touched it. I verified this with a direct side-by-side
+comparison of "normal" wrapping vs. "anywhere" on the exact failing text at
+the exact failing width — the line breaks were byte-for-byte identical.
+
+The property that actually does what's needed is `word-break: break-all`,
+which allows a break at any character boundary regardless of whether the
+word would fit on a fresh line. Applied it, then looked at the real result
+on every name the task asked me to check:
+  - "Aveeno Daily Mois / turising Lightly S…" — both lines now fully used.
+  - "Aveeno Oat Milk B / lend Moisturisin…" — both lines fully used, but the
+    break lands after a single letter ("B"), which does look like a stray
+    character rather than an intentional break.
+  - "Beauty of Joseon / Relief Sun Aqua-F…" — breaks fall at natural word
+    boundaries here regardless, so this one looks completely normal.
+  - "CeraVe Foaming / Cleanser Eco-Rec…" — fills further than before
+    (previously broke after "Eco-", now after "Eco-Rec"), reads fine.
+  - "Bio Oil | 200mL" — short name, unaffected, still reserves the full
+    two-line height so price rows stay aligned with longer-named neighbours.
+I also tried combining this with automatic hyphenation (`hyphens: auto`) to
+see if the browser would insert a proper hyphen at a real syllable break
+instead of an arbitrary character split — it made no difference; break-all's
+break opportunities override hyphenation's the same way they override normal
+word boundaries.
+
+Net result: the wasted-line bug the task rejected is gone on every test
+name, which is what was required. The genuinely honest trade-off, per the
+task's own instruction to report rather than silently revert: a small number
+of long names will occasionally show a bare mid-word split with no hyphen
+mark, and in the "Aveeno Oat Milk Blend" case that split happens to land
+after a single orphan letter, which is the roughest-looking result I found
+across the whole catalogue. I judged this an acceptable trade for "every
+card actually uses the room it has," per the task's explicit instruction,
+but it's a real, visible characteristic of this choice, not a non-issue —
+see section 6 below for the actual long-term fix (shortening a few names).
+Font size was not touched anywhere in this change.
+
+PART 2 — "Save X%" wording restored
+
+Changed the badge text back from "-12%" to "Save 12%". Tested immediately
+afterward at the widths the task named:
+  - 390px: comfortable, 35px+ clear of the cart button on every card.
+  - 360px: comfortable, 19px+ clear.
+  - 320px: at the original badge size this collided — badges were
+    overlapping the cart button by up to 13px on some cards. Reduced the
+    badge's font size (8.5px → 7px) and padding, per the task's explicit
+    fallback instruction ("reduce the badge's font size and padding
+    slightly rather than dropping the word"). Re-tested: 0 wrapping cards,
+    minimum 4px clearance from the cart button at 320px, checked against
+    every card currently in the catalogue including the largest discounts
+    (up to -45%, wording doesn't change badge width since "Save XX%" is a
+    fixed 8-character shape regardless of the digits).
+The word "Save" is now on every discount badge, unconditionally, at all
+three checked widths, with no wrap and no collision anywhere.
+
+PART 3 — Hero banner image support
+
+Built this as: an optional per-slide photo, uploaded through the same
+Supabase Storage mechanism product images already use (resize client-side to
+WebP, upload, read back a public URL) — no new bucket, no new upload
+mechanism, per the task's instruction. With no image, the slide is
+byte-for-byte the same markup as before this change (verified on screen —
+see below). With one, the photo fills the slide behind a dark scrim, with
+the heading, eyebrow and "Shop Now" button on top.
+
+I could not log into the live admin panel to test the upload button itself
+(see section 3), so I verified the two things that matter most a different
+way — by injecting a real photo from the shop's own Storage bucket into the
+actual running page's DOM, using the exact CSS classes the real component
+outputs, and looking at the actual rendered result:
+  - No image (today's real data): confirmed unchanged — same dark block,
+    same decorative circles, same layout, at 390px.
+  - With a real photo loaded: my first scrim attempt (a diagonal fade,
+    strong at bottom-left, nearly gone at top-right) genuinely failed the
+    "readable over any photograph, light or dark" requirement — tested
+    against an actual light pink product photo from the catalogue, and the
+    tail end of a two-line headline that reached into the faded corner
+    lost real contrast. I did not accept that as good enough. Replaced it
+    with a vertical gradient that never drops below ~40% black anywhere in
+    the slide, strongest at the bottom where the title and button actually
+    sit. Re-tested with the same photo: fully legible white heading and
+    button across the whole slide, photo still clearly visible. Height,
+    rounded corners and the button's orange stayed exactly as before — the
+    button is still the one orange element in the banner.
+
+PART 4 — Browse category circle images
+
+Same storage pattern as Part 3, this time per category. Needs one new
+database column that does not exist in the live database yet — see the SQL
+section below; I could not run it myself (no service-role access from this
+environment, and it's exactly the kind of schema change CLAUDE.md says you
+run by hand). I built and type-checked the whole feature, and verified the
+customer-facing rendering the same DOM-injection way as Part 3:
+  - No image (every real category today): confirmed unchanged — same
+    curated icon, same circle, at 390px.
+  - With a real photo injected into a live circle: crops cleanly to fill the
+    circle (cover, centred), no distortion, category name underneath
+    untouched. Also specifically checked the circle's "NEW" badge (the small
+    red dot some circles carry) doesn't get clipped by the new image now
+    that the circle can show a full-bleed photo — it doesn't; the rounding
+    lives on the image itself, not the circle wrapper, precisely so that
+    badge (which sits slightly outside the circle's own bounds) keeps
+    showing over an image exactly as it does today over an icon.
+  - Could NOT verify: the actual admin upload flow, or a real photo coming
+    from a real category row, because the column doesn't exist in the
+    database yet. Please look at this one yourself after running the SQL
+    below.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+One new migration, needed for Part 4 only (Part 3 needed no schema change —
+banner slide data is a JSON blob in app_settings, not a table). Safe to
+re-run.
+
+File: supabase/migration-015-category-images.sql
+
+  ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url text;
+
+That's the whole migration — categories has always been a plain "anyone can
+read every column" table (see rls.sql), so nothing else (no view, no column
+grant) is needed for the new column to become visible, unlike products'
+wholesale_price-style columns.
+
+No storage bucket or storage policy SQL is needed — both the banner image
+and the category image reuse the existing product-images bucket and its
+existing policies, the same way the admin's expert-photo upload already
+does.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+- I do not have admin login credentials in this environment, so I could not
+  sign into /admin or turn on Edit Mode to actually click through the
+  banner-image and category-image upload buttons I built. I verified their
+  code by type-checking and by reading it carefully against the existing
+  expert-photo upload it's modelled on (which does work, and which I did not
+  change), and I verified the RENDERING side (what a customer sees) by
+  injecting real photos into the live running page — but the actual
+  admin-facing "pick a file, watch it upload, see it save" flow is unverified
+  by eye. Please try it yourself first before trusting it fully — upload a
+  banner photo and a category photo, refresh, and confirm both stuck.
+- Part 4's admin and customer-facing code for a real (non-injected) category
+  photo is entirely unverified until you run migration-015 — right now the
+  database simply doesn't have anywhere to put the URL, so saving a category
+  with an image chosen would fail with a database error today. This is
+  expected and not a bug; it'll work once the column exists.
+- Same environment gap as every prior session: no way to actually click
+  "Save" as an authenticated admin and watch a network request succeed.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- The banner slide's "Background colour" field, editable in the admin sheet
+  for as long as banner slides have existed, is never actually applied
+  anywhere in HeroBanner.tsx — the slide always used one fixed CSS colour
+  regardless of what was saved there. Not something this batch asked me to
+  fix, and I didn't touch it, but it means that field has quietly done
+  nothing since it was built. Worth deciding whether to wire it up or remove
+  it in a future session.
+- Bento tiles (the homepage's admin-managed cards) use a THIRD, different
+  image mechanism from everything else — a plain "paste a URL" text field,
+  no upload, no Storage bucket at all. Not a bug, just worth knowing there
+  are now three different patterns for "give this thing a photo" in the
+  codebase (multi-upload for products, paste-a-URL for bento tiles, and now
+  the single-photo Storage upload this session generalised for banner/
+  category/expert-photo). Consolidating bento tiles onto the same
+  Storage-upload pattern would be a reasonable future cleanup, not urgent.
+- Banner slides had no stable id before this session — the admin list used
+  to key each row on `${title}-${index}`, which breaks (duplicate React
+  keys, wrong row edited) if two slides ever share a title or index shifts
+  from reordering. Gave every slide a real `id` (generated once, kept for
+  its lifetime) as part of adding the image feature, since the image needed
+  a stable storage path anyway. This is a small, low-risk correctness fix
+  that fell directly out of this session's work, not a separate change.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Part 3/4's upload widget is a NEW small shared component
+  (AdminImagePicker), not the existing multi-image ImageUploader product
+  photos use. I checked first: that component is built specifically for
+  "add several photos, reorder them, mark one as cover," which doesn't fit
+  "this one thing optionally has exactly one photo." The codebase already
+  had a precedent for that exact shape of problem — the admin's expert-photo
+  field, which has its own small single-photo upload widget separate from
+  ImageUploader. I pulled that existing pattern out into one shared
+  component instead of writing it a third time inline in both the banner
+  and category editors, and reused the exact same Storage upload mechanics
+  (same bucket, same client-side resize) everywhere. I read this as
+  satisfying the task's actual instruction — "don't invent a second way of
+  uploading images" — since nothing about how or where images are stored
+  changed; only the fact that three fields sharing one shape of UI now share
+  one implementation of it. I did not touch the existing expert-photo field
+  itself to use this new shared component — it already works, and rewriting
+  working code to a new shared version was not asked for this session.
+- Each banner slide's image is stored at a fixed path keyed to the slide's
+  new id (banners/{id}.webp) with upsert, rather than a fresh random
+  filename per upload. Replacing a slide's photo overwrites the same file in
+  Storage instead of leaving the old upload behind — the same choice the
+  existing expert-photo field already makes, for the same reason.
+- Category images work the same way, at categories/{category id}.webp —
+  using the category's own database id, which is already stable, rather
+  than generating a new one.
+- The scrim redesign in Part 3 is the one place this session made a real
+  judgment call the task explicitly authorised ("judge the strength by
+  looking at it, not by guessing a value") — documented in the CSS comment
+  directly above the rule, including which photo it was tested against and
+  why the first attempt wasn't good enough.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Content — small, carried over from last session] The specific long
+   product names that now show a mid-word break with no hyphen (see Part 1)
+   would look meaningfully cleaner if shortened slightly in the catalogue —
+   "Aveeno Daily Moisturising Lightly Scented Body Wash 354mL" is long
+   enough that no purely visual fix avoids some compromise. This is a data
+   decision, not a code one, and is the actual permanent fix for Part 1's
+   remaining rough edges.
+2. [Code health — small] Now that three different "give this one thing a
+   photo" implementations exist in slightly different shapes (see section 4
+   above), migrating the expert-photo field and the bento-tile URL field
+   onto the new shared AdminImagePicker component would leave exactly one
+   pattern to maintain instead of three. Low risk, not urgent.
+3. [Process — worth remembering] This is the third session in a row where a
+   real, previously-unverified problem was only caught once someone actually
+   looked at the rendered page rather than reasoning from the code (the
+   wasted-line-1 bug in Part 1 is exactly this again, on top of Part 1's own
+   finding last session and the Copy Price colour bug two sessions ago).
+   Worth keeping "look at it running" as a standing requirement for any
+   future visual work, not just when a bug report specifically demands it.
+
+====================================================================

@@ -1432,14 +1432,46 @@ textarea {
   gap: var(--space-2);
 }
 
+.admin-category-row__thumb {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.admin-category-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-category-row__thumb svg {
+  width: 18px;
+  height: 18px;
+}
+
 .admin-category-row__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.admin-category-row__edit-fields {
   display: flex;
   gap: var(--space-2);
   align-items: center;
   width: 100%;
 }
 
-.admin-category-row__edit .form-input {
+.admin-category-row__edit-fields .form-input {
   flex: 1;
 }
 
@@ -1946,6 +1978,54 @@ textarea {
 }
 
 .expert-photo-uploader__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---------- Admin single-image picker (banner slides, categories) ---------- */
+
+.admin-image-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.admin-image-picker__preview {
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.admin-image-picker__preview--circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+}
+
+.admin-image-picker__preview--rect {
+  width: 140px;
+  height: 78px;
+  border-radius: var(--radius-sm);
+}
+
+.admin-image-picker__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-image-picker__preview svg {
+  width: 28px;
+  height: 28px;
+}
+
+.admin-image-picker__actions {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -2509,6 +2589,38 @@ textarea {
   pointer-events: none;
 }
 
+.hero-banner__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Vertical gradient, strongest at the bottom where the title and button
+   sit, but never fading away completely — tested against a light pastel
+   product photo, where a scrim that faded much past ~0.4 let the title's
+   white text lose contrast wherever the headline ran long enough to reach
+   the lighter top of the slide. */
+.hero-banner__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.58) 45%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+}
+
+/* Photo slides always use light text over the scrim, regardless of the
+   site's light/dark theme — the background is a photo, not a themed
+   surface, so the near-black text token would be unreadable on it. */
+.hero-banner__slide--photo .hero-banner__title {
+  color: #FFFFFF;
+}
+
 .hero-banner__circle--one {
   top: -46px;
   right: -30px;
@@ -2646,6 +2758,17 @@ textarea {
   box-shadow: var(--shadow-circle);
   color: var(--color-text-primary);
   transition: transform var(--transition-fast), border-color var(--transition-base);
+}
+
+/* Rounded on the image itself, not the circle wrapper — the wrapper must
+   stay overflow-visible so the "NEW" badge (positioned slightly outside its
+   bounds) never gets clipped. */
+.browse-circle__image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .browse-item:active .browse-circle {
@@ -3286,7 +3409,16 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  overflow-wrap: break-word;
+  /* A long word that would otherwise wrap whole to the next line (leaving
+     the current line half-empty) breaks and continues instead, so both
+     lines actually fill before the clamp's ellipsis kicks in. Verified:
+     overflow-wrap: anywhere does NOT do this — the spec only lets it break
+     a word too wide for an entire fresh line, not merely too wide for what
+     remains of the current one, so it left the exact same gaps as before.
+     word-break: break-all is the only property that actually forces a
+     break at the point a word stops fitting, which is what "fill the line
+     before truncating" requires. */
+  word-break: break-all;
   /* Reserve both lines so cards in a row line their prices up. */
   min-height: calc(2 * 1.35em);
 }
@@ -3331,13 +3463,17 @@ textarea {
 }
 
 .product-card__save {
-  font-size: 8.5px;
+  /* "Save X%" (the full word, not "-X%") is the wording — see CLAUDE.md's
+     card spec. Sized down from a generic badge so it still fits beside the
+     retail price at the narrowest real phone width without wrapping. */
+  font-size: 7px;
   font-weight: 800;
+  letter-spacing: -0.15px;
   color: #FF7A45;
   background: var(--save-pill-bg);
   border: 1px solid var(--save-pill-border);
   border-radius: 20px;
-  padding: 2px 6px;
+  padding: 1px 3.5px;
   white-space: nowrap;
   flex-shrink: 0;
 }
