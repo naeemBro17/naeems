@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useModalBackClose } from '../../hooks/useModalBackClose';
 
 interface ModalProps {
   isOpen: boolean;
@@ -21,6 +22,9 @@ export function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Device/browser back closes the modal instead of leaving the page.
+  useModalBackClose(isOpen, onClose);
 
   // Focus trap + Escape to close + restore focus on close + scroll lock.
   useEffect(() => {

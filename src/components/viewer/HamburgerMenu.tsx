@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { BottomSheet } from '../shared/BottomSheet';
 
 interface HamburgerMenuProps {
@@ -51,7 +53,15 @@ function ComingSoon({ onBack }: { onBack: () => void }) {
  */
 export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const { theme, toggleTheme } = useTheme();
+  const { isAdmin, profile } = useAuth();
+  const navigate = useNavigate();
   const [screen, setScreen] = useState<MenuScreen>('root');
+  const isApprovedWholesaler = profile?.role === 'wholesaler' && profile?.status === 'approved';
+
+  const goTo = (path: string) => {
+    onClose();
+    navigate(path);
+  };
 
   // Always reopen on the root screen, never on a stale Coming Soon panel.
   useEffect(() => {
@@ -95,6 +105,31 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
             <span className="menu-row__label">About Naeem&apos;s Price Hub</span>
             <ChevronRight />
           </button>
+
+          {/* Only an authenticated admin/wholesaler ever sees these — the
+              role check comes straight from AuthContext's session profile,
+              never from CSS or client-side guessing. */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="menu-row menu-row--button"
+              onClick={() => goTo('/admin')}
+            >
+              <span className="menu-row__label">Admin Panel</span>
+              <ChevronRight />
+            </button>
+          )}
+
+          {isApprovedWholesaler && (
+            <button
+              type="button"
+              className="menu-row menu-row--button"
+              onClick={() => goTo('/wholesaler-access')}
+            >
+              <span className="menu-row__label">Wholesale Account</span>
+              <ChevronRight />
+            </button>
+          )}
         </div>
       ) : (
         <ComingSoon onBack={() => setScreen('root')} />

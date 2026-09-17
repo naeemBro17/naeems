@@ -33,8 +33,9 @@ export function buildOrderWhatsAppText(order: OrderSnapshot): string {
   lines.push('');
   lines.push('Items:');
   for (const item of order.items) {
+    const variant = item.variantLabel ? ` (${item.variantLabel})` : '';
     lines.push(
-      `- ${item.product.name} x${item.quantity} - ${formatTaka(item.unitPrice * item.quantity)}`
+      `- ${item.product.name}${variant} x${item.quantity} - ${formatTaka(item.unitPrice * item.quantity)}`
     );
   }
   lines.push('');
@@ -79,8 +80,9 @@ export async function buildOrderPdf(order: OrderSnapshot) {
 
   writeLine('Items', true);
   for (const item of order.items) {
+    const variant = item.variantLabel ? ` (${item.variantLabel})` : '';
     writeLine(
-      `${item.product.name}  x${item.quantity}  ${formatTakaAscii(item.unitPrice * item.quantity)}`
+      `${item.product.name}${variant}  x${item.quantity}  ${formatTakaAscii(item.unitPrice * item.quantity)}`
     );
   }
   y += lineHeight * 0.5;

@@ -6,7 +6,7 @@
 // usage count is committed here (not when it was typed in) via the
 // increment_promo_usage SECURITY DEFINER function.
 import { useEffect, useRef } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
 import { whatsAppUrl, openExternal } from '../../lib/expertLinks';
@@ -17,6 +17,7 @@ import { CheckoutProgressBar } from './CheckoutProgressBar';
 export function OrderSuccessPage() {
   const { lastOrder, resetAfterOrder } = useCheckoutState();
   const { settings } = useProducts();
+  const navigate = useNavigate();
   const hasRunRef = useRef(false);
 
   useEffect(() => {
@@ -24,10 +25,13 @@ export function OrderSuccessPage() {
     hasRunRef.current = true;
 
     if (lastOrder.promo) {
-      void supabase.rpc('increment_promo_usage', { promo_code: lastOrder.promo.code });
-      // The discount already shown to this customer is honored regardless
-      // of whether the code was still valid at this exact moment — see
-      // migration-014's increment_promo_usage for the re-check.
+      void supabase.rpc('increment_promo_usage', { promo_code: lastOrder.promo.code }).then(({ error }) => {
+        // The discount already shown to this customer is honored regardless
+        // of whether the code was still valid at this exact moment — see
+        // migration-014's increment_promo_usage for the re-check. We only
+        // log here so a missing/failed function isn't silently invisible.
+        if (error) console.error('increment_promo_usage failed:', error.message);
+      });
     }
     resetAfterOrder();
     // resetAfterOrder is stable (useCallback) but intentionally excluded so
@@ -99,6 +103,14 @@ export function OrderSuccessPage() {
             Send on WhatsApp
           </button>
         </div>
+
+        <button
+          type="button"
+          className="button button--secondary button--full checkout-success__continue"
+          onClick={() => navigate('/')}
+        >
+          Continue Shopping
+        </button>
       </main>
     </div>
   );

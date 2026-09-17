@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useModalBackClose } from '../../hooks/useModalBackClose';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -28,6 +29,9 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
+
+  // Device/browser back closes the sheet instead of leaving the page.
+  useModalBackClose(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen) {

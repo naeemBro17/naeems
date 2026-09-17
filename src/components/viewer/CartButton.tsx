@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useCart } from '../../contexts/CartContext';
-import { useToast } from '../../hooks/useToast';
 
 interface CartButtonProps {
   productId: string;
   productName: string;
   price: number;
   outOfStock: boolean;
+  /** True when the product has Region/Size variants — the card only shows
+   *  a "from" price, so which exact variant to add is ambiguous here. */
+  hasVariants?: boolean;
+  /** Called instead of adding to cart when hasVariants is true, so the
+   *  customer picks a variant on the detail page first. */
+  onRequiresVariant?: () => void;
 }
 
 /** How long the button shows the green checkmark before reverting. */
@@ -53,9 +58,15 @@ function CheckIcon({ className }: { className?: string }) {
  * Wired to CartContext (Session 9 groundwork) — the checkout flow that reads
  * from it is a separate session.
  */
-export function CartButton({ productId, productName, price, outOfStock }: CartButtonProps) {
+export function CartButton({
+  productId,
+  productName,
+  price,
+  outOfStock,
+  hasVariants = false,
+  onRequiresVariant,
+}: CartButtonProps) {
   const { addItem } = useCart();
-  const { showToast } = useToast();
   const [justAdded, setJustAdded] = useState(false);
   // Bumped on every tap so the pulse ring span remounts and its CSS
   // animation restarts, even on rapid repeat taps.
@@ -70,6 +81,11 @@ export function CartButton({ productId, productName, price, outOfStock }: CartBu
     e.stopPropagation();
     if (outOfStock) return;
 
+    if (hasVariants) {
+      onRequiresVariant?.();
+      return;
+    }
+
     addItem(productId, price);
 
     // navigator.vibrate is undefined on iOS Safari — guard so it never throws.
@@ -81,7 +97,6 @@ export function CartButton({ productId, productName, price, outOfStock }: CartBu
       }
     }
 
-    showToast('Added to cart');
     setJustAdded(true);
     setPulseId((id) => id + 1);
     window.clearTimeout(resetTimerRef.current);
@@ -94,7 +109,13 @@ export function CartButton({ productId, productName, price, outOfStock }: CartBu
       className={`cart-button${justAdded ? ' cart-button--added' : ''}`}
       onClick={handleClick}
       disabled={outOfStock}
-      aria-label={outOfStock ? `${productName} is out of stock` : `Add ${productName} to cart`}
+      aria-label={
+        outOfStock
+          ? `${productName} is out of stock`
+          : hasVariants
+            ? `Choose options for ${productName}`
+            : `Add ${productName} to cart`
+      }
     >
       {pulseId > 0 && <span key={pulseId} className="cart-button__pulse" aria-hidden="true" />}
       {justAdded ? (

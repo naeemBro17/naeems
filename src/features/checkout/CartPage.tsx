@@ -22,14 +22,14 @@ export function CartPage() {
 
   const handleDecrement = (item: CartItem) => {
     if (item.quantity > 1) {
-      updateQuantity(item.product.id, item.quantity - 1);
+      updateQuantity(item.product.id, item.quantity - 1, item.variantId);
     } else {
       setPendingRemove(item);
     }
   };
 
   const handleConfirmRemove = () => {
-    if (pendingRemove) removeItem(pendingRemove.product.id);
+    if (pendingRemove) removeItem(pendingRemove.product.id, pendingRemove.variantId);
     setPendingRemove(null);
   };
 
@@ -57,7 +57,7 @@ export function CartPage() {
         ) : (
           <ul className="checkout-cart__list">
             {items.map((item) => (
-              <li key={item.product.id} className="checkout-cart__row">
+              <li key={`${item.product.id}::${item.variantId ?? ''}`} className="checkout-cart__row">
                 <Link to={productPath(item.product)} className="checkout-cart__thumb">
                   {coverImage(item.product) ? (
                     <img src={coverImage(item.product) ?? ''} alt={item.product.name} />
@@ -70,6 +70,9 @@ export function CartPage() {
                   <Link to={productPath(item.product)} className="checkout-cart__name">
                     {item.product.name}
                   </Link>
+                  {item.variantLabel && (
+                    <span className="checkout-cart__variant">{item.variantLabel}</span>
+                  )}
                   <span className="checkout-cart__unit-price">{formatTaka(item.unitPrice)}</span>
                 </div>
 
@@ -87,7 +90,9 @@ export function CartPage() {
                     <button
                       type="button"
                       className="checkout-cart__step-btn"
-                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                      onClick={() =>
+                        updateQuantity(item.product.id, item.quantity + 1, item.variantId)
+                      }
                       aria-label={`Increase quantity of ${item.product.name}`}
                     >
                       +
