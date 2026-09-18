@@ -30,8 +30,10 @@ function ProductCardName({ name }: { name: string }) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let cancelled = false;
 
     const measure = () => {
+      if (cancelled) return;
       const width = el.getBoundingClientRect().width;
       if (width === 0) return;
       setLines(splitProductName(name, width, fontStringOf(el)));
@@ -40,7 +42,17 @@ function ProductCardName({ name }: { name: string }) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+
+    // The card font (Plus Jakarta Sans) loads asynchronously; if it swaps in
+    // after this first measurement, the split above was computed against
+    // fallback-font metrics and a font swap alone doesn't fire the
+    // ResizeObserver above, so nothing else would ever correct it.
+    document.fonts.ready.then(measure);
+
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [name]);
 
   return (

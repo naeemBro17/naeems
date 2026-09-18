@@ -1626,3 +1626,269 @@ the reactivation actually works). Nothing further to run.
    outstanding.
 
 ====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-6-card-name-and-edit-menu
+====================================================================
+
+This session worked through "Batch 6 — Card Name Gap and Missing Edit
+Option (Verify on Real Production URL)" (2 parts). You told me both items
+had been reported fixed twice before and were still broken for you on
+https://naeems-all.vercel.app in a brand-new browser, so the instruction
+was explicit: don't trust the old fixes, re-diagnose from scratch, and
+don't write "done" without a concrete description of what the real
+production site actually showed. Everything below was checked against
+that exact URL, using real DOM measurements and real canvas text
+measurements taken from the live page — not assumptions from reading the
+source code.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Card name still leaving unused space on line 1
+
+First I checked whether the two earlier "fixes" had even made it to
+production, because that's the single most common reason a fix looks
+undone. My local clone's cached copy of the GitHub main branch was a
+commit behind (it still showed Batch 5's branch as unmerged) — but a
+fresh `git fetch` showed PR #14 (Batch 5) genuinely was merged, and
+Batch 5's code (the left-side drawer menu, the MIN_FRAGMENT_CHARS
+change) is confirmed live and running on production right now. So this
+was not a missed-deployment problem. I mention the false alarm because
+it's exactly the kind of thing that caused the last two sessions'
+confusion, and I want you to know I checked it properly with a fresh
+fetch rather than trusting a stale local branch list.
+
+With that ruled out, I tested the font-loading race theory the task
+asked me to check first, directly on production: I read
+`document.fonts.status` on the live page after load — it reported
+"loaded" — and then re-ran the exact same canvas measurement the site's
+own code uses, with the exact same font string, and got the exact same
+(wrong) line break the page was already showing. That means the font
+was NOT still loading when the bad split happened. The font-race theory
+was a reasonable thing to check but it is not what's happening here.
+
+The real cause, found by measuring "CeraVe Foaming Cleanser
+Eco-Recharge Refill 473mL" on the real live grid: the card's usable
+line-1 width left 40.7px of room after "CeraVe Foaming". The next word,
+"Cleanser", could fit 6 characters ("Cleans") in that space, which
+would leave "er" (2 characters) for the start of line 2. Batch 5's rule
+requires at least 3 characters on both sides of a mid-word break, so
+"Cleans"/"er" correctly got rejected — but the code's response to that
+rejection was to give up on splitting the word at all, leaving "CeraVe
+Foaming" alone on line 1 with 40px of empty space, instead of trying a
+slightly shorter, still-valid split. A 5-character piece ("Clean") would
+have left "ser" (3 characters) — which passes the same rule Batch 5
+already had — but the code never tried it, because it only ever computed
+the single longest-fitting prefix and gave up entirely if that one
+specific prefix failed the check.
+
+The fix (src/lib/textWrap.ts): instead of only trying the longest
+prefix that fits the available pixels, it now caps that prefix at
+`word.length - MIN_FRAGMENT_CHARS` before checking it — which finds the
+largest prefix that BOTH fits the available width AND leaves the
+required 3 characters on line 2, in one step, rather than trying only
+the biggest option and giving up if that one fails.
+
+I separately added a defensive fix in src/components/viewer/ProductCard.tsx:
+even though the font race wasn't the cause of this specific bug, nothing
+in the code currently re-measures if the card's font swaps in after the
+first paint (a real risk with the Google Font this site uses, which
+loads asynchronously). I added a `document.fonts.ready.then(measure)`
+call so a late font swap now triggers a correct re-measurement instead
+of leaving whatever was measured against the fallback font. This didn't
+fix today's reported bug, but it closes a real gap the task specifically
+asked me to check for.
+
+How I verified it, precisely: I could not watch my own new code run at
+the literal https://naeems-all.vercel.app URL in this same session,
+because that only updates once you merge this branch's pull request
+into main (see the honesty note in section 6 — I am not allowed to merge
+to main myself, and structurally no session can). What I did instead:
+I pulled the real rendered widths, the real computed font string, and
+the real product names straight from the live production page right
+now, then ran both the OLD and the NEW splitting logic against that
+real data side by side, in the browser, to see exactly what each one
+produces:
+  - "CeraVe Foaming Cleanser Eco-Recharge Refill 473mL" at the real
+    134.7px card width: OLD gave "CeraVe Foaming" / "Cleanser
+    Eco-Rechar…" (the reported bug, empty space on line 1). NEW gives
+    "CeraVe Foaming Clean" / "ser Eco-Recharge Refi…" — line 1 now fills
+    the available width with a valid break.
+  - "Cerave PM Face Moisturizing Lotion 89ml" at the real 141.5px width:
+    unchanged by the fix, both give "Cerave PM Face" / "Moisturizing
+    Lotion 89ml" — this one was already fine at this width, confirming
+    no regression.
+  - "Aveeno Baby Daily Moisture Fragrance Free Lotion 227g" and the
+    "…Lightly Scented Wash" variant, both at the real 141.5px width:
+    also unchanged by the fix (both already split cleanly as "Aveeno
+    Baby Daily Moist" / "ure …" with under 5px of unused space) —
+    another confirmed non-regression. I could not reproduce a visible
+    gap for these two specific products at the widths this browser
+    could render; it's possible Naeem's real phone hits a narrower
+    width where the same underlying flaw showed up differently, but the
+    class of bug (give up on a valid shorter split) is now fixed
+    generally, not tuned to one screenshot.
+`npm run build` (which runs the TypeScript compiler, then Vite) passed
+with zero errors after the change.
+
+PART 2 — "Edit Product" missing from the home grid card menu
+
+I checked git history first: the code for this menu item
+(src/components/viewer/CardMenu.tsx) was added in a commit from before
+Batch 1 and has not been touched or removed by any commit since,
+including Batch 4 and Batch 5. So this was never a regression — the
+code has been sitting there, unchanged and correct, the whole time.
+
+The Chrome browser I used for this session already had an active admin
+session on it (I saw the admin-only "Edit Mode" floating pencil button
+appear on the homepage before I logged in as anyone), so I was able to
+test your exact real situation end to end without needing your password
+for this part. Here's exactly what I found: "Edit Product" is gated
+behind a site-wide "Edit Mode" toggle (src/contexts/AdminEditContext.tsx),
+switched on and off by a floating pencil-shaped button fixed above the
+bottom navigation bar, visible only to an approved admin. It is off by
+default and resets to off every time you reload the page or sign out —
+it does not stay on. The same toggle also controls every other inline
+edit control across the site (the hero banner, the browse category
+circles, the bento grid tiles, the expert contact page) — it's one
+consistent switch for all inline editing, not something specific to
+just this menu.
+
+With Edit Mode off, tapping "..." on a real product card on the real
+home grid showed exactly what you described: Share Product, Copy Link,
+Copy Price, and a disabled Save — no Edit Product. I then tapped the
+pencil button to turn Edit Mode on (a thin orange bar appeared across
+the top of the screen, confirming it was on), tapped "..." on the same
+CeraVe card again, and "Edit Product" was there. I tapped it, and the
+real product editor sheet opened, pre-filled with that exact product's
+real data (name, brand, category, retail/offer/wholesale prices, stock
+count) — confirmed correct, not a placeholder.
+
+So: this was never broken code. It's a real feature that's always been
+there, gated behind a toggle you didn't know existed. I decided not to
+remove the toggle requirement, because it's the one consistent
+mechanism protecting every inline-editing surface on the site from
+accidental edits while you're just browsing normally as admin — removing
+it just for this one menu item would make Edit Product behave
+differently from every other inline edit control on the site, which
+seems like it would create more confusion, not less. The floating pencil
+button is already visually obvious once you know to look for it (bottom
+right, above the cart/account bar, only shows for you as admin) — the
+real gap was nobody had told you it exists. Now you know: **tap the
+pencil icon bottom-right to turn Edit Mode on, then "..." on any card
+will show Edit Product.**
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed. Nothing in this batch touched the database.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+I could not watch my own Part 1 code fix running live at the actual
+https://naeems-all.vercel.app URL, because that URL only updates after
+you merge this branch's pull request into main, and I'm not able to
+merge to main myself (by design — see CLAUDE.md's git rules). What I
+verified instead is described in detail in Part 1 above: real
+production data (real widths, real fonts, real product names) run
+through both the old and new code side by side, plus a clean local
+build. Please do one thirty-second check yourself after merging: open
+https://naeems-all.vercel.app on your phone in a fresh/incognito tab and
+look at the CeraVe Foaming Cleanser card — line 1 should now read
+"CeraVe Foaming Clean" (or similar, filling the line) instead of
+stopping short at "CeraVe Foaming" with empty space.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- The two "still broken" bugs in this batch turned out to have two
+  completely different real causes, and neither was what the task
+  document's leading theories suggested. Part 1 was a genuine remaining
+  logic gap in the split algorithm (not the font race that was
+  flagged as the top suspect). Part 2 was not a bug at all — the code
+  has been correct and unchanged since before Batch 1; it was a
+  feature-discoverability gap. Recorded honestly rather than forcing a
+  fit to the suspected causes.
+- See section 6 for the direct answer to your question about whether
+  there's a structural gap between what a session can verify and what
+  actually ends up live for you.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Part 1: chose to fix the line-splitting heuristic itself (search for
+  the largest valid prefix instead of only trying the single longest
+  one) rather than lowering MIN_FRAGMENT_CHARS again or changing the
+  card's width/padding. Lowering the minimum would reintroduce the
+  "Dai"/"ly"-style orphan breaks Batch 5 fixed; changing card width
+  would be a much bigger, unrelated layout change. Fixing the heuristic
+  fixes the actual flaw without touching anything Batch 5 already got
+  right.
+- Part 1: also added the font-ready re-measure even though it wasn't
+  the cause of today's specific bug, because it's a real, currently
+  unguarded gap the task explicitly asked me to check for, and it's a
+  small, low-risk addition (one extra promise callback) rather than a
+  redesign.
+- Part 2: chose to keep the Edit Mode toggle requirement rather than
+  making Edit Product always visible to any admin, because it's a
+  deliberate, consistent, site-wide mechanism (five other components
+  share it) rather than something specific to this one menu — see the
+  full reasoning in Part 2 above. If you'd rather Edit Product always
+  show without needing to toggle Edit Mode on first, tell me and I can
+  make that one-line change next session.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Process — directly answers your question] You asked whether there's
+   a real structural reason two "fixed and verified" reports didn't hold
+   up for you in production. The honest answer is a mix of both:
+   - For Part 2, there was NO gap at all — the code was correct and
+     live the whole time; it just needed a "here's exactly how you'll
+     see this" explanation, which apparently never made it into your
+     hands clearly enough. That's on how it was communicated, not the
+     code or the deploy pipeline.
+   - For Part 1, both earlier fixes were real, correctly deployed fixes
+     for the specific cases each session tested — but a heuristic
+     algorithm like this one has many possible word-length/width
+     combinations, and each session's test sweep missed the specific
+     combination that was still broken. That's a test-coverage gap, not
+     a deployment gap.
+   - There IS one genuine structural limit worth knowing, though, and
+     it's not specific to this session: no session can ever watch its
+     OWN new code running at the real production URL in the same
+     session it wrote that code, because CLAUDE.md correctly forbids
+     pushing to main directly, and only main deploys to
+     naeems-all.vercel.app. A session can build locally, and can test
+     its new logic against real data pulled from the live site, but the
+     literal "open the real URL and see the new code live" step can
+     only happen after you merge the PR. Any future session that claims
+     "verified live" for code it JUST wrote in that same session should
+     be read with that caveat — the only way to fully close this gap is
+     for you to do a quick check yourself right after merging, which is
+     exactly what I've asked for in section 3 above.
+   Small process suggestion: when you merge one of these batch PRs,
+   it'd be worth doing that one thirty-second phone check the same day,
+   before the next batch starts — that's the one point where a real bug
+   and a "not deployed yet" bug look identical from a chat transcript.
+2. [Code health — small] src/lib/textWrap.ts is now handling a
+   surprisingly deep set of edge cases (whole-word fit, forced first-word
+   break, mid-word spill with a minimum-fragment rule) for a single pure
+   function with no automated tests. A handful of unit tests (a handless
+   test runner isn't even set up yet — see package.json, there's no test
+   script at all) covering the real product names that have caused
+   trouble across three sessions now (CeraVe Foaming Cleanser, Aveeno
+   Baby Daily Moisture, the "Dai"/"ly" case) would catch a regression
+   here in seconds instead of needing another live-production
+   investigation next time this file changes. Small effort, meaningful
+   payoff given this exact file has now needed fixing in three
+   consecutive batches.
+3. [Trust signal — small, carried forward] Still true, third session
+   running: product card prices are orange (#FF7A45), not near-black,
+   against CLAUDE.md's own colour rule (src/styles/app.css line 3722).
+   Not touched this batch — still out of scope of what was asked — just
+   flagging it keeps not getting picked up.
+
+====================================================================
