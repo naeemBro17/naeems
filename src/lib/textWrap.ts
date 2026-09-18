@@ -112,13 +112,21 @@ export function splitProductName(name: string, maxWidthPx: number, font: string)
 
   // Line 2 is going to be truncated regardless. See if part of the next
   // word can usefully extend line 1 without stranding a lone character.
+  //
+  // Only the LONGEST fitting prefix was tried here before, e.g. "Cleanser"
+  // with room for 6 characters gave "Cleans" + "er" — a 2-char remainder,
+  // rejected by the orphan check below — and the whole spill was abandoned,
+  // leaving line 1 under-filled even though a *shorter* prefix ("Clean" +
+  // "ser", both sides >= MIN_FRAGMENT_CHARS) would have passed. Capping the
+  // prefix at `nextWord.length - MIN_FRAGMENT_CHARS` finds that shorter
+  // prefix directly instead of giving up after the longest one fails.
   const usedWidth = textWidth(line1Words.join(' ') + ' ', font);
   const leftover = maxWidthPx - usedWidth;
   const nextWord = remainingWords[0];
-  const fit = longestFittingPrefix(nextWord, leftover, font);
-  const remainderLen = nextWord.length - fit;
+  const longestFit = longestFittingPrefix(nextWord, leftover, font);
+  const fit = Math.min(longestFit, nextWord.length - MIN_FRAGMENT_CHARS);
 
-  if (fit >= MIN_FRAGMENT_CHARS && remainderLen >= MIN_FRAGMENT_CHARS) {
+  if (fit >= MIN_FRAGMENT_CHARS) {
     const line1 = line1Words.join(' ') + ' ' + nextWord.slice(0, fit);
     const rest = [nextWord.slice(fit), ...remainingWords.slice(1)].join(' ');
     return { line1, line2: truncateToWidth(rest, maxWidthPx, font) };
