@@ -114,6 +114,9 @@ export function CombineProductsSheet({
         size: sourceLabel.size.trim() === '' ? null : sourceLabel.size.trim(),
         image_urls: productImages(contentSource),
         image_url: coverImage(contentSource),
+        // Lets deleting this combined product later know to reactivate the
+        // content-source original too — see Naeems.txt "PART 2" (batch 5).
+        combined_from_product_id: contentSource.id,
         is_featured: false,
         is_active: true,
       })
@@ -142,6 +145,9 @@ export function CombineProductsSheet({
         stock_quantity: p.stock_quantity,
         image_url: coverImage(p),
         note: p.note,
+        // See combined_from_product_id above — the same reactivate-on-delete
+        // mechanism, for a variant row instead of the container itself.
+        source_product_id: p.id,
         sort_order: index,
       };
     });

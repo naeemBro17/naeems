@@ -715,6 +715,7 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
             onRemove={(id) => {
               setImages((prev) => prev.filter((img) => img.id !== id));
             }}
+            onReorder={setImages}
             isUploading={isUploadingImage}
             uploadError={uploadError}
           />

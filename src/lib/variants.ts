@@ -9,7 +9,7 @@ import type { DisplayPrice } from './pricing';
 export const VARIANTS_VIEW = 'product_variants_view';
 
 export const VARIANT_SELECT =
-  'id, product_id, region, size, retail_price, offer_price, wholesale_price, has_wholesale, in_stock, stock_quantity, image_url, note, sort_order, created_at';
+  'id, product_id, region, size, retail_price, offer_price, wholesale_price, has_wholesale, in_stock, stock_quantity, image_url, note, source_product_id, sort_order, created_at';
 
 /** Variants of one product in display order. */
 export function sortVariants(variants: ProductVariant[]): ProductVariant[] {
@@ -154,6 +154,7 @@ function baseOption(product: Product): VariantOption {
     stock_quantity: product.stock_quantity,
     image_url: null,
     note: product.note,
+    source_product_id: null,
     sort_order: -1,
     created_at: product.created_at,
     isBase: true,

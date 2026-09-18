@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type DragEvent, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ChangeEvent } from 'react';
 import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
+import { useDragReorder } from '../../hooks/useDragReorder';
 import type { FormImage } from '../../types';
 
 interface ImageUploaderProps {
@@ -7,16 +8,36 @@ interface ImageUploaderProps {
   images: FormImage[];
   onAddFiles: (files: File[]) => void;
   onRemove: (id: string) => void;
+  /** Hold-to-drag reorder — mirrors ImageStrip's own contract so both admin
+   *  product editors behave the same way. */
+  onReorder: (next: FormImage[]) => void;
   /** True while images are uploading to Supabase Storage. */
   isUploading: boolean;
   /** Upload failure message (with retry handled by re-submitting the form). */
   uploadError: string | null;
 }
 
+/** Hold time on the handle before a thumbnail lifts — matches ImageStrip. */
+const HANDLE_LONG_PRESS_MS = 500;
+
+function HandleGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.7" />
+      <circle cx="15" cy="6" r="1.7" />
+      <circle cx="9" cy="12" r="1.7" />
+      <circle cx="15" cy="12" r="1.7" />
+      <circle cx="9" cy="18" r="1.7" />
+      <circle cx="15" cy="18" r="1.7" />
+    </svg>
+  );
+}
+
 export function ImageUploader({
   images,
   onAddFiles,
   onRemove,
+  onReorder,
   isUploading,
   uploadError,
 }: ImageUploaderProps) {
@@ -24,6 +45,22 @@ export function ImageUploader({
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(new Map());
+
+  // Same mechanism as ImageStrip (product edit sheet's own image list) — a
+  // horizontal row so drag can resolve position along one axis. This grid
+  // used to wrap to multiple rows with no reordering at all; a 2D grid
+  // can't reuse this same one-axis hit-testing, so it's now a single
+  // scrolling row instead, matching the sheet's own pattern exactly rather
+  // than inventing separate reorder logic for a grid.
+  const drag = useDragReorder<FormImage>({
+    items: images,
+    onReorder: (next) => onReorder(next),
+    mode: 'move',
+    axis: 'x',
+    enabled: images.length > 1,
+    longPressMs: HANDLE_LONG_PRESS_MS,
+    keyOf: (image) => image.id,
+  });
 
   // Object URLs for pending files, keyed by image id; revoked on change/unmount.
   useEffect(() => {
@@ -116,8 +153,23 @@ export function ImageUploader({
         <ul className="image-uploader__grid" {...dragProps}>
           {images.map((image, index) => {
             const src = image.url ?? previewUrls.get(image.id);
+            const isDragged = drag.dragIndex === index;
+            const style: CSSProperties = {};
+            if (isDragged) {
+              style.transform = `translateX(${drag.delta.x}px) scale(1.03)`;
+            } else {
+              const shift = drag.shiftFor(index);
+              if (shift !== 0) style.transform = `translateX(${shift}px)`;
+            }
             return (
-              <li key={image.id} className="image-uploader__item">
+              <li
+                key={image.id}
+                ref={drag.registerItem(index)}
+                className={`image-uploader__item${isDragged ? ' image-uploader__item--dragging' : ''}${
+                  isDragged && drag.isDragging ? ' image-uploader__item--live' : ''
+                }`}
+                style={style}
+              >
                 {src && (
                   <img
                     src={src}
@@ -146,6 +198,17 @@ export function ImageUploader({
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
+                {images.length > 1 && (
+                  <span
+                    ref={drag.registerHandle(index)}
+                    className="image-uploader__handle"
+                    role="button"
+                    tabIndex={-1}
+                    aria-label={`Hold to drag image ${index + 1}`}
+                  >
+                    <HandleGlyph />
+                  </span>
+                )}
               </li>
             );
           })}

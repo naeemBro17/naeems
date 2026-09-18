@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { BottomSheet } from '../shared/BottomSheet';
+import { SideDrawer } from '../shared/SideDrawer';
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -47,9 +47,10 @@ function ComingSoon({ onBack }: { onBack: () => void }) {
 }
 
 /**
- * Bottom sheet behind the header's hamburger button. The Dark Mode switch is
- * live and shares state with the header's theme button; Settings and About are
- * placeholders that swap the sheet body for a Coming Soon panel.
+ * Left-side sliding drawer behind the header's hamburger button. The Dark
+ * Mode switch is live and shares state with the header's theme button;
+ * Settings and About are placeholders that swap the drawer body for a
+ * Coming Soon panel.
  */
 export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const { theme, toggleTheme } = useTheme();
@@ -71,7 +72,7 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const isDark = theme === 'dark';
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={SCREEN_TITLES[screen]}>
+    <SideDrawer isOpen={isOpen} onClose={onClose} title={SCREEN_TITLES[screen]}>
       {screen === 'root' ? (
         <div className="menu-list">
           <div className="menu-row">
@@ -134,6 +135,6 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
       ) : (
         <ComingSoon onBack={() => setScreen('root')} />
       )}
-    </BottomSheet>
+    </SideDrawer>
   );
 }
