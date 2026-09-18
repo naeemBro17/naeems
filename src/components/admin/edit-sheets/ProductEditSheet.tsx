@@ -22,6 +22,8 @@ interface ProductDraft {
   wholesale_price: string;
   stock_quantity: string;
   note: string;
+  region: string;
+  size: string;
   description: string;
   how_to_use: string;
   key_ingredients: string;
@@ -46,6 +48,8 @@ function draftFrom(product: Product): ProductDraft {
         : '',
     stock_quantity: product.stock_quantity !== null ? String(product.stock_quantity) : '',
     note: product.note ?? '',
+    region: product.region ?? '',
+    size: product.size ?? '',
     description: product.description ?? '',
     how_to_use: product.how_to_use ?? '',
     key_ingredients: product.key_ingredients ?? '',
@@ -150,6 +154,8 @@ export function ProductEditSheet() {
       stock_quantity: numberOrNull(draft.stock_quantity),
       stock_status: statusFromQuantity(draft.stock_quantity, editingProduct.stock_status),
       note: nullable(draft.note),
+      region: nullable(draft.region),
+      size: nullable(draft.size),
       description: nullable(draft.description),
       how_to_use: nullable(draft.how_to_use),
       key_ingredients: nullable(draft.key_ingredients),
@@ -406,6 +412,37 @@ export function ProductEditSheet() {
             selected={draft.skin_conditions}
             onChange={(skin_conditions) => patch({ skin_conditions })}
           />
+
+          <div className="form-row">
+            <div className="form-field">
+              <label className="form-label" htmlFor="pe-region">Region</label>
+              <input
+                id="pe-region"
+                type="text"
+                className="form-input"
+                placeholder="e.g. AU"
+                value={draft.region}
+                onChange={(e) => patch({ region: e.target.value })}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="pe-size">Size</label>
+              <input
+                id="pe-size"
+                type="text"
+                className="form-input"
+                placeholder="e.g. 50 ml"
+                value={draft.size}
+                onChange={(e) => patch({ size: e.target.value })}
+              />
+            </div>
+          </div>
+          <p className="form-helper">
+            Optional label for this product itself. With no variants added
+            below, it just shows as text on the detail page (no selector).
+            Once you add a real variant, this product's own price/stock
+            becomes the first selectable option under this label.
+          </p>
 
           <VariantEditor productId={editingProduct.id} />
 

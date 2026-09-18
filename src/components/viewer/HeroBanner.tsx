@@ -124,30 +124,39 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
                   aria-hidden="true"
                   loading={index === 0 ? 'eager' : 'lazy'}
                 />
-                {/* Scrim behind the text so it stays legible over any photo. */}
-                <div className="hero-banner__scrim" aria-hidden="true" />
+                {/* Naeem designs the photo with any heading already baked in —
+                    no rendered text or scrim over it, just the CTA. */}
+                {slide.cta_button_text !== '' && (
+                  <button
+                    type="button"
+                    className="hero-banner__shop-now"
+                    onClick={() => handleCta(slide)}
+                  >
+                    {slide.cta_button_text}
+                  </button>
+                )}
               </>
             ) : (
               <>
                 <span className="hero-banner__circle hero-banner__circle--one" aria-hidden="true" />
                 <span className="hero-banner__circle hero-banner__circle--two" aria-hidden="true" />
+                <div className="hero-banner__content">
+                  {slide.eyebrow_text !== '' && (
+                    <p className="hero-banner__eyebrow">{slide.eyebrow_text}</p>
+                  )}
+                  <h2 className="hero-banner__title">{slide.title}</h2>
+                  {slide.cta_button_text !== '' && (
+                    <button
+                      type="button"
+                      className="hero-banner__cta"
+                      onClick={() => handleCta(slide)}
+                    >
+                      {slide.cta_button_text}
+                    </button>
+                  )}
+                </div>
               </>
             )}
-            <div className="hero-banner__content">
-              {slide.eyebrow_text !== '' && (
-                <p className="hero-banner__eyebrow">{slide.eyebrow_text}</p>
-              )}
-              <h2 className="hero-banner__title">{slide.title}</h2>
-              {slide.cta_button_text !== '' && (
-                <button
-                  type="button"
-                  className="hero-banner__cta"
-                  onClick={() => handleCta(slide)}
-                >
-                  {slide.cta_button_text}
-                </button>
-              )}
-            </div>
           </article>
         ))}
       </div>

@@ -59,8 +59,8 @@ export function CartPage() {
             {items.map((item) => (
               <li key={`${item.product.id}::${item.variantId ?? ''}`} className="checkout-cart__row">
                 <Link to={productPath(item.product)} className="checkout-cart__thumb">
-                  {coverImage(item.product) ? (
-                    <img src={coverImage(item.product) ?? ''} alt={item.product.name} />
+                  {item.variantImage ?? coverImage(item.product) ? (
+                    <img src={item.variantImage ?? coverImage(item.product) ?? ''} alt={item.product.name} />
                   ) : (
                     <span className="checkout-cart__thumb-empty" aria-hidden="true" />
                   )}

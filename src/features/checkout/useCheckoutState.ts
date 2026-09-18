@@ -85,7 +85,7 @@ const CheckoutStateContext = createContext<CheckoutStateValue | null>(null);
 
 export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   const { items: rawItems, updateQuantity, removeItem, clearCart } = useCart();
-  const { products } = useProducts();
+  const { products, variantsFor } = useProducts();
 
   const [zoneId, setZoneId] = useState<DeliveryZoneId>(() => loadPersisted().zoneId);
   const [address, setAddress] = useState<DeliveryAddress>(() => loadPersisted().address);
@@ -109,19 +109,26 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
     () =>
       rawItems.flatMap((item) => {
         const product = products.find((p) => p.id === item.productId);
-        return product
-          ? [
-              {
-                product,
-                quantity: item.quantity,
-                unitPrice: item.priceAtAdd,
-                variantId: item.variantId,
-                variantLabel: item.variantLabel,
-              },
-            ]
-          : [];
+        if (!product) return [];
+        // The variant may be the product's own base option (id === productId,
+        // no image of its own) or a real row that's since been deleted —
+        // either way, no match just means "use the product's cover image".
+        const variant =
+          item.variantId !== null
+            ? variantsFor(item.productId).find((v) => v.id === item.variantId)
+            : undefined;
+        return [
+          {
+            product,
+            quantity: item.quantity,
+            unitPrice: item.priceAtAdd,
+            variantId: item.variantId,
+            variantLabel: item.variantLabel,
+            variantImage: variant?.image_url ?? null,
+          },
+        ];
       }),
-    [rawItems, products]
+    [rawItems, products, variantsFor]
   );
 
   const subtotal = useMemo(

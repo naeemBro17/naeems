@@ -9,8 +9,11 @@ import {
   variantToForm,
 } from '../../../lib/variants';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
+import { AdminImagePicker } from '../AdminImagePicker';
 import { PencilGlyph, RowIconButton, Toggle, TrashGlyph } from './SheetChrome';
 import type { ProductVariant, VariantFormData } from '../../../types';
+
+const VARIANT_NOTE_MAX_LENGTH = 200;
 
 interface VariantEditorProps {
   productId: string;
@@ -20,12 +23,17 @@ const numberOrNull = (value: string): number | null =>
   value.trim() === '' ? null : Number(value);
 
 function VariantForm({
+  variantId,
   form,
   isSaving,
   onChange,
   onSubmit,
   onCancel,
 }: {
+  /** Stable id this variant will be saved under — a freshly generated one
+   *  for a not-yet-saved row, kept for its lifetime — so its image can be
+   *  uploaded to a fixed Storage path before the row itself is inserted. */
+  variantId: string;
   form: VariantFormData;
   isSaving: boolean;
   onChange: (patch: Partial<VariantFormData>) => void;
@@ -131,6 +139,61 @@ function VariantForm({
         </div>
       </div>
 
+      <div className="form-field">
+        <label className="form-label" htmlFor="vf-quantity">Stock Quantity</label>
+        <input
+          id="vf-quantity"
+          type="number"
+          min="0"
+          step="1"
+          inputMode="numeric"
+          placeholder="Not tracked"
+          className="form-input"
+          value={form.stock_quantity}
+          onChange={(e) => onChange({ stock_quantity: e.target.value })}
+        />
+        <p className="form-helper">
+          Leave blank to use the In Stock toggle above instead of an exact count.
+        </p>
+      </div>
+
+      <div className="form-field">
+        <span className="form-label">Image (optional)</span>
+        <AdminImagePicker
+          path={`variants/${variantId}.webp`}
+          value={form.image_url}
+          onChange={(image_url) => onChange({ image_url })}
+          shape="rect"
+          label="Variant image"
+          placeholderIcon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          }
+        />
+        <p className="form-helper">
+          With no image, this variant uses the product's own main image.
+        </p>
+      </div>
+
+      <div className="form-field">
+        <label className="form-label" htmlFor="vf-note">Note (optional)</label>
+        <textarea
+          id="vf-note"
+          className="form-input form-textarea"
+          maxLength={VARIANT_NOTE_MAX_LENGTH}
+          rows={2}
+          placeholder="e.g. USA batch, slightly different box"
+          value={form.note}
+          onChange={(e) => onChange({ note: e.target.value })}
+        />
+        <p className="form-helper form-helper--counter">
+          {form.note.length} / {VARIANT_NOTE_MAX_LENGTH}
+        </p>
+      </div>
+
       <div className="variant-form__actions">
         <button type="button" className="edit-sheet__cancel" onClick={onCancel} disabled={isSaving}>
           Cancel
@@ -161,12 +224,16 @@ export function VariantEditor({ productId }: VariantEditorProps) {
   const [form, setForm] = useState<VariantFormData | null>(null);
   /** Variant being edited, or null while adding a new one. */
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Id a not-yet-saved variant will be inserted under — generated up front
+   *  so its image can be uploaded to a fixed path before the row exists. */
+  const [newVariantId, setNewVariantId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProductVariant | null>(null);
 
   const startAdd = () => {
     setForm(emptyVariantForm());
     setEditingId(null);
+    setNewVariantId(crypto.randomUUID());
   };
 
   const startEdit = (variant: ProductVariant) => {
@@ -177,6 +244,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
   const closeForm = () => {
     setForm(null);
     setEditingId(null);
+    setNewVariantId(null);
   };
 
   const handleSubmit = async (e: SyntheticEvent) => {
@@ -196,12 +264,15 @@ export function VariantEditor({ productId }: VariantEditorProps) {
       offer_price: numberOrNull(form.offer_price),
       wholesale_price: numberOrNull(form.wholesale_price),
       in_stock: form.in_stock,
+      stock_quantity: numberOrNull(form.stock_quantity),
+      image_url: form.image_url,
+      note: form.note.trim() === '' ? null : form.note.trim(),
     };
     const { error } = editingId
       ? await supabase.from('product_variants').update(payload).eq('id', editingId)
       : await supabase
           .from('product_variants')
-          .insert({ ...payload, sort_order: variants.length + 1 });
+          .insert({ ...payload, id: newVariantId, sort_order: variants.length + 1 });
     if (error) {
       console.error('Variant save failed:', error);
       setIsSaving(false);
@@ -281,6 +352,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
               </div>
               {form !== null && editingId === variant.id && (
                 <VariantForm
+                  variantId={variant.id}
                   form={form}
                   isSaving={isSaving}
                   onChange={(patch) =>
@@ -295,8 +367,9 @@ export function VariantEditor({ productId }: VariantEditorProps) {
         </ul>
       )}
 
-      {form !== null && editingId === null && (
+      {form !== null && editingId === null && newVariantId !== null && (
         <VariantForm
+          variantId={newVariantId}
           form={form}
           isSaving={isSaving}
           onChange={(patch) =>

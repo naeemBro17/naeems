@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -10,11 +10,13 @@ import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
 import { buildCopyText, copyToClipboard } from '../lib/clipboard';
 import {
-  regionsOf,
+  isVariantInStock,
   sortVariants,
   VARIANT_SELECT,
   VARIANTS_VIEW,
   variantDisplayPrice,
+  variantOptionLabel,
+  variantOptionsFor,
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
 import { useToast } from '../hooks/useToast';
@@ -24,7 +26,10 @@ import { ShareButton } from '../components/viewer/ShareButton';
 import { CartIcon } from '../components/viewer/CartButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
-import type { Product, ProductVariant } from '../types';
+import type { Product, ProductVariant, VariantOption } from '../types';
+
+/** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
+const VARIANT_PARAM = 'variant';
 
 /** How long the Copy Price button holds its success state. */
 const COPIED_RESET_MS = 600;
@@ -89,72 +94,43 @@ function VideoReviewCard({ url }: { url: string }) {
   );
 }
 
-/** One row of pill chips — regions or the sizes within a region. */
-function ChipRow({
-  label,
-  options,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  options: string[];
-  selected: string;
-  onSelect: (value: string) => void;
-}) {
-  return (
-    <div className="variant-row" role="group" aria-label={label}>
-      <span className="variant-row__label">{label}</span>
-      <div className="variant-row__chips">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`chip-select${option === selected ? ' chip-select--on' : ''}`}
-            aria-pressed={option === selected}
-            onClick={() => onSelect(option)}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /**
- * Region → Size picker, rendered only when the product has variants. The
- * chosen combination drives the price block, stock row, Copy Price and the
- * wholesale row below it.
+ * Option picker, rendered only when a product has 2+ selectable options (its
+ * own base entry plus one or more real variant rows — see variantOptionsFor).
+ * A flat chip row rather than a two-tier Region → Size grid: options can come
+ * from the ad-hoc "combine products into variants" flow (Part 7) where two
+ * options don't necessarily share a clean region×size matrix, so each chip
+ * just shows its own full label. The chosen option drives the price block,
+ * stock row, image, note, Copy Price and the wholesale row below it.
  */
 function VariantSelector({
-  variants,
+  options,
+  productName,
   selected,
   onSelect,
 }: {
-  variants: ProductVariant[];
-  selected: ProductVariant;
-  onSelect: (variant: ProductVariant) => void;
+  options: VariantOption[];
+  productName: string;
+  selected: VariantOption;
+  onSelect: (option: VariantOption) => void;
 }) {
-  const regions = regionsOf(variants);
-  const sizes = variants.filter((v) => v.region === selected.region);
-
-  const pickRegion = (region: string) => {
-    const first = variants.find((v) => v.region === region);
-    if (first) onSelect(first);
-  };
-
   return (
     <div className="variant-selector">
-      <ChipRow label="Region" options={regions} selected={selected.region} onSelect={pickRegion} />
-      <ChipRow
-        label="Size"
-        options={sizes.map((v) => v.size)}
-        selected={selected.size}
-        onSelect={(size) => {
-          const match = sizes.find((v) => v.size === size);
-          if (match) onSelect(match);
-        }}
-      />
+      <div className="variant-row" role="group" aria-label="Choose an option">
+        <div className="variant-row__chips">
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`chip-select${option.id === selected.id ? ' chip-select--on' : ''}`}
+              aria-pressed={option.id === selected.id}
+              onClick={() => onSelect(option)}
+            >
+              {variantOptionLabel(option, productName)}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -168,18 +144,43 @@ function DetailContent({
 }) {
   const { showToast } = useToast();
   const { addItem } = useCart();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const [copied, setCopied] = useState(false);
   const [justAddedToCart, setJustAddedToCart] = useState(false);
   const copyTimerRef = useRef<number>();
   const cartTimerRef = useRef<number>();
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
-  // Default to the first variant in sort order; re-resolve if the list changes.
-  const selectedVariant = useMemo(() => {
-    if (variants.length === 0) return null;
-    return variants.find((v) => v.id === selectedVariantId) ?? variants[0];
-  }, [variants, selectedVariantId]);
+  // Option zero is always the product's own data; real variant rows follow.
+  // A product with no real variants has exactly one option and no selector
+  // shows — see variantOptionsFor's doc comment.
+  const options = useMemo(() => variantOptionsFor(product, variants), [product, variants]);
+  const hasSelector = options.length > 1;
+
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+
+  // A link opened with ?variant=<id> pre-selects that option (falls back to
+  // the default — the base option — when absent or the id doesn't match any
+  // option, e.g. a stale link after the variant was deleted).
+  useEffect(() => {
+    const fromUrl = searchParams.get(VARIANT_PARAM);
+    setSelectedOptionId(fromUrl && options.some((o) => o.id === fromUrl) ? fromUrl : null);
+    // Only re-resolve from the URL when the product itself changes — once
+    // resolved, tapping a chip owns selection state (see handleSelectOption).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
+
+  const selectedOption = useMemo(
+    () => options.find((o) => o.id === selectedOptionId) ?? options[0],
+    [options, selectedOptionId]
+  );
+
+  const handleSelectOption = (option: VariantOption) => {
+    setSelectedOptionId(option.id);
+    const next = new URLSearchParams(searchParams);
+    next.set(VARIANT_PARAM, option.id);
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     return () => {
@@ -188,23 +189,33 @@ function DetailContent({
     };
   }, []);
 
-  const images = productImages(product);
-  // With a variant selected, everything price/stock-related follows it.
-  const outOfStock = selectedVariant ? !selectedVariant.in_stock : isOutOfStock(product);
-  const { mainPrice, strikePrice, savePercent } = selectedVariant
-    ? variantDisplayPrice(selectedVariant)
+  // A variant's own photo stands in for the cover image wherever it's
+  // selected; the rest of the gallery (and the no-photo-set case) is
+  // untouched.
+  const baseImages = productImages(product);
+  const images =
+    selectedOption.image_url !== null
+      ? [selectedOption.image_url, ...baseImages.filter((url) => url !== selectedOption.image_url)]
+      : baseImages;
+
+  const outOfStock = hasSelector ? !isVariantInStock(selectedOption) : isOutOfStock(product);
+  const { mainPrice, strikePrice, savePercent } = hasSelector
+    ? variantDisplayPrice(selectedOption)
     : getDisplayPrice(product);
-  const hasWholesale = selectedVariant ? selectedVariant.has_wholesale : product.has_wholesale;
-  const wholesalePrice = selectedVariant
-    ? selectedVariant.wholesale_price
-    : product.wholesale_price;
+  const hasWholesale = hasSelector ? selectedOption.has_wholesale : product.has_wholesale;
+  const wholesalePrice = hasSelector ? selectedOption.wholesale_price : product.wholesale_price;
   const brand = product.brand?.trim() ?? '';
   // `note` is the short line under the price; `description` is the long copy.
+  // A variant's own note (Part 5) stands in for the product's when set.
   const about = product.description?.trim() ?? '';
+  const noteText = (selectedOption.note ?? product.note ?? '').trim();
   const howToUse = product.how_to_use?.trim() ?? '';
   const keyIngredients = product.key_ingredients?.trim() ?? '';
   const youtubeUrl = product.youtube_url?.trim() ?? '';
   const hasAccordion = howToUse !== '' || keyIngredients !== '' || youtubeUrl !== '';
+  // No real variants, but the product itself carries a Region/Size label —
+  // shown as plain text since there's nothing to select between (state 2).
+  const plainLabel = !hasSelector ? variantOptionLabel(options[0], '') : '';
 
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -213,8 +224,8 @@ function DetailContent({
   };
 
   const handleAddToCart = () => {
-    const variant = selectedVariant
-      ? { id: selectedVariant.id, label: `${selectedVariant.region} · ${selectedVariant.size}` }
+    const variant = hasSelector
+      ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
       : null;
     addItem(product.id, mainPrice, variant);
     if (typeof navigator.vibrate === 'function') {
@@ -293,11 +304,14 @@ function DetailContent({
 
         <h1 className="product-detail__name">{product.name}</h1>
 
-        {selectedVariant && (
+        {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
+
+        {hasSelector && (
           <VariantSelector
-            variants={variants}
-            selected={selectedVariant}
-            onSelect={(v) => setSelectedVariantId(v.id)}
+            options={options}
+            productName={product.name}
+            selected={selectedOption}
+            onSelect={handleSelectOption}
           />
         )}
 
@@ -325,7 +339,7 @@ function DetailContent({
           </span>
         </p>
 
-        {product.note && <p className="product-detail__note">{product.note}</p>}
+        {noteText !== '' && <p className="product-detail__note">{noteText}</p>}
 
         {outOfStock ? (
           <button
