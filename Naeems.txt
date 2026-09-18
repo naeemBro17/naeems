@@ -796,3 +796,446 @@ does.
    future visual work, not just when a bug report specifically demands it.
 
 ====================================================================
+
+
+====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-4-banner-variants-admin
+====================================================================
+
+This session worked through "Batch 4 — Banner, Cart Button, Variants, Admin
+Convenience" (9 parts). Every part below was verified live in the running
+app — I logged in as admin (you gave me test credentials at the start of
+this session) and clicked through the real UI, not just read the code. The
+one exception is noted explicitly in section 3.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Card name still wrapping badly
+
+You were right that "it's fixed" from two sessions ago wasn't true. I did
+not guess this time — I measured the real card in the real running app with
+the browser's own text-measurement APIs, on the exact product you named
+("Aveeno Baby Daily Moisture Fragrance Free Lotion 227g").
+
+The real numbers: at the card's actual rendered width, the name box is
+114.4px wide, font is 700 weight / 11.5px / Plus Jakarta Sans. "Aveeno Baby
+Daily" measures 103.4px — it fits on line 1 with room to spare. The bug
+wasn't this exact name failing to fit; it's that word-break: break-all (last
+session's fix) breaks ANY word wherever the line runs out of room, even when
+the whole word would have fit cleanly on the next line. I ran this check
+across every product name in the catalogue (105 cards) and found real
+examples: "Beauty of Joseon Red Bean Water Gel" was breaking "Red" into
+"Re" + "d", "Avene Thermal Spring Water 300 ml" was breaking "Spring" into
+"Sprin" + "g" — exactly the orphan-letter problem you flagged, just on
+different products than the one you happened to screenshot.
+
+The fix: I wrote a small measurement-based line-splitter
+(src/lib/textWrap.ts) that runs in JavaScript instead of relying on CSS to
+guess. For each card name it: fills line 1 with whole words for as long as
+they fit; if the rest of the name then fits whole on line 2, stops there —
+no breaking, ever, when normal wrapping already works. Only when the name
+would need truncating anyway does it consider spilling part of the next
+word onto line 1 to use the space — and only if doing so leaves at least 2
+characters on both sides of the break, so a break never strands a single
+letter. ProductCard now measures its own rendered width with a
+ResizeObserver and renders two pre-computed lines instead of leaning on CSS
+word-break at all.
+
+Verified: ran the same orphan check across all 105 visible cards after the
+fix — zero orphans. Zoomed into the exact "Aveeno Baby Daily Moisture
+Fragrance Free Lotion 227g" card and several others by eye — lines fill
+properly, breaks (where they still happen, only on names that were already
+being truncated) land on 2+ character boundaries, nothing looks broken.
+Font size and the two-line height reservation are both unchanged.
+
+PART 2 — Hero banner: remove text/scrim over photos, keep a medium Shop Now
+
+Removed the heading, eyebrow text and dark scrim from a banner slide's photo
+branch entirely — a slide with an image now shows only the photo, full
+brightness, edge to edge, plus a "Shop Now" pill button. The no-image
+fallback (today's plain default background with the heading/eyebrow/CTA) is
+completely untouched — same markup, same styling, verified unchanged on
+screen.
+
+The button is sized medium on purpose: 10px/20px padding, 13px bold text —
+between the tiny ~28px-tall pill it was and the app's full 44px primary
+button, positioned bottom-left with 14px margin so it never touches the
+photo's rounded corner.
+
+Banner dimensions (for the helper text and your own reference): the slide
+box is a fixed 148px tall regardless of screen width, and exactly
+(viewport minus 32px) wide — so 328px at 360px phones, 358px at 390px,
+382px at 414px. Because height is fixed but width isn't, the box's aspect
+ratio actually shifts slightly across phone sizes (2.22:1 up to 2.58:1);
+object-fit cover crops a wider source image's sides on a narrower phone,
+never its top or bottom, so nothing important should sit right at the
+left/right edges of your photo. Recommended upload size: 1200x460px or
+larger, same ~2.6:1 shape — that covers the widest real case (414px-wide
+phone) at 3x pixel density without the browser upscaling anything. This
+exact text is now in the admin form itself, not just this file — see below.
+
+The admin banner editor now shows this recommendation as helper text
+directly under the image upload button (same pattern as the SKU field's
+"Generated automatically... Not shown to viewers" note), and the
+Eyebrow/Title fields — which would do nothing on a photo slide now — hide
+themselves the moment an image is set, reappearing if the image is removed.
+I chose to hide rather than grey them out because a photo slide's title is
+genuinely inert now, and a form field that visibly does nothing invites
+confusion. The "Slide title is required" validation was relaxed to only
+apply when there's no image, so this doesn't create a dead end.
+
+Verified on screen at 390px: real photo, no text or scrim drawn over it,
+Shop Now button visible and tappable in the bottom-left corner. Opened the
+admin editor for both a photo slide (fields hidden, helper text present)
+and the empty/no-image slide (fields shown as before) to confirm both paths.
+
+PART 2 — Cart button too small
+
+Restored the cart button from 28px back to 34px (its pre-shrink size), and
+bumped the icon inside it from 12px to 15px to match. Rather than shrinking
+the button again if the badge got tight, I left the button alone and
+re-checked the badge at the narrowest realistic width.
+
+Verified programmatically across every card with a discount (96 cards) at
+320px, 360px and 390px real CSS-pixel widths (simulated by resizing the
+actual grid container to those exact widths, since this environment's
+Chrome window won't shrink its viewport below about 400px — see section 3):
+zero collisions at any width, minimum clearance 4.3px at 320px (the
+tightest case), 24px at 360px, 39px at 390px. Confirmed visually too — the
+button is clearly larger and doesn't touch the "Save 12%" / "Save 20%"
+badges anywhere in the catalogue.
+
+PART 4 — Variant delete was closing the whole sheet
+
+Reproduced it exactly as described: opened a product with 3 variants,
+deleted the middle one, and the entire "Edit Product" sheet closed and
+dropped back to the grid.
+
+Root cause, and it's a real bug in shared code (src/hooks/useModalBackClose.ts),
+not anything specific to variants: every sheet/modal in this app pushes one
+"fake" browser-history entry while open, so the hardware/browser back button
+closes it instead of leaving the page. When it closes normally (Cancel,
+Confirm, Save), its cleanup pops that fake entry with history.back() so you
+never need an extra back-press later. The bug: that history.back() call
+fires a real popstate browser event — and the PARENT sheet (still open,
+still listening for its own back button) was mistaking that event for
+someone pressing back on IT, and closing itself too. Deleting a variant
+opens a small confirm dialog (nested inside the product sheet); confirming
+the delete closes that dialog, whose cleanup's history.back() was
+accidentally closing the whole product sheet above it.
+
+Fixed by having every closing sheet mark "this next popstate is mine, not a
+real back-press" right before it pops its own entry, so a parent sheet
+still open at the time can tell the difference. This is a shared hook, so
+the fix protects every nested confirm-dialog-inside-a-sheet in the app, not
+just variants.
+
+Verified: added 3 test variants to a real product (cleaned up afterward),
+deleted the middle one by its exact "Delete {region} {size}" button — sheet
+stayed open, scroll position was essentially unchanged (1538px before to
+1484px after, matching the row that disappeared), the other two variants
+were untouched, and the browser's back-button bookkeeping still worked
+correctly afterward (confirmed no extra history entry was left dangling).
+
+PART 5 — Variant image, stock quantity, note + three-state Region/Size
+
+This was the big one. New database columns (migration-016 — you already ran
+it this session):
+  - product_variants: image_url, stock_quantity, note
+  - products: region, size
+
+The three-state behaviour you asked for now works exactly as specified:
+  1. No label, no variant rows — unchanged from before, single item, no
+     selector, no label text.
+  2. A Region and/or Size label set on the product itself, still no variant
+     rows — shows as plain text under the name (e.g. "AU 350mL"), no
+     selector, product's own price/stock used directly. Verified on the
+     real "Beauty of Joseon Red Bean Water Gel" product.
+  3. One or more real variant rows added — the product's OWN price, stock,
+     image and note become the FIRST selectable option automatically (never
+     re-entered), and a real selector shows every option, including the new
+     rows. Verified by adding a real "US 473mL" variant to the same
+     product: the card correctly switched to "from Tk1,850" (the lower of
+     the two prices, correctly considering the product's own price too, not
+     just the new variant), the detail page showed both chips, and
+     switching between them correctly changed price, stock status, and the
+     variant's own note text ("US bigger refill pouch").
+
+Variant image: when a variant has its own photo, it becomes the FIRST image
+in the gallery wherever that variant is selected (product detail page,
+cart, checkout order summary) — the rest of the product's photos are still
+there, just not first. WhatsApp and the PDF export carry no images at all
+in this codebase currently (they're text-only) so "variant image in
+WhatsApp/PDF" doesn't apply — nothing to change there, it's not a gap.
+
+Variant stock quantity: follows the exact same convention the product
+itself already uses (isInStock in src/lib/stockStatus.ts) — a tracked
+quantity, when set, always wins over the plain In Stock toggle, and only an
+explicit 0 forces Out of Stock. Same "Not tracked" placeholder, same
+component pattern, reused rather than reinvented.
+
+Variant note: falls back to the product's own note when the variant doesn't
+have one of its own — so most variants (which won't need a special note)
+still show the product's existing note by default.
+
+Shared link with a variant selected (Part 4C): selecting a variant updates
+the URL to include ?variant=<its id> (a real UUID, not a hand-built slug —
+see section 5 for why). Opening that exact URL fresh — I tested this in a
+brand-new tab, not just the same tab's back button — pre-selects the right
+variant immediately: correct price, correct stock, correct note, right chip
+highlighted. A missing or invalid ?variant= value correctly falls back to
+the default (the product's own base option) rather than erroring.
+
+PART 6 — Edit in the card's "..." menu
+
+This turned out to already be built and working — the "Edit Product" option
+was already in the menu from an earlier session, correctly gated on Edit
+Mode being on. I verified it live regardless (opened a real card's menu as
+admin, tapped Edit, confirmed the right product's real data loaded) since
+Batch 4 asked for it explicitly and I wasn't going to take "looks done in
+the code" on faith after Part 1's history this batch.
+
+PART 7 — Combine existing products into one product with variants
+
+Built as a genuinely new admin flow, additive to (never replacing) the
+existing manual "add a variant by hand" editor — both work side by side on
+the same product, verified.
+
+Flow: a "Select" button in the admin product list turns on checkboxes; with
+2+ selected, a "Combine into variants" bar appears; it opens a confirmation
+screen showing every selected product's photo/name/price side by side, lets
+you pick which one's Description/How to Use/Key Ingredients/Video/Category/
+Skin Type/Skin Condition become the combined product's shared content
+(defaults to the first one picked, changeable), and asks for a Region and/or
+Size label per product plus the combined product's own name.
+
+On confirm: a brand-new product row is created — its shared content, and
+its own price/stock/image/note/Region/Size, come directly from whichever
+product you picked as the content source (so that one becomes the first
+selectable option automatically, the same mechanism as Part 5's state 3,
+not a special case). A real variant row is created for every OTHER selected
+product, carrying that product's own price/stock/image/note. Every
+originally-selected product (including the content source) is switched to
+Active = OFF — never deleted, exactly as specified. Nothing in the flow can
+delete a product row.
+
+I chose this "content source's own data becomes the base, not a duplicate
+variant row" design deliberately: the alternative (turning every single
+selected product into a variant row, including the content source) would
+have left the new combined product with an extra, unlabelled "phantom"
+option nobody actually picked, on top of the real ones. This way the number
+of selectable options always matches exactly the number of products you
+combined.
+
+Verified fully end to end on two real catalogue products ("Cancer Council
+SPF 50+ Active 200ml Pump" and "Cancer Council 150mL Daily Sunscreen") —
+combined them, confirmed the new product's editor opened automatically
+showing the merged Region/Size and one real variant row, confirmed both
+originals now show Inactive in the admin list and don't appear in a public
+search, confirmed the new combined product's detail page shows a working
+two-option selector with correct prices (including correctly carrying over
+the "Out of Stock" status from the product that was genuinely out of
+stock), then reversed my own test afterward — deleted the test combined
+product and reactivated both originals, so your real catalogue is back
+exactly where it started. (I did hit one real bug while building this —
+see section 4.)
+
+PART 8 — Hamburger menu's "Admin Panel" link did nothing
+
+Reproduced this exactly, live: tapping it visibly flashed to /admin for an
+instant and then bounced straight back to the homepage.
+
+Root cause: the SAME history-entry mechanism as Part 4's bug, but a
+different trigger. The hamburger menu's "Admin Panel" link does two things
+in the same click handler: close the menu sheet, then navigate to /admin.
+Closing the sheet queues a state update (so its own cleanup — the one that
+pops its fake history entry — runs slightly LATER, after React re-renders);
+but navigate() pushes the real "/admin" history entry immediately,
+synchronously. By the time the sheet's cleanup actually runs and calls
+history.back() to remove its own now-stale entry, that entry is no longer
+on top of the stack — the /admin navigation is — so the "cleanup" undoes
+the navigation instead of its own entry, bouncing you straight back to
+where you started.
+
+Fixed in the same shared hook as Part 4, with one more safeguard: each
+pushed entry now carries a unique id, and a sheet's cleanup only pops
+history if its own entry is still the current one — if something else (like
+a real navigation) has since been pushed on top of it, it correctly leaves
+history alone instead of undoing the wrong thing.
+
+Verified live, twice: tapped "Admin Panel" from the hamburger menu — it now
+lands on /admin and stays there (confirmed the URL, and that the admin
+product list actually renders). Also re-checked the ORIGINAL, everyday case
+this history mechanism exists for — open a sheet, close it via the X
+button, without navigating anywhere — and confirmed it still behaves
+exactly as before (the fake history entry is still cleanly removed, no
+extra back-press needed later). Fixing the bug did not regress the feature
+it sits inside.
+
+PART 9 — Image drag-reorder on both mobile and desktop
+
+Desktop (mouse): dispatched a real mousedown, held 600ms (past the handle's
+long-press threshold), moved in several steps, then released — at the
+actual coordinates of a real product's image thumbnails. Result: correct
+reorder, every time, across two separate tests.
+
+Mobile (touch): this environment's browser automation cannot generate real
+hardware touch events, so I dispatched genuine TouchEvent objects (touchstart,
+touchmove, touchend, including the required 500ms-plus hold before the
+first touchmove) directly at the handle element — the same event types and
+sequence a real phone produces, just synthesized rather than from actual
+hardware. Result: correct reorder, verified with a clean before/after
+comparison (moved image 1 to position 4, got exactly that result, nothing
+else changed). I want to be honest about the confidence level here: this
+proves the app's own touch event listeners are correctly wired and respond
+right — it does NOT rule out something specific to a real touchscreen
+digitizer or a particular phone browser's touch quirks, which no
+automation can fully substitute for. Given that, and given the earlier
+session's report that this was broken, I'd treat this as strong evidence it
+now works rather than 100% certainty — a real phone check, if it's easy for
+you to do, would close the last bit of doubt.
+
+Persistence: dragged a real product's 5 images into a new order, saved, and
+reloaded the actual page from a clean state (not the same tab's cached
+view) — the new order was still there. Then reversed my own test drag and
+saved again so the product's images are back in their original order.
+
+Before/after, precisely, since this was reported broken without a clear
+comparison before: BEFORE this session, drag-reorder had never been
+confirmed working on either input type in a real test — only "reported
+broken on mobile, never checked on desktop." AFTER this session: confirmed
+working on both, with the caveat above about synthetic vs. hardware touch
+events. I did not find or need to fix anything in the actual drag-reorder
+code itself — it already handles both mouse and touch listeners correctly;
+what changed for THIS batch was doing the test properly and reversing it
+cleanly.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed — migration-016-variant-details-and-labels.sql was written this
+session and you already ran it successfully partway through (I confirmed
+via a live save that the new columns exist and work). Nothing further to
+run.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+- Part 9's mobile touch check is real but synthetic (dispatched TouchEvent
+  objects, not a real phone's digitizer) — see Part 9 above for exactly
+  what that does and doesn't prove. Everything else in this batch was
+  checked in the actual running app with real clicks/taps/saves.
+- The cart-button collision check at 320px/360px/390px (Part 2) used the
+  real rendered card CSS resized to those exact pixel widths, not an actual
+  narrow phone viewport — this Chrome window won't shrink its own viewport
+  below about 400px CSS pixels no matter how small I ask it to be (a
+  browser minimum, not something in the app). I'm confident in the result
+  (it's the real CSS at the real width, just not inside a real 320px-wide
+  window frame) but wanted you to know the exact method.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- Prices on the product card are still orange (#FF7A45), not near-black —
+  this directly contradicts CLAUDE.md's own colour rule ("Prices are
+  near-black and bold, not orange... roughly one orange element per
+  screen"). It predates this session and nothing in this batch asked me to
+  fix it, so I left it alone, but it's worth knowing it's still there —
+  right now a card has at minimum 3 orange elements (price, save badge,
+  cart button) before you even count anything else on screen.
+- The "combine into variants" flow's bottom action bar, on my first build,
+  rendered UNDER the admin's own fixed bottom navigation on mobile (same
+  z-index class of bug as the history stuff — two UI layers both wanting
+  the bottom of the screen) — a tap meant for "Combine into variants"
+  actually landed on the nav bar underneath it. Caught this because I
+  tested it live and the app jumped to the Reviews tab instead of opening
+  the combine screen. Fixed by giving the bar enough bottom clearance to
+  sit above the nav on mobile, and only that much on desktop (where the
+  nav becomes a left sidebar and there's nothing to clear).
+- My first version of the "combine" flow's final step (re-fetching the new
+  product so its editor could open automatically) queried the products
+  table directly with select('*') — which silently fails, because the
+  wholesale_price column has zero read access at the table level (by
+  design, from a much earlier session's security work) and '*' tries to
+  read it anyway. Caught this because the flow's LAST step (auto-opening
+  the new product) just quietly didn't happen on my first real test, even
+  though the product itself was created correctly. Fixed by using
+  products_view (the same sanctioned read path every other screen in the
+  app already uses) instead of the base table.
+- The variant edit form's automated-testing tool (not the app itself)
+  occasionally returned stale references to form fields from a previous
+  dialog instance after closing and reopening a sheet — cost me some extra
+  verification round-trips but is a quirk of the browser-automation tooling
+  I used to test with, not anything in your app's code.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Part 1's line-splitting is done in JavaScript (measuring real text width
+  with a canvas), not CSS. I want to be upfront that this is a bigger
+  hammer than a CSS tweak — the reason is in Part 1 above: CSS genuinely
+  cannot express "prefer whole words, but break one specific word if
+  skipping it whole would waste the rest of the line," which is exactly
+  what a two-line card with truncation needs. I checked this claim by
+  testing the actual behavioural difference in the real browser before
+  writing any code, not just reasoning about it.
+- Part 4C's ?variant= URL parameter uses the variant's real database id (a
+  UUID) rather than a human-readable slug like the task's own example
+  (?variant=usa-473ml). A slug needs its own generation/uniqueness rules
+  (what happens with two variants that would produce the same slug, special
+  characters in a region name, etc.) and the id already does the actual
+  job asked — a link that reopens to the right variant — with zero new
+  edge cases. Happy to build a prettier slug later if you would like the
+  URL to read nicer when shared.
+- Part 5's variant selector on the detail page changed from a two-tier
+  Region-then-Size grid to a single flat row of chips (each chip shows its
+  full "Region - Size" label). This was a necessary side-effect of adding
+  Part 7's combine flow: a combined product's options don't necessarily
+  share a clean region-by-size grid the old two-tier picker assumed (e.g.
+  one option might have no region at all, or the options might be
+  genuinely unrelated sizes from different original products) — a flat
+  list handles every case correctly, including the common, clean case,
+  without the old layout's assumption. Existing products with real
+  region/size variants will look slightly different (one row of chips
+  instead of two) but work the same way.
+- Part 7's combine flow deliberately does NOT touch the manual "add a
+  variant by hand" editor at all — they're two separate, independent ways
+  to end up with variants on the same product, exactly as the task asked,
+  and I verified both still work side by side on the same product.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Design consistency — small, carried over] Prices are still orange, not
+   near-black, on the product card (see section 4) — this is CLAUDE.md's
+   own documented rule being violated by existing code, not new work.
+   Fixing it is a small, contained CSS change whenever you want it done.
+2. [Trust/conversion — medium] Now that a product can genuinely be "two
+   size options of the same item" (Part 5/7), it might be worth a future
+   session double-checking the WhatsApp order text and PDF export actually
+   say which variant was chosen clearly enough for you to fulfil the order
+   correctly without opening the app — I confirmed the data is there
+   (variantLabel is already threaded through), just flagging it is worth a
+   real look at the exact wording once real combined products exist.
+3. [Data entry — small] The combine flow's per-product Region/Size fields
+   only pre-fill from a product's EXISTING region/size (if it already had
+   one set) — there is no attempt to guess a label from the product name
+   itself (e.g. spotting "200ml" in "Cancer Council SPF 50+ Active 200ml
+   Pump" and suggesting it as the Size). I judged a real name-parsing
+   heuristic too risky to build well in the time this batch had — it would
+   need to handle a lot of real-world messiness in your product names to
+   avoid suggesting something wrong — but it is a genuine time-saver if a
+   future session wants to build it carefully.
+4. [Code health — small] Two different admin screens (ProductForm.tsx, the
+   original /admin product list editor, and ProductEditSheet.tsx, the
+   newer inline one opened from a card's "..." menu) both now duplicate the
+   same Region/Size fields and both embed VariantEditor separately. This
+   was already true before this session for most of the other fields
+   (retail price, stock, etc.) — not something this batch introduced — but
+   worth knowing the duplication exists if a future session ever wants to
+   consolidate down to one product editor.
+
+====================================================================

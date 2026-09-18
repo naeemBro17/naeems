@@ -5,6 +5,7 @@ import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
 import { productImages, coverImage } from '../../lib/productImages';
 import { ProductForm } from './ProductForm';
+import { CombineProductsSheet } from './CombineProductsSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { isOutOfStock } from '../../lib/stockStatus';
 import type { Product } from '../../types';
@@ -34,6 +35,26 @@ export function ProductList() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  /** Bulk multi-select for "Combine into variants" — off by default so the
+   *  list behaves exactly as before unless the admin opts in. */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [combineOpen, setCombineOpen] = useState(false);
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  // Selected products, kept in the order they were picked — the first one is
+  // the combine sheet's default "shared content" source.
+  const selectedProducts = selectedIds
+    .map((id) => products.find((p) => p.id === id))
+    .filter((p): p is Product => p !== undefined);
 
   const filtered = useMemo(() => {
     let result = products;
@@ -105,16 +126,31 @@ export function ProductList() {
     <section aria-label="Products">
       <header className="admin-section-header">
         <h2 className="admin-section-title">Products</h2>
-        <button
-          type="button"
-          className="button button--primary"
-          onClick={() => {
-            setEditingProduct(null);
-            setFormOpen(true);
-          }}
-        >
-          + Add Product
-        </button>
+        <div className="admin-section-header__actions">
+          {selectMode ? (
+            <button type="button" className="button button--secondary button--small" onClick={exitSelectMode}>
+              Cancel
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => setSelectMode(true)}
+            >
+              Select
+            </button>
+          )}
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => {
+              setEditingProduct(null);
+              setFormOpen(true);
+            }}
+          >
+            + Add Product
+          </button>
+        </div>
       </header>
 
       <div className="admin-filter-bar">
@@ -187,6 +223,15 @@ export function ProductList() {
         <ul className="admin-product-list">
           {filtered.map((product) => (
             <li key={product.id} className="admin-product-row">
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  className="admin-product-row__checkbox"
+                  checked={selectedIds.includes(product.id)}
+                  onChange={() => toggleSelected(product.id)}
+                  aria-label={`Select ${product.name}`}
+                />
+              )}
               <div className="admin-product-row__thumb-wrap">
                 {coverImage(product) ? (
                   <img
@@ -301,6 +346,19 @@ export function ProductList() {
         </ul>
       )}
 
+      {selectMode && selectedIds.length >= 2 && (
+        <div className="admin-combine-bar">
+          <span className="admin-combine-bar__count">{selectedIds.length} selected</span>
+          <button
+            type="button"
+            className="button button--primary button--small"
+            onClick={() => setCombineOpen(true)}
+          >
+            Combine into variants
+          </button>
+        </div>
+      )}
+
       <ProductForm
         isOpen={formOpen}
         product={editingProduct}
@@ -317,6 +375,18 @@ export function ProductList() {
         }
         onConfirm={handleDelete}
         onClose={() => setDeletingProduct(null)}
+      />
+
+      <CombineProductsSheet
+        isOpen={combineOpen}
+        products={selectedProducts}
+        onClose={() => setCombineOpen(false)}
+        onCombined={(newProduct) => {
+          setCombineOpen(false);
+          exitSelectMode();
+          setEditingProduct(newProduct);
+          setFormOpen(true);
+        }}
       />
     </section>
   );

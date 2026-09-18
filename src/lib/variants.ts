@@ -1,4 +1,4 @@
-import type { ProductVariant, VariantFormData } from '../types';
+import type { Product, ProductVariant, VariantFormData, VariantOption } from '../types';
 import type { DisplayPrice } from './pricing';
 
 /**
@@ -9,7 +9,7 @@ import type { DisplayPrice } from './pricing';
 export const VARIANTS_VIEW = 'product_variants_view';
 
 export const VARIANT_SELECT =
-  'id, product_id, region, size, retail_price, offer_price, wholesale_price, has_wholesale, in_stock, sort_order, created_at';
+  'id, product_id, region, size, retail_price, offer_price, wholesale_price, has_wholesale, in_stock, stock_quantity, image_url, note, sort_order, created_at';
 
 /** Variants of one product in display order. */
 export function sortVariants(variants: ProductVariant[]): ProductVariant[] {
@@ -64,6 +64,9 @@ export function emptyVariantForm(): VariantFormData {
     offer_price: '',
     wholesale_price: '',
     in_stock: true,
+    stock_quantity: '',
+    image_url: null,
+    note: '',
   };
 }
 
@@ -78,6 +81,12 @@ export function variantToForm(variant: ProductVariant): VariantFormData {
         ? String(variant.wholesale_price)
         : '',
     in_stock: variant.in_stock,
+    stock_quantity:
+      variant.stock_quantity !== null && variant.stock_quantity !== undefined
+        ? String(variant.stock_quantity)
+        : '',
+    image_url: variant.image_url ?? null,
+    note: variant.note ?? '',
   };
 }
 
@@ -98,5 +107,68 @@ export function validateVariantForm(form: VariantFormData): string | null {
     const wholesale = Number(form.wholesale_price);
     if (Number.isNaN(wholesale) || wholesale < 0) return 'Enter a valid wholesale price';
   }
+  if (form.stock_quantity.trim() !== '') {
+    const qty = Number(form.stock_quantity);
+    if (!Number.isInteger(qty) || qty < 0) return 'Stock count must be a whole number';
+  }
   return null;
+}
+
+/**
+ * Whether a variant is available, same convention as Product's isInStock: a
+ * tracked quantity (when set) always wins over the manual In Stock toggle,
+ * and only an explicit 0 forces Out of Stock.
+ */
+export function isVariantInStock(variant: ProductVariant): boolean {
+  if (variant.stock_quantity !== null && variant.stock_quantity !== undefined) {
+    return variant.stock_quantity > 0;
+  }
+  return variant.in_stock;
+}
+
+/** Display label for one option: "Region · Size", just one half if only one
+ *  is set, or the fallback name when the base option has neither. */
+export function variantOptionLabel(option: VariantOption, fallbackName: string): string {
+  const parts = [option.region, option.size].filter((p) => p.trim() !== '');
+  return parts.length > 0 ? parts.join(' · ') : fallbackName;
+}
+
+/**
+ * The product's own data becomes selectable option zero. Never written back
+ * as a database row — purely a read-time projection so the manual Add
+ * Variant flow and the "combine products" flow don't have to duplicate the
+ * product's price/stock/image/note into a real variant row just to make it
+ * choosable alongside the others.
+ */
+function baseOption(product: Product): VariantOption {
+  return {
+    id: product.id,
+    product_id: product.id,
+    region: product.region ?? '',
+    size: product.size ?? '',
+    retail_price: product.retail_price,
+    offer_price: product.offer_price,
+    wholesale_price: product.wholesale_price,
+    has_wholesale: product.has_wholesale,
+    in_stock: product.stock_status !== 'out_of_stock',
+    stock_quantity: product.stock_quantity,
+    image_url: null,
+    note: product.note,
+    sort_order: -1,
+    created_at: product.created_at,
+    isBase: true,
+  };
+}
+
+/**
+ * Every selectable option for a product's detail page: the product's own
+ * data first, then its real variant rows in display order. Length 1 (just
+ * the base) means "nothing to select between" — callers should not show a
+ * selector in that case; see CLAUDE.md / Naeems.txt "PART 5" for the full
+ * three-state behaviour this backs.
+ */
+export function variantOptionsFor(product: Product, variants: ProductVariant[]): VariantOption[] {
+  const base = baseOption(product);
+  const rest: VariantOption[] = variants.map((v) => ({ ...v, isBase: false }));
+  return [base, ...rest];
 }

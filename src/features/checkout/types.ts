@@ -17,6 +17,11 @@ export interface CartItem {
   variantId: string | null;
   /** e.g. "AU · 340g" — snapshot label, shown in cart/summary/WhatsApp/PDF. */
   variantLabel: string | null;
+  /** The selected variant's own photo, if it has one; null falls back to the
+   *  product's own cover image (coverImage(product)) wherever a thumbnail is
+   *  shown — the variant may have been deleted since, so this is resolved
+   *  live from the current variant list, not stored with the cart line. */
+  variantImage: string | null;
 }
 
 export type DeliveryZoneId = 'inside_dhaka' | 'outside_dhaka';

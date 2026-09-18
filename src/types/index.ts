@@ -48,6 +48,15 @@ export interface Product {
    */
   skin_types: string[] | null;
   skin_conditions: string[] | null;
+  /**
+   * Optional Region/Size label for the product itself — shown as plain text
+   * on the detail page when the product has no real variant rows, or
+   * becomes the label of the first selectable option once it does (see
+   * ProductVariant/VariantOption). Absent (undefined) on rows cached before
+   * migration-016.
+   */
+  region: string | null;
+  size: string | null;
   /** Featured products sort first in the default homepage view. */
   is_featured: boolean;
   /**
@@ -83,6 +92,8 @@ export interface ProductFormData {
   stock_status: 'in_stock' | 'low_stock' | 'out_of_stock';
   stock_quantity: string;
   note: string;
+  region: string;
+  size: string;
   is_featured: boolean;
   is_active: boolean;
   skin_types: string[];
@@ -206,6 +217,19 @@ export interface ProductVariant {
   wholesale_price: number | null;
   has_wholesale: boolean;
   in_stock: boolean;
+  /** Tracked count; null means "not tracking exact quantity" — same
+   *  convention as Product.stock_quantity. When set, it overrides in_stock
+   *  (see isVariantInStock). Absent (undefined) on rows cached before
+   *  migration-016. */
+  stock_quantity: number | null;
+  /** Optional photo replacing the product's own cover image wherever this
+   *  variant is selected; null falls back to the product's image exactly as
+   *  before this field existed. */
+  image_url: string | null;
+  /** Optional short text, same purpose as Product.note but variant-specific
+   *  (e.g. "USA batch, slightly different box"). Falls back to the
+   *  product's own note when null. */
+  note: string | null;
   sort_order: number;
   created_at: string;
 }
@@ -218,6 +242,21 @@ export interface VariantFormData {
   offer_price: string;
   wholesale_price: string;
   in_stock: boolean;
+  stock_quantity: string;
+  image_url: string | null;
+  note: string;
+}
+
+/**
+ * One selectable option on a product's detail page: either a real
+ * product_variants row, or the product's own base data synthesized into the
+ * same shape (isBase: true) so it can sit alongside real variants as the
+ * first option — see src/lib/variants.ts variantOptionsFor(). The product's
+ * own row is never duplicated as a separate database record; this is a
+ * read-time projection only.
+ */
+export interface VariantOption extends ProductVariant {
+  isBase: boolean;
 }
 
 /** One admin-managed card in the homepage bento carousel. */

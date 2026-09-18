@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -8,13 +8,47 @@ import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { coverImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
-import { lowestVariantPrice } from '../../lib/variants';
+import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
+import { fontStringOf, splitProductName, type TwoLineSplit } from '../../lib/textWrap';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
 
 interface ProductCardProps {
   product: Product;
+}
+
+/**
+ * The card's name, wrapped onto exactly two lines by real width/font
+ * measurement rather than CSS word-breaking — see src/lib/textWrap.ts for
+ * why. Re-measures on resize (device rotation, DevTools resize, etc).
+ */
+function ProductCardName({ name }: { name: string }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const [lines, setLines] = useState<TwoLineSplit>({ line1: name, line2: '' });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const measure = () => {
+      const width = el.getBoundingClientRect().width;
+      if (width === 0) return;
+      setLines(splitProductName(name, width, fontStringOf(el)));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [name]);
+
+  return (
+    <h3 className="product-card__name" ref={ref}>
+      <span className="product-card__name-line">{lines.line1}</span>
+      <span className="product-card__name-line">{lines.line2}</span>
+    </h3>
+  );
 }
 
 export function ProductCard({ product }: ProductCardProps) {
@@ -35,9 +69,14 @@ export function ProductCard({ product }: ProductCardProps) {
     navigateToProductWithHero(navigate, productPath(product), product);
   };
 
-  // A product with variants shows its cheapest option as a "from" price; the
-  // full Region → Size picker lives on the detail page.
-  const fromPrice = lowestVariantPrice(variantsFor(product.id));
+  // A product with real variant rows shows its cheapest option (including
+  // its own base price, folded in as option zero) as a "from" price; the
+  // full Region → Size picker lives on the detail page. A product with no
+  // real variant rows (even one carrying just a Region/Size label) behaves
+  // exactly as before — its own plain price, no "from".
+  const realVariants = variantsFor(product.id);
+  const fromPrice =
+    realVariants.length > 0 ? lowestVariantPrice(variantOptionsFor(product, realVariants)) : null;
 
   const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.target !== e.currentTarget) return;
@@ -98,7 +137,7 @@ export function ProductCard({ product }: ProductCardProps) {
         {/* Reserving a dedicated column (not absolute positioning) for the cart
             button means text here physically cannot flow under it. */}
         <div className="product-card__info">
-          <h3 className="product-card__name">{product.name}</h3>
+          <ProductCardName name={product.name} />
 
           {fromPrice !== null ? (
             <div className="product-card__prices">

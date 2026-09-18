@@ -80,8 +80,8 @@ export function OrderSummaryPage() {
                 className="checkout-summary-card__item"
               >
                 <span className="checkout-summary-card__thumb">
-                  {coverImage(item.product) ? (
-                    <img src={coverImage(item.product) ?? ''} alt={item.product.name} />
+                  {item.variantImage ?? coverImage(item.product) ? (
+                    <img src={item.variantImage ?? coverImage(item.product) ?? ''} alt={item.product.name} />
                   ) : (
                     <span className="checkout-summary-card__thumb-empty" aria-hidden="true" />
                   )}

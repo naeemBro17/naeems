@@ -69,7 +69,9 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
 
   const applySlideDraft = () => {
     if (!slideDraft || editingIndex === null) return;
-    if (slideDraft.title.trim() === '') {
+    // Title is only shown on the slide (and required) when there's no photo
+    // — a photo slide's title field is hidden, so it can't be required here.
+    if (slideDraft.image_url === null && slideDraft.title.trim() === '') {
       showToast('Slide title is required', 'error');
       return;
     }
@@ -106,32 +108,41 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
             {editingIndex === -1 ? 'New Slide' : 'Edit Slide'}
           </h3>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="bs-eyebrow">Eyebrow text</label>
-            <input
-              id="bs-eyebrow"
-              type="text"
-              className="form-input"
-              placeholder="Direct from Australia"
-              value={slideDraft.eyebrow_text}
-              onChange={(e) => patchSlide({ eyebrow_text: e.target.value })}
-            />
-          </div>
+          {/* Once a photo is uploaded, the app draws no heading/eyebrow text
+              over it (see the image field's own helper below) — these
+              fields would do nothing, so they're hidden rather than shown
+              greyed-out. They still matter for the plain-background
+              fallback below, and reappear the moment the image is removed. */}
+          {slideDraft.image_url === null && (
+            <>
+              <div className="form-field">
+                <label className="form-label" htmlFor="bs-eyebrow">Eyebrow text</label>
+                <input
+                  id="bs-eyebrow"
+                  type="text"
+                  className="form-input"
+                  placeholder="Direct from Australia"
+                  value={slideDraft.eyebrow_text}
+                  onChange={(e) => patchSlide({ eyebrow_text: e.target.value })}
+                />
+              </div>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="bs-title">
-              Title <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <input
-              id="bs-title"
-              type="text"
-              className="form-input"
-              maxLength={80}
-              value={slideDraft.title}
-              onChange={(e) => patchSlide({ title: e.target.value })}
-            />
-            <p className="form-helper">Clamped to two lines on the banner.</p>
-          </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="bs-title">
+                  Title <span className="form-required" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="bs-title"
+                  type="text"
+                  className="form-input"
+                  maxLength={80}
+                  value={slideDraft.title}
+                  onChange={(e) => patchSlide({ title: e.target.value })}
+                />
+                <p className="form-helper">Clamped to two lines on the banner.</p>
+              </div>
+            </>
+          )}
 
           <div className="form-field">
             <span className="form-label">Banner image (optional)</span>
@@ -150,8 +161,11 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
               }
             />
             <p className="form-helper">
-              With no image, the banner shows its plain default background. With
-              one, it fills the slide with a dark scrim behind the text.
+              Recommended: 1200×460px or larger, same ~2.6:1 aspect ratio (a
+              wide banner shape) — any heading or text should already be part
+              of the photo, since the app no longer draws text over it. With
+              no image, the banner falls back to the plain background and the
+              Eyebrow/Title fields above.
             </p>
           </div>
 

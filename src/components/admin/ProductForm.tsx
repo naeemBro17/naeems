@@ -58,6 +58,8 @@ function emptyForm(): ProductFormData {
     stock_status: 'in_stock',
     stock_quantity: '',
     note: '',
+    region: '',
+    size: '',
     is_featured: false,
     is_active: true,
     skin_types: [],
@@ -94,6 +96,8 @@ function formFromProduct(product: Product): ProductFormData {
     stock_quantity:
       product.stock_quantity !== null ? String(product.stock_quantity) : '',
     note: product.note ?? '',
+    region: product.region ?? '',
+    size: product.size ?? '',
     is_featured: product.is_featured,
     is_active: product.is_active,
     skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
@@ -316,6 +320,8 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
       stock_quantity:
         form.stock_quantity.trim() === '' ? null : Number(form.stock_quantity),
       note: form.note.trim() === '' ? null : form.note.trim(),
+      region: form.region.trim() === '' ? null : form.region.trim(),
+      size: form.size.trim() === '' ? null : form.size.trim(),
       is_featured: form.is_featured,
       skin_types: form.skin_types,
       skin_conditions: form.skin_conditions,
@@ -713,6 +719,41 @@ export function ProductForm({ isOpen, product, onClose }: ProductFormProps) {
             uploadError={uploadError}
           />
         </div>
+
+        {product && (
+          <>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="form-label" htmlFor="pf-region">Region</label>
+                <input
+                  id="pf-region"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. AU"
+                  value={form.region}
+                  onChange={(e) => setField('region', e.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="pf-size">Size</label>
+                <input
+                  id="pf-size"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. 50 ml"
+                  value={form.size}
+                  onChange={(e) => setField('size', e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="form-helper">
+              Optional label for this product itself. With no variants added
+              below, it just shows as text on the detail page (no selector).
+              Once you add a real variant, this product's own price/stock
+              becomes the first selectable option under this label.
+            </p>
+          </>
+        )}
 
         {/* Variants only make sense for a product that already exists —
             a newly-created one has no id to attach them to yet. */}
