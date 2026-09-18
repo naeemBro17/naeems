@@ -57,6 +57,15 @@ export interface Product {
    */
   region: string | null;
   size: string | null;
+  /**
+   * Set only on a product created by the "Combine into Variants" flow —
+   * points at whichever originally-selected product supplied this
+   * product's shared content and base price/stock (the one that became
+   * option zero, not a separate variant row). Null for every ordinary
+   * product. Used to reactivate that original when this combined product
+   * is deleted. Absent (undefined) on rows cached before migration-017.
+   */
+  combined_from_product_id: string | null;
   /** Featured products sort first in the default homepage view. */
   is_featured: boolean;
   /**
@@ -230,6 +239,12 @@ export interface ProductVariant {
    *  (e.g. "USA batch, slightly different box"). Falls back to the
    *  product's own note when null. */
   note: string | null;
+  /** Set only on a variant row created by the "Combine into Variants" flow
+   *  — points at the original standalone product it was copied from. Null
+   *  for every hand-added variant. Used to reactivate that original when
+   *  the parent product is deleted. Absent (undefined) on rows cached
+   *  before migration-017. */
+  source_product_id: string | null;
   sort_order: number;
   created_at: string;
 }

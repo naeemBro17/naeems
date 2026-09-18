@@ -27,6 +27,16 @@ export function AdminPage() {
     void loadWholesalers();
   }, [loadWholesalers]);
 
+  // A client-side navigation (e.g. the hamburger menu's Admin Panel link)
+  // keeps whatever scroll position the previous page was at — this page
+  // never got its own reset, unlike ProductDetailPage's equivalent effect,
+  // which is what made landing here look like a jump/bounce from wherever
+  // the home grid had been scrolled to. Runs once, on mount, not per tab
+  // switch.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const pendingWholesalers = wholesalers.filter(
     (w) => w.role === 'wholesaler' && w.status === 'pending'
   ).length;

@@ -51,9 +51,14 @@ export interface TwoLineSplit {
   line2: string;
 }
 
-/** A mid-word break must leave at least this many characters on both sides,
- *  or it reads as a single stray letter rather than an intentional split. */
-const MIN_FRAGMENT_CHARS = 2;
+/** A mid-word break must leave at least this many characters on both sides.
+ *  Measured live against the real catalogue at the narrow end of phone
+ *  widths (~360px): a threshold of 2 let "Daily" split into "Dai" + "ly" —
+ *  not a single stray letter, but still reads as a broken word for almost
+ *  no gain (skipping it whole costs only ~2 characters of line-1 width). 3
+ *  was the smallest threshold that stopped choosing that trade at 320–428px
+ *  across the real product names that were failing. */
+const MIN_FRAGMENT_CHARS = 3;
 
 /**
  * Splits `name` into two lines that fit `maxWidthPx` at the given canvas

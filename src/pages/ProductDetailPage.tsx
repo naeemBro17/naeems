@@ -11,6 +11,7 @@ import { isOutOfStock } from '../lib/stockStatus';
 import { buildCopyText, copyToClipboard } from '../lib/clipboard';
 import {
   isVariantInStock,
+  regionsOf,
   sortVariants,
   VARIANT_SELECT,
   VARIANTS_VIEW,
@@ -94,16 +95,43 @@ function VideoReviewCard({ url }: { url: string }) {
   );
 }
 
-/**
- * Option picker, rendered only when a product has 2+ selectable options (its
- * own base entry plus one or more real variant rows — see variantOptionsFor).
- * A flat chip row rather than a two-tier Region → Size grid: options can come
- * from the ad-hoc "combine products into variants" flow (Part 7) where two
- * options don't necessarily share a clean region×size matrix, so each chip
- * just shows its own full label. The chosen option drives the price block,
- * stock row, image, note, Copy Price and the wholesale row below it.
- */
-function VariantSelector({
+/** One row of pill chips — a Region row, a Size row, or (for the flat
+ *  fallback) a row of full option labels. */
+function ChipRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="variant-row" role="group" aria-label={label}>
+      <span className="variant-row__label">{label}</span>
+      <div className="variant-row__chips">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`chip-select${option === selected ? ' chip-select--on' : ''}`}
+            aria-pressed={option === selected}
+            onClick={() => onSelect(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Flat single row, one chip per option, each showing its own full label —
+ *  the fallback for a product whose options don't cleanly split into a
+ *  Region×Size matrix (see VariantSelector's doc comment). */
+function FlatOptionRow({
   options,
   productName,
   selected,
@@ -135,6 +163,73 @@ function VariantSelector({
   );
 }
 
+/**
+ * Option picker, rendered only when a product has 2+ selectable options (its
+ * own base entry plus one or more real variant rows — see variantOptionsFor).
+ *
+ * Two-level by default — a Region row, then a Size row filtered to whatever
+ * that region actually has — because that's what reads best for the common
+ * case where every option cleanly carries both. Falls back to one flat row
+ * of full labels only when it can't: an option with a blank Region or Size
+ * (a product with no label at all, showing its bare name as the fallback
+ * option — see variantOptionLabel — or an option built by the "combine
+ * products into variants" flow that was only given one half of a label)
+ * can't be placed in a region×size grid at all, so the whole selector drops
+ * to the flat list rather than showing a broken or misleading grid.
+ */
+function VariantSelector({
+  options,
+  productName,
+  selected,
+  onSelect,
+}: {
+  options: VariantOption[];
+  productName: string;
+  selected: VariantOption;
+  onSelect: (option: VariantOption) => void;
+}) {
+  const canGroup = options.every((o) => o.region.trim() !== '' && o.size.trim() !== '');
+
+  if (!canGroup) {
+    return (
+      <FlatOptionRow
+        options={options}
+        productName={productName}
+        selected={selected}
+        onSelect={onSelect}
+      />
+    );
+  }
+
+  const regions = regionsOf(options);
+  const optionsInRegion = options.filter((o) => o.region === selected.region);
+  const sizesInRegion = Array.from(new Set(optionsInRegion.map((o) => o.size)));
+
+  const pickRegion = (region: string) => {
+    // Keep the same size selected across the region switch when that size
+    // exists there too; otherwise fall back to the first option in it.
+    const sameSize = options.find((o) => o.region === region && o.size === selected.size);
+    const first = sameSize ?? options.find((o) => o.region === region);
+    if (first) onSelect(first);
+  };
+
+  const pickSize = (size: string) => {
+    const match = optionsInRegion.find((o) => o.size === size);
+    if (match) onSelect(match);
+  };
+
+  return (
+    <div className="variant-selector">
+      {regions.length > 1 && (
+        <ChipRow label="Region" options={regions} selected={selected.region} onSelect={pickRegion} />
+      )}
+      {sizesInRegion.length > 1 && (
+        <ChipRow label="Size" options={sizesInRegion} selected={selected.size} onSelect={pickSize} />
+      )}
+    </div>
+  );
+}
+
 function DetailContent({
   product,
   variants,
@@ -150,6 +245,7 @@ function DetailContent({
   const [justAddedToCart, setJustAddedToCart] = useState(false);
   const copyTimerRef = useRef<number>();
   const cartTimerRef = useRef<number>();
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   // Option zero is always the product's own data; real variant rows follow.
   // A product with no real variants has exactly one option and no selector
@@ -197,6 +293,19 @@ function DetailContent({
     selectedOption.image_url !== null
       ? [selectedOption.image_url, ...baseImages.filter((url) => url !== selectedOption.image_url)]
       : baseImages;
+
+  // The carousel keeps its own scroll position across re-renders — without
+  // this, the browser's native scroll anchoring "helpfully" compensates for
+  // the new first slide by scrolling forward to keep whatever was already
+  // on screen in view, which silently cancels out the whole swap (verified
+  // live: scrollLeft jumped to exactly one slide-width on its own the
+  // instant the images array reordered). Snap back to the first slide —
+  // wherever the selected option's own image now sits in the array —
+  // every time the selection actually changes.
+  useEffect(() => {
+    if (carouselRef.current) carouselRef.current.scrollLeft = 0;
+    setActiveImage(0);
+  }, [selectedOption.id]);
 
   const outOfStock = hasSelector ? !isVariantInStock(selectedOption) : isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = hasSelector
@@ -262,6 +371,7 @@ function DetailContent({
           style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
           <div
+            ref={carouselRef}
             className="product-detail__carousel"
             onScroll={handleCarouselScroll}
             aria-label={`${product.name} images, ${activeImage + 1} of ${images.length}`}

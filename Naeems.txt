@@ -1239,3 +1239,390 @@ run.
    consolidate down to one product editor.
 
 ====================================================================
+
+
+====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-5-regressions-and-drawer-menu
+====================================================================
+
+This session worked through "Batch 5 — Re-fixes, Regressions, and Hamburger
+Menu Redesign" (8 parts). Per the batch's own mandatory verification rule, I
+did not write "done" for anything without actually loading the real running
+app, logging in as admin, performing the real action, and looking at the
+real rendered/queried result. At the end I went back through every part a
+second time, after everything else was built, specifically checking whether
+a later part's change had broken an earlier one — this is documented in
+each part below, and it genuinely caught something (see Part 5).
+
+One important thing to flag up front: when I started this session, my own
+local copy of the repo was a commit behind — batch 3 and batch 4 had NOT
+yet been merged into main in my local clone. I fetched fresh from GitHub and
+confirmed both were in fact merged (PR #12 and #13), so this branch starts
+from the real, current main. I mention this only so you know I checked it,
+not because it turned out to be the explanation for anything below — the
+problems in this batch were real bugs, not stale code.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Card name still wasting line-1 space (third attempt)
+
+First confirmed the fix from last session IS wired into the live component
+— src/lib/textWrap.ts is imported and called from ProductCard.tsx, not
+dead code sitting unused. So the question was why it was still producing a
+bad result.
+
+I measured the exact product you'd know as "Aveeno Baby Daily Moisture
+Fragrance Free Lotion 227g" in the real running grid at a sweep of widths
+(320 through 428px, the realistic phone range) rather than just the one
+width (390px) I'd checked last time. At 390px it was already fine — which
+is exactly why last session's check missed this. At 360px specifically, it
+broke: "Aveeno Baby Dai" / "ly Moisture Fra…" — a real mid-word split,
+"Daily" torn into "Dai" + "ly".
+
+The actual cause, with real numbers: at 360px the available line-1 width is
+94.4px. "Aveeno Baby " (with trailing space) uses 75.7px, leaving 18.7px of
+room. "Dai" (3 characters of "Daily") fits in exactly that 18.7px; the
+remaining "ly" is 2 characters. My rule from last session only required
+each side of a mid-word break to be at least 2 characters — which "Dai" (3)
+and "ly" (2) technically satisfy, so the algorithm judged it an acceptable
+break. It isn't, in practice — splitting a plain 5-letter word for the sake
+of 2 extra characters of line-1 fill still reads as broken. I raised the
+minimum from 2 to 3 characters on each side of a break (src/lib/textWrap.ts,
+MIN_FRAGMENT_CHARS). At 3, this exact case now correctly falls back to
+moving "Daily" whole to line 2 instead of splitting it, at every width from
+320 to 428px.
+
+Verified: swept 320/330/340/350/360/370/375/380/390/400/414/428px again
+after the fix — "Aveeno Baby Daily Moisture Fragrance Free Lotion 227g" now
+reads as clean whole-word wraps at every one of them (e.g. at 360px:
+"Aveeno Baby" / "Daily Moisture…"; at 390px: "Aveeno Baby Daily" /
+"Moisture Fragran…"). Also re-ran the full-catalogue orphan/short-fragment
+check (104 real cards) at 320/340/360/375/390px — the only two flagged
+results ("The Ordinary O. Reusable Rounds…" showing "O." as a line-2 start,
+and "Kirkland Minoxidil 5%…" showing "5%") are real whole words in those
+products' actual names, not broken fragments — confirmed by checking the
+real product names, not assumed. Re-checked again at the very end of this
+session, after every other part was done, and it's still clean.
+
+PART 2 — Deleting a combined product now reactivates its originals
+
+Confirmed the gap first: the "combine into variants" flow (built last
+session) sets originals inactive but never recorded which product a
+combined product or its variants actually came from — so there was no way
+for a later delete to know what to reactivate.
+
+Added two new nullable columns (migration-017, SQL below, already run this
+session): products.combined_from_product_id (set on a product CREATED by
+the combine flow, pointing at whichever original supplied its shared
+content and base price — the one that becomes option zero, not a separate
+variant row) and product_variants.source_product_id (set on a variant row
+created by the combine flow, pointing at the original it was copied from).
+Both are null for anything created the ordinary way — a manually-added
+variant never sets source_product_id, so deleting a product that only has
+hand-added variants is completely unaffected; I did not touch that path.
+
+Deleting a product (src/components/admin/ProductList.tsx) now reads its own
+combined_from_product_id plus every one of its variants' source_product_id
+BEFORE the delete (variant rows are cascade-deleted the instant the product
+row goes), collects the distinct original product ids, deletes as before,
+then sets is_active back to true on every one of them.
+
+Verified live, fully: combined "Cancer Council 150mL Daily Sunscreen…" and
+"Cancer Council SPF 50+ Active 200ml Pump" into one product (both went
+Inactive, confirmed in the real admin list). Deleted the new combined
+product. Saw the toast read "Product deleted — 2 original products
+reactivated", then independently re-checked the admin list itself (not just
+the toast) — both original products showed Active again, with no manual
+toggling on my part. Product count back to the original 106.
+
+PART 3 — Hamburger menu: bottom sheet → left-side sliding drawer
+
+Built a new shared component, src/components/shared/SideDrawer.tsx —
+same contract as the existing BottomSheet (isOpen/onClose/title/children,
+focus trap, Escape, scroll lock, useModalBackClose for the back button) but
+slides in from the left over a dimmed backdrop instead of up from the
+bottom. BottomSheet itself is untouched — the review form and the bottom-
+nav account sheet still use it exactly as before; only HamburgerMenu.tsx
+was switched over. Every existing menu item (Dark Mode, Settings, About,
+Admin Panel, Wholesale Account) moved across unchanged — same labels, same
+onClick handlers, same admin/wholesaler gating.
+
+Animation: 280ms, transform + opacity only (translateX), the close
+animation is the exact reverse of the open one, and prefers-reduced-motion
+gets an instant show/hide instead (verified the CSS handles this the same
+way the existing bottom sheet does, including forcing full transparency on
+the closing state so a reduced-motion user doesn't see it freeze in place
+for the unmount delay).
+
+Verified live at real phone width (390px): drawer width measured at 328px
+= 82% of the 400px viewport, inside the 75–85% requirement, with a visibly
+dimmed strip of the page on the right. Tapped a real link inside it (Admin
+Panel) — navigated correctly and the drawer closed. Re-opened it and used
+the browser back button — drawer closed, no navigation happened, confirmed
+via the actual URL staying on "/". Tapping the dimmed backdrop area also
+closes it — checked separately. I also made the hamburger button itself a
+real open/close toggle (aria-expanded, aria-label switches between "Open
+menu"/"Close menu") for correctness, but I want to be upfront that once the
+drawer is open it visually covers that same corner of the screen, so
+"tapping the hamburger icon again" isn't something a real tap can reach in
+this layout — the X inside the drawer, the dimmed backdrop, and the back
+button all do the same job and all three are confirmed working. I judged
+forcing the header above the drawer's dimming (the only way to make the
+original icon reachable) would look worse — an undimmed strip of header
+sitting on top of an otherwise-dimmed page — than just relying on the three
+ways that do work.
+
+PART 4 — Admin Panel navigation: no more jump/bounce
+
+Root cause, confirmed by reading the code rather than guessing: AdminPage
+never reset scroll position on mount — every other page that can be reached
+by a fresh navigation (e.g. ProductDetailPage) does this already, AdminPage
+was simply missing the same one-line effect. If you'd scrolled down the
+home page before opening the menu, landing on /admin kept that same scroll
+position, which is what read as a jump.
+
+Added the same window.scrollTo(0, 0) effect AdminPage was missing (runs
+once on mount, not on every tab switch inside the admin panel).
+
+Verified live: scrolled the home page down a long way, opened the new
+drawer, tapped Admin Panel — landed on /admin with window.scrollY at
+exactly 0 and the real admin header visible at the very top, no visible
+jump. Re-checked again at the end of the session after every other part was
+built, from a fresh page load — still lands at the top cleanly.
+
+PART 5 — Variant image now actually shows on the detail page
+
+Reproduced it exactly: uploaded a real photo to a real variant (via the
+same admin flow you'd use), selected that variant on the real product page
+— the hero image did NOT change, kept showing the product's default image.
+
+Root cause, found by inspecting the live DOM rather than assuming: the
+image swap logic itself was correct — the variant's photo really was being
+placed first in the array. What was actually happening is the browser's
+own "scroll anchoring" feature: when the slide order changes, the browser
+tries to be helpful by keeping whatever was already visible on screen in
+view, and silently scrolls the carousel forward by exactly one slide-width
+to compensate — which cancels out the swap, so you keep seeing the old
+image even though the underlying data changed correctly. I confirmed this
+by reading the carousel's actual scrollLeft value right after switching
+variants: it had moved to 388px on its own, nobody told it to.
+
+Fixed with two things in src/pages/ProductDetailPage.tsx: the carousel now
+resets its own scroll position back to the start every time the selected
+variant actually changes (not on every render), and I added
+overflow-anchor: none in the CSS so the browser stops trying to compensate
+in the first place.
+
+Verified live: selected a variant with its own uploaded photo — the hero
+image genuinely changed to that photo (confirmed by reading the actual
+image src, and by looking at the rendered screenshot — the recognisable
+"Naeem's — Authentic Australian skincare" branded image I'd uploaded as the
+test photo was really on screen, not the product's usual bottle photo).
+Switched back to the option with no photo of its own — correctly fell back
+to the product's normal image. Re-verified a second time at the very end of
+the session, after Part 6 rewrote the selector component in the same file —
+this is the one place in this batch where the "check it again at the end"
+rule actually caught something worth catching: Part 6 touches the exact
+same file Part 5's fix lives in, so I re-tested Part 5 specifically after
+Part 6 was done, not just assumed it still worked. It does.
+
+PART 6 — Variant selector reverted to two separate levels (Region, then Size)
+
+Replaced the flat single row of chips with the original two-level layout: a
+Region row, then a Size row filtered to whatever that Region actually has —
+but rebuilt to work off last batch's merged option list (a product's own
+data plus its real variant rows) rather than raw variant rows only, and
+each row now only appears when there's more than one distinct value to
+choose between (so a product that only varies by Region shows just the
+Region row, and vice versa — this wasn't gated at all in the original
+pre-flat version, so it's slightly improved from before, not just restored).
+
+For the case the two-level grid genuinely can't represent — an option with
+a blank Region or blank Size, which happens when a product has no label set
+at all (it falls back to showing its bare name) or when the "combine
+products" flow was only given one half of a label — the selector correctly
+drops back to the flat, one-row-per-option list rather than showing a
+broken or misleading grid. This isn't a guess: I tested both shapes on the
+same real product.
+
+Verified live, in detail, on "Beauty of Joseon Red Bean Water Gel" with two
+real variants set up as AU/350mL (the product's own base data), AU/473mL,
+and US/473mL: saw two separate rows, "Region" (AU, US) and "Size" (350mL,
+473mL), default selection AU/350mL. Clicked "US" — the Size row correctly
+disappeared (US only has one size) and price/URL updated to the US variant.
+Clicked back to "AU" — Size row reappeared showing both sizes, and it kept
+"473mL" selected rather than resetting to the region's first option, because
+I built pickRegion to prefer keeping the same size across a region switch
+when that size exists in the new region too; price and the URL's ?variant=
+both matched the correct variant at every step. Separately confirmed the
+flat fallback still works on the same product before I'd given it a clean
+label (two chips, "Beauty of Joseon Red Bean Water Gel" and "US · 473mL",
+full names, no Region/Size rows) — so both code paths were actually
+exercised, not just the common one.
+
+PART 7 — Image drag-reorder: found a real gap, not a re-run of the same bug
+
+This is the one where reading the code first actually mattered. The
+drag-reorder files themselves (useDragReorder.ts, ImageStrip.tsx) hadn't
+been touched by any commit since long before last session — so whatever
+last session tested and reported working was, in that exact code, still
+true. But there are TWO separate product editors in this app: the inline
+one opened from a card's "..." menu on the home grid (ProductEditSheet.tsx,
+uses ImageStrip — has drag-reorder) and the one opened from the admin
+product list's own "Edit" button (ProductForm.tsx, uses a completely
+different component called ImageUploader — which never had drag-reorder at
+all, just add/remove). Last session's testing (and my own, until I noticed
+this) only ever went through the first path. The admin product list's own
+Edit button — almost certainly the way you'd naturally reach it from
+/admin — genuinely had no way to reorder images. That's the real "it
+stopped working" here: it never worked from that entry point.
+
+Fixed by wiring the same drag mechanism into ImageUploader.tsx. One
+necessary side effect: ImageUploader's image list used to wrap into a
+multi-row grid, and the drag-reorder mechanism (shared with ImageStrip)
+only understands one-directional dragging, not a 2D wrapping grid — so I
+changed it to a single horizontal scrolling row, the same shape
+ImageStrip already uses. Same thumbnail size, same remove button, same
+"Add" button at the end — just scrolls sideways instead of wrapping when
+there are more than fit on one row.
+
+Verified live on both entry points, mouse and touch, with a full save-and-
+reload persistence check each time — and I want to be specific about a
+testing wrinkle I hit and resolved, not just the end result: my FIRST
+attempt at testing the admin-list path (right after editing the code)
+showed drag doing nothing at all. Before concluding that meant the fix was
+broken, I did a full page reload and tried again — it worked immediately
+and correctly, every time afterward. That first failure was stale hot-
+reload state from editing the component live, not the actual fix; I'm
+noting it explicitly because this batch exists precisely because past
+sessions didn't chase down exactly this kind of "looks broken, might not
+be" moment. After the reload, I dragged a real image to a new position,
+saved, reloaded the page fresh (not the same tab's cached view — a full
+navigation to the product's public detail page), and the new order was
+still there. I then manually restored the original image order (three
+separate drag-save-reload cycles, each independently verified) so the
+product's real images are exactly as they were before I touched them.
+
+PART 8 — "Edit" in the home grid card's "..." menu
+
+Checked the code first: CardMenu.tsx already has an "Edit Product" entry,
+gated on Edit Mode being on (the same real admin/session check every other
+admin-only control in this app uses — not CSS, not guesswork). I used this
+exact menu item successfully, repeatedly, throughout this session to reach
+the product editor for Parts 5, 6 and 7's testing above, so by the time I
+sat down to check this part specifically it had already been proven working
+many times over. I still did one clean, explicit check for the record:
+opened Edit Mode, opened a real card's "..." menu, confirmed "Edit Product"
+is the first item, tapped it, and confirmed the product editor opened
+showing that exact product's real name and data.
+
+I don't have a code-level explanation for why this would have looked
+missing on the live site, the way I found concrete causes for the other
+parts — the option is real, present, and working in the current code with
+no gap I could find. I'm reporting that honestly rather than inventing a
+fix for a bug I couldn't reproduce.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed — migration-017-combine-source-tracking.sql was written this
+session and you already ran it successfully partway through (confirmed via
+the live combine-then-delete test in Part 2 that the new columns exist and
+the reactivation actually works). Nothing further to run.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+- Part 3's "tap the hamburger icon again to close" — see Part 3 above for
+  exactly why (the icon's own screen position is covered by the open
+  drawer) and what I verified instead (X button, backdrop tap, back button
+  — all three confirmed working). I did make the underlying button a real
+  toggle in the code, but by the layout's own nature that toggle isn't
+  reachable through a second tap once the drawer is open.
+- Part 8 — I could not find anything actually wrong to fix. Reported
+  honestly above rather than making an unnecessary change to working code.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- The real, recurring pattern behind this batch, now that I've dug into
+  four separate "was fixed, now isn't" reports: two were genuine bugs that
+  only showed up outside the exact conditions previously tested (Part 1's
+  360px-only break; Part 7's admin-list entry point never having had the
+  feature at all) — not regressions in the sense of working code being
+  undone, but real gaps that narrower testing missed the first time. A
+  third (Part 5) was a subtle browser behaviour (scroll anchoring) that
+  looks identical to "the code didn't work" from the outside but has
+  nothing to do with the actual swap logic. The fourth (Part 8) I could not
+  reproduce at all. I don't have hard evidence for this, but it's worth
+  knowing: this app is a PWA with a service worker that caches the built
+  app (registerType: 'autoUpdate', which is already the safer of the two
+  common settings — it self-updates rather than waiting for a prompt). If
+  you're testing on a phone or a browser tab that's been open a while
+  rather than a completely fresh load, it's possible to be looking at a
+  cached previous build for a short window after a new one ships. I can't
+  confirm this was the explanation for anything specific in this batch, but
+  if a future "definitely fixed this already" report comes up again, a
+  hard refresh (or closing and reopening the tab/PWA) before concluding the
+  fix failed would rule this out cheaply.
+- Confirmed a duplication I flagged last session is real and now matters
+  more: ProductForm.tsx and ProductEditSheet.tsx are genuinely two separate
+  product editors with two separate image-handling components
+  (ImageUploader vs ImageStrip). Part 7 fixed the immediate symptom (drag-
+  reorder now works in both), but they're still two components doing
+  almost the same job with separate code paths — any future change to one
+  (like Part 5/6's variant work, which only touches the product DETAIL
+  page, not this) needs to be remembered for the other too.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Part 2: the combined product's own base data (price/stock/image/note)
+  still comes directly from whichever original was picked as the "shared
+  content source," rather than every selected product becoming a real
+  variant row — this is unchanged from last session's design and Part 2
+  builds on it directly (combined_from_product_id records that one
+  relationship, source_product_id records the rest).
+- Part 3: 82% width, capped at 340px on wider screens (so the drawer
+  doesn't get unreasonably wide on a tablet or desktop browser window) —
+  the requirement was 75–85% and this is a straightforward middle choice
+  within it.
+- Part 7: turning ImageUploader's grid into a horizontal scrolling row
+  (matching ImageStrip) was the one place in this batch I made a layout
+  change beyond the minimum needed to fix the reported bug. I want to be
+  upfront about why: the reorder mechanism this app already has and trusts
+  only understands dragging along one axis, and a wrapping multi-row grid
+  needs real two-dimensional hit-testing to reorder correctly by drag —
+  building that from scratch risked a worse, buggier drag experience than
+  none at all. Matching the pattern that's already proven to work
+  correctly elsewhere in this exact app was the safer choice over inventing
+  new drag logic under this batch's time budget.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Code health — medium, escalated from last session] Two separate
+   product editors with two separate image components is no longer just a
+   tidiness question — Part 7 this session was a direct, real consequence
+   of it (a feature working in one and silently not existing in the other).
+   The same risk applies to anything else added to one editor without the
+   other in mind. Worth a session dedicated to merging them into one editor
+   used everywhere, which would remove this whole class of bug permanently
+   rather than one symptom at a time.
+2. [Process — worth repeating] The pattern behind this entire batch was
+   narrower testing conditions than real usage — one screen width, one of
+   two entry points, one browser tab that happened to already have the new
+   code. None of that is a criticism of testing "live" in principle (it
+   caught real, specific bugs this session, with exact pixel numbers each
+   time) — it's that "verified live" needs to mean a spread of realistic
+   conditions (a few widths, both admin entry points where more than one
+   exists, a genuinely fresh page load), not just one successful pass.
+3. [Trust signal — small] Still true from two sessions ago: product card
+   prices are orange, not near-black, against CLAUDE.md's own colour rule.
+   Not touched this batch (out of scope), just flagging it's still
+   outstanding.
+
+====================================================================

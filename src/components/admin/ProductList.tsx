@@ -8,6 +8,7 @@ import { ProductForm } from './ProductForm';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { isOutOfStock } from '../../lib/stockStatus';
+import { VARIANTS_VIEW } from '../../lib/variants';
 import type { Product } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -103,6 +104,28 @@ export function ProductList() {
 
   const handleDelete = async () => {
     if (!deletingProduct) return;
+
+    // If this product was created by "Combine into Variants", every
+    // original it was built from needs to come back Active once it's gone
+    // — the container itself for whichever product supplied its shared
+    // content (combined_from_product_id), and each of its variant rows for
+    // the rest (source_product_id). Both are null for an ordinary product,
+    // so this is a no-op for the everyday delete path. Read before
+    // deleting: the variant rows (and with them their source_product_id)
+    // are cascade-deleted the instant the product row goes.
+    const { data: variantRows } = await supabase
+      .from(VARIANTS_VIEW)
+      .select('source_product_id')
+      .eq('product_id', deletingProduct.id);
+
+    const toReactivate = new Set<string>();
+    if (deletingProduct.combined_from_product_id) {
+      toReactivate.add(deletingProduct.combined_from_product_id);
+    }
+    for (const row of (variantRows ?? []) as { source_product_id: string | null }[]) {
+      if (row.source_product_id) toReactivate.add(row.source_product_id);
+    }
+
     const { error } = await supabase
       .from('products')
       .delete()
@@ -117,9 +140,31 @@ export function ProductList() {
     if (imagePaths.length > 0) {
       await supabase.storage.from(STORAGE_BUCKET).remove(imagePaths);
     }
+
+    if (toReactivate.size > 0) {
+      const { error: reactivateError } = await supabase
+        .from('products')
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .in('id', Array.from(toReactivate));
+      if (reactivateError) {
+        console.error('Reactivating combined-from products failed:', reactivateError);
+        showToast(
+          'Product deleted, but its original products could not be reactivated — turn them on by hand',
+          'error'
+        );
+        setDeletingProduct(null);
+        await refetch();
+        return;
+      }
+    }
+
     setDeletingProduct(null);
     await refetch();
-    showToast('Product deleted');
+    showToast(
+      toReactivate.size > 0
+        ? `Product deleted — ${toReactivate.size} original product${toReactivate.size === 1 ? '' : 's'} reactivated`
+        : 'Product deleted'
+    );
   };
 
   return (

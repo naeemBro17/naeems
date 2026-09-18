@@ -262,8 +262,8 @@ export function ViewerPage() {
         <button
           type="button"
           className="app-header__hamburger"
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
         >
           <svg
