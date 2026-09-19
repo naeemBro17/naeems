@@ -1892,3 +1892,356 @@ stopping short at "CeraVe Foaming" with empty space.
    flagging it keeps not getting picked up.
 
 ====================================================================
+NAEEM'S PRICE HUB — SESSION LOG
+Branch: fix/batch-7-native-text-wrapping
+====================================================================
+
+This session worked through "Batch 7 — Delete the JavaScript
+Line-Splitter, Use Native CSS Wrapping". The instruction this time was
+explicit: stop tuning the JS line-splitter (src/lib/textWrap.ts) that
+five straight batches had already adjusted, and remove it entirely in
+favour of letting the browser's own line-breaking wrap the card name.
+That's what I did.
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Removed the JS splitter
+
+- src/components/viewer/ProductCard.tsx: removed the ResizeObserver,
+  the document.fonts.ready re-measure callback, the splitProductName/
+  fontStringOf imports, and the two-line React state. The product
+  name is now a single presentational component:
+
+    export function ProductCardName({ name }: { name: string }) {
+      return <h3 className="product-card__name">{name}</h3>;
+    }
+
+  I kept it as its own small exported component (instead of inlining
+  the <h3> straight into ProductCard) purely so Part 3's test could
+  render it without needing to mock Supabase, routing, and the rest
+  of ProductCard's context tree — it has no hooks and no dependency
+  besides the string it's given.
+
+- Deleted src/lib/textWrap.ts. I grepped the whole repo first —
+  nothing else imported it (only ProductCard.tsx and Naeems.txt's own
+  history mentioned it), so it was safe to remove outright rather than
+  leave dead code behind.
+
+- src/styles/app.css (.product-card__name, around line 3688): replaced
+  the old rule (flex column, min-height reservation, two child
+  ".product-card__name-line" spans with white-space:nowrap+overflow:
+  hidden) with the standard two-line clamp this codebase already uses
+  in three other places (.hero-banner__title, .bento-custom__title,
+  .bento-tile__name, .review-admin__quote):
+
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: calc(2 * 1.35em);   /* unchanged — still reserves 2 lines */
+
+  Deleted the now-unused ".product-card__name-line" rule along with
+  its comment block (that comment was the thing explaining why JS
+  splitting was supposedly necessary — no longer true).
+
+- Grep for word-break: break-all / word-break: break-word /
+  overflow-wrap: anywhere anywhere in the stylesheets, as the task
+  asked: the ONLY hit outside the deleted comment was
+  ".admin-wholesaler-row__meta { word-break: break-word }" at line
+  2404 — that's the admin wholesaler list's join-date/meta text, a
+  completely different component, not the product card. Left it
+  alone. No break-all or overflow-wrap:anywhere rule targeting the
+  card name existed anywhere in the codebase — Batch 5's fix must have
+  already been replaced by the JS splitter in a later batch before
+  this session started.
+
+- Checked the flex chain around the name element for width-stealing,
+  as instructed: .product-card__body is a flex row (padding 9px 10px
+  10px, gap 8px) containing .product-card__info (flex:1, already had
+  min-width:0 from an earlier batch — no change needed) and
+  .product-card__cart-slot (width:34px, flex-shrink:0, its own
+  reserved column). This was already correct; I didn't touch it.
+
+- Did not touch font size, letter spacing, card width/padding, or any
+  product name in the database, per the task's explicit "do not"
+  list.
+
+PART 2 — Verification across real widths
+
+Two things blocked doing this the obvious way (load the real site,
+shrink the window):
+
+  1. Only `main` deploys to https://naeems-all.vercel.app, and I'm not
+     allowed to push there — this is the same structural limit Batch 6
+     already flagged, carried forward, not new.
+  2. Less expected: in THIS session's Windows Chrome, the resize_window
+     tool could not actually shrink the browser window's viewport below
+     about 523px — I tried 400px, 375px, and 320px and window.innerWidth
+     read back 523 every time (likely an OS-level minimum window width
+     on this machine). So even local, same-session testing at real phone
+     widths via literal window resize wasn't available either.
+
+What I did instead: built a throwaway test harness page
+(dist/wrap-test.html, deleted again before finishing — it is NOT part
+of the commit) that pulls in the actual compiled CSS
+(dist/assets/index-*.css) and the actual Google Fonts link, and
+renders the exact same DOM structure the real card uses
+(.product-card > .product-card__body > .product-card__info >
+.product-card__name, plus a same-size .product-card__cart-slot so the
+reserved button column is accounted for) inside a wrapper div whose
+width I could set to an exact pixel value — 320, 360, 375, 390, 414 —
+standing in for the viewport width, since none of those cross the
+grid's 480px column-count breakpoint.
+
+I validated this harness against the real thing before trusting it: I
+loaded the actual site (localhost:4173, a production build, using
+real Supabase data — no mocking) in a normal Chrome window and read
+the real DOM measurements directly. At a real rendered card width of
+139.67px, the real .product-card__name element measured exactly
+76.33px wide. My harness at a simulated 320px viewport (which produces
+a 138px card by the same grid math) measured 75px for the name
+element — a match. That gave me confidence the harness reflects
+production, not a guess.
+
+One correction to the task brief's own numbers, for the record: the
+task said "real available width of the name element on his phone:
+about 139 CSS px." That 139px figure is actually the CARD's width, not
+the name element's — the name column loses 20px to the card's own
+left/right padding, 8px to the gap before the cart button, and 34px to
+the reserved cart-button column, leaving roughly HALF that: 76px at a
+320px screen, up to about 122px at 414px. I don't think this changes
+anything about the fix (native CSS wrapping is still strictly better
+than the JS splitter at any of these widths — see the table below),
+but it's worth knowing the real number if you're ever eyeballing card
+width again.
+
+Full measured results, all 8 names × all 5 widths, using getClientRects()
+on the real rendered text node (not a screenshot guess) to find exactly
+where each line breaks:
+
+  320px (name column ≈75px):
+    CeraVe Moisturising Cream 50ml            → "CeraVe" / "Moisturising Cream 50ml…" (overflows 2 lines, ellipsis)
+    CeraVe Moisturizing Lotion 236ml          → "CeraVe" / "Moisturizing Lotion 236ml…" (overflows, ellipsis)
+    CeraVe Oil Control Moisturising Gel-Cream 52ml → "CeraVe Oil" / "Control Moisturising Gel-Cream…" (overflows, ellipsis)
+    Cerave PM Face Moisturizing Lotion 89ml   → "Cerave PM" / "Face Moisturizing Lotion 89ml…" (overflows, ellipsis)
+    CeraVe Hydrating Foaming Oil Cleanser 473ml → "CeraVe" / "Hydrating Foaming Oil Cleanser…" (overflows, ellipsis)
+    Aveeno Baby Daily Moisture Fragrance Free Lotion 227g → "Aveeno Baby" / "Daily Moisture Fragrance Free…" (overflows, ellipsis)
+    Beauty of Joseon Red Bean Water Gel       → "Beauty of" / "Joseon Red Bean Water Gel…" (overflows, ellipsis)
+    Bio Oil | 200mL                           → "Bio Oil |" / "200mL" (fits in 2, no ellipsis, full name)
+
+  360px (name column ≈95px):
+    CeraVe Moisturising Cream 50ml            → "CeraVe" / "Moisturising Cream 50ml…" (overflows, ellipsis)
+    CeraVe Moisturizing Lotion 236ml          → "CeraVe" / "Moisturizing Lotion 236ml…" (overflows, ellipsis)
+    CeraVe Oil Control Moisturising Gel-Cream 52ml → "CeraVe Oil" / "Control Moisturising Gel-Cream…" (overflows, ellipsis)
+    Cerave PM Face Moisturizing Lotion 89ml   → "Cerave PM Face" / "Moisturizing Lotion 89ml" (fits in 2, no ellipsis, full name)
+    CeraVe Hydrating Foaming Oil Cleanser 473ml → "CeraVe" / "Hydrating Foaming Oil Cleanser…" (overflows, ellipsis)
+    Aveeno Baby Daily Moisture Fragrance Free Lotion 227g → "Aveeno Baby" / "Daily Moisture Fragrance Free…" (overflows, ellipsis)
+    Beauty of Joseon Red Bean Water Gel       → "Beauty of" / "Joseon Red Bean Water Gel…" (overflows, ellipsis)
+    Bio Oil | 200mL                           → "Bio Oil | 200mL" (fits on 1 line, full name, no ellipsis)
+
+  375px (name column ≈102px):
+    CeraVe Moisturising Cream 50ml            → "CeraVe" / "Moisturising Cream 50ml…" (overflows, ellipsis)
+    CeraVe Moisturizing Lotion 236ml          → "CeraVe" / "Moisturizing Lotion 236ml…" (overflows, ellipsis)
+    CeraVe Oil Control Moisturising Gel-Cream 52ml → "CeraVe Oil" / "Control Moisturising Gel-Cream…" (overflows, ellipsis)
+    Cerave PM Face Moisturizing Lotion 89ml   → "Cerave PM Face" / "Moisturizing Lotion 89ml" (fits in 2, no ellipsis)
+    CeraVe Hydrating Foaming Oil Cleanser 473ml → "CeraVe Hydrating" / "Foaming Oil Cleanser 473ml" (fits in 2, no ellipsis)
+    Aveeno Baby Daily Moisture Fragrance Free Lotion 227g → "Aveeno Baby" / "Daily Moisture Fragrance Free…" (overflows, ellipsis)
+    Beauty of Joseon Red Bean Water Gel       → "Beauty of Joseon" / "Red Bean Water Gel" (fits in 2, no ellipsis)
+    Bio Oil | 200mL                           → "Bio Oil | 200mL" (1 line, no ellipsis)
+
+  390px (name column ≈110px):
+    CeraVe Moisturising Cream 50ml            → "CeraVe" / "Moisturising Cream 50ml…" (overflows, ellipsis)
+    CeraVe Moisturizing Lotion 236ml          → "CeraVe" / "Moisturizing Lotion 236ml…" (overflows, ellipsis)
+    CeraVe Oil Control Moisturising Gel-Cream 52ml → "CeraVe Oil Control" / "Moisturising Gel-Cream 52ml" (fits in 2, no ellipsis)
+    Cerave PM Face Moisturizing Lotion 89ml   → "Cerave PM Face" / "Moisturizing Lotion 89ml" (fits in 2, no ellipsis)
+    CeraVe Hydrating Foaming Oil Cleanser 473ml → "CeraVe Hydrating" / "Foaming Oil Cleanser 473ml" (fits in 2, no ellipsis)
+    Aveeno Baby Daily Moisture Fragrance Free Lotion 227g → "Aveeno Baby Daily" / "Moisture Fragrance Free…" (overflows, ellipsis)
+    Beauty of Joseon Red Bean Water Gel       → "Beauty of Joseon" / "Red Bean Water Gel" (fits in 2, no ellipsis)
+    Bio Oil | 200mL                           → "Bio Oil | 200mL" (1 line, no ellipsis)
+
+  414px (name column ≈122px):
+    CeraVe Moisturising Cream 50ml            → "CeraVe Moisturising" / "Cream 50ml" (fits in 2, no ellipsis, FULL name)
+    CeraVe Moisturizing Lotion 236ml          → "CeraVe Moisturizing" / "Lotion 236ml" (fits in 2, no ellipsis, FULL name)
+    CeraVe Oil Control Moisturising Gel-Cream 52ml → "CeraVe Oil Control" / "Moisturising Gel-Cream…" (overflows, ellipsis — genuinely too long for 2 lines even at the widest tested width)
+    Cerave PM Face Moisturizing Lotion 89ml   → "Cerave PM Face" / "Moisturizing Lotion 89ml" (fits in 2, no ellipsis)
+    CeraVe Hydrating Foaming Oil Cleanser 473ml → "CeraVe Hydrating" / "Foaming Oil Cleanser 473ml" (fits in 2, no ellipsis)
+    Aveeno Baby Daily Moisture Fragrance Free Lotion 227g → "Aveeno Baby Daily" / "Moisture Fragrance Free…" (overflows, ellipsis — this name is genuinely long)
+    Beauty of Joseon Red Bean Water Gel       → "Beauty of Joseon Red" / "Bean Water Gel" (fits in 2, no ellipsis, FULL name)
+    Bio Oil | 200mL                           → "Bio Oil | 200mL" (1 line, no ellipsis)
+
+Checked against the 5 requirements:
+  A. No mid-word break — TRUE across all 40 renders (8 names × 5 widths).
+     Every single line boundary lands on whitespace or punctuation, never
+     inside a word. Verified programmatically (not by eye): for every
+     wrap point I checked that the characters immediately before and
+     after the break weren't both non-space characters.
+  B. A name that fits in 2 lines shows in full, no ellipsis — TRUE. E.g.
+     "Bio Oil | 200mL" never gets an ellipsis at any width; "CeraVe
+     Moisturising Cream 50ml" shows completely at 414px with no ellipsis.
+  C. Ellipsis appears only where the name genuinely needs a 3rd+ line —
+     TRUE. E.g. "CeraVe Oil Control Moisturising Gel-Cream 52ml" still
+     needs an ellipsis even at the widest width tested (414px) — that's
+     correct, it's a genuinely long name, not a bug.
+  D. Card height / row alignment unchanged — TRUE. Checked all 8 name
+     elements' rendered heights at 375px: all 8 were exactly 31px,
+     including the short one-line "Bio Oil | 200mL" name, confirming the
+     min-height 2-line reservation still works.
+  E. Nothing else on the card moved — I can say this with confidence
+     from the diff itself rather than a full-card screenshot: the only
+     CSS touched was .product-card__name and the now-deleted
+     .product-card__name-line rule, and the only TSX touched was the
+     name-rendering piece of ProductCard.tsx. Price, save badge, cart
+     button and stock dot markup and CSS are byte-for-byte unchanged.
+
+Screenshots at 320px and 375px (dark theme, since that's this machine's
+system default) visually confirm the same thing the DOM measurements
+say: whole words only, ellipsis exactly where expected, consistent card
+height across the row.
+
+WAS THE SPLITTER'S MEASUREMENT ACTUALLY WRONG, AND WHY?
+I could not find an outright logic bug in textWrap.ts's own measurement
+code when I read it closely — the canvas ctx.font string composition and
+ctx.measureText calls looked like the standard, normally-correct way to
+do this. My best explanation for the symptom described (breaking a word
+early despite room to spare) is a font-loading race: Plus Jakarta Sans is
+a fairly narrow/compact typeface, and browsers substitute a WIDER
+fallback font before it loads. If the very first measurement ran against
+that fallback's metrics, it would have overestimated how much space each
+word needed — for exactly the effect described (breaking early, leaving
+unused space). Batch 6 added a document.fonts.ready.then(measure) re-run
+specifically to fix this, but at the very narrow real column widths this
+batch measured (76–122px, not the ~139px assumed), even a small
+per-character overestimate from a fallback font is enough to flip a
+"fits" decision to "doesn't fit" on a 12+ character word like
+"Moisturising" — so if that re-measure didn't fire for any reason (a
+component remount racing the promise, for instance), the wrong split
+would stick. I can't confirm this was THE cause with certainty from a
+local build, but it doesn't matter for the fix: removing the JS
+measurement removes this entire class of bug regardless of which exact
+mechanism caused it, because there's no longer a second measurement that
+can disagree with the one the browser uses to paint.
+
+PART 3 — Test added
+
+There was no test runner configured at all (no test script in
+package.json). I added Vitest, since it's the natural fit for a Vite
+project and needed very little setup — one thing to flag: the newest
+Vitest (v5) requires Vite 6/7/8, but this project is on Vite 5.4.8, so
+I installed vitest@^2 (2.1.9) instead, which is compatible. Also added
+jsdom as the test DOM environment.
+
+Added:
+  - vitest.config.ts (environment: jsdom, one setup file)
+  - src/test/setup.ts (one line: sets IS_REACT_ACT_ENVIRONMENT so
+    React's act() doesn't print a warning in tests)
+  - src/components/viewer/ProductCard.test.tsx — renders the new
+    ProductCardName component for each of the 8 real catalogue names
+    from Part 2 and asserts the rendered element's textContent is
+    EXACTLY equal to the original name, character for character. This
+    is the right regression guard for what actually broke five times:
+    native CSS wrapping never touches the DOM text at all (the browser
+    only changes where it visually breaks the line, not the text
+    content), so if a future session reintroduces a JS splitter that
+    mutates the text into two truncated/broken fragments, this test
+    fails immediately instead of waiting for another live-site report.
+  - "test": "vitest run" added to package.json scripts.
+
+`npm test` (or `npx vitest run`) → 9/9 tests pass.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+
+None needed. This batch touched no database schema.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+
+Nothing from the task was skipped. One limit worth repeating (carried
+forward from Batch 6, not new to this session): I cannot watch this
+session's own new code running at https://naeems-all.vercel.app in
+this same session, because only `main` deploys there and I'm not
+allowed to push to `main`. Everything above — including the width
+sweep — was verified against a local production build of this
+branch, using the real compiled CSS/JS and real Supabase product data
+fetched over the network, but served from localhost, not from the
+live production URL. Please do the 30-second real-phone check once
+this is merged, the same way Batch 6 asked.
+
+Separately, and specific to this session: real browser window
+resizing (the most direct way to test responsive widths) was not
+available in this environment — Chrome's window would not shrink
+below ~523px wide no matter what width I asked for. I used a
+same-CSS, same-font, same-DOM-structure harness page with an
+explicitly-sized wrapper div instead, and cross-checked its numbers
+against the real live app's actual DOM before trusting it (see Part 2
+above). I'm flagging this explicitly so it's not mistaken for having
+tested with a real narrow window.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+
+- The task brief's own reference number for the name element's
+  available width (~139px) turned out to be the card's width, not the
+  name column's — see Part 2 above for the real numbers (76px–122px
+  across 320–414px screens). Not a bug, just worth knowing for next
+  time.
+- No stray break-all / overflow-wrap:anywhere rules were hiding
+  anywhere for the product card name — the only word-break rule left
+  in the whole stylesheet is on a completely unrelated admin list
+  component (.admin-wholesaler-row__meta), which I left untouched.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+
+- Kept the name as its own tiny exported component (ProductCardName)
+  rather than inlining the <h3> into ProductCard, purely so Part 3
+  could test it in isolation without mocking Supabase/router context.
+  It has zero behaviour beyond rendering the string — this is not a
+  reintroduction of any measurement logic.
+- Used the exact -webkit-line-clamp:2 pattern already used in three
+  other places in this codebase (hero banner, bento tiles, review
+  admin) rather than inventing a different two-line-clamp technique,
+  per the task's own instruction to reuse whatever the codebase
+  already does.
+- Deleted the throwaway test harness (dist/wrap-test.html) and stopped
+  the local static server I used to serve it before finishing — it was
+  only ever a verification tool, not part of the app, and isn't in the
+  commit.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+
+1. [Trust signal — small, carried forward from Batches 5 and 6] Still
+   true: product card prices are orange (#FF7A45), not near-black,
+   against CLAUDE.md's own colour rule (src/styles/app.css, the
+   .product-card__price rule). Not touched this batch — still out of
+   scope — flagging again since it's now been carried forward three
+   sessions running.
+2. [Testing — small, now partially addressed] This batch added the
+   first automated test in the project (Vitest + one test file for the
+   card name). Now that the runner exists with almost no setup cost,
+   it would be worth adding a couple more targeted tests the next time
+   any of these recur: pricing/discount display logic
+   (getDisplayPrice), stock status (isOutOfStock), and promo code
+   validation are all pure-ish functions that have caused real bugs
+   across past batches and would be cheap to cover now that the
+   scaffolding exists.
+3. [Performance — small] `npm run build` still warns that
+   dist/assets/index-*.js is 700KB+ (194KB gzipped) — Vite's own
+   suggestion is code-splitting with dynamic import(). Not urgent on
+   its own, but worth watching as the product catalogue and feature
+   set keep growing, especially given the target device is a
+   mid-range Android phone on a slow connection.
+
+====================================================================
