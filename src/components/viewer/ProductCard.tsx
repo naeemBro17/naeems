@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -10,7 +10,6 @@ import { coverImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
-import { fontStringOf, splitProductName, type TwoLineSplit } from '../../lib/textWrap';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
 
@@ -19,48 +18,13 @@ interface ProductCardProps {
 }
 
 /**
- * The card's name, wrapped onto exactly two lines by real width/font
- * measurement rather than CSS word-breaking — see src/lib/textWrap.ts for
- * why. Re-measures on resize (device rotation, DevTools resize, etc).
+ * Product name, wrapped by the browser's own line-breaking — see Naeems.txt
+ * "Batch 7" for why a separate JS measurement (the old src/lib/textWrap.ts)
+ * was removed. Kept as its own component (no hooks, no props beyond the
+ * name) so it can be unit-tested without pulling in router/Supabase context.
  */
-function ProductCardName({ name }: { name: string }) {
-  const ref = useRef<HTMLHeadingElement>(null);
-  const [lines, setLines] = useState<TwoLineSplit>({ line1: name, line2: '' });
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let cancelled = false;
-
-    const measure = () => {
-      if (cancelled) return;
-      const width = el.getBoundingClientRect().width;
-      if (width === 0) return;
-      setLines(splitProductName(name, width, fontStringOf(el)));
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-
-    // The card font (Plus Jakarta Sans) loads asynchronously; if it swaps in
-    // after this first measurement, the split above was computed against
-    // fallback-font metrics and a font swap alone doesn't fire the
-    // ResizeObserver above, so nothing else would ever correct it.
-    document.fonts.ready.then(measure);
-
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  }, [name]);
-
-  return (
-    <h3 className="product-card__name" ref={ref}>
-      <span className="product-card__name-line">{lines.line1}</span>
-      <span className="product-card__name-line">{lines.line2}</span>
-    </h3>
-  );
+export function ProductCardName({ name }: { name: string }) {
+  return <h3 className="product-card__name">{name}</h3>;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
