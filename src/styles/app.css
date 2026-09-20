@@ -621,7 +621,13 @@ textarea {
   align-items: stretch;
 }
 
-@media (min-width: 480px) {
+/* .viewer-shell caps the whole app at max-width:480px, so a viewport that
+   merely crosses 480px gains zero extra room — it just crams a 3rd column
+   into the same ~448px content area, nearly halving the title's available
+   width. Real large-screen phones can report a CSS viewport width at or
+   above 480px, so this breakpoint must sit safely past every realistic
+   phone width, not at the shell's own cap. */
+@media (min-width: 640px) {
   .product-grid {
     grid-template-columns: repeat(3, 1fr);
   }
