@@ -2245,3 +2245,58 @@ tested with a real narrow window.
    mid-range Android phone on a slow connection.
 
 ====================================================================
+
+====================================================================
+BATCH 8 — Product Card Title Width (Root Cause)
+Branch: fix/batch-8-title-width-root-cause
+====================================================================
+
+1. ROOT CAUSE
+The whole app is deliberately capped to a max-width of 480px (see
+.viewer-shell in app.css) so it always looks like a phone, even on a wide
+desktop screen. But the product grid's "switch to 3 columns" rule fired at
+the SAME number: `@media (min-width: 480px)`. That media query checks the
+device's real physical viewport width, not the 480px-capped content area.
+So the instant a real phone's CSS viewport width touched or passed 480px
+(this genuinely happens on some large-screen Android phones — it depends on
+the phone's display-size/zoom setting, which is why two different real
+phones gave two different results for the same product), the grid crammed
+a 3rd column into the exact same ~448px space that used to hold 2 columns.
+Measured on the real production DOM: the title box for "CeraVe Foaming
+Cleanser..." was 145–148px wide at 2 columns, and dropped to 77.5px the
+moment 3 columns kicked in — a 47% cut. That starved width, not the
+wrapping CSS from Batch 7, is why words wrapped early and left empty space
+on the right. Confirmed with getBoundingClientRect() measurements at every
+width from 320px to 700px, and cross-checked that the live production CSS
+bundle matches source exactly (no build/minification discrepancy).
+
+2. FIX
+src/styles/app.css, line ~624: changed the product grid's breakpoint from
+`@media (min-width: 480px)` to `@media (min-width: 640px)`, with a comment
+explaining why. This keeps every realistic phone width at 2 columns (matching
+CLAUDE.md's "two columns on mobile" spec) and only allows 3 columns on
+genuinely wider screens (tablets/desktop) where the shell can't be confused
+with a phone. No wrapping CSS, cart button, price, or badge code was touched.
+
+3. BUILD
+`npm run build` — PASSED, zero errors.
+
+4. REAL-WIDTH TESTING
+Tested all 104 real product names (not just 8) at 320/360/375/390/414px —
+zero mid-word breaks found. Verified the specific 480px boundary directly:
+before the fix, crossing 480px cut the title box width nearly in half;
+after the fix, the grid stays 2-column all the way to 640px, and the
+"CeraVe Foaming Cleanser..." title now fills its line almost edge-to-edge
+at every real phone width tested.
+
+5. VERIFICATION METHOD
+Chrome's device toolbar/window resize was not controllable in this
+environment (the automation window would not resize below desktop size), so
+I verified using same-origin iframes pinned to exact CSS pixel widths
+(320–700px) — this gives a real, independently-computed browser layout at
+that exact width, not a simulation. The root-cause measurements (Part 1)
+were taken directly against the live production DOM at
+https://naeems-all.vercel.app. The fix verification (Parts 3–4) was run
+against a local `npm run build` output served on localhost, since that is
+the only way to test code that isn't merged yet. I could not test on a
+physical phone from this environment.
