@@ -4,6 +4,7 @@ import type { AppSettings, BentoTile, Product } from '../../types';
 import { getDisplayPrice } from '../../lib/pricing';
 import { formatTaka } from '../../lib/format';
 import { isOutOfStock } from '../../lib/stockStatus';
+import { coverImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
@@ -67,6 +68,20 @@ function ProductFaceBody({ product }: { product: Product }) {
   );
 }
 
+/** className + inline background-image for one product face — a real photo
+ *  when the product has one, the same plain ground as before when it
+ *  doesn't. Quotes/backslashes/newlines would break out of the url()
+ *  literal (mirrors BentoCustomTile's own image handling). */
+function faceImageProps(product: Product): { className: string; style?: CSSProperties } {
+  const cover = coverImage(product);
+  if (cover === null) return { className: '' };
+  const safeUrl = cover.replace(/["\\\r\n]/g, '');
+  return {
+    className: ' bento-face--image',
+    style: { backgroundImage: `url("${safeUrl}")` },
+  };
+}
+
 /* ---------- Left tile: manual vertical swipe ---------- */
 
 /**
@@ -110,24 +125,28 @@ function SwipeStackTile({
           transform: `translateY(-${(index * 100) / count}%)`,
         }}
       >
-        {products.map((product) => (
-          <div
-            className="bento-face bento-face--front bento-stack__slide"
-            key={product.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => onOpen(product)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen(product);
-              }
-            }}
-            aria-label={`View details for ${product.name}`}
-          >
-            <ProductFaceBody product={product} />
-          </div>
-        ))}
+        {products.map((product) => {
+          const { className, style } = faceImageProps(product);
+          return (
+            <div
+              className={`bento-face bento-face--front bento-stack__slide${className}`}
+              style={style}
+              key={product.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(product)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onOpen(product);
+                }
+              }}
+              aria-label={`View details for ${product.name}`}
+            >
+              <ProductFaceBody product={product} />
+            </div>
+          );
+        })}
       </div>
 
       {count > 1 && (
@@ -164,21 +183,25 @@ function FlipTile({
   onEdit: () => void;
 }) {
   const [front, back] = faces;
+  const frontImage = faceImageProps(front);
+  const backImage = back ? faceImageProps(back) : null;
   return (
     <div className="bento-tile bento-tile--short">
       <EditButton label="Edit right top tile products" onClick={onEdit} />
       <div className={`bento-flipper${back ? '' : ' bento-flipper--static'}`}>
         <div
-          className="bento-face bento-face--front"
+          className={`bento-face bento-face--front${frontImage.className}`}
+          style={frontImage.style}
           role="button"
           tabIndex={-1}
           onClick={() => onOpen(front)}
         >
           <ProductFaceBody product={front} />
         </div>
-        {back && (
+        {back && backImage && (
           <div
-            className="bento-face bento-face--back"
+            className={`bento-face bento-face--back${backImage.className}`}
+            style={backImage.style}
             role="button"
             tabIndex={-1}
             onClick={() => onOpen(back)}

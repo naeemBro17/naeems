@@ -110,7 +110,10 @@ export function CombineProductsSheet({
         stock_status: contentSource.stock_status,
         stock_quantity: contentSource.stock_quantity,
         note: contentSource.note,
-        region: sourceLabel.region.trim() === '' ? null : sourceLabel.region.trim(),
+        // Uppercased so the base option's Region can never mismatch a
+        // variant row's case-normalized one — see Naeems.txt "duplicate
+        // variant display" fix.
+        region: sourceLabel.region.trim() === '' ? null : sourceLabel.region.trim().toUpperCase(),
         size: sourceLabel.size.trim() === '' ? null : sourceLabel.size.trim(),
         image_urls: productImages(contentSource),
         image_url: coverImage(contentSource),

@@ -151,8 +151,6 @@ export interface BannerSlide {
   cta_action: BannerCtaAction;
   /** Destination for cta_action 'open_url'; ignored otherwise. */
   cta_url: string;
-  /** Hex background reserved for future per-slide custom grounds. */
-  background_color: string;
   /** Optional photo behind the slide's text; null shows the plain default
    *  background exactly as before this field existed. */
   image_url: string | null;

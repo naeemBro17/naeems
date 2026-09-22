@@ -153,7 +153,23 @@ export function ViewerPage() {
   const handleSelectCategory = useCallback(
     (id: string | null) => {
       setSelectedCategoryId(id);
-      scrollToProducts();
+      // scrollToProducts measures productsRef's CURRENT position — calling it
+      // synchronously here measures the layout from before this filter took
+      // effect (setSelectedCategoryId is async/batched), then starts a smooth
+      // scroll toward that stale target just as the grid's real height (very
+      // different depending on how many products the category has) lands
+      // underneath it. A category with a very different row count from
+      // whatever was showing before is exactly when the scroll and the
+      // reflow could visibly fight each other — the chip row and grid
+      // frame looking cut off / covered while that settled. Waiting two
+      // animation frames lets the browser finish laying out and painting
+      // the filtered grid first, so the scroll always measures the real,
+      // final position.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToProducts();
+        });
+      });
     },
     [scrollToProducts]
   );

@@ -18,6 +18,28 @@ export function sortVariants(variants: ProductVariant[]): ProductVariant[] {
   );
 }
 
+/**
+ * Every distinct Region (or Size) already used anywhere in the catalog — a
+ * product's own base label plus every real variant row, sorted alphabetically
+ * — for the admin's guided Region/Size picker (see GuidedField in
+ * SheetChrome.tsx). Picking from this list instead of retyping the value by
+ * hand is what keeps a new variant's case/spacing consistent with existing
+ * ones, so it can't silently look like a duplicate option.
+ */
+export function distinctRegions(products: Product[], variants: ProductVariant[]): string[] {
+  const set = new Set<string>();
+  for (const p of products) if (p.region) set.add(p.region);
+  for (const v of variants) if (v.region) set.add(v.region);
+  return Array.from(set).sort();
+}
+
+export function distinctSizes(products: Product[], variants: ProductVariant[]): string[] {
+  const set = new Set<string>();
+  for (const p of products) if (p.size) set.add(p.size);
+  for (const v of variants) if (v.size) set.add(v.size);
+  return Array.from(set).sort();
+}
+
 /** Distinct regions in the order they first appear. */
 export function regionsOf(variants: ProductVariant[]): string[] {
   const seen = new Set<string>();
@@ -124,6 +146,49 @@ export function isVariantInStock(variant: ProductVariant): boolean {
     return variant.stock_quantity > 0;
   }
   return variant.in_stock;
+}
+
+/** Leading number in a Size string ("340g" → 340, "50 ml" → 50) — Infinity
+ *  for a size with no parseable number, so it always sorts last instead of
+ *  breaking the order. */
+function leadingSizeNumber(size: string): number {
+  const match = size.match(/[\d.]+/);
+  return match ? Number.parseFloat(match[0]) : Number.POSITIVE_INFINITY;
+}
+
+/** Every variant's own photo, smallest Size first — variants with no photo
+ *  of their own contribute nothing here (see mergedGalleryImages). */
+export function variantImagesBySize(variants: ProductVariant[]): string[] {
+  return [...variants]
+    .filter((v): v is ProductVariant & { image_url: string } => v.image_url !== null)
+    .sort((a, b) => leadingSizeNumber(a.size) - leadingSizeNumber(b.size))
+    .map((v) => v.image_url);
+}
+
+/**
+ * The detail page's full image gallery: every variant's own photo (smallest
+ * Size first), then the product's own multi-image gallery, each url appearing
+ * once. Selecting an option (see ProductDetailPage) moves just that option's
+ * own image to the front — the rest keeps this same smallest-to-largest
+ * order, so a variant's photo is never missing from the gallery just because
+ * a different size is currently selected.
+ */
+export function mergedGalleryImages(baseImages: string[], variants: ProductVariant[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const url of variantImagesBySize(variants)) {
+    if (!seen.has(url)) {
+      merged.push(url);
+      seen.add(url);
+    }
+  }
+  for (const url of baseImages) {
+    if (!seen.has(url)) {
+      merged.push(url);
+      seen.add(url);
+    }
+  }
+  return merged;
 }
 
 /** Display label for one option: "Region · Size", just one half if only one

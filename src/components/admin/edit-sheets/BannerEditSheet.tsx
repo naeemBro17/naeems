@@ -28,11 +28,6 @@ interface BannerEditSheetProps {
 
 const CTA_ACTIONS = Object.keys(CTA_ACTION_LABELS) as BannerCtaAction[];
 
-/** Hex colour input that tolerates a value the native picker can't show. */
-function isHex(value: string): boolean {
-  return /^#[0-9a-fA-F]{6}$/.test(value);
-}
-
 /**
  * Banner slide editor. The whole slide array is one app_settings row, so
  * every action edits a local draft and the single Save writes it back — the
@@ -209,27 +204,6 @@ export function BannerEditSheet({ isOpen, onClose }: BannerEditSheetProps) {
               />
             </div>
           )}
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="bs-color">Background colour</label>
-            <div className="inline-mini-form">
-              <input
-                type="color"
-                className="edit-sheet__color"
-                value={isHex(slideDraft.background_color) ? slideDraft.background_color : '#FFF3EE'}
-                onChange={(e) => patchSlide({ background_color: e.target.value })}
-                aria-label="Pick background colour"
-              />
-              <input
-                id="bs-color"
-                type="text"
-                className="form-input"
-                value={slideDraft.background_color}
-                onChange={(e) => patchSlide({ background_color: e.target.value })}
-                placeholder="#FFF3EE"
-              />
-            </div>
-          </div>
 
           <div className="form-field form-field--toggle">
             <span className="toggle-label">Active</span>

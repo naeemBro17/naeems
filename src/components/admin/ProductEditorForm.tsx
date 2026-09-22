@@ -338,7 +338,11 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
       stock_quantity:
         form.stock_quantity.trim() === '' ? null : Number(form.stock_quantity),
       note: form.note.trim() === '' ? null : form.note.trim(),
-      region: form.region.trim() === '' ? null : form.region.trim(),
+      // Uppercased so it can never mismatch a real variant row's own Region
+      // (VariantEditor uppercases the same way) — a case difference between
+      // this product's own base option and one of its variants is exactly
+      // what made the two look like duplicate options. See Naeems.txt.
+      region: form.region.trim() === '' ? null : form.region.trim().toUpperCase(),
       size: form.size.trim() === '' ? null : form.size.trim(),
       is_featured: form.is_featured,
       skin_types: form.skin_types,

@@ -37,6 +37,12 @@ button {
   border: none;
   background: none;
   color: inherit;
+  /* Without this, a mobile browser arms its double-tap-to-zoom gesture
+     detector on every tap and only resolves it as "just a tap" after a
+     ~300ms hold — which can visibly nudge/zoom the page for an instant on
+     that first tap. Every button on the site gets this, not just one
+     screen — see Naeems.txt "first-tap shake". */
+  touch-action: manipulation;
 }
 
 input,
@@ -824,20 +830,6 @@ textarea {
 }
 
 .product-detail .copy-button {
-  margin-top: var(--space-4);
-}
-
-.product-detail__actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.product-detail__actions .copy-button {
-  margin-top: 0;
-}
-
-.product-detail__actions .copy-button:first-child {
   margin-top: var(--space-4);
 }
 
@@ -3403,6 +3395,31 @@ textarea {
   cursor: default;
 }
 
+/* A dragged-in product's own cover photo, same treatment as the bottom
+ * carousel's custom tiles (.bento-custom--image) — a scrim so the name/price
+ * stay legible, white text over it. Previously these faces never rendered
+ * any image at all; see Naeems.txt "bento tile images stay blank". */
+.bento-face--image {
+  background-size: cover;
+  background-position: center;
+  border-color: transparent;
+  isolation: isolate;
+}
+
+.bento-face--image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05));
+  z-index: -1;
+}
+
+.bento-face--image .bento-tile__name,
+.bento-face--image .bento-tile__price,
+.bento-face--image .bento-tile__strike {
+  color: #fff;
+}
+
 .bento-tile__category {
   font-size: 9px;
   font-weight: 700;
@@ -3434,7 +3451,8 @@ textarea {
   font-family: var(--font-price);
   font-size: 15px;
   font-weight: 900;
-  color: #FF7A45;
+  /* Prices are near-black and bold, not orange — see CLAUDE.md. */
+  color: var(--color-text-primary);
   letter-spacing: -0.3px;
 }
 
@@ -3720,7 +3738,8 @@ textarea {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  color: #FF7A45;
+  /* Prices are near-black and bold, not orange — see CLAUDE.md. */
+  color: var(--color-text-primary);
   line-height: 1.15;
   /* A price must never break — see CLAUDE.md's card spec. */
   white-space: nowrap;
@@ -3871,15 +3890,6 @@ textarea {
 
 .copy-button:active {
   transform: scale(0.97);
-}
-
-/* Copy Price is a secondary action now that Add to Cart is the primary one —
-   only one orange element per screen (see CLAUDE.md). Declared after the
-   base .copy-button rule (equal specificity) so it actually wins — but
-   before --copied below, so the "Copied!" flash still goes green here too. */
-.copy-button--secondary {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
 }
 
 .copy-button--copied {
@@ -5588,16 +5598,6 @@ textarea {
 .edit-sheet__save:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.edit-sheet__color {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: none;
-  cursor: pointer;
 }
 
 .edit-sheet__picker {

@@ -25,7 +25,6 @@ export function emptyBannerSlide(): BannerSlide {
     cta_button_text: 'Shop Now →',
     cta_action: 'scroll_to_products',
     cta_url: '',
-    background_color: '#FFF3EE',
     image_url: null,
     is_active: true,
   };
@@ -64,7 +63,6 @@ export function parseBannerSlides(raw: string): BannerSlide[] {
     cta_button_text: asString(entry.cta_button_text, 'Shop Now →'),
     cta_action: asCtaAction(entry.cta_action),
     cta_url: asString(entry.cta_url, ''),
-    background_color: asString(entry.background_color, '#FFF3EE'),
     image_url: typeof entry.image_url === 'string' && entry.image_url !== '' ? entry.image_url : null,
     is_active: entry.is_active !== false,
   }));
