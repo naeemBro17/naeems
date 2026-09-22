@@ -8,9 +8,9 @@ import { coverImage, productImages } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
-import { buildCopyText, copyToClipboard } from '../lib/clipboard';
 import {
   isVariantInStock,
+  mergedGalleryImages,
   regionsOf,
   sortVariants,
   VARIANT_SELECT,
@@ -20,7 +20,6 @@ import {
   variantOptionsFor,
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
-import { useToast } from '../hooks/useToast';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
@@ -32,8 +31,8 @@ import type { Product, ProductVariant, VariantOption } from '../types';
 /** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
 const VARIANT_PARAM = 'variant';
 
-/** How long the Copy Price button holds its success state. */
-const COPIED_RESET_MS = 600;
+/** How long the Add to Cart button holds its "Added!" success state. */
+const ADDED_RESET_MS = 600;
 
 /** App-wide og: values from index.html, restored when the detail page unmounts. */
 const DEFAULT_OG = {
@@ -237,13 +236,10 @@ function DetailContent({
   product: Product;
   variants: ProductVariant[];
 }) {
-  const { showToast } = useToast();
   const { addItem } = useCart();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [justAddedToCart, setJustAddedToCart] = useState(false);
-  const copyTimerRef = useRef<number>();
   const cartTimerRef = useRef<number>();
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -280,19 +276,19 @@ function DetailContent({
 
   useEffect(() => {
     return () => {
-      window.clearTimeout(copyTimerRef.current);
       window.clearTimeout(cartTimerRef.current);
     };
   }, []);
 
-  // A variant's own photo stands in for the cover image wherever it's
-  // selected; the rest of the gallery (and the no-photo-set case) is
-  // untouched.
+  // Every variant's own photo (smallest Size first) plus the product's own
+  // gallery, merged into one set — then whichever option is selected moves
+  // its own photo to the front, the same way Amazon's size picker does.
   const baseImages = productImages(product);
+  const galleryImages = mergedGalleryImages(baseImages, variants);
   const images =
     selectedOption.image_url !== null
-      ? [selectedOption.image_url, ...baseImages.filter((url) => url !== selectedOption.image_url)]
-      : baseImages;
+      ? [selectedOption.image_url, ...galleryImages.filter((url) => url !== selectedOption.image_url)]
+      : galleryImages;
 
   // The carousel keeps its own scroll position across re-renders — without
   // this, the browser's native scroll anchoring "helpfully" compensates for
@@ -346,19 +342,7 @@ function DetailContent({
     }
     setJustAddedToCart(true);
     window.clearTimeout(cartTimerRef.current);
-    cartTimerRef.current = window.setTimeout(() => setJustAddedToCart(false), COPIED_RESET_MS);
-  };
-
-  const handleCopy = async () => {
-    const ok = await copyToClipboard(buildCopyText(product, mainPrice));
-    if (ok) {
-      setCopied(true);
-      showToast('Copied to clipboard');
-      window.clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = window.setTimeout(() => setCopied(false), COPIED_RESET_MS);
-    } else {
-      showToast('Could not copy', 'error');
-    }
+    cartTimerRef.current = window.setTimeout(() => setJustAddedToCart(false), ADDED_RESET_MS);
   };
 
   return (
@@ -461,69 +445,30 @@ function DetailContent({
             Out of Stock
           </button>
         ) : (
-          <div className="product-detail__actions">
-            <button
-              type="button"
-              className={`button copy-button${justAddedToCart ? ' copy-button--copied' : ''}`}
-              onClick={handleAddToCart}
-              aria-label={`Add ${product.name} to cart`}
-            >
-              {justAddedToCart ? 'Added!' : 'Add to Cart'}
-              {justAddedToCart ? (
-                <svg
-                  className="copy-button__icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              ) : (
-                <CartIcon className="copy-button__icon" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              className={`button copy-button copy-button--secondary${copied ? ' copy-button--copied' : ''}`}
-              onClick={handleCopy}
-              aria-label={`Copy name and price of ${product.name}`}
-            >
-              {copied ? 'Copied!' : 'Copy Price'}
-              {copied ? (
-                <svg
-                  className="copy-button__icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              ) : (
-                <svg
-                  className="copy-button__icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" />
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                </svg>
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`button copy-button${justAddedToCart ? ' copy-button--copied' : ''}`}
+            onClick={handleAddToCart}
+            aria-label={`Add ${product.name} to cart`}
+          >
+            {justAddedToCart ? 'Added!' : 'Add to Cart'}
+            {justAddedToCart ? (
+              <svg
+                className="copy-button__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            ) : (
+              <CartIcon className="copy-button__icon" />
+            )}
+          </button>
         )}
 
         <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />

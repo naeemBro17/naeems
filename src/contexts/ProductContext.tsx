@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -31,6 +32,9 @@ interface ProductContextValue {
   patchProductLocal: (id: string, patch: Partial<Product>) => void;
   /** Region/size variants of one product, in display order. Empty when none. */
   variantsFor: (productId: string) => ProductVariant[];
+  /** Every variant row across every product — lets the admin editor offer
+   *  existing Region/Size values instead of free text (see VariantEditor). */
+  allVariants: ProductVariant[];
   /** Re-read product_variants_view only (after the admin edits a variant). */
   reloadVariants: () => Promise<void>;
 }
@@ -281,6 +285,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     [variantsByProduct]
   );
 
+  const allVariants = useMemo(
+    () => Array.from(variantsByProduct.values()).flat(),
+    [variantsByProduct]
+  );
+
   return (
     <ProductContext.Provider
       value={{
@@ -293,6 +302,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         refetch,
         patchProductLocal,
         variantsFor,
+        allVariants,
         reloadVariants,
       }}
     >

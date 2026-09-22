@@ -636,20 +636,6 @@ function BannerSlidesPanel() {
             </div>
           )}
 
-          <div className="form-field">
-            <label className="form-label" htmlFor="banner-bg">
-              Background Colour
-            </label>
-            <input
-              id="banner-bg"
-              type="text"
-              className="form-input"
-              placeholder="#FFF3EE"
-              value={draft.background_color}
-              onChange={(e) => updateDraft({ background_color: e.target.value })}
-            />
-          </div>
-
           <div className="form-field form-field--toggle">
             <span className="toggle-label">Active</span>
             <button

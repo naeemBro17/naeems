@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 interface SheetFooterProps {
   onCancel: () => void;
@@ -226,6 +226,100 @@ export function ChipGroup({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Sentinel option value that switches a GuidedField into free-text mode. */
+const ADD_NEW_VALUE = '__add_new__';
+
+/**
+ * A text field guided by whatever values already exist in the catalog —
+ * used for a variant's Region and Size so Naeem picks from a list instead of
+ * retyping "AU" or "340g" by hand, where a stray case or spacing difference
+ * used to make a variant look like a silent duplicate of another option (see
+ * Naeems.txt). Falls back to a plain text input when there's nothing to pick
+ * from yet, or once "+ Add new…" is chosen.
+ */
+export function GuidedField({
+  id,
+  label,
+  required = false,
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  value: string;
+  options: string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const [isCustom, setIsCustom] = useState(() => value !== '' && !options.includes(value));
+
+  const fieldLabel = (
+    <label className="form-label" htmlFor={id}>
+      {label} {required && <span className="form-required" aria-hidden="true">*</span>}
+    </label>
+  );
+
+  if (options.length === 0 || isCustom) {
+    return (
+      <div className="form-field">
+        {fieldLabel}
+        <div className="inline-mini-form">
+          <input
+            id={id}
+            type="text"
+            className="form-input"
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {options.length > 0 && (
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => {
+                setIsCustom(false);
+                onChange('');
+              }}
+            >
+              Choose from list
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="form-field">
+      {fieldLabel}
+      <select
+        id={id}
+        className="form-input form-select"
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === ADD_NEW_VALUE) {
+            setIsCustom(true);
+            onChange('');
+            return;
+          }
+          onChange(e.target.value);
+        }}
+      >
+        <option value="">Choose…</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+        <option value={ADD_NEW_VALUE}>+ Add new…</option>
+      </select>
     </div>
   );
 }

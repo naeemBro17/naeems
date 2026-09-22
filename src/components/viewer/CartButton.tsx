@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useCart } from '../../contexts/CartContext';
 
 interface CartButtonProps {
@@ -13,9 +13,6 @@ interface CartButtonProps {
    *  customer picks a variant on the detail page first. */
   onRequiresVariant?: () => void;
 }
-
-/** How long the button shows the green checkmark before reverting. */
-const ADDED_RESET_MS = 500;
 
 export function CartIcon({ className }: { className?: string }) {
   return (
@@ -57,6 +54,12 @@ function CheckIcon({ className }: { className?: string }) {
  * Circular add-to-cart button anchored in the card's reserved button column.
  * Wired to CartContext (Session 9 groundwork) — the checkout flow that reads
  * from it is a separate session.
+ *
+ * The checkmark reflects real cart membership (items.some(...)), not a
+ * timer — a local "just added" flag used to revert to the plain icon after
+ * ~500ms even though the item was still genuinely in the cart, which read as
+ * "the tap didn't work." It now only ever shows the plain icon when this
+ * product truly isn't in the cart.
  */
 export function CartButton({
   productId,
@@ -66,16 +69,14 @@ export function CartButton({
   hasVariants = false,
   onRequiresVariant,
 }: CartButtonProps) {
-  const { addItem } = useCart();
-  const [justAdded, setJustAdded] = useState(false);
+  const { items, addItem } = useCart();
+  // A card only ever adds the plain product (variants require the detail
+  // page — see onRequiresVariant), so "in cart" here means any line for this
+  // product, regardless of which variant it ended up as.
+  const inCart = items.some((item) => item.productId === productId);
   // Bumped on every tap so the pulse ring span remounts and its CSS
   // animation restarts, even on rapid repeat taps.
   const [pulseId, setPulseId] = useState(0);
-  const resetTimerRef = useRef<number>();
-
-  useEffect(() => {
-    return () => window.clearTimeout(resetTimerRef.current);
-  }, []);
 
   const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -97,16 +98,13 @@ export function CartButton({
       }
     }
 
-    setJustAdded(true);
     setPulseId((id) => id + 1);
-    window.clearTimeout(resetTimerRef.current);
-    resetTimerRef.current = window.setTimeout(() => setJustAdded(false), ADDED_RESET_MS);
   };
 
   return (
     <button
       type="button"
-      className={`cart-button${justAdded ? ' cart-button--added' : ''}`}
+      className={`cart-button${inCart ? ' cart-button--added' : ''}`}
       onClick={handleClick}
       disabled={outOfStock}
       aria-label={
@@ -118,7 +116,7 @@ export function CartButton({
       }
     >
       {pulseId > 0 && <span key={pulseId} className="cart-button__pulse" aria-hidden="true" />}
-      {justAdded ? (
+      {inCart ? (
         <CheckIcon className="cart-button__icon" />
       ) : (
         <CartIcon className="cart-button__icon" />

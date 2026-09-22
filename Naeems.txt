@@ -2418,3 +2418,193 @@ A recurring cosmetic glitch in this test environment's screenshot tool
 (pages rendered solid black in several captures) had nothing to do with
 the app — confirmed by reading the live DOM/accessibility tree instead,
 which showed correct data throughout. Not something to act on.
+
+====================================================================
+BATCH 10 — Colour Cleanup, Variant Fixes, Bento Image, Category
+Filter Layout, Cart Icon
+Branch: fix/batch-10-cleanup-and-variants
+====================================================================
+
+PART 1 — Card price colour
+Fixed. `.product-card__price` and `.bento-tile__price` were still
+`#FF7A45` (orange) — CLAUDE.md says prices must be near-black. Changed
+both to `var(--color-text-primary)`, the exact treatment already used on
+checkout (`.checkout-cart__line-total` etc). Left the strikethrough price
+and "Save X%" badge alone — CLAUDE.md's rule only names prices. Verified
+live: an in-stock card's price now renders white (this app's dark-theme
+"near-black" equivalent) instead of orange.
+Files: src/styles/app.css
+
+PART 2 — Banner "Background colour" does nothing
+Removed the field rather than wiring it up. HeroBanner's no-photo slide
+already uses a theme-aware CSS variable (`--banner-bg`, different value
+per light/dark mode); a single admin-picked hex per slide has no dark-mode
+counterpart and would fight that system, plus risks off-brand colours.
+Removed `background_color` from the BannerSlide type, bannerSlides.ts, and
+the colour picker UI in BannerEditSheet.tsx. Also found and fixed a SECOND,
+apparently-duplicate banner editor living in SettingsTab.tsx
+(BannerSlidesPanel) that referenced the same field and both write to the
+same app_settings row as BannerEditSheet — see part 4 below, this looks
+like real duplication worth knowing about, not something I restructured.
+Files: src/types/index.ts, src/lib/bannerSlides.ts,
+src/components/admin/edit-sheets/BannerEditSheet.tsx,
+src/components/admin/SettingsTab.tsx
+
+PART 3A — Edit Mode doesn't survive reload
+Root cause: AdminEditContext held the on/off toggle in plain useState,
+deliberately reset on every mount. Persisted it to localStorage instead —
+kept the deliberate on/off toggle (matches the rest of the app's pattern)
+rather than switching to "always on for admins". Still force-cleared the
+moment the session isn't a real approved admin, so it can never leak to a
+signed-out visitor or a different account on the same device. First pass
+had a real bug of its own: the clear-on-non-admin effect fired during the
+one-render window where auth is still resolving (isAdmin reads false
+before the session check completes), wiping the stored value before it
+ever got a chance. Fixed by also gating on authLoading. Verified live:
+turned Edit Mode on, did a real page reload, confirmed it was still on
+(and the orange top bar was back) — twice, once before the authLoading
+fix (failed, caught it) and once after (passed).
+Files: src/contexts/AdminEditContext.tsx
+
+PART 3B — Remove Copy Price from product detail page
+Removed the button, its `copied` state/timer, and the now-unused
+buildCopyText/copyToClipboard imports from ProductDetailPage.tsx. Kept
+lib/clipboard.ts itself and the card menu's own "Copy Price" item —
+CardMenu.tsx uses the same two functions and was explicitly out of scope.
+Only "Add to Cart" remains on the detail page now; simplified the
+now-single-button wrapper and removed the CSS that only existed to lay
+out two buttons side by side.
+Files: src/pages/ProductDetailPage.tsx, src/styles/app.css
+
+PART 4 — Variants
+4A. Duplicate variant display: the earlier case-normalization fix only
+touched variant ROWS (VariantEditor already uppercases Region on save).
+It never touched the product's OWN Region field — set in
+ProductEditorForm.tsx's plain text field, or CombineProductsSheet.tsx's
+"shared content source" label — which is option zero in the picker
+(variantOptionsFor). A product whose own Region was typed "au" while its
+real variant rows were saved as "AU" showed two chips for what's really
+one Region — that's the duplicate, a real stored-data mismatch, not a
+display bug. Uppercased both save sites to match VariantEditor. Wrote
+migration-018 to fix existing rows (casing only, no value/row changes) —
+see SQL section below. I don't have a live product with an existing
+mismatch to demo the before/after on, but the mechanism is unambiguous
+from the code and the fix directly closes it.
+
+4B. First-tap "shake": read every relevant CSS transition (all already
+correctly scoped to transform/opacity/colour, no width/height/position
+animated) and instrumented the actual DOM through a real variant tap
+(getBoundingClientRect on the gallery, price, note, actions and selector,
+sampled every 50ms for 500ms) — found zero geometry change on the two
+real-variant products in the live catalog, so I could not reproduce a
+layout shift with measurement. Found and fixed a real, separate gap that
+matches the symptom well and is a well-known cause of exactly this kind
+of first-tap jank: no `<button>` on the whole site had
+`touch-action: manipulation`, so a mobile browser arms its double-tap-to-
+zoom gesture detector on every tap and only resolves it after ~300ms —
+visibly nudging the page on that first tap. Added it to the global button
+reset. I can't fully confirm this was THE mechanism Naeem saw (no way to
+test real mobile Safari/Chrome touch behaviour from here), so flagging
+that honestly rather than claiming a confirmed fix.
+
+4C. Guided Region/Size: replaced the two free-text inputs in the variant
+Add/Edit sub-form with GuidedField (new, in SheetChrome.tsx) — a select of
+every Region/Size already used anywhere in the catalog (product base
+labels + all variant rows, via new distinctRegions/distinctSizes in
+lib/variants.ts and a new `allVariants` on ProductContext), with a
+"+ Add new…" option that drops to free text for a genuinely new value.
+Built on Batch 9's merged ProductEditorForm/VariantEditor, so this reaches
+both entry points (card sheet and /admin) automatically. This directly
+prevents 4A's root cause recurring for new variants.
+
+4D. Variant image sorting: previously the gallery only ever showed the
+SELECTED variant's own photo swapped into slot 1 — a different variant's
+photo was invisible whenever it wasn't the active selection. Added
+mergedGalleryImages()/variantImagesBySize() (lib/variants.ts): every
+variant's own photo, smallest Size first (parsed from the leading number
+in the Size string), merged with the product's own gallery, deduplicated.
+Selecting an option still moves its own photo to slot 1 — the rest keeps
+this same smallest-to-largest order, so nothing drops out of the gallery
+anymore.
+Files: src/lib/variants.ts, src/components/admin/edit-sheets/VariantEditor.tsx,
+src/components/admin/edit-sheets/SheetChrome.tsx,
+src/components/admin/CombineProductsSheet.tsx,
+src/components/admin/ProductEditorForm.tsx, src/contexts/ProductContext.tsx,
+src/pages/ProductDetailPage.tsx
+
+PART 5 — WhatsApp / PDF variant display
+Verified, not a bug. buildOrderWhatsAppText and buildOrderPdf
+(lib/orderExport.ts) both already append the variant label in parentheses
+after the product name — e.g. "CeraVe Hydrating Cleanser (473) x1 -
+৳1,650" on WhatsApp and the same line format in the PDF. The label is
+snapshotted onto the cart line at add-time (CartContext) specifically so
+it survives even if the variant is later deleted. Nothing changed here.
+
+PART 6 — Bento tile images stay blank
+Confirmed root cause: the left (swipe stack) and right-top (flip) bento
+tiles never rendered a product image at all — no <img>, no
+background-image, ever, for any product, dragged in or not. Only the
+bottom carousel's custom link tiles (a completely separate admin form)
+ever showed a photo. Added a background-image (the product's real cover
+photo, same CSS scrim-over-photo treatment as the custom tiles) to both
+tile types. Verified live: a real product's actual Supabase-hosted photo
+now renders as the tile's background.
+Files: src/components/viewer/BentoGrid.tsx, src/styles/app.css
+
+PART 7 — Category chip layout breaks on some categories
+Could not visually reproduce the cut-off/overlap in this environment
+despite substantial live testing (instrumented before/after geometry of
+the chip row, grid and every home section across the full transition,
+0-2000ms, both from the top of the page and mid-scroll; switching "All"
+(104 products) to Body Care (13) and back) — every measurement came back
+clean, no overlap, no stale height. I did find and fix one genuine race
+condition on the way: `scrollToProducts()` ran synchronously right after
+`setSelectedCategoryId()`, so it measured the OLD (pre-filter) layout
+before React had re-rendered the new, often very differently-sized grid —
+exactly the kind of scroll-vs-reflow race that would show up worse the
+bigger the size difference between categories (Body Care vs Eye Care).
+Deferred it two animation frames so it always measures the real, final
+layout. This is a genuine bug fix, but I can't promise it's THE bug Naeem
+saw — reporting that honestly rather than claiming a confirmed fix.
+Files: src/pages/ViewerPage.tsx
+
+PART 8 — Cart button checkmark reverts after ~1 second
+Root cause: the checkmark was driven by a local `justAdded` flag on a
+500ms timeout, reverting to the plain icon regardless of whether the item
+was still genuinely in the cart — which is exactly what read as "the tap
+didn't work". Changed it to derive directly from real cart membership
+(`items.some(i => i.productId === productId)` from CartContext) instead
+of a timer, so the icon can never contradict the actual cart state; it
+only ever shows the plain icon when the product truly isn't in the cart.
+Kept the decorative tap-pulse ring as its own state (unrelated to the
+icon). Verified live: added an item, checked the button's class at 0ms,
+200ms, 600ms, 1200ms and 2000ms — checkmark held throughout.
+Files: src/components/viewer/CartButton.tsx
+
+--------------------------------------------------------------------
+SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+migration-018-normalize-variant-region-case.sql — fixes any existing
+product/variant rows where Region casing doesn't match (Part 4A). Casing
+only, no values or rows change, safe to re-run:
+
+UPDATE products
+SET region = UPPER(region)
+WHERE region IS NOT NULL AND region <> UPPER(region);
+
+UPDATE product_variants
+SET region = UPPER(region)
+WHERE region <> UPPER(region);
+
+--------------------------------------------------------------------
+WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- SettingsTab.tsx has a full second banner-slide editor
+  (BannerSlidesPanel) alongside BannerEditSheet.tsx, both writing the same
+  app_settings row — editing in one place then the other risks silently
+  clobbering whichever was saved last. Didn't touch beyond the
+  Part 2 field removal needed to keep both compiling; a real fix would be
+  picking one and deleting the other, which is a bigger, separate task.
+
+Build: `npm run build` — PASSED, zero errors. `npx vitest run` — 9/9
+tests passed.

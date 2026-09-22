@@ -1,16 +1,18 @@
-import { useState, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useProducts } from '../../../contexts/ProductContext';
 import { useToast } from '../../../hooks/useToast';
 import { formatTaka } from '../../../lib/format';
 import {
+  distinctRegions,
+  distinctSizes,
   emptyVariantForm,
   validateVariantForm,
   variantToForm,
 } from '../../../lib/variants';
 import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import { AdminImagePicker } from '../AdminImagePicker';
-import { PencilGlyph, RowIconButton, Toggle, TrashGlyph } from './SheetChrome';
+import { GuidedField, PencilGlyph, RowIconButton, Toggle, TrashGlyph } from './SheetChrome';
 import type { ProductVariant, VariantFormData } from '../../../types';
 
 const VARIANT_NOTE_MAX_LENGTH = 200;
@@ -26,6 +28,8 @@ function VariantForm({
   variantId,
   form,
   isSaving,
+  knownRegions,
+  knownSizes,
   onChange,
   onSubmit,
   onCancel,
@@ -36,6 +40,10 @@ function VariantForm({
   variantId: string;
   form: VariantFormData;
   isSaving: boolean;
+  /** Existing Region/Size values already used in the catalog, for the
+   *  guided picker — see GuidedField. */
+  knownRegions: string[];
+  knownSizes: string[];
   onChange: (patch: Partial<VariantFormData>) => void;
   onSubmit: (e: SyntheticEvent) => void;
   onCancel: () => void;
@@ -54,33 +62,24 @@ function VariantForm({
   return (
     <div className="variant-form" onKeyDown={handleKeyDown}>
       <div className="form-row">
-        <div className="form-field">
-          <label className="form-label" htmlFor="vf-region">
-            Region <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="vf-region"
-            type="text"
-            className="form-input"
-            placeholder="AU"
-            value={form.region}
-            onChange={(e) => onChange({ region: e.target.value })}
-            autoCapitalize="characters"
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="vf-size">
-            Size <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="vf-size"
-            type="text"
-            className="form-input"
-            placeholder="340g"
-            value={form.size}
-            onChange={(e) => onChange({ size: e.target.value })}
-          />
-        </div>
+        <GuidedField
+          id="vf-region"
+          label="Region"
+          required
+          value={form.region}
+          options={knownRegions}
+          placeholder="AU"
+          onChange={(region) => onChange({ region })}
+        />
+        <GuidedField
+          id="vf-size"
+          label="Size"
+          required
+          value={form.size}
+          options={knownSizes}
+          placeholder="340g"
+          onChange={(size) => onChange({ size })}
+        />
       </div>
 
       <div className="form-row">
@@ -217,9 +216,12 @@ function VariantForm({
  * reloaded so the grid's "from" price and the detail page follow.
  */
 export function VariantEditor({ productId }: VariantEditorProps) {
-  const { variantsFor, reloadVariants } = useProducts();
+  const { products, variantsFor, allVariants, reloadVariants } = useProducts();
   const { showToast } = useToast();
   const variants = variantsFor(productId);
+
+  const knownRegions = useMemo(() => distinctRegions(products, allVariants), [products, allVariants]);
+  const knownSizes = useMemo(() => distinctSizes(products, allVariants), [products, allVariants]);
 
   const [form, setForm] = useState<VariantFormData | null>(null);
   /** Variant being edited, or null while adding a new one. */
@@ -355,6 +357,8 @@ export function VariantEditor({ productId }: VariantEditorProps) {
                   variantId={variant.id}
                   form={form}
                   isSaving={isSaving}
+                  knownRegions={knownRegions}
+                  knownSizes={knownSizes}
                   onChange={(patch) =>
                     setForm((current) => (current ? { ...current, ...patch } : current))
                   }
@@ -372,6 +376,8 @@ export function VariantEditor({ productId }: VariantEditorProps) {
           variantId={newVariantId}
           form={form}
           isSaving={isSaving}
+          knownRegions={knownRegions}
+          knownSizes={knownSizes}
           onChange={(patch) =>
             setForm((current) => (current ? { ...current, ...patch } : current))
           }
