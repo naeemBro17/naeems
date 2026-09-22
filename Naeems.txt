@@ -2300,3 +2300,121 @@ https://naeems-all.vercel.app. The fix verification (Parts 3–4) was run
 against a local `npm run build` output served on localhost, since that is
 the only way to test code that isn't merged yet. I could not test on a
 physical phone from this environment.
+
+====================================================================
+BATCH 9 — Merge the Two Product Editors Into One
+Branch: fix/batch-9-merge-product-editors
+====================================================================
+
+1. AUDIT — what the two editors looked like before this batch
+
+  ProductEditSheet.tsx (card "..." menu, BottomSheet)  vs  ProductForm.tsx (/admin Products tab, Modal)
+
+  Field/feature          | Card sheet          | Admin panel         | Notes
+  ------------------------|---------------------|---------------------|------
+  Name/brand/category     | yes                 | yes                 | same
+  Description/how-to-use/ | yes                 | yes                 | same
+    key ingredients/video |                     |                     |
+  Retail/offer/wholesale  | yes                 | yes                 | same
+  Stock quantity          | yes                 | yes                 | same
+  Stock status (manual)   | NO — derived only   | yes (select, only   | admin-only capability
+                           |                     | active w/o qty)     |
+  Note/region/size        | yes                 | yes (region/size    | same
+                           |                     | edit-mode only)     |
+  Skin type/condition      | yes                 | yes                 | same (already shared)
+  Variants                | yes (VariantEditor) | yes (VariantEditor) | already the same shared component
+  Featured toggle         | yes                 | yes                 | same
+  Active toggle           | NO                  | yes                 | admin-only capability
+  Category creation       | NO                  | yes ("+ Create      | admin-only capability
+                           |                     | new category")      |
+  SKU display              | NO                  | yes (edit mode)     | admin-only capability
+  Create mode (Add        | NO (edit only)      | yes                 | expected — no "add" from a card
+    Product)               |                     |                     | that doesn't exist yet
+  IMAGES                   | ImageStrip: paste a | ImageUploader: real | THE reported gap — confirmed
+                           | URL by hand, one at | file upload (camera/| real, not assumed. Card sheet had
+                           | a time. Drag-reorder| gallery), multiple  | NO way to add a photo from a phone,
+                           | worked.              | at once, resize,    | only pasting an already-hosted
+                           |                     | drag-reorder.       | image URL.
+
+  Confirms Naeem's report: the card-edit flow could NOT add real photos —
+  only a manually-typed image URL. The /admin panel's ImageUploader was
+  already the complete one (file picker, drag&drop, multi-select, resize
+  before upload, drag-to-reorder — reorder was fixed for it back in an
+  earlier batch).
+
+2. THE FIX — one shared editor
+
+  Picked ProductForm.tsx's fields/logic as the base, NOT the card sheet —
+  despite the card sheet being the one earlier sessions kept extending, the
+  audit above shows the admin panel was actually the more complete
+  implementation on every point of difference (Active toggle, category
+  creation, SKU display, manual stock status, real image upload, create
+  mode). The card sheet's only asset was its BottomSheet presentation,
+  which was kept as-is.
+
+  New file: src/components/admin/ProductEditorForm.tsx — owns every field,
+  validation, image upload/resize, and the single save (insert or update).
+  Both old files are now thin wrappers with no form markup or save logic
+  of their own:
+    - ProductForm.tsx        → Modal + <ProductEditorForm footerVariant="modal">
+    - ProductEditSheet.tsx   → BottomSheet + <ProductEditorForm footerVariant="sheet">
+  ("footerVariant" only changes which button row renders — Cancel+Save for
+  the sheet to match every other sheet in the app, a single Save/Add button
+  for the modal, matching its own existing pattern with the Modal's own X
+  close button. No other behavioural difference between the two.)
+
+  Moved into the shared form (now available from BOTH entry points):
+    - Real multi-image upload via ImageUploader (fixes the reported gap)
+    - Active toggle
+    - SKU read-only display
+    - "+ Create new category" inline
+    - Manual Stock Status select
+
+  Deleted ImageStrip.tsx (the old URL-paste image list) and its ~110 lines
+  of now-dead CSS in app.css — nothing references it anymore.
+
+  No database schema changes. No new fields were invented — this is a
+  consolidation of what already existed in one editor or the other.
+
+3. VERIFICATION — live, against the real production Supabase data
+
+  Tested with two real products via the browser: "Beauty of Joseon Red
+  Bean Water Gel" (has a real HC-0366 SKU, 5 images, wholesale price, no
+  variants at the time of testing) and "Bio Oil | 200mL" (single image,
+  Out of Stock status).
+
+  - Both entry points load every field with the product's real current
+    data (not blank/default): PASS. Checked SKU, name, prices, category,
+    5 images with correct order/cover, skin tags, region/size.
+  - Multi-image upload from BOTH entry points: PASS. Uploaded a real file
+    through the admin panel's picker — became a 6th image, saved,
+    reloaded, still there — then removed it and re-saved to restore the
+    product exactly as it was. Confirmed the same ImageUploader (file
+    picker, not URL paste) is now present in the card-edit sheet too.
+  - Variants still work from both entry points: PASS. Added a temporary
+    "TEST / 100ml / ৳999" variant from the card-edit sheet, saved — it
+    appeared correctly in the /admin panel's editor for the SAME product
+    (proving both go through the same variants table), then deleted it
+    from the admin side to restore the product.
+  - Active toggle round-trip: PASS. Toggled Bio Oil to Inactive from the
+    admin panel, saved, confirmed the list showed "inactive" — then
+    reopened and toggled it back to Active, saved, confirmed restored.
+  - Saving from one entry point and reopening from the other shows the
+    change: PASS — both the variant test and the image test above proved
+    this directly (created/changed in one, visible in the other).
+  - Both products were left in their original state when I finished —
+    verified by reopening each one last time.
+
+  Everything above was done live against the real database (not a test
+  copy), with each temporary test change (image, variant, active toggle)
+  undone immediately after it proved the round trip worked.
+
+4. BUILD
+`npm run build` — PASSED, zero errors, both before and after the live
+verification.
+
+5. WHAT I FOUND ALONG THE WAY
+A recurring cosmetic glitch in this test environment's screenshot tool
+(pages rendered solid black in several captures) had nothing to do with
+the app — confirmed by reading the live DOM/accessibility tree instead,
+which showed correct data throughout. Not something to act on.
