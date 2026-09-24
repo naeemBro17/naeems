@@ -1,0 +1,109 @@
+====================================================================
+BATCH 13 — Bento Grid: Image Shape, Expert Tile, Missing Products
+====================================================================
+Branch: fix/batch-13-bento-image-and-picker
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+Part 1 — Bento tile image "distortion"
+I could not reproduce this. The CSS Batch 10 added (`.bento-face--image`,
+`background-size: cover; background-position: center;`) is still exactly in
+place and is mathematically incapable of stretching an image — "cover" only
+scales and crops, it never distorts an aspect ratio. To be sure, I
+temporarily fed the real live app two test photos with an obvious circle
+marker (a tall 1:3 image and a wide 3:1 image) into the tall left tile and
+the short top-right tile and screenshotted both — in every case the circle
+stayed a perfect circle, just cropped differently to fit each tile's shape.
+No code change made for Part 1. If the distortion is still visible for you
+on the live site, it's most likely a stale Vercel deploy rather than this
+code — worth a hard refresh / redeploy check before re-filing.
+
+Part 2 — "Talk with Naeem" tile photo
+Root cause: the bento tile's own edit sheet (Home → Edit Mode → tap the
+bottom-right tile's pencil) only ever had "Expert name" and "Subtitle"
+fields — no photo field. The photo does exist as a setting
+(`expert_photo_url`) and two OTHER admin screens can already set it (Admin →
+Settings → "Talk to an Expert", and Edit Mode on the /contact page), but
+neither is reachable from the bento tile's own edit button, so there was no
+obvious way to manage this tile's photo from the place a customer actually
+sees it.
+Fix: added a Photo field to that same edit sheet, reusing the exact
+`AdminImagePicker` component and the exact same storage path
+(`settings/expert-photo.webp`, same bucket) the working Settings-tab photo
+field already uses — so it's the same photo everywhere, not a second copy.
+Verified live: yes — the live database already had a real photo and name
+set (via one of the other two paths), and it renders correctly circular,
+not distorted, confirming the display side was always fine; the gap was
+purely "no way to set it from here."
+
+Part 3 — Product picker missing products
+Root cause: the "add a product to this tile" picker only listed products
+where `is_featured` was already true (`products.filter(p => p.is_featured
+&& p.is_active)`). Since the left/top-right bento tiles only ever render
+from the featured list, any active product that hadn't separately been
+starred "Featured" in the main product list was invisible in this picker —
+which is most of a ~150-SKU catalog if only a handful are starred.
+Fix: the picker now lists every active product. Picking one that isn't
+already featured marks it Featured automatically when you hit Save (so it
+actually shows up in the tile — the tile itself still only ever renders
+featured products, that part is unchanged). Added a one-line hint in the
+picker explaining this. Did not change what happens when you *remove* a
+product from a tile — it stays Featured (matches the star toggle elsewhere,
+which is the existing single source of truth for that flag).
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+- No admin login in this environment, so I couldn't click through the two
+  new UI pieces (Photo field on the Expert card sheet; broadened product
+  picker) as a real logged-in admin. Both type-check clean and reuse
+  components already proven working elsewhere (AdminImagePicker,
+  is_featured toggle) rather than new code paths. Please click through both
+  once and confirm.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- There's a third, separate expert-photo upload path (`ExpertEditSheet.tsx`,
+  reached from Edit Mode on /contact) that uploads to its own storage
+  bucket ('expert-photos', created by migration-010) instead of the bucket
+  the Settings-tab field and my new bento field both use. It still works if
+  migration-010 was run, but it's now the odd one out — three different
+  code paths writing to the same `expert_photo_url` setting is confusing to
+  maintain. Not touched this batch (out of scope), but worth consolidating
+  onto one path later.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- For Part 3, I chose "auto-feature on add" over "let the tile render any
+  active product regardless of featured status." The latter would mean two
+  different lists (picker vs. renderer) drifting apart again the next time
+  someone reads the code. Auto-featuring keeps `is_featured` as the single
+  source of truth for "is this product anywhere in the bento" everywhere.
+- For Part 2, I put the photo field in the bento tile's own edit sheet
+  rather than just adding a hint pointing at Settings, since the task asked
+  for the admin to actually be able to set a photo from this tile.
+
+--------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented — for you to schedule)
+--------------------------------------------------------------------
+1. [Code health — small] Three separate expert-photo upload implementations
+   now exist (Settings tab, /contact Edit Mode, and now this bento sheet
+   reusing the Settings-tab path). Worth consolidating onto one later —
+   low risk, not urgent.
+2. [Trust/UX — small] The product picker's new "adding this also marks it
+   Featured" behavior is a little surprising if you're just trying to fill
+   a bento tile — consider whether "Featured" should really be the bento
+   tiles' gatekeeper flag long-term, or whether the bento tiles should have
+   their own independent membership list.
+
+Build: npm run build — PASSED (zero errors).
+Tests: npx vitest run — PASSED (9/9).
