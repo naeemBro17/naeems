@@ -2608,3 +2608,109 @@ WHAT I FOUND ALONG THE WAY
 
 Build: `npm run build` — PASSED, zero errors. `npx vitest run` — 9/9
 tests passed.
+
+========================================================================
+BATCH 11 — Variant tap slide, SIZE label, Region dropdown + management
+========================================================================
+
+PART 1-2 — Variant tap "full screen slide"
+Root cause found and confirmed live (not a guess this time). Tapping a
+size/region chip calls setSearchParams(..., {replace:true}) to write
+?variant=<id> into the URL. React Router's setSearchParams never carries
+over the current location's `state` — so the FIRST such tap after landing
+via the card's hero-transition silently wiped state.hero (which was
+telling PageTransition.tsx to skip its own slide because the native View
+Transition was already animating that arrival). Losing that flag flipped
+PageTransition's slide class from absent to present on the SAME still-
+mounted wrapper div (no remount — key is the pathname, unchanged), and
+adding a fresh animation class to an existing element replays the CSS
+animation from 0 — a real, once-only, full-screen slide-in. Every tap
+after the first has nothing left to lose (state was already gone), so it
+never repeats. Matches Naeem's description exactly.
+
+Fix: PageTransition now only plays the slide when the PATHNAME actually
+changed (tracked in a ref, compared each render) — a same-page update
+like ?variant=<id> can never trigger it again, no matter what happens to
+location.state.
+
+Verified live (real browser, real product data, both the dev server and
+a built production bundle): attached a MutationObserver and confirmed
+the slide class WAS added on the first variant tap before the fix, was
+NOT added on the first OR second tap after the fix, and that a real
+page-to-page navigation (Back button) still plays its slide correctly in
+the production build — PASSED on 2 products (Beauty of Joseon Revive Eye
+Serum, CeraVe Hydrating Cleanser).
+Note: in the Vite DEV server only (not production), React 18 StrictMode's
+double-render briefly appeared to suppress the Back slide too, because
+the fix's pathname-tracking ref gets touched twice per render pass under
+StrictMode. Confirmed this does NOT happen in the actual production
+build (which never double-renders) — flagging only so dev-mode testing
+in a future session isn't confusing.
+
+SIZE label: already renders correctly, in code and in the live DOM
+(confirmed visible with text "Size") on the exact product from your
+screenshot (Beauty of Joseon, 30ml/10ml). It's small (9.5px) and light
+gray by design, which likely made it easy to miss in a compressed
+screenshot. No bug found — left as is.
+Files: src/components/shared/PageTransition.tsx
+
+PART 5 — Region: product's own field was still free text
+5A. The product's own Region field (ProductEditorForm.tsx) now uses the
+same GuidedField dropdown VariantEditor already uses for variant rows,
+sourced from the same distinctRegions() list — a product's own Region
+and its variants' Region can no longer drift apart by typo/casing going
+forward. (Size stays free text for the product's own field, as scoped.)
+
+5B. Added a Region/Size management view in the admin Categories tab,
+right under Categories — same kind of catalog-wide label. Lists every
+Region/Size in use with a usage count, lets Naeem rename one (updates
+every product and variant row carrying that exact value, one operation),
+and has a Delete button that's blocked with the usage count whenever
+anything still uses it. Honest caveat: Region/Size aren't their own
+database rows — they only appear in this list because something already
+references them — so Delete will in practice always show the "in use"
+message; it's a safety guard, not a normal path to removing one.
+"+ Add new" isn't here — GuidedField's own "+ Add new…" already covers
+that from both the product and variant forms.
+
+5C. migration-019 (below) trims + uppercases both products.region and
+product_variants.region so a product's own Region always matches its
+variant rows' Region exactly, even where they only differed by stray
+whitespace or case. Also re-runs migration-018's UPPER() in case that one
+was never applied. Casing/whitespace only — never invents or merges
+Region names.
+
+5D. Checked every product/variant pair in the live catalog — no existing
+casing/whitespace mismatch was found right now, so there's nothing
+currently mis-displaying to demo a before/after on. Did confirm live that
+the grouping logic itself is correct: Beauty of Joseon's own Region
+("KOREA") already matches its variant's Region exactly, and the detail
+page correctly shows ONE Region (no Region row at all, since there's
+only one) with both sizes grouped under it — the exact behaviour this
+migration protects.
+Could not verify 5A/5B by actually logging into /admin — this
+environment has no admin credentials. Verified by code review (matches
+the existing VariantEditor pattern exactly) and a clean `npm run build`.
+Files: src/components/admin/ProductEditorForm.tsx,
+src/components/admin/RegionSizeManager.tsx (new), src/pages/AdminPage.tsx,
+src/styles/app.css
+
+--------------------------------------------------------------------
+SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+migration-019-normalize-region-whitespace.sql — trims + uppercases
+products.region and product_variants.region so a product's own Region
+always matches its variants' Region exactly. Safe to re-run:
+
+UPDATE products
+SET region = UPPER(TRIM(region))
+WHERE region IS NOT NULL AND region <> UPPER(TRIM(region));
+
+UPDATE product_variants
+SET region = UPPER(TRIM(region))
+WHERE region <> UPPER(TRIM(region));
+
+(Covers migration-018 too, if that one was never run.)
+
+Build: `npm run build` — PASSED, zero errors. `npx vitest run` — 9/9
+tests passed.
