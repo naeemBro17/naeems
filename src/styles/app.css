@@ -610,10 +610,12 @@ textarea {
     border-color var(--transition-base);
 }
 
+/* Selected state is neutral, not orange — a category filter isn't the
+   screen's primary action, see CLAUDE.md's colour rule. */
 .chip--active {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg);
 }
 
 /* ---------- Product grid ---------- */
@@ -770,7 +772,7 @@ textarea {
 }
 
 .product-detail__dot--active {
-  background: var(--color-primary);
+  background: var(--color-text-primary);
 }
 
 .product-detail__info {
@@ -806,7 +808,10 @@ textarea {
   font-family: var(--font-price);
   font-size: 26px;
   font-weight: 900;
-  color: var(--color-accent);
+  /* Prices are near-black and bold, not orange — see CLAUDE.md. Matches the
+     grid card price; the page's one orange element is the Add to Cart
+     button below (.copy-button). */
+  color: var(--color-text-primary);
   letter-spacing: -0.5px;
 }
 
@@ -943,7 +948,7 @@ textarea {
   flex-shrink: 0;
   border-radius: 8px;
   background: var(--color-bg-tertiary);
-  color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
 .video-review__thumb svg {
@@ -967,6 +972,25 @@ textarea {
 .video-review__sub {
   font-size: 11px;
   color: var(--color-text-muted);
+}
+
+/* Inline YouTube player, opened from the video review card's modal — a
+   fixed 16:9 box so the iframe never has to be manually sized. */
+.video-embed {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+}
+
+.video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 /* ---------- Skeleton loading ---------- */
@@ -1095,7 +1119,7 @@ textarea {
 .admin-header__title {
   font-size: 16px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-text-primary);
 }
 
 .admin-header__actions {
@@ -1169,7 +1193,7 @@ textarea {
 }
 
 .admin-nav__item--active {
-  color: var(--color-primary);
+  color: var(--color-text-primary);
 }
 
 .admin-nav__icon {
@@ -1211,7 +1235,7 @@ textarea {
   }
 
   .admin-nav__item--active {
-    background: var(--color-primary-bg);
+    background: var(--color-bg-tertiary);
     font-weight: 600;
   }
 
@@ -1414,7 +1438,7 @@ textarea {
 .combine-product-row__source-note {
   font-size: 10.5px;
   font-weight: 700;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
   margin-top: 2px;
 }
 
@@ -1485,7 +1509,7 @@ textarea {
 .admin-product-row__price {
   font-size: 15px;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-text-primary);
   margin-top: 2px;
 }
 
@@ -2296,7 +2320,7 @@ textarea {
 
 .auth-toggle__tab--active {
   background: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-text-primary);
   box-shadow: var(--shadow-xs);
 }
 
@@ -2733,7 +2757,7 @@ textarea {
 .menu-back {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
 }
 
 .menu-coming-soon__text {
@@ -2851,6 +2875,7 @@ textarea {
 }
 
 .filter-button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2870,6 +2895,26 @@ textarea {
 .filter-button__icon {
   width: 18px;
   height: 18px;
+}
+
+/* Active-filter count — neutral, same treatment as the cart nav badge (see
+   CLAUDE.md's colour rule: this is a status indicator, not the screen's one
+   primary action). Inverted relative to the filter button's own two-tone
+   background so it stays legible against it in both themes. */
+.filter-button__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--filter-btn-fg);
+  color: var(--filter-btn-bg);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 /* ---------- Hero banner ---------- */
@@ -2969,7 +3014,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #FF7A45;
+  color: var(--color-text-secondary);
 }
 
 .hero-banner__title {
@@ -3010,14 +3055,14 @@ textarea {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255, 122, 69, 0.3);
+  background: rgba(255, 255, 255, 0.5);
   transition: width var(--transition-base), background-color var(--transition-base);
 }
 
 .hero-banner__dot--active {
   width: 16px;
   border-radius: var(--radius-pill);
-  background: #FF7A45;
+  background: #fff;
 }
 
 /* ---------- Browse (category story circles) ---------- */
@@ -3092,14 +3137,16 @@ textarea {
   transform: scale(0.94);
 }
 
-/* A category holding at least one featured product. */
+/* A category holding at least one featured product. Neutral, not orange —
+   several circles can be "hot" at once, so it can't be the one orange
+   element per screen (see CLAUDE.md's colour rule). */
 .browse-circle--hot {
-  border: 2px solid #FF7A45;
+  border: 2px solid var(--color-border-strong);
 }
 
 .browse-circle--selected {
-  border: 2px solid var(--color-accent);
-  background: var(--color-accent-soft);
+  border: 2px solid var(--color-text-primary);
+  background: var(--color-bg-tertiary);
 }
 
 .browse-circle--expert {
@@ -3253,7 +3300,7 @@ textarea {
 
 .bento-stack__dot--active {
   height: 14px;
-  background: var(--color-accent);
+  background: #fff;
 }
 
 /* ---------- Right bottom tile: manual horizontal carousel ---------- */
@@ -3293,7 +3340,7 @@ textarea {
 .bento-carousel__dot--active {
   width: 12px;
   border-radius: var(--radius-pill);
-  background: var(--color-accent);
+  background: var(--color-text-primary);
 }
 
 .bento-expert {
@@ -3449,7 +3496,8 @@ textarea {
 
 .bento-face--image .bento-tile__name,
 .bento-face--image .bento-tile__price,
-.bento-face--image .bento-tile__strike {
+.bento-face--image .bento-tile__strike,
+.bento-face--image .bento-tile__category {
   color: #fff;
 }
 
@@ -3458,7 +3506,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: #FF7A45;
+  color: var(--color-text-secondary);
 }
 
 .bento-tile__name {
@@ -3529,8 +3577,8 @@ textarea {
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #FF9A6B, #FF7A45);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-bg-tertiary), var(--color-border-strong));
+  color: var(--color-text-secondary);
 }
 
 .bento-expert__avatar img {
@@ -3553,7 +3601,7 @@ textarea {
 .bento-expert__label {
   font-size: 9px;
   font-weight: 700;
-  color: #FF7A45;
+  color: var(--color-text-secondary);
 }
 
 .bento-expert__name {
@@ -3666,8 +3714,8 @@ textarea {
 }
 
 .category-badge--neutral {
-  background: var(--color-primary-bg);
-  color: var(--color-primary-dark);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 /* ---------- Product card (redesign) ---------- */
@@ -3808,7 +3856,9 @@ textarea {
   font-size: 7px;
   font-weight: 800;
   letter-spacing: -0.15px;
-  color: #FF7A45;
+  /* Neutral, not orange — see CLAUDE.md's colour rule; the card's one
+     orange element is its cart button. */
+  color: var(--color-text-primary);
   background: var(--save-pill-bg);
   border: 1px solid var(--save-pill-border);
   border-radius: 20px;
@@ -4038,7 +4088,7 @@ textarea {
 }
 
 .bottom-nav__tab--active {
-  color: #FF7A45;
+  color: var(--color-text-primary);
 }
 
 .bottom-nav__icon {
@@ -4059,8 +4109,8 @@ textarea {
   height: 15px;
   padding: 0 3px;
   border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-text-primary);
+  color: var(--color-bg);
   font-size: 9px;
   font-weight: 700;
   line-height: 15px;
@@ -4788,7 +4838,7 @@ textarea {
 }
 
 .exp-stars__star--on {
-  color: #FF7A45;
+  color: var(--color-text-primary);
 }
 
 /* ---------- Reviews ---------- */
@@ -4952,9 +5002,9 @@ textarea {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: rgba(255, 122, 69, 0.12);
-  border: 1px solid rgba(255, 122, 69, 0.2);
-  color: #FF7A45;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
   flex-shrink: 0;
 }
 
@@ -4985,7 +5035,7 @@ textarea {
 .exp-share-experience__arrow {
   width: 16px;
   height: 16px;
-  color: #FF7A45;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -5012,7 +5062,7 @@ textarea {
 }
 
 .review-stars-input__star--on {
-  color: #FF7A45;
+  color: var(--color-text-primary);
 }
 
 .review-stars-input__star:active {
@@ -6110,7 +6160,7 @@ textarea {
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--color-accent);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-pill);
 }
 
@@ -6137,12 +6187,58 @@ textarea {
 }
 
 .chip-select--on {
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-text-primary);
+  color: var(--color-bg);
 }
 
 .chip-select:active {
   transform: scale(0.96);
+}
+
+/* ---------- Product grid filter sheet (Brand / Skin Type) ---------- */
+
+.filter-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.filter-sheet__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.filter-sheet__clear {
+  padding: 12px var(--space-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.filter-sheet__clear:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.filter-sheet__apply {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 30px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform var(--transition-fast);
+}
+
+.filter-sheet__apply:active {
+  transform: scale(0.97);
 }
 
 /* ============================================================

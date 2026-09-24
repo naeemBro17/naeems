@@ -1,5 +1,4 @@
 import { useRef, type KeyboardEvent, type RefObject } from 'react';
-import { useToast } from '../../hooks/useToast';
 
 interface SearchBarProps {
   value: string;
@@ -13,6 +12,10 @@ interface SearchBarProps {
   onClear?: () => void;
   /** True while the autocomplete list is showing, for aria-expanded. */
   isExpanded?: boolean;
+  /** Opens the Brand/Skin Type filter sheet. */
+  onOpenFilters: () => void;
+  /** Number of active filters, shown as a badge on the filter button. */
+  activeFilterCount: number;
 }
 
 export function SearchBar({
@@ -24,8 +27,9 @@ export function SearchBar({
   onKeyDown,
   onClear,
   isExpanded = false,
+  onOpenFilters,
+  activeFilterCount,
 }: SearchBarProps) {
-  const { showToast } = useToast();
   const localRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? localRef;
 
@@ -95,8 +99,12 @@ export function SearchBar({
       <button
         type="button"
         className="filter-button"
-        onClick={() => showToast('Filters coming soon')}
-        aria-label="Filter products"
+        onClick={onOpenFilters}
+        aria-label={
+          activeFilterCount > 0
+            ? `Filter products, ${activeFilterCount} active`
+            : 'Filter products'
+        }
       >
         <svg
           className="filter-button__icon"
@@ -111,6 +119,11 @@ export function SearchBar({
           <path d="M7 12h10" />
           <path d="M10 17h4" />
         </svg>
+        {activeFilterCount > 0 && (
+          <span className="filter-button__badge" aria-hidden="true">
+            {activeFilterCount}
+          </span>
+        )}
       </button>
     </div>
   );

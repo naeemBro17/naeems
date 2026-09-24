@@ -20,8 +20,10 @@ import {
   variantOptionsFor,
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
+import { extractYouTubeId, youtubeEmbedUrl } from '../lib/youtube';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
+import { Modal } from '../components/shared/Modal';
 import { ShareButton } from '../components/viewer/ShareButton';
 import { CartIcon } from '../components/viewer/CartButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
@@ -74,23 +76,51 @@ function PlaceholderIcon() {
   );
 }
 
+/**
+ * A recognisable YouTube link plays inline in a modal on tap — the customer
+ * never leaves the site. A link we can't parse as YouTube (mistyped, or a
+ * different host entirely) falls back to opening it in a new tab instead of
+ * breaking the page or silently doing nothing.
+ */
 function VideoReviewCard({ url }: { url: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const videoId = useMemo(() => extractYouTubeId(url), [url]);
+
   return (
-    <button
-      type="button"
-      className="video-review"
-      onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-    >
-      <span className="video-review__thumb" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5.5v13l11-6.5-11-6.5z" />
-        </svg>
-      </span>
-      <span className="video-review__text">
-        <span className="video-review__title">Watch Review</span>
-        <span className="video-review__sub">Tap to watch on YouTube</span>
-      </span>
-    </button>
+    <>
+      <button
+        type="button"
+        className="video-review"
+        onClick={() =>
+          videoId ? setIsOpen(true) : window.open(url, '_blank', 'noopener,noreferrer')
+        }
+      >
+        <span className="video-review__thumb" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5.5v13l11-6.5-11-6.5z" />
+          </svg>
+        </span>
+        <span className="video-review__text">
+          <span className="video-review__title">Watch Review</span>
+          <span className="video-review__sub">
+            {videoId ? 'Tap to play' : 'Tap to watch on YouTube'}
+          </span>
+        </span>
+      </button>
+
+      {videoId && (
+        <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Watch Review">
+          <div className="video-embed">
+            <iframe
+              src={youtubeEmbedUrl(videoId)}
+              title="Product video review"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 

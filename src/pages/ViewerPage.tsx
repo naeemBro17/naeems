@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAdminEdit } from '../contexts/AdminEditContext';
 import { useNavigate } from 'react-router-dom';
 import { useSearch } from '../hooks/useSearch';
+import { useProductFilters } from '../hooks/useProductFilters';
 import { useDragReorder } from '../hooks/useDragReorder';
 import { useToast } from '../hooks/useToast';
 import { rememberGridScroll, takeGridScroll } from '../lib/gridScroll';
@@ -26,6 +27,7 @@ import {
 } from '../lib/layoutOrder';
 import type { Product } from '../types';
 import { SearchBar } from '../components/viewer/SearchBar';
+import { FilterSheet } from '../components/viewer/FilterSheet';
 import { SearchPanels } from '../components/viewer/SearchPanels';
 import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
@@ -93,6 +95,7 @@ export function ViewerPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +137,12 @@ export function ViewerPage() {
     categoryId: selectedCategoryId,
     onSelectSuggestion: openSuggestedProduct,
   });
-  const filteredProducts = search.results;
+
+  // Brand / Skin Type filtering sits on top of search+category, never inside
+  // it — the grid gets search.results run through it; search itself, and
+  // its own suggestions, are untouched.
+  const productFilters = useProductFilters(activeProducts);
+  const filteredProducts = productFilters.apply(search.results);
 
   const handleRecent = useCallback(
     (term: string) => {
@@ -318,6 +326,8 @@ export function ViewerPage() {
           onKeyDown={search.onKeyDown}
           onClear={search.clear}
           isExpanded={search.isDropdownOpen}
+          onOpenFilters={() => setFilterOpen(true)}
+          activeFilterCount={productFilters.activeCount}
         />
         <SearchPanels search={search} onRecent={handleRecent} />
       </div>
@@ -395,6 +405,8 @@ export function ViewerPage() {
           searchQuery={search.query}
           selectedCategoryId={selectedCategoryId}
           onClearSearch={search.clear}
+          activeFilterCount={productFilters.activeCount}
+          onClearFilters={productFilters.clear}
         />
       </main>
 
@@ -407,6 +419,14 @@ export function ViewerPage() {
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <AccountSheet isOpen={accountOpen} onClose={closeAccount} />
+      <FilterSheet
+        isOpen={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filters={productFilters.filters}
+        onChange={productFilters.setFilters}
+        availableBrands={productFilters.availableBrands}
+        baseProducts={search.results}
+      />
 
       {/* Both render nothing for anyone who isn't an approved admin. */}
       <EditModeToggle />
