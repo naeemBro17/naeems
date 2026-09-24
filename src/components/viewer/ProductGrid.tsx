@@ -8,6 +8,9 @@ interface ProductGridProps {
   searchQuery: string;
   selectedCategoryId: string | null;
   onClearSearch: () => void;
+  /** Active Brand/Skin Type filter count, and how to clear them. */
+  activeFilterCount: number;
+  onClearFilters: () => void;
 }
 
 function EmptyState({
@@ -49,6 +52,8 @@ export function ProductGrid({
   searchQuery,
   selectedCategoryId,
   onClearSearch,
+  activeFilterCount,
+  onClearFilters,
 }: ProductGridProps) {
   if (isLoading) {
     return (
@@ -61,6 +66,14 @@ export function ProductGrid({
   }
 
   if (products.length === 0) {
+    if (activeFilterCount > 0) {
+      return (
+        <EmptyState
+          message="No products match these filters"
+          action={{ label: 'Clear filters', onClick: onClearFilters }}
+        />
+      );
+    }
     if (searchQuery.trim() !== '') {
       return (
         <EmptyState

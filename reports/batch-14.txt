@@ -1,0 +1,164 @@
+====================================================================
+BATCH 14 — Orange Cleanup, Inline YouTube, Filter/Browse
+====================================================================
+Branch: fix/batch-14-orange-cleanup-video-filters
+
+--------------------------------------------------------------------
+1. WHAT I DID
+--------------------------------------------------------------------
+
+PART 1 — Orange cleanup
+CLAUDE.md's rule, quoted: "roughly one orange element per screen — the
+single primary action the customer should take next... Everything else
+uses a neutral scale." I audited every use of the two orange tokens
+(--color-accent #FF7A45 and the older --color-primary #F05020 — both exist,
+see section 4) across app.css — 40+ call sites — and fixed every one that
+wasn't a genuine single primary action, transient interaction feedback
+(focus rings, hover/drag states, spinners — mutually exclusive or vanish
+before anything else needs attention), or the admin's own self-contained
+"Edit Mode" visual language (deliberately orange throughout, customer-
+invisible, already documented as its own system — left untouched).
+
+Fixed to neutral (near-black/gray scale):
+  - Category filter chip active state, Browse circle "hot"/"selected" rings
+  - Hero banner eyebrow text + carousel dots
+  - Bento: swipe/carousel dots, tile category label, expert avatar
+    placeholder gradient, "Talk with" label
+  - Product card "Save X%" badge (text + background/border tokens)
+  - Product detail page price (was still orange — grid card price was
+    fixed in Batch 10, this one was missed)
+  - Bottom nav active tab + cart count badge
+  - Admin header title, admin nav active tab (+ its desktop bg tint),
+    admin product-list row price, "category" badge (misleadingly named
+    "--neutral" already, wasn't)
+  - Contact page: rating stars (display + review-submit input), "Share
+    your experience" card icon/arrow
+  - Auth modal's active login/signup tab
+  - Search page "Clear recent searches" link
+  - Admin's Skin Type/Condition chip multi-select (now reused by Part 3's
+    customer filter chips too — see below)
+
+Left orange (genuine single primary action, or exempt — see above):
+  - Hero "Shop Now" / text-slide CTA, cart button, detail page "Add to
+    Cart" (its actual name — "Copy Price" is legacy naming), "Book
+    Appointment", "Submit Review", every `.button--primary`/edit-sheet
+    Save button, focus rings, hover/drag feedback, loading spinners, the
+    whole admin Edit Mode toggle/bar/menu-item family.
+
+Verified live (screenshots + computed-style checks) on 4 screens — home
+grid, product detail, contact/expert page, and an admin-pattern probe (no
+admin login in this environment) — each showed exactly one orange element.
+Stock dots were already correct (green/red, never orange) — nothing to fix
+there.
+
+PART 2 — Inline YouTube video
+Root cause: the video row just did `window.open(url, '_blank')`. Added
+src/lib/youtube.ts to parse a video id out of watch/youtu.be/shorts/live
+URLs (any host or shape it doesn't recognise returns null); the product
+detail page now opens the existing shared Modal with a 16:9 embedded
+iframe (youtube-nocookie.com, autoplay) when an id is found, and falls
+back to the old open-in-new-tab behaviour when it isn't — so a bad/foreign
+URL can't break the page.
+Verified: tested against two real products with real youtu.be URLs from
+the live database (read-only). Confirmed via DOM/computed-geometry checks
+— modal opens with a correctly-sized 400×225 (exact 16:9) iframe, correct
+embed URL, scroll lock and focus trap engage/release correctly, close
+button works. Also unit-checked the parser against 8 URL shapes (watch
+w/params, youtu.be, shorts, m.youtube.com, a non-YouTube host, garbage
+text, empty string, a YouTube URL with no video id) — all correct.
+Screenshot capture itself became unreliable specifically while the real
+YouTube iframe was live (see section 3) — a tooling/sandbox issue, not
+something in the app; DOM-level verification is solid.
+
+PART 3 — Filter/browse (Brand + Skin Type)
+Built and wired up the "Filters coming soon" placeholder button. New
+useProductFilters hook (src/hooks/useProductFilters.ts) + FilterSheet
+component (src/components/viewer/FilterSheet.tsx), opened from the
+existing filter button, using the existing BottomSheet + the admin
+product editor's own ChipGroup/skinFields.SKIN_TYPES (reused, not
+duplicated). Filters apply on top of the existing search+category result
+list — useSearch itself is untouched. AND across Brand/Skin Type, OR
+within each (Brand=CeraVe OR Avene, AND SkinType=Sensitive). The sheet
+drafts changes locally and only commits on "Show N results" (live count
+preview as you tap chips); cancelling leaves the grid untouched. The
+filter button shows a small neutral count badge when any filter is
+active; the empty state gets its own "No products match these filters" /
+Clear filters action, checked before the existing search/category empty
+states.
+Verified live end-to-end against the real catalog: opened the sheet, saw
+real Brand chips (Aveeno, La Roche Posay) and all 6 Skin Type chips,
+selected Aveeno → grid correctly dropped to 1 product; added a Skin Type
+with no overlap → correctly showed 0 results with "Clear filters"; clicked
+it → grid and badge both reset to the full 104-product catalog; reopening
+the sheet correctly remembers the last-applied selection. No console
+errors during any of this.
+Deferred (per the task's own "build what's included completely rather
+than partially covering more" instruction): everything beyond Brand +
+Skin Type — no other product fields were in scope this batch.
+
+--------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------------------------------------------
+None needed — Brand and Skin Type both already exist as columns.
+
+--------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+--------------------------------------------------------------------
+- No admin login in this environment, so Part 1's admin-screen fixes
+  (header, nav, product-list price, category badge) are verified by
+  reading the real stylesheet's computed colours via an injected DOM
+  probe, not by an actual logged-in screenshot. Please spot-check the
+  Admin tab and product list once.
+- The browser automation tooling in this session reliably choked (script
+  timeouts, one full extension disconnect) specifically while a real
+  YouTube iframe was playing with autoplay — recovered fine once
+  navigated away. This looks like a sandbox/resource limit in this
+  environment rather than anything in the app; real-device testing of the
+  inline video is worth a quick manual check regardless.
+
+--------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+--------------------------------------------------------------------
+- Two separate orange tokens exist site-wide: --color-accent (#FF7A45,
+  most customer-facing UI) and --color-primary (#F05020, admin forms,
+  auth modal, generic .button--primary). Both are "the brand orange" to a
+  user but are literally different hex values in a few places they sit
+  near each other (e.g. AccountSheet's button--primary next to
+  accent-coloured icons). Not a rule violation, just worth eventually
+  picking one.
+- ChipGroup (the multi-select chip row) lives under
+  components/admin/edit-sheets/ even though it's a plain, generic,
+  presentational component — Part 3's customer-facing FilterSheet now
+  imports it from there too. Reused as-is rather than relocating it, to
+  avoid an unrelated refactor; a future session could move it to
+  components/shared/ now that it has a non-admin consumer.
+- .save-badge (red, product detail page's own bigger save pill) and
+  .product-card__save (grid card's small pill, fixed this batch) are two
+  separate badge implementations for the same "Save X%" concept — the
+  detail one was already non-orange (uses --color-danger), so nothing to
+  fix there, just noting the duplication.
+
+--------------------------------------------------------------------
+5. DESIGN DECISIONS
+--------------------------------------------------------------------
+- Where a "selected/active" element could show on the same screen as the
+  actual primary action (chips, nav tabs, badges), I used the site's
+  existing inverted neutral pattern (near-black bg / near-white text,
+  flips correctly in dark mode) rather than inventing a new treatment.
+- Kept the whole admin "Edit Mode" family (toggle, top bar, drag states,
+  the card menu's "Edit Product" item) orange — it's a deliberate,
+  self-contained, customer-invisible visual language ("you are editing"),
+  not overuse of the same accent for unrelated things.
+- Carousel/pagination dots that sit over a photo (hero banner, bento
+  swipe-stack) went white/near-white rather than near-black, since they
+  need to read against a photo, not the page background.
+- Part 3's "Show Results" button uses --color-accent (matches cart
+  button / Add to Cart / hero CTA — the customer-facing accent) rather
+  than --color-primary, for consistency with the rest of the viewer.
+- Filter sheet drafts locally and commits on Apply (rather than filtering
+  live as each chip is tapped) so backing out of the sheet never leaves
+  the grid in a half-changed state, and so the "Show N results" button
+  can double as a live preview.
+
+Build: npm run build — PASSED (zero errors).
+Tests: npx vitest run — PASSED (9/9).

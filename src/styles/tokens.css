@@ -1,11 +1,13 @@
 :root {
-  /* Brand orange — accent only (prices, active states, primary buttons) */
+  /* Brand orange — reserved for the one primary action per screen (see
+     CLAUDE.md's colour rule), plus transient interaction feedback (focus
+     rings, hover/drag states, loading spinners). Everything else — prices,
+     badges, active/selected states, nav — uses the neutral scale below. */
   --color-primary:        #F05020;
   --color-primary-light:  #FF7A50;
   --color-primary-dark:   #C03C10;
   --color-primary-bg:     #FDF0EC;
 
-  /* Redesign accent — used by the banner, bento tiles, prices and nav. */
   --color-accent:         #FF7A45;
   --color-accent-soft:    #FFF3EE;
 
@@ -44,9 +46,10 @@
   --card-dots-scrim:      rgba(0, 0, 0, 0.18);
   --card-dots-fg:         #FFFFFF;
 
-  /* Offer "Save X%" pill on cards */
-  --save-pill-bg:         #FFF0EA;
-  --save-pill-border:     #FFD4BC;
+  /* Offer "Save X%" pill on cards — neutral, not a tint of the brand
+     orange (see CLAUDE.md's colour rule). */
+  --save-pill-bg:         #F5F5F7;
+  --save-pill-border:     #E5E5EA;
 
   /* Hero banner + expert bento tile warm grounds */
   --banner-bg:            #FFF3EE;
@@ -124,8 +127,8 @@
   --card-dots-scrim:      rgba(255, 255, 255, 0.12);
   --card-dots-fg:         #FFFFFF;
 
-  --save-pill-bg:         #2A1A10;
-  --save-pill-border:     #5A2A10;
+  --save-pill-bg:         #1F1F1F;
+  --save-pill-border:     #38383A;
 
   --banner-bg:            #1C1410;
   --expert-tile-bg:       #1A1210;
@@ -168,8 +171,8 @@
     --card-dots-scrim:      rgba(255, 255, 255, 0.12);
     --card-dots-fg:         #FFFFFF;
 
-    --save-pill-bg:         #2A1A10;
-    --save-pill-border:     #5A2A10;
+    --save-pill-bg:         #1F1F1F;
+    --save-pill-border:     #38383A;
 
     --banner-bg:            #1C1410;
     --expert-tile-bg:       #1A1210;
