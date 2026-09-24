@@ -19,8 +19,21 @@ export function PageTransition({ children }: { children: ReactNode }) {
   // A cold load reports POP, which would slide the first paint in for no
   // reason — the first render is shown as-is.
   const isFirstRender = useRef(true);
-  const animate = !isFirstRender.current;
+  // A same-page update (e.g. the product detail page's variant picker
+  // writing ?variant=<id> via setSearchParams) fires a location change too,
+  // but must never replay the slide — only an actual page change should. It
+  // used to: setSearchParams's replace navigation carries no `state`, so it
+  // silently wiped a hero navigation's `state.hero` flag on the very first
+  // such update after arriving, which flipped isHeroTransition from true to
+  // false and added the (until then absent) slide class to this still-
+  // mounted div — a real, once-only, full-screen slide on the first variant
+  // tap. Gating on the pathname actually changing (matching the `key` below,
+  // and this component's own original intent) fixes it at the root.
+  const prevPathname = useRef(location.pathname);
+  const pathChanged = location.pathname !== prevPathname.current;
+  const animate = !isFirstRender.current && pathChanged;
   isFirstRender.current = false;
+  prevPathname.current = location.pathname;
 
   const direction = navigationType === 'POP' ? 'back' : 'forward';
   // Set by navigateToProductWithHero — a native View Transition is already
