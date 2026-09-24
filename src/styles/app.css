@@ -1622,6 +1622,15 @@ textarea {
   flex: 1;
 }
 
+.region-size-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
 /* ---------- CSV import ---------- */
 
 .csv-dropzone {

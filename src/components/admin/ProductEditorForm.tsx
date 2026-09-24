@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   supabase,
   STORAGE_BUCKET,
@@ -14,8 +14,9 @@ import { productImages } from '../../lib/productImages';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
+import { distinctRegions } from '../../lib/variants';
 import { ImageUploader } from './ImageUploader';
-import { ChipGroup, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
+import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
 import type { Product, ProductFormData, FormImage } from '../../types';
 
@@ -161,8 +162,9 @@ function validate(form: ProductFormData): FieldErrors {
  * points automatically instead of needing to be copied by hand.
  */
 export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }: ProductEditorFormProps) {
-  const { categories, refetch } = useProducts();
+  const { categories, products, allVariants, refetch } = useProducts();
   const { showToast } = useToast();
+  const knownRegions = useMemo(() => distinctRegions(products, allVariants), [products, allVariants]);
 
   const [form, setForm] = useState<ProductFormData>(emptyForm());
   const [images, setImages] = useState<FormImage[]>([]);
@@ -740,17 +742,14 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
       {product && (
         <>
           <div className="form-row">
-            <div className="form-field">
-              <label className="form-label" htmlFor="pf-region">Region</label>
-              <input
-                id="pf-region"
-                type="text"
-                className="form-input"
-                placeholder="e.g. AU"
-                value={form.region}
-                onChange={(e) => setField('region', e.target.value)}
-              />
-            </div>
+            <GuidedField
+              id="pf-region"
+              label="Region"
+              value={form.region}
+              options={knownRegions}
+              placeholder="e.g. AU"
+              onChange={(region) => setField('region', region)}
+            />
             <div className="form-field">
               <label className="form-label" htmlFor="pf-size">Size</label>
               <input

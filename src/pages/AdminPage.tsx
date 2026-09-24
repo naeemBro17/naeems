@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { AdminLayout, type AdminTab } from '../components/admin/AdminLayout';
 import { ProductList } from '../components/admin/ProductList';
 import { CategoryManager } from '../components/admin/CategoryManager';
+import { RegionSizeManager } from '../components/admin/RegionSizeManager';
 import { CSVImport } from '../components/admin/CSVImport';
 import { WholesalerList } from '../components/admin/WholesalerList';
 import { ReviewsTab } from '../components/admin/ReviewsTab';
@@ -48,7 +49,12 @@ export function AdminPage() {
       pendingWholesalers={pendingWholesalers}
     >
       {activeTab === 'products' && <ProductList />}
-      {activeTab === 'categories' && <CategoryManager />}
+      {activeTab === 'categories' && (
+        <>
+          <CategoryManager />
+          <RegionSizeManager />
+        </>
+      )}
       {activeTab === 'import-export' && <CSVImport />}
       {activeTab === 'wholesalers' && (
         <WholesalerList accounts={wholesalers} onReload={loadWholesalers} />
