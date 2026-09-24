@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from 'react';
 import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
 import { uploadAdminImage } from '../../lib/supabase';
 
@@ -34,11 +34,9 @@ export function AdminImagePicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  const uploadFile = async (file: File) => {
     if (!isAcceptedImageType(file)) {
       setError('Choose a JPG, PNG, or WebP image.');
       return;
@@ -60,9 +58,40 @@ export function AdminImagePicker({
     }
   };
 
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await uploadFile(file);
+  };
+
+  // Desktop-only — touch devices have no drag-and-drop, so this only ever
+  // arms on a mouse-driven drag (see ImageUploader, the multi-image field
+  // this mirrors).
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => setIsDragging(false);
+
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (!isUploading && file) await uploadFile(file);
+  };
+
   return (
     <div className="admin-image-picker">
-      <div className={`admin-image-picker__preview admin-image-picker__preview--${shape}`}>
+      <div
+        className={`admin-image-picker__preview admin-image-picker__preview--${shape}${
+          isDragging ? ' admin-image-picker__preview--dragging' : ''
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {value ? <img src={value} alt="" /> : placeholderIcon}
       </div>
       <div className="admin-image-picker__actions">

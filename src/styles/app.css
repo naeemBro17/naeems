@@ -1776,12 +1776,30 @@ textarea {
   display: flex;
   gap: var(--space-3);
   overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
+  padding-bottom: var(--space-2);
+}
+
+/* A visible track is the only affordance a mouse user has that more images
+   sit off-screen (touch scrolling doesn't need one — the swipe itself is
+   the affordance, and mobile browsers only ever show their own scrollbar
+   transiently during that swipe, never at rest, so this never clutters the
+   mobile layout). Thin and neutral rather than the browser default. */
+.image-uploader__grid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 
 .image-uploader__grid::-webkit-scrollbar {
-  display: none;
+  height: 6px;
+}
+
+.image-uploader__grid::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full, 999px);
+}
+
+.image-uploader__grid::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .image-uploader__item {
@@ -2217,6 +2235,12 @@ textarea {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+.admin-image-picker__preview--dragging {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .admin-image-picker__preview--circle {
