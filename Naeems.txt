@@ -2608,3 +2608,63 @@ WHAT I FOUND ALONG THE WAY
 
 Build: `npm run build` — PASSED, zero errors. `npx vitest run` — 9/9
 tests passed.
+
+========================================================================
+BATCH 12 — Desktop image upload: variant drag-and-drop, main row overflow
+========================================================================
+
+PART 1 — Variant image drag-and-drop didn't work
+Root cause: the variant "Image (optional)" field uses a different, older
+component (AdminImagePicker) than the main product's images (ImageUploader)
+— and AdminImagePicker had no drag-and-drop code at all, just the "Upload
+image" button/file-picker. Dropping a file onto it did nothing (confirmed
+live, before/after: no dragover class, no preventDefault, no upload
+attempt at all before the fix).
+Fix: added the same dragover/dragleave/drop handling ImageUploader already
+has to AdminImagePicker (drop onto the image preview box), reusing its
+existing upload/validation logic. Since AdminImagePicker is also the same
+component behind category images, banner slides, and the expert photo,
+those all gained working drag-and-drop too as a side effect of the shared
+component — did not touch the button/file-picker path.
+Verified live (real drag events dispatched on the actual component, both
+before and after the fix): before — no reaction at all; after — the drop
+zone highlights on drag-over and the drop correctly reaches the upload
+code path. PASSED.
+Files: src/components/admin/AdminImagePicker.tsx
+
+PART 2 — Main image row shifts right, can't scroll back
+Root cause: the thumbnail row (ImageUploader) is a deliberate single
+scrolling row (not a wrapping grid — wrapping would break the hold-to-drag
+reorder, which only knows how to resolve position along one horizontal
+axis). It already had `overflow-x: auto`, so it WAS technically scrollable
+— but its scrollbar was deliberately hidden (`scrollbar-width: none` +
+`-webkit-scrollbar{display:none}`) for a clean mobile look, which also
+removed the only affordance/handle a desktop mouse user had once the row
+overflowed. A plain vertical mouse wheel does nothing to a horizontal row
+by default either, so once enough images were added to overflow, a
+desktop user was stuck — exactly what Naeem saw.
+Fix (kept the single-row design, didn't switch to wrapping, to avoid
+breaking the reorder drag): swapped the hidden scrollbar for a thin,
+visible one (so there's now a real handle to drag), and added a wheel
+handler that redirects vertical mouse-wheel scrolling into horizontal
+scroll. The row is also keyboard-scrollable now (made it focusable) —
+confirmed Left/Right arrow keys scroll it once focused.
+Image count limit: checked the upload code and the database column
+(`products.image_urls`, a plain Postgres text array) — there is no cap
+anywhere, client or database. Effectively unlimited, as Naeem suspected.
+Verified live (real overflow row, 8 images): before the fix, a vertical
+wheel scroll did nothing; after the fix, the same scroll moved the row
+(scrollLeft 0 → 333px), and arrow keys scrolled it back. PASSED.
+Files: src/components/admin/ImageUploader.tsx, src/styles/app.css
+
+PART 3 — Mobile regression check
+Both fixes are desktop-only in effect: HTML5 drag events never fire from
+a touch gesture (nothing new to trigger on mobile), and the wheel handler
+only responds to `wheel` events, which touch scrolling doesn't send —
+mobile still scrolls the row by native swipe exactly as before. The
+existing hold-to-drag reorder logic (useDragReorder) wasn't touched.
+Not re-tested live on an actual touch device this session — reasoning
+from the code is that neither change has any mobile code path to affect.
+
+Build: `npm run build` — PASSED, zero errors. `npx vitest run` — 9/9
+tests passed.

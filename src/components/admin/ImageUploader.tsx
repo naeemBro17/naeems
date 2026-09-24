@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ChangeEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ChangeEvent,
+  type WheelEvent,
+} from 'react';
 import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
 import { useDragReorder } from '../../hooks/useDragReorder';
 import type { FormImage } from '../../types';
@@ -113,6 +121,18 @@ export function ImageUploader({
     onDrop: handleDrop,
   };
 
+  // A plain vertical mouse wheel does nothing to a horizontally-scrolling
+  // row by default, and this row deliberately stays single-line (see the
+  // CSS comment on .image-uploader__grid) — so once it overflows, a mouse
+  // user with no trackpad or precise scrollbar aim had no way to reach the
+  // rest of it. Redirect vertical wheel delta into horizontal scroll.
+  // Touch scrolling already works natively and never fires wheel events, so
+  // this is desktop-only and changes nothing on mobile.
+  const handleWheel = (e: WheelEvent<HTMLUListElement>) => {
+    if (e.deltaY === 0) return;
+    e.currentTarget.scrollLeft += e.deltaY;
+  };
+
   return (
     <div className="image-uploader">
       {images.length === 0 ? (
@@ -150,7 +170,13 @@ export function ImageUploader({
           <p className="image-uploader__sub-hint">JPG, PNG or WebP — max 10MB each</p>
         </div>
       ) : (
-        <ul className="image-uploader__grid" {...dragProps}>
+        <ul
+          className="image-uploader__grid"
+          tabIndex={0}
+          aria-label="Product images — scroll to see more"
+          onWheel={handleWheel}
+          {...dragProps}
+        >
           {images.map((image, index) => {
             const src = image.url ?? previewUrls.get(image.id);
             const isDragged = drag.dragIndex === index;
