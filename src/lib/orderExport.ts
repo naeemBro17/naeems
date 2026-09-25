@@ -17,7 +17,9 @@ function formatTakaAscii(amount: number): string {
 }
 
 function areaLine(order: OrderSnapshot): string {
-  return [order.address.district, order.address.thana].filter((v) => v.trim() !== '').join(', ');
+  return [order.address.thana, order.address.district, order.address.division]
+    .filter((v) => v.trim() !== '')
+    .join(', ');
 }
 
 /** Pre-filled WhatsApp message text for OrderSuccessPage's "Send on WhatsApp". */

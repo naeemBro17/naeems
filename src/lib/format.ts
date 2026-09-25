@@ -21,6 +21,16 @@ export function normalizeText(text: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/** Up to two initials for an avatar fallback, e.g. "Naeem Islam" -> "NI". */
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return parts
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join('');
+}
+
 /** Auto-generate a URL slug: lowercase, spaces→hyphens, strip special chars. */
 export function slugify(name: string): string {
   return name

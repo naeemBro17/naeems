@@ -109,10 +109,12 @@ export interface ProductFormData {
   skin_conditions: string[];
 }
 
-export type UserRole = 'wholesaler' | 'admin';
+export type UserRole = 'customer' | 'wholesaler' | 'admin';
 export type ProfileStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
 
-/** The current user's profile row (role + approval status). */
+/** The current user's profile row (role + approval status). Customer-only
+ *  fields (full_name, photo_url, division/district/thana/address_line) are
+ *  null for admin/wholesaler rows, which don't use them. */
 export interface Profile {
   id: string;
   role: UserRole;
@@ -121,6 +123,12 @@ export interface Profile {
   phone: string | null;
   created_at: string;
   approved_at: string | null;
+  full_name: string | null;
+  photo_url: string | null;
+  division: string | null;
+  district: string | null;
+  thana: string | null;
+  address_line: string | null;
 }
 
 /** One row of the admin Wholesalers tab (profile joined with auth email). */

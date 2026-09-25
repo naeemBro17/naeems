@@ -12,6 +12,8 @@ import { CartIcon } from '../../components/viewer/CartButton';
 import { coverImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { formatTaka } from '../../lib/format';
+import { useAuth } from '../../contexts/AuthContext';
+import { CheckoutLoginSheet } from '../../components/checkout/CheckoutLoginSheet';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import type { CartItem } from './types';
@@ -19,8 +21,20 @@ import type { CartItem } from './types';
 export function CartPage() {
   useDocumentTitle("Your Cart — Naeem's");
   const { items, subtotal, updateQuantity, removeItem } = useCheckoutState();
+  const { session } = useAuth();
   const navigate = useNavigate();
   const [pendingRemove, setPendingRemove] = useState<CartItem | null>(null);
+  const [showLoginSheet, setShowLoginSheet] = useState(false);
+
+  const handleCheckout = () => {
+    // Already logged in — customer, wholesaler, or admin alike — skip the
+    // ask entirely. Only a fully logged-out visitor sees the sheet.
+    if (session) {
+      navigate('/checkout/delivery');
+      return;
+    }
+    setShowLoginSheet(true);
+  };
 
   const handleDecrement = (item: CartItem) => {
     if (item.quantity > 1) {
@@ -116,11 +130,7 @@ export function CartPage() {
             <span className="checkout-cart__sticky-label">Total</span>
             <span className="checkout-cart__sticky-amount">{formatTaka(subtotal)}</span>
           </div>
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => navigate('/checkout/delivery')}
-          >
+          <button type="button" className="button button--primary" onClick={handleCheckout}>
             Checkout
           </button>
         </div>
@@ -135,6 +145,12 @@ export function CartPage() {
         confirmLabel="Remove"
         onConfirm={handleConfirmRemove}
         onClose={() => setPendingRemove(null)}
+      />
+
+      <CheckoutLoginSheet
+        isOpen={showLoginSheet}
+        onClose={() => setShowLoginSheet(false)}
+        redirectTo={`${window.location.origin}/checkout/delivery`}
       />
     </div>
   );

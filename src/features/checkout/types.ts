@@ -41,13 +41,14 @@ export const DELIVERY_ZONES: DeliveryZoneOption[] = [
 export interface DeliveryAddress {
   fullName: string;
   phone: string;
+  division: string;
   district: string;
   thana: string;
   fullAddress: string;
 }
 
 export function emptyDeliveryAddress(): DeliveryAddress {
-  return { fullName: '', phone: '', district: '', thana: '', fullAddress: '' };
+  return { fullName: '', phone: '', division: '', district: '', thana: '', fullAddress: '' };
 }
 
 /** A promo code currently applied to the order, plus its computed discount. */

@@ -1,0 +1,181 @@
+BATCH 16 — Customer Google Login + Account Page + Smart Address
+====================================================================
+
+SUMMARY
+-------
+Built: Google-only customer login, a real account page, and a Division→
+District→Thana address picker (with Dhaka/Chattogram city areas added — the
+public dataset was missing them). Login is only asked for at checkout, never
+while browsing. Security first, as instructed: a test customer account could
+not gain admin/wholesaler powers, see wholesale prices, or write to anything
+it shouldn't — every existing protection already keyed off the real role, not
+just "is logged in." One real bug found while building this: a cold page
+load straight onto checkout (exactly what happens right after the Google
+redirect) was bouncing the customer to an apparently-empty cart — fixed.
+Build and tests both pass.
+
+PART 1 — SECURITY: WHAT I CHECKED, WHAT I CHANGED
+-----------------------------------------------------
+Read every RLS policy, view, RPC, and storage policy in supabase/*.sql for
+anything treating "is authenticated" as "is admin/wholesaler" — that exact
+bug existed once (migration-004, already fixed), and Google login reopens the
+same risk since now any Google account becomes "authenticated."
+
+Result: every write policy (products, categories, app_settings, reviews,
+bento_tiles, product_variants, promo_codes, both storage buckets) already
+gates on is_admin() or is_wholesaler_or_admin() — real functions that check
+the profiles table, not just "logged in." Google login adds no new risk there.
+
+What DID need a change: profiles.role only allowed 'wholesaler'/'admin', and
+nobody could update their own row at all. migration-020 adds a 'customer'
+role with three layers so a bug in any one can't cause self-escalation:
+  1. Self-insert only accepts role='customer'+status='approved', or the
+     existing role='wholesaler'+status='pending' — never admin.
+  2. A new self-update policy: a signed-in user may only touch their own row.
+  3. A trigger (prevent_profile_self_escalation) hard-blocks any UPDATE that
+     changes role/status/approved_at unless the caller is already admin —
+     plain OLD/NEW comparison, no ambiguity. This is the one piece worth a
+     second read if you want to sanity-check it yourself before running it.
+Also scoped admin_list_profiles() (the Wholesalers tab's data source) to
+role='wholesaler' only, and bundled in Batch 15's optional search_path
+hardening for is_admin()/is_wholesaler_or_admin() since this migration
+already touches them.
+
+Couldn't test against a real customer session (Google isn't configured yet),
+but re-verified live, as a real anonymous request, that wholesale_price still
+returns null everywhere and every admin table is still write-protected —
+unchanged from Batch 15. The migration file's own "Verify" section has five
+copy-paste checks to run as a real logged-in customer once Google is on.
+
+BUG FOUND & FIXED — cold-load redirect race
+------------------------------------------------
+DeliveryDetailsPage/OrderSummaryPage decide "cart is empty" by resolving the
+cart against the loaded product catalog, which starts empty and loads over
+the network. Fine when clicking through from the cart page (catalog's
+already loaded), but the Google redirect lands fresh on /checkout/delivery —
+catalog still empty — and the page redirected straight back to /cart before
+the catalog had a chance to load, even though the cart was fine. Fixed by
+having both pages wait for the catalog before deciding the cart is empty.
+Confirmed via a real cold load onto /checkout/delivery, before and after.
+
+PARTS 2-5 — WHAT WAS BUILT
+-------------------------------
+Profile (Part 2): extended the existing `profiles` table rather than adding a
+new `customers` table — every role check already keys off profiles, and
+CLAUDE.md rules out a second source of truth for roles. New columns:
+full_name, photo_url, division, district, thana, address_line. Email is not
+duplicated — read straight from the Auth session. Files: migration-020,
+src/types/index.ts
+
+Lazy login (Part 3): tapping Checkout while logged out opens a bottom sheet
+with the spec's Bangla copy (wording lives in one file, checkoutCopy.ts) and
+a Google-branded button (real four-colour "G", built as SVG, no external
+asset). Already-logged-in users (customer/wholesaler/admin) skip it. Cart
+survives the Google round-trip because it was already in localStorage;
+redirectTo=/checkout/delivery lands the browser straight back there. That
+page doubles as both "first-time details" and "returning, prefilled" — no
+need for two separate forms for the same fields. Files:
+CheckoutLoginSheet.tsx, GoogleSignInButton.tsx, checkoutCopy.ts,
+CartPage.tsx, AuthContext.tsx
+
+Smart address (Part 4): Division→District→Thana as searchable bottom-sheet
+pickers (a 559-row dropdown is unusable on a phone), English+Bangla, each
+filtered by the one above, feeding the existing two delivery zones (mapping
+below). Files: bangladeshGeo.ts, PickerSheet.tsx, AddressFormFields.tsx
+(shared by the checkout step and the account page's edit sheet — one form,
+one validation rule), deliveryZones.ts
+
+Account page (Part 5): bottom nav's Account tab now opens a real page
+(/account), replacing the old "coming soon" sheet (deleted). Logged out: SVG
+droplet brand mark, one-line pitch, Google button. Logged in as customer:
+photo/initials header, Delivery Details card with an Edit sheet, a My Orders
+placeholder ("আপনার অর্ডারগুলো এখানে দেখাবে", ready for Batch 17), a
+"সাহায্য দরকার?" row to the existing WhatsApp number, quiet (not orange, not
+red) Log out with confirm. Logged in as admin/wholesaler: their name + a link
+to their existing panel — their login paths are untouched. Files:
+AccountPage.tsx, EditDeliveryDetailsSheet.tsx
+
+DISTRICT/THANA → DELIVERY ZONE MAPPING (please confirm)
+------------------------------------------------------------
+Only two zones exist today (Inside Dhaka ৳80, Outside Dhaka ৳130) — mapping
+lives in one file, src/lib/deliveryZones.ts:
+  - District=Dhaka, Thana=one of the 50 DMP areas (Mirpur, Dhanmondi,
+    Gulshan, Uttara East/West, Mohammadpur, Badda, etc.) → Inside Dhaka
+  - District=Dhaka, Thana=Savar/Dhamrai/Keraniganj/Nawabganj/Dohar (Dhaka's
+    outer upazilas) → Outside Dhaka — my judgment call, see below
+  - Every other district (incl. Chattogram city) → Outside Dhaka
+
+Judgment call: Steadfast prices Savar/Keraniganj/Dhamrai cheaper than
+"outside Dhaka" but pricier than central Dhaka — a third tier the app
+doesn't have. Mapped those five to Outside Dhaka since ৳130 is closer to
+Steadfast's real cost than ৳80 would recover. A real third zone with its own
+fee is a small follow-up if you'd rather have one.
+
+Steadfast's order API (for a later batch's real courier booking): couldn't
+reach their docs live — looks like it sits behind a merchant login. Worth
+confirming directly once you have API credentials; third-party write-ups I'm
+aware of describe a plain free-text address field, but treat that as
+unconfirmed until you see their real docs.
+
+DATASET USED + WHAT WAS ADDED
+----------------------------------
+Base: nuhil/bangladesh-geocode on GitHub (713 stars, the standard public
+dataset) — 8 divisions, 64 districts, 494 upazilas, English+Bangla, bundled
+into src/data/bangladeshGeo.ts at build time (no runtime API calls).
+
+As warned in the brief, its "Dhaka district" only lists 5 rural upazilas.
+Added on top, from Bangla Wikipedia's DMP/CMP articles (cross-checked against
+the English versions):
+  - 50 Dhaka Metropolitan Police areas
+  - 15 Chattogram Metropolitan Police areas (CMP has 16; "Karnaphuli" thana
+    was left out — Chattogram already had a near-identical "Karnafuli" rural
+    upazila, and showing both would confuse the picker)
+Total: 559 Division/District/Thana entries.
+
+WHAT NAEEM MUST DO
+-----------------------
+Dashboard configuration only, no code:
+1. Google Cloud Console → Credentials → Create OAuth Client ID (Web app).
+   Authorized redirect URI:
+     https://afkgkpuppmwmkyrbheew.supabase.co/auth/v1/callback
+2. Supabase → Authentication → Providers → Google: paste Client ID/Secret, enable.
+3. Supabase → Authentication → URL Configuration:
+     Site URL: https://naeems-all.vercel.app
+     Redirect URLs: https://naeems-all.vercel.app/**  and  http://localhost:5173/**
+4. Vercel env vars: none needed — Google's credentials live in Supabase's
+   own settings, not this app's code.
+
+SQL NAEEM MUST RUN IN SUPABASE
+-----------------------------------
+File: supabase/migration-020-customer-accounts.sql. Safe to re-run.
+  - Lets profiles hold a third account kind, "customer."
+  - Adds the columns a customer profile needs.
+  - A customer can only ever create/edit their OWN row, and can never change
+    their own role or approval status (enforced twice — policy + trigger).
+  - Narrows the admin Wholesalers tab back to wholesalers only.
+  - Applies Batch 15's optional search_path hardening to the two existing
+    role-check functions.
+Run BEFORE turning on Google sign-in (step 2 above) — until then, a Google
+sign-in would just fail to save a profile row, not do anything unsafe.
+
+WHAT COULDN'T BE TESTED LIVE
+---------------------------------
+Google isn't configured in Supabase yet, so no real Google sign-in end to
+end. Tested for real, on a local build against the live catalog: the login
+sheet (correct copy, correct Google button, Cancel keeps the cart), the
+pickers (search works, Dhaka shows all 50 city areas, zone auto-selects
+correctly for Gulshan→Inside and Savar→Outside), the cold-load redirect bug
+and its fix, and the account page logged-out and logged-in-as-admin, both
+light and dark mode. NOT tested: the actual Google round-trip, a real
+customer profile under RLS, and "returning customer, prefilled." Walk
+through the original spec's Part 6 once Google is on.
+
+Side note: testing the logged-out account view on this machine required
+clearing this browser's saved Supabase login locally (not the real sign-out,
+to avoid revoking your session everywhere) — if this Chrome profile shows you
+logged out of /admin next time, that's why; just sign back in.
+
+BUILD & TEST STATUS
+------------------------
+npm run build   → PASSED, zero errors
+npx vitest run  → PASSED, 9/9 tests

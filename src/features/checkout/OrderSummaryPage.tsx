@@ -16,14 +16,34 @@ import { CheckoutProgressBar } from './CheckoutProgressBar';
 
 export function OrderSummaryPage() {
   useDocumentTitle("Order Summary — Naeem's");
-  const { items, subtotal, zone, address, promo, setPromo, discount, total, finalizeOrder } =
-    useCheckoutState();
+  const {
+    items,
+    isCatalogLoading,
+    subtotal,
+    zone,
+    address,
+    promo,
+    setPromo,
+    discount,
+    total,
+    finalizeOrder,
+  } = useCheckoutState();
   const navigate = useNavigate();
 
   const [promoInput, setPromoInput] = useState('');
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoSuccess, setPromoSuccess] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+
+  // See DeliveryDetailsPage's identical guard — items resolve against the
+  // product catalog, which is still empty on a cold load.
+  if (isCatalogLoading) {
+    return (
+      <div className="full-screen-center" aria-label="Loading your order">
+        <span className="spinner spinner--large" aria-hidden="true" />
+      </div>
+    );
+  }
 
   if (items.length === 0 || address.fullName.trim() === '' || address.fullAddress.trim() === '') {
     return <Navigate to={items.length === 0 ? '/cart' : '/checkout/delivery'} replace />;

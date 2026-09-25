@@ -5,6 +5,7 @@ import { useProducts } from '../contexts/ProductContext';
 import { useToast } from '../hooks/useToast';
 import { averageRating, REVIEW_SELECT } from '../lib/reviews';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
+import { initialsOf } from '../lib/format';
 import { CollapsingHeader } from '../components/expert/CollapsingHeader';
 import { StatsRow } from '../components/expert/StatsRow';
 import { SocialLinks } from '../components/expert/SocialLinks';
@@ -19,16 +20,6 @@ import {
   type ExpertEditSection,
 } from '../components/admin/edit-sheets/ExpertEditSheet';
 import type { Review } from '../types';
-
-/** Initials shown when no expert photo is set. */
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return parts
-    .slice(0, 2)
-    .map((p) => p.charAt(0).toUpperCase())
-    .join('');
-}
 
 function MapPinIcon() {
   return (
