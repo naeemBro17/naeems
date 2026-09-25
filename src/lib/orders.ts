@@ -149,6 +149,22 @@ export async function adminSetOrderStatus(
   return { error: error?.message ?? null };
 }
 
+/** Admin: change the delivery fee on one order (e.g. a heavy parcel needs a
+ *  higher courier charge) while it's still pending/confirmed — see
+ *  admin_update_order_delivery_fee() (migration-024). The database
+ *  recalculates the order's total itself and logs the change into its
+ *  status history; nothing here computes or trusts a total. */
+export async function adminUpdateOrderDeliveryFee(
+  orderId: string,
+  newFee: number
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_update_order_delivery_fee', {
+    p_order_id: orderId,
+    p_new_fee: newFee,
+  });
+  return { error: error?.message ?? null };
+}
+
 /** Admin: mark a bKash order as paid after checking the bKash app by hand,
  *  set a courier tracking number, or edit the admin-only note — a plain
  *  UPDATE, gated by orders_admin_update + the column-level grant

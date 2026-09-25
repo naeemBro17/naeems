@@ -131,6 +131,32 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
               <ChevronRight />
             </button>
           )}
+
+          {/* Policy/trust pages — Batch 19 Part 4. */}
+          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/about')}>
+            <span className="menu-row__label">About Us</span>
+            <ChevronRight />
+          </button>
+          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/delivery')}>
+            <span className="menu-row__label">Delivery Info</span>
+            <ChevronRight />
+          </button>
+          <button
+            type="button"
+            className="menu-row menu-row--button"
+            onClick={() => goTo('/return-policy')}
+          >
+            <span className="menu-row__label">Return Policy</span>
+            <ChevronRight />
+          </button>
+          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/terms')}>
+            <span className="menu-row__label">Terms &amp; Conditions</span>
+            <ChevronRight />
+          </button>
+          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/privacy')}>
+            <span className="menu-row__label">Privacy Policy</span>
+            <ChevronRight />
+          </button>
         </div>
       ) : (
         <ComingSoon onBack={() => setScreen('root')} />

@@ -123,6 +123,11 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
                   alt=""
                   aria-hidden="true"
                   loading={index === 0 ? 'eager' : 'lazy'}
+                  // The first slide is this page's Largest Contentful Paint
+                  // element (Batch 15 audit) — fetchPriority tells the
+                  // browser to fetch it ahead of lower-priority resources
+                  // instead of waiting its turn in normal scan order.
+                  fetchPriority={index === 0 ? 'high' : undefined}
                 />
                 {/* Naeem designs the photo with any heading already baked in —
                     no rendered text or scrim over it, just the CTA. */}

@@ -36,7 +36,7 @@ export interface DeliveryZoneOption {
 
 /** The only two delivery zones the shop offers. Order also drives display order. */
 export const DELIVERY_ZONES: DeliveryZoneOption[] = [
-  { id: 'inside_dhaka', label: 'Inside Dhaka', fee: 80 },
+  { id: 'inside_dhaka', label: 'Inside Dhaka', fee: 70 },
   { id: 'outside_dhaka', label: 'Outside Dhaka', fee: 130 },
 ];
 

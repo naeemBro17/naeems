@@ -4,7 +4,7 @@ import type { AppSettings, BentoTile, Product } from '../../types';
 import { getDisplayPrice } from '../../lib/pricing';
 import { formatTaka } from '../../lib/format';
 import { isOutOfStock } from '../../lib/stockStatus';
-import { coverImage } from '../../lib/productImages';
+import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
@@ -73,7 +73,7 @@ function ProductFaceBody({ product }: { product: Product }) {
  *  doesn't. Quotes/backslashes/newlines would break out of the url()
  *  literal (mirrors BentoCustomTile's own image handling). */
 function faceImageProps(product: Product): { className: string; style?: CSSProperties } {
-  const cover = coverImage(product);
+  const cover = cardImage(product);
   if (cover === null) return { className: '' };
   const safeUrl = cover.replace(/["\\\r\n]/g, '');
   return {

@@ -78,6 +78,12 @@ export interface Product {
   image_url: string | null;
   /** All product images, in display order. May be absent in pre-migration cached data. */
   image_urls: string[] | null;
+  /** Small ~400px WebP "card" version of each image_urls entry, same index
+   *  order. Absent/shorter than image_urls for any product not yet through
+   *  the thumbnail backfill (migration-024 / Batch 19) — use cardImage()
+   *  from lib/productImages, never this field directly, so that fallback is
+   *  never forgotten at a call site. */
+  image_urls_thumb: string[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -225,6 +231,12 @@ export interface AppSettings {
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
+
+  /* --- Ad tracking (Batch 19) --- */
+  /** Facebook Pixel ID. Blank = Pixel never loads, no errors. */
+  fb_pixel_id: string;
+  /** Google Analytics 4 Measurement ID (G-XXXXXXX). Blank = GA never loads. */
+  ga_measurement_id: string;
 }
 
 /**

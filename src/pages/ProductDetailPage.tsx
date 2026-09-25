@@ -21,6 +21,7 @@ import {
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
 import { extractYouTubeId, youtubeEmbedUrl } from '../lib/youtube';
+import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
@@ -391,6 +392,13 @@ function DetailContent({
   // shown as plain text since there's nothing to select between (state 2).
   const plainLabel = !hasSelector ? variantOptionLabel(options[0], '') : '';
 
+  // Fires once per product shown (not on every variant swap) — see
+  // trackViewContent's own doc comment for what is/isn't sent.
+  useEffect(() => {
+    if (!product) return;
+    trackViewContent({ id: product.id, name: product.name, price: mainPrice });
+  }, [product?.id]);
+
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const index = Math.round(el.scrollLeft / el.clientWidth);
@@ -402,6 +410,7 @@ function DetailContent({
       ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
       : null;
     addItem(product.id, mainPrice, variant);
+    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
     if (typeof navigator.vibrate === 'function') {
       try {
         navigator.vibrate(15);

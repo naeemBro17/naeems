@@ -1,5 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import { useCart } from '../../contexts/CartContext';
+import { trackAddToCart } from '../../lib/analytics';
 
 interface CartButtonProps {
   productId: string;
@@ -88,6 +89,7 @@ export function CartButton({
     }
 
     addItem(productId, price);
+    trackAddToCart({ id: productId, name: productName, price }, 1);
 
     // navigator.vibrate is undefined on iOS Safari — guard so it never throws.
     if (typeof navigator.vibrate === 'function') {

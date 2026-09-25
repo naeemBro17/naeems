@@ -8,11 +8,11 @@
 // it was so the customer can fix whatever was wrong (out of stock, a promo
 // that just expired) and try again.
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useProducts } from '../../contexts/ProductContext';
-import { coverImage } from '../../lib/productImages';
+import { cardImage } from '../../lib/productImages';
 import { formatTaka } from '../../lib/format';
 import { computePromoDiscount, findValidPromoCode } from '../../lib/promoCodes';
 import { placeOrder } from '../../lib/orders';
@@ -169,8 +169,8 @@ export function OrderSummaryPage() {
                 className="checkout-summary-card__item"
               >
                 <span className="checkout-summary-card__thumb">
-                  {item.variantImage ?? coverImage(item.product) ? (
-                    <img src={item.variantImage ?? coverImage(item.product) ?? ''} alt={item.product.name} />
+                  {item.variantImage ?? cardImage(item.product) ? (
+                    <img src={item.variantImage ?? cardImage(item.product) ?? ''} alt={item.product.name} />
                   ) : (
                     <span className="checkout-summary-card__thumb-empty" aria-hidden="true" />
                   )}
@@ -323,6 +323,11 @@ export function OrderSummaryPage() {
             {placeError}
           </p>
         )}
+
+        <p className="checkout-summary-page__consent">
+          অর্ডার করে আপনি আমাদের <Link to="/terms">শর্তাবলি</Link> ও{' '}
+          <Link to="/return-policy">রিটার্ন পলিসি</Link> মেনে নিচ্ছেন
+        </p>
 
         <button
           type="button"

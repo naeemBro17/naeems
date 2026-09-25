@@ -6,10 +6,12 @@
 // just a receipt, "what happens next", and a way to the order's own page
 // or back to shopping. Promo usage is committed server-side inside
 // place_order() now, not here.
+import { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatTaka } from '../../lib/format';
 import { buildOrderPdf } from '../../lib/orderExport';
+import { trackPurchase } from '../../lib/analytics';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
@@ -17,6 +19,14 @@ export function OrderSuccessPage() {
   useDocumentTitle("Order Placed — Naeem's");
   const { lastOrder } = useCheckoutState();
   const navigate = useNavigate();
+
+  // The order number is passed as both trackers' event/transaction id, so
+  // even if this effect (or a page refresh landing back here) fires twice,
+  // Meta/GA4 de-duplicate by that id instead of double-counting the sale.
+  useEffect(() => {
+    if (!lastOrder) return;
+    trackPurchase(lastOrder.orderNumber, lastOrder.total);
+  }, [lastOrder?.orderNumber, lastOrder?.total]);
 
   if (!lastOrder) {
     return <Navigate to="/cart" replace />;
