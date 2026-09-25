@@ -3,7 +3,7 @@ import type { CartItem, DeliveryAddress, DeliveryZoneId } from '../features/chec
 import type { Order, OrderItem, OrderPaymentMethod, OrderStatusHistoryRow, OrderWithDetails } from '../types';
 
 const ORDER_SELECT =
-  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, created_at, updated_at';
+  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_status, created_at, updated_at';
 
 const ORDER_ITEM_SELECT =
   'id, order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total';
@@ -163,6 +163,79 @@ export async function adminUpdateOrderDeliveryFee(
     p_new_fee: newFee,
   });
   return { error: error?.message ?? null };
+}
+
+interface SteadfastFunctionResponse {
+  ok: boolean;
+  error?: string;
+  consignmentId?: string;
+  trackingCode?: string;
+  courierStatus?: string;
+  markedDelivered?: boolean;
+}
+
+export interface SteadfastBookingResult {
+  error: string | null;
+  consignmentId: string | null;
+  trackingCode: string | null;
+  courierStatus: string | null;
+}
+
+/** Admin: book this order's parcel with Steadfast Courier — see the
+ *  `steadfast` Edge Function (Batch 20) for every validation this goes
+ *  through server-side (order must be confirmed, not already booked, COD
+ *  amount worked out from payment method/status). Never sends order data
+ *  itself — the function reads the order from the database by id. */
+export async function bookSteadfastShipment(orderId: string): Promise<SteadfastBookingResult> {
+  const { data, error } = await supabase.functions.invoke('steadfast', {
+    body: { action: 'create', orderId },
+  });
+  const empty = { consignmentId: null, trackingCode: null, courierStatus: null };
+  if (error) {
+    return { error: error.message || 'Could not reach Steadfast. Please try again.', ...empty };
+  }
+  const body = data as SteadfastFunctionResponse;
+  if (!body.ok) {
+    return { error: body.error ?? 'Could not book with Steadfast.', ...empty };
+  }
+  return {
+    error: null,
+    consignmentId: body.consignmentId ?? null,
+    trackingCode: body.trackingCode ?? null,
+    courierStatus: body.courierStatus ?? null,
+  };
+}
+
+export interface SteadfastStatusResult {
+  error: string | null;
+  courierStatus: string | null;
+  markedDelivered: boolean;
+}
+
+/** Admin: ask Steadfast for this order's current delivery status and save
+ *  it. Only ever auto-advances the order's own status to 'delivered' —
+ *  everything else (cancelled/hold/returned) is left for Naeem to see and
+ *  act on himself. */
+export async function refreshSteadfastStatus(orderId: string): Promise<SteadfastStatusResult> {
+  const { data, error } = await supabase.functions.invoke('steadfast', {
+    body: { action: 'status', orderId },
+  });
+  if (error) {
+    return {
+      error: error.message || 'Could not reach Steadfast. Please try again.',
+      courierStatus: null,
+      markedDelivered: false,
+    };
+  }
+  const body = data as SteadfastFunctionResponse;
+  if (!body.ok) {
+    return { error: body.error ?? 'Could not refresh status.', courierStatus: null, markedDelivered: false };
+  }
+  return {
+    error: null,
+    courierStatus: body.courierStatus ?? null,
+    markedDelivered: body.markedDelivered ?? false,
+  };
 }
 
 /** Admin: mark a bKash order as paid after checking the bKash app by hand,

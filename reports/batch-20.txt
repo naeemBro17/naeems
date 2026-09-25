@@ -1,0 +1,149 @@
+BATCH 20 — Steadfast Courier Integration
+===========================================
+
+1) SUMMARY
+-----------
+Admin can now book a confirmed order's parcel with Steadfast Courier with
+one tap from the order detail screen, and pull back the delivery status
+later, instead of copying order details into Steadfast's own panel by
+hand. Everything runs through a new Edge Function that checks the caller
+is really an admin, reads the order from the database itself, and never
+trusts anything the browser sends. I also deployed the function and ran
+the SQL migration myself this time (unlike earlier batches) — see section
+6 for how far that testing actually went.
+
+
+2) STEADFAST DOCS — CONFIRMED vs. ASSUMED
+---------------------------------------------
+Steadfast doesn't publish a public docs website you can just browse — their
+official docs live behind merchant login. I did NOT build this from memory.
+Instead I found and read the actual source code of a real, currently
+maintained open-source API client (a Laravel package on GitHub, MIT
+licensed) that wraps this exact API, and confirmed these directly from its
+HTTP client code (not just its README, which is often vaguer than the code):
+  CONFIRMED (from real client source code):
+    - Base URL: https://portal.packzy.com/api/v1
+    - Auth headers: Api-Key, Secret-Key (plus Content-Type/Accept: application/json)
+    - POST create_order — fields: invoice, recipient_name, recipient_phone,
+      recipient_address, cod_amount, note (optional)
+    - GET status_by_cid/{consignment_id}, status_by_invoice/{invoice},
+      status_by_trackingcode/{code}
+    - Create-order success response: {status, message, consignment: {consignment_id,
+      tracking_code, status, ...}}
+    - Status-check response: {status, delivery_status} — values include
+      pending, in_review, delivered, partial_delivered, cancelled, hold, unknown
+    - A specific 401 case: "Account is not active!" if Naeem's Steadfast
+      account isn't yet approved for API use.
+  ASSUMED / NOT CONFIRMED:
+    - No public "paste this exact code into this exact URL" tracking link
+      format was found — steadfast.com.bd/tracking is a real public page,
+      but customers paste their tracking code into it rather than opening a
+      pre-filled link. Used that page as the "Track parcel" link.
+    - Exact wording of Steadfast's error messages for a rejected booking
+      (bad phone number, duplicate invoice, etc.) — the code shows Naeem
+      whatever text Steadfast sends back, whatever that turns out to be.
+  Everything Steadfast-specific (base URL, header names, field names) sits
+  in one small section at the top of supabase/functions/steadfast/index.ts
+  — if anything above turns out wrong, it's a one-place fix.
+
+
+3) WHAT WAS BUILT
+--------------------
+- supabase/functions/steadfast/index.ts — one Edge Function, two actions:
+  "create" (book) and "status" (refresh). Verifies the caller is an admin
+  by calling the database's own is_admin() check with the caller's real
+  session — the same check every other admin action in this app already
+  relies on, nothing new invented. Never accepts order details from the
+  browser — always re-reads the real order by id first. Handles the
+  browser-to-Supabase cross-origin request properly (CORS) — the first
+  function in this project actually called directly from the browser
+  rather than triggered by a database webhook, so this needed extra care I
+  caught and fixed during my own review before it ever shipped.
+- migration-025-steadfast.sql — three new columns on `orders`
+  (steadfast_consignment_id, steadfast_tracking_code, steadfast_status) and
+  two database functions that are the only way those columns (and the
+  order's own status/tracking_number) ever get written, matching how every
+  other order write in this app already works.
+- Admin order detail: "Steadfast-এ পাঠাও" button (only on confirmed,
+  not-yet-booked orders), a confirm step showing name/phone/address/COD
+  amount, and a "Steadfast Courier" section showing the consignment ID,
+  tracking code and courier status once booked, with a "ডেলিভারির অবস্থা
+  দেখো" button while shipped.
+- Admin Orders tab: "Update all shipped (N)" button — refreshes every
+  shipped-and-booked order's status in one tap.
+- Customer's "আমার অর্ডার" page: a "Track parcel on Steadfast →" link
+  appears once an order has been booked.
+- COD amount logic exactly as specified: Cash on Delivery → order total;
+  bKash marked paid → ৳0; bKash not yet verified → booking is blocked with
+  a clear message instead of a confirm dialog that would just fail.
+- Never books twice: re-opening an already-booked order just shows what's
+  already there — checked both in the Edge Function and, a second time, at
+  the database level (defense in depth against two admin sessions clicking
+  at once).
+
+
+4) NAEEM'S SETUP STEPS
+--------------------------
+Good news — most of this is already done:
+  - Your Steadfast API Key and Secret Key are already saved in Supabase
+    Edge Function secrets (STEADFAST_API_KEY, STEADFAST_SECRET_KEY) — I
+    found them already there when I checked, so nothing to add.
+  - The SQL migration (migration-025-steadfast.sql) is already applied to
+    your live database — I ran it myself and confirmed the new columns and
+    functions exist.
+  - The Edge Function is already deployed and live.
+So there's actually nothing left for you to *set up* — this is ready to use
+once this branch is merged. If you ever need to redeploy it after a future
+code change, the sentence to give Claude Code is:
+    "Deploy the Steadfast edge function to Supabase (supabase functions
+    deploy steadfast)."
+And if the two secrets are ever missing (e.g. a fresh Supabase project),
+where to find your Steadfast keys: log into your Steadfast merchant panel →
+Settings → API Support (or similar — Steadfast's own dashboard), copy the
+API Key and Secret Key shown there, and give them to Claude Code to add as
+Supabase secrets (never paste them anywhere else — not chat, not a file).
+
+
+5) HOW TO TEST SAFELY
+-------------------------
+There are currently no "confirmed" orders in your database to book against
+(the only 3 real orders in there right now are all cancelled test orders),
+so the very first real test will naturally be your first real customer
+order. Recommended:
+  1. Wait for (or place) a small, real, low-value test order.
+  2. Confirm it in Admin → Orders (Pending → Confirmed).
+  3. Open it, tap "Steadfast-এ পাঠাও", check the confirm screen shows the
+     right name/phone/address/COD amount, then confirm.
+  4. If it succeeds, check Steadfast's own merchant panel to see the same
+     parcel show up there — that confirms the whole path end-to-end.
+  5. Tap "ডেলিভারির অবস্থা দেখো" a little later to confirm status refresh
+     works too.
+Steadfast doesn't appear to offer a separate "sandbox/test mode" — the API
+key is tied to your real merchant account, so the safest test is one real,
+cheap, low-risk order rather than a fake one.
+
+
+6) WHAT COULD NOT BE TESTED LIVE
+------------------------------------
+- An actual real call to Steadfast's create_order / status_by_cid — I have
+  no way to place a real booking from this environment (no confirmed order
+  exists, and I shouldn't invent one against a real merchant account
+  without Naeem's say-so). Everything up to that point (the button, the
+  confirm dialog, the database write, the "never book twice" guard) was
+  built and reviewed carefully, and the Edge Function's own code was
+  syntax-checked, but the actual Steadfast API call itself is untested
+  against a real account.
+- The full admin UI in a real browser (no admin login available in this
+  environment — same limitation as every earlier batch's report).
+- Whether Naeem's Steadfast account is fully active for API bookings (the
+  library I read from handles a specific "Account is not active!" error —
+  if that happens on the first real attempt, it means Steadfast support
+  needs to activate API access on the account, not a bug here).
+
+
+BUILD & TEST STATUS
+----------------------
+npm run build   → PASSED, zero errors
+npx vitest run  → PASSED (9/9)
+
+Branch: feature/batch-20-steadfast

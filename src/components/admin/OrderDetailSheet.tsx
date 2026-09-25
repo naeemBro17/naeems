@@ -7,6 +7,8 @@ import {
   adminSetOrderStatus,
   adminUpdateOrder,
   adminUpdateOrderDeliveryFee,
+  bookSteadfastShipment,
+  refreshSteadfastStatus,
 } from '../../lib/orders';
 import { formatTaka } from '../../lib/format';
 import { buildOrderPdf } from '../../lib/orderExport';
@@ -103,6 +105,9 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   );
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [steadfastConfirmOpen, setSteadfastConfirmOpen] = useState(false);
+  const [isBookingSteadfast, setIsBookingSteadfast] = useState(false);
+  const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
 
   useEffect(() => {
     if (!orderId) {
@@ -209,6 +214,33 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     await reload();
   };
 
+  const handleBookSteadfast = async () => {
+    if (!order) return;
+    setSteadfastConfirmOpen(false);
+    setIsBookingSteadfast(true);
+    const result = await bookSteadfastShipment(order.id);
+    setIsBookingSteadfast(false);
+    if (result.error) {
+      showToast(result.error, 'error');
+      return;
+    }
+    showToast('Booked with Steadfast');
+    await reload();
+  };
+
+  const handleRefreshSteadfastStatus = async () => {
+    if (!order) return;
+    setIsRefreshingSteadfast(true);
+    const result = await refreshSteadfastStatus(order.id);
+    setIsRefreshingSteadfast(false);
+    if (result.error) {
+      showToast(result.error, 'error');
+      return;
+    }
+    showToast(result.markedDelivered ? 'Marked delivered' : `Courier status: ${result.courierStatus}`);
+    await reload();
+  };
+
   const handleCopyAddress = async () => {
     if (!order) return;
     const ok = await copyToClipboard(addressText(order));
@@ -222,6 +254,16 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   };
 
   const nextStatus = order ? NEXT_STATUS[order.status] : undefined;
+  // Mirrors the Edge Function's own COD logic (Batch 20) so the confirm
+  // dialog shows exactly what will be sent — null means "blocked", the
+  // bKash payment hasn't been verified yet.
+  const steadfastCodAmount = order
+    ? order.payment_method === 'bkash'
+      ? order.payment_status === 'paid'
+        ? 0
+        : null
+      : order.total
+    : null;
 
   return (
     <BottomSheet isOpen={orderId !== null} onClose={onClose} title={order?.order_number ?? 'Order'}>
@@ -374,6 +416,52 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             )}
           </section>
 
+          {(order.steadfast_consignment_id || order.status === 'confirmed') && (
+            <section className="order-detail__section">
+              <h2 className="order-detail__section-title">Steadfast Courier</h2>
+              {order.steadfast_consignment_id ? (
+                <>
+                  <p className="order-detail__trx">Consignment ID: {order.steadfast_consignment_id}</p>
+                  {order.steadfast_tracking_code && (
+                    <p className="order-detail__trx">Tracking code: {order.steadfast_tracking_code}</p>
+                  )}
+                  {order.steadfast_status && (
+                    <p className="order-detail__trx">Courier status: {order.steadfast_status}</p>
+                  )}
+                  {order.status === 'shipped' && (
+                    <button
+                      type="button"
+                      className="button button--secondary button--small"
+                      style={{ marginTop: 8 }}
+                      onClick={handleRefreshSteadfastStatus}
+                      disabled={isRefreshingSteadfast}
+                    >
+                      {isRefreshingSteadfast ? (
+                        <span className="spinner" aria-hidden="true" />
+                      ) : (
+                        'ডেলিভারির অবস্থা দেখো'
+                      )}
+                    </button>
+                  )}
+                </>
+              ) : steadfastCodAmount === null ? (
+                <p className="admin-panel__description">
+                  This bKash payment has not been verified yet — mark it as paid above before booking
+                  with Steadfast.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => setSteadfastConfirmOpen(true)}
+                  disabled={isBookingSteadfast}
+                >
+                  {isBookingSteadfast ? <span className="spinner" aria-hidden="true" /> : 'Steadfast-এ পাঠাও'}
+                </button>
+              )}
+            </section>
+          )}
+
           {order.customer_note && (
             <section className="order-detail__section">
               <h2 className="order-detail__section-title">Customer note</h2>
@@ -480,6 +568,20 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
         danger
         onConfirm={handleCancel}
         onClose={() => setCancelOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={steadfastConfirmOpen}
+        title="Book with Steadfast?"
+        message={
+          order
+            ? `${order.customer_name} · ${order.customer_phone} · ${order.address_line}, ${order.thana}, ${order.district} · COD amount: ${formatTaka(steadfastCodAmount ?? 0)}`
+            : ''
+        }
+        confirmLabel="Book parcel"
+        cancelLabel="Cancel"
+        onConfirm={handleBookSteadfast}
+        onClose={() => setSteadfastConfirmOpen(false)}
       />
     </BottomSheet>
   );

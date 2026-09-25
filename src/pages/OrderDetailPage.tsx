@@ -156,10 +156,22 @@ export function OrderDetailPage() {
             )}
 
             {order.tracking_number && (
-              <div className="order-detail__tracking">
-                <span>Tracking number</span>
-                <strong>{order.tracking_number}</strong>
-              </div>
+              <>
+                <div className="order-detail__tracking">
+                  <span>Tracking number</span>
+                  <strong>{order.tracking_number}</strong>
+                </div>
+                {order.steadfast_consignment_id && (
+                  <a
+                    href="https://steadfast.com.bd/tracking"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="order-detail__tracking-link"
+                  >
+                    Track parcel on Steadfast →
+                  </a>
+                )}
+              </>
             )}
 
             <section className="checkout-summary-card">
