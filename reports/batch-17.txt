@@ -1,0 +1,186 @@
+BATCH 17 — Category Chips, Search Rebuild, Animation Audit
+====================================================================
+
+SUMMARY
+-------
+Found the real cause of the chip-scrolling bug — a CSS trap, not a timing
+issue like Batch 10 assumed — and fixed it with a pinned duplicate bar,
+verified live at every category tested. Rebuilt search into its own screen
+(recent searches, live suggestions, results with a count, all surviving
+Back-navigation via the URL) matching Daraz/Shopee-style search. Audited
+every open/close interaction on the site; found and fixed three real "opens
+but doesn't close" bugs. Build and tests both pass.
+
+
+PART 1 — CATEGORY CHIPS
+----------------------------
+Root cause (confirmed live, not assumed): the chip row's wrapper
+(.home-section, one per reorderable homepage section) is exactly as tall as
+the chip row itself — a live test showed both at exactly 59px. CSS
+`position: sticky` can only stick within the height its own parent box
+gives it room to move through; with zero spare height, sticky did nothing
+useful no matter how it was tuned. This is why Batch 10's timing fix didn't
+help — the bug was never about when the scroll ran, it was that scrolling
+the chip row into view always ends with it under the fixed header once the
+page is tall enough, because there was never really anything holding it in
+place after that.
+
+Fix: a second, always-mounted copy of the chip row, fixed just below the
+header, that fades/slides in exactly when the original has scrolled up past
+the header and fades back out when scrolled back above it (plain scroll
+listener, rAF-throttled). Tapping either copy filters the same way and
+re-highlights both. Tapping a chip now scrolls to a manually computed
+position (chip row's real offset minus header height) rather than relying on
+scrollIntoView, which was the piece silently depending on sticky actually
+working.
+
+Verified live (dev build, real product data):
+  - Body Care (13 products): tapped from top of page → pinned bar's
+    getBoundingClientRect().top measured 60, header's own bottom edge also
+    60 — flush, no gap, no overlap. Confirmed both directions: scrolling
+    down past the original row shows the pinned copy (opacity 0→1,
+    top:60px), scrolling back up hides it again (opacity back to 0).
+  - Selecting a category from the Browse circles (not the chip row) lights
+    up the matching chip in both copies and scrolls the same way.
+  - Active-chip horizontal scroll-into-view (e.g. Hair Care sitting off the
+    right edge of the row) confirmed via the new per-chip ref map in
+    CategoryChips.tsx.
+  - Eye Care (1 product) and All (104 products) both filter and highlight
+    correctly; with so little content on Eye Care the page may not be tall
+    enough to ever trigger the pinned bar at all, same as before — that's
+    correct, not a bug, there's nothing to scroll past.
+Not independently re-measured at exactly 360px/390px device width — this
+dev environment's viewport didn't respond to resize commands, but the
+layout itself has no breakpoint between 360-640px (confirmed in app.css),
+so the 480px-capped content column measured above renders identically
+across that whole range.
+
+Files: src/pages/ViewerPage.tsx, src/components/viewer/CategoryChips.tsx,
+src/styles/app.css
+
+
+PART 2 — SEARCH
+--------------------
+New dedicated screen at /search (src/pages/SearchPage.tsx), reusing the
+existing Fuse.js matching (src/hooks/useSearch.ts — unchanged, already
+case-insensitive and already matches brand + category name, so left alone
+per the brief) rather than rebuilding search itself:
+
+  1. Tapping the home search bar (now a button, not a live input —
+     SearchEntryBar.tsx) or the bottom nav's Search tab goes straight to
+     /search. No hero, Browse circles, bento grid, or chips there.
+  2. Empty: recent searches (persistent list, not the old focus-only
+     dropdown) with per-term remove + Clear all, plus up to 8 category quick
+     picks.
+  3. Typing 2+ characters: a live suggestions dropdown (thumbnail + name)
+     floats over the results grid, which is already updating live
+     underneath it — confirmed live: typing "cerave" showed "16 products"
+     and a real CeraVe-only grid the instant the dropdown appeared.
+  4. Results: count line ("16 products found") + the same ProductGrid/
+     ProductCard as the home page, including its existing empty-state
+     ("No results for '...'", suggests clearing the search).
+  5. Query lives in the URL (?q=cerave), synced one-directionally
+     (query→URL, replacing not pushing, so typing doesn't spam browser
+     history) so a reload or shared link restores it.
+  6. Confirmed live: searched "cerave", opened a product from the results,
+     pressed Back → landed back on /search?q=cerave, input showed "cerave"
+     again, the same CeraVe grid was showing at very close to the same
+     scroll position, and — checked directly —
+     document.activeElement was <body>, not the input, so no keyboard
+     popped up. That was the specific bug named in the brief; it's fixed by
+     never auto-focusing on a return trip (only ever on a genuinely fresh,
+     empty entry into the page).
+  7. Clear (×) on the input; Back arrow returns to home.
+
+One design call: the brief's example result-count text was given in both
+Bangla and English ("১৩টি প্রোডাক্ট পাওয়া গেছে" / "13 products") — used the
+English form since every other piece of site chrome (buttons, labels,
+empty states) is English throughout; only the Batch 16 checkout login
+moment was asked to be Bangla specifically.
+
+Files: src/pages/SearchPage.tsx (new), src/lib/searchScroll.ts (new),
+src/components/viewer/SearchEntryBar.tsx (new),
+src/components/viewer/SearchBar.tsx (extended with optional onBack/
+autoFocus, filter button now optional), SearchPanels.tsx renamed to
+SearchSuggestions.tsx and trimmed to just the live dropdown (recent search
+UI moved to SearchPage as persistent content, not a focus-gated overlay),
+src/hooks/useSearch.ts (added optional initialQuery), src/pages/ViewerPage.tsx
+(search state removed — the home grid now only ever reflects category +
+Brand/Skin Type filters), src/components/viewer/BottomNav.tsx (Search tab
+navigates directly, matching how Cart already did).
+
+
+PART 3 — ANIMATION AUDIT
+-----------------------------
+Went through every open/close/move interaction on the site. Most were
+already solid — sheets (BottomSheet, SideDrawer, used by the hamburger menu
+and every admin edit sheet) already had matching open AND close animations
+with prefers-reduced-motion handling; accordions already animate smoothly
+both ways; the card→product hero View Transition and the page slide-in/out
+(including Batch 11's "never replay on a ?variant= change" fix) were
+re-verified working and untouched.
+
+  Interaction                          Before                  After
+  ------------------------------------ ----------------------- -----------------------
+  Bottom sheets (login, delivery,      Open + close animated   No change — already fine
+  admin edit sheets, filters)
+  Side drawer (hamburger menu)         Open + close animated   No change — already fine
+  Accordions (product page)            Smooth both ways        No change — already fine
+  Page navigation forward/back         Slide, 200ms             Slide, 350ms (matches
+                                                                 CLAUDE.md's page tier)
+  Card→product hero transition         Working                 Re-verified, untouched
+  Card "..." menu                      Opens/closes instantly, No change — already fine
+                                        no animation at all     Fades + scales in (150ms)
+                                                                 AND out (150ms) — confirmed
+                                                                 live: opacity 0→1 opening,
+                                                                 closing class + fade
+                                                                 confirmed before removal
+  Modal (confirm dialogs, CSV import,  Opens with fade+slide,  Same open animation, now
+  combine-into-variants, admin forms)  closes instantly         also fades+slides out
+                                                                 (180ms) before unmounting —
+                                                                 confirmed live via a real
+                                                                 Remove-item confirm dialog
+  Toasts                               Fades in, then just     Now fades/slides out (200ms)
+                                        vanishes when its       before being removed from
+                                        timer removes it        the list
+  Category chip select                 Scrolled to the wrong   Smooth scroll to the correct
+                                        place (Part 1's bug)    pinned position (Part 1)
+  Search suggestions/results           Old: shared the home    New dedicated page: dropdown
+                                        grid, no separate       fades in/out with focus,
+                                        transition               results grid renders inline
+  Cart add feedback, bento tiles,      Already animated         No change — already fine
+  toast entrance, checkout success
+
+Not independently re-measured pixel-by-pixel for smoothness: this dev
+environment's automated browser doesn't tick CSS keyframe animations or
+window.scrollTo(behavior:'smooth') at real wall-clock speed (confirmed
+separately — instant/legacy scrollTo worked instantly and correctly, only
+the smooth-animated path stalled under automation), so exact frame-by-frame
+smoothness couldn't be verified live the way the underlying open/close LOGIC
+could. That logic — the isRendered/isClosing mount-for-one-more-frame
+pattern — is the same one BottomSheet.tsx already used successfully before
+this batch, and was confirmed via computed opacity + class checks at each
+step (element present with the closing class → mounted for the extra frame
+→ then actually removed), not just eyeballed.
+
+Files: src/components/shared/Modal.tsx, src/components/shared/Toast.tsx,
+src/components/shared/ToastContainer.tsx, src/components/viewer/CardMenu.tsx,
+src/styles/app.css
+
+
+NOT VERIFIED LIVE
+----------------------
+- Exact 360px/390px viewport measurements (environment limitation, see
+  Part 1 — layout has no breakpoint in that range so this shouldn't matter).
+- Frame-by-frame animation smoothness on a real mid-range Android phone —
+  test on an actual phone before/after this branch if possible; the
+  mechanism is verified correct, the feel is not something this environment
+  could confirm.
+- Google-login-dependent flows (unrelated to this batch, still blocked on
+  Naeem completing the Batch 16 Google/Supabase setup).
+
+
+BUILD & TEST STATUS
+------------------------
+npm run build   → PASSED, zero errors
+npx vitest run  → PASSED, 9/9 tests

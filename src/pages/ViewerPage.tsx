@@ -12,12 +12,10 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminEdit } from '../contexts/AdminEditContext';
 import { useNavigate } from 'react-router-dom';
-import { useSearch } from '../hooks/useSearch';
 import { useProductFilters } from '../hooks/useProductFilters';
 import { useDragReorder } from '../hooks/useDragReorder';
 import { useToast } from '../hooks/useToast';
-import { rememberGridScroll, takeGridScroll } from '../lib/gridScroll';
-import { productPath } from '../lib/slugify';
+import { takeGridScroll } from '../lib/gridScroll';
 import { saveSettings, serializeIdList } from '../lib/settingsLists';
 import {
   DEFAULT_SECTION_ORDER,
@@ -25,16 +23,14 @@ import {
   REORDERABLE_SECTIONS,
   type HomeSectionId,
 } from '../lib/layoutOrder';
-import type { Product } from '../types';
-import { SearchBar } from '../components/viewer/SearchBar';
+import { SearchEntryBar } from '../components/viewer/SearchEntryBar';
 import { FilterSheet } from '../components/viewer/FilterSheet';
-import { SearchPanels } from '../components/viewer/SearchPanels';
 import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
 import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
 import { ProductGrid } from '../components/viewer/ProductGrid';
-import { BottomNav, type NavTab } from '../components/viewer/BottomNav';
+import { BottomNav } from '../components/viewer/BottomNav';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
@@ -94,10 +90,58 @@ export function ViewerPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<NavTab>('home');
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const productsRef = useRef<HTMLElement>(null);
+  const chipsRowRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(52);
+  // True once the in-flow chip row has scrolled up past the header — a
+  // second, always-pinned copy of the chips then takes over visually (see
+  // .home-chips-pinned in app.css). Plain CSS `position: sticky` on the
+  // in-flow row doesn't work here: each reorderable homepage section (hero/
+  // browse/bento/chips) is wrapped in its own .home-section box sized to
+  // exactly that section's content, so the chip row's sticky "containing
+  // block" is only ever as tall as the chip row itself — there's no room
+  // for it to visibly stick before its own tiny box scrolls past too (see
+  // reports/batch-17.txt Part 1 for how this was found). A fixed duplicate,
+  // toggled by scroll position, sidesteps that entirely.
+  const [isChipsPinned, setIsChipsPinned] = useState(false);
+
+  // Measures the header's real height (used both for the pinned chips'
+  // top offset and the scroll-target math below) and re-measures on resize.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const setHeight = () => setHeaderHeight(header.getBoundingClientRect().height);
+    setHeight();
+    const observer = new ResizeObserver(setHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
+  // A plain scroll listener rather than IntersectionObserver: simpler to
+  // reason about, and the chip row's own height can change (e.g. its
+  // categories load in after first paint), which would otherwise mean
+  // recreating the observer's rootMargin whenever that height settles.
+  // rAF-throttled so this never runs more than once per frame.
+  useEffect(() => {
+    let ticking = false;
+    const checkPinned = () => {
+      ticking = false;
+      const el = chipsRowRef.current;
+      if (!el) return;
+      const chipsDocumentTop = el.getBoundingClientRect().top + window.scrollY;
+      setIsChipsPinned(window.scrollY > chipsDocumentTop - headerHeight);
+    };
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(checkPinned);
+    };
+    checkPinned();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [headerHeight]);
 
   // Coming back from a product detail page: put the grid back where it was.
   // Runs after products land so the list is tall enough to scroll into.
@@ -120,64 +164,52 @@ export function ViewerPage() {
       selectedCategoryId === null ? sortFeaturedFirst(activeProducts) : activeProducts,
     [activeProducts, selectedCategoryId]
   );
-  // Choosing a suggestion opens that product, like tapping its card.
-  const openSuggestedProduct = useCallback(
-    (product: Product) => {
-      rememberGridScroll();
-      navigate(productPath(product));
-    },
-    [navigate]
-  );
-
-  const search = useSearch({
-    products: activeProducts,
-    defaultOrdered: orderedProducts,
-    categoryId: selectedCategoryId,
-    onSelectSuggestion: openSuggestedProduct,
-  });
-
-  // Brand / Skin Type filtering sits on top of search+category, never inside
-  // it — the grid gets search.results run through it; search itself, and
-  // its own suggestions, are untouched.
+  // Brand / Skin Type filtering sits on top of the category selection —
+  // free-text search now lives entirely on its own page (SearchPage), the
+  // home grid only ever shows the category-filtered catalog.
   const productFilters = useProductFilters(activeProducts);
-  const filteredProducts = productFilters.apply(search.results);
-
-  const handleRecent = useCallback(
-    (term: string) => {
-      search.applyTerm(term);
-      searchInputRef.current?.blur();
-    },
-    [search]
-  );
+  const filteredProducts = productFilters.apply(orderedProducts);
 
   const scrollToProducts = useCallback(() => {
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
+
+  // Scrolls so the chip row lands right below the header, with products
+  // visible underneath — never past it, unlike the old scrollToProducts-
+  // based version, which scrolled the chip row itself off-screen above the
+  // header once the filtered grid was tall enough to allow the scroll to go
+  // that far (see reports/batch-17.txt Part 1). Computed manually (current
+  // viewport offset + current scroll - header height) rather than a plain
+  // scrollIntoView, since the chip row isn't actually CSS-sticky (see the
+  // isChipsPinned effect above) — scrollIntoView's block:'start' would
+  // otherwise land it at y=0, under the header, not just below it.
+  const scrollToChips = useCallback(() => {
+    const el = chipsRowRef.current;
+    if (!el) return;
+    const targetY = el.getBoundingClientRect().top + window.scrollY - headerHeight;
+    window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+  }, [headerHeight]);
 
   // The Browse circles and the chips write the same filter, so selecting in
   // either place lights up the other.
   const handleSelectCategory = useCallback(
     (id: string | null) => {
       setSelectedCategoryId(id);
-      // scrollToProducts measures productsRef's CURRENT position — calling it
+      // scrollToChips measures chipsRowRef's CURRENT position — calling it
       // synchronously here measures the layout from before this filter took
       // effect (setSelectedCategoryId is async/batched), then starts a smooth
       // scroll toward that stale target just as the grid's real height (very
       // different depending on how many products the category has) lands
-      // underneath it. A category with a very different row count from
-      // whatever was showing before is exactly when the scroll and the
-      // reflow could visibly fight each other — the chip row and grid
-      // frame looking cut off / covered while that settled. Waiting two
-      // animation frames lets the browser finish laying out and painting
-      // the filtered grid first, so the scroll always measures the real,
-      // final position.
+      // underneath it. Waiting two animation frames lets the browser finish
+      // laying out and painting the filtered grid first, so the scroll
+      // always measures the real, final position.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          scrollToProducts();
+          scrollToChips();
         });
       });
     },
-    [scrollToProducts]
+    [scrollToChips]
   );
 
   const handleRetry = async () => {
@@ -187,14 +219,7 @@ export function ViewerPage() {
   };
 
   const handleHomeTab = () => {
-    setActiveTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleSearchTab = () => {
-    setActiveTab('search');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    searchInputRef.current?.focus();
   };
 
   const handleAccountTab = () => {
@@ -274,7 +299,7 @@ export function ViewerPage() {
 
   return (
     <div className="viewer-shell">
-      <header className="app-header">
+      <header className="app-header" ref={headerRef}>
         <button
           type="button"
           className="app-header__hamburger"
@@ -306,22 +331,27 @@ export function ViewerPage() {
         </button>
       </header>
 
+      {/* Always mounted (so it can animate in/out smoothly, no snap-in),
+          only actually visible once isChipsPinned — see the effect above. */}
+      <div
+        className={`home-chips-pinned${isChipsPinned ? ' home-chips-pinned--visible' : ''}`}
+        style={{ top: headerHeight }}
+        aria-hidden={!isChipsPinned}
+      >
+        <CategoryChips
+          categories={categories}
+          selectedId={selectedCategoryId}
+          onSelect={handleSelectCategory}
+        />
+      </div>
+
       {isOffline && <OfflineBanner />}
 
       <div className="home-search">
-        <SearchBar
-          value={search.query}
-          onChange={search.setQuery}
-          inputRef={searchInputRef}
-          onFocus={search.onFocus}
-          onBlur={search.onBlur}
-          onKeyDown={search.onKeyDown}
-          onClear={search.clear}
-          isExpanded={search.isDropdownOpen}
+        <SearchEntryBar
           onOpenFilters={() => setFilterOpen(true)}
           activeFilterCount={productFilters.activeCount}
         />
-        <SearchPanels search={search} onRecent={handleRecent} />
       </div>
 
       {movableSections.map((id, index) => {
@@ -342,7 +372,7 @@ export function ViewerPage() {
           ),
           bento: <BentoGrid products={activeProducts} settings={settings} />,
           chips: (
-            <div className="home-chips">
+            <div className="home-chips" ref={chipsRowRef}>
               <CategoryChips
                 categories={categories}
                 selectedId={selectedCategoryId}
@@ -394,20 +424,15 @@ export function ViewerPage() {
         <ProductGrid
           products={filteredProducts}
           isLoading={isLoading}
-          searchQuery={search.query}
+          searchQuery=""
           selectedCategoryId={selectedCategoryId}
-          onClearSearch={search.clear}
+          onClearSearch={() => {}}
           activeFilterCount={productFilters.activeCount}
           onClearFilters={productFilters.clear}
         />
       </main>
 
-      <BottomNav
-        activeTab={activeTab}
-        onHome={handleHomeTab}
-        onSearch={handleSearchTab}
-        onAccount={handleAccountTab}
-      />
+      <BottomNav activeTab="home" onHome={handleHomeTab} onAccount={handleAccountTab} />
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <FilterSheet
@@ -416,7 +441,7 @@ export function ViewerPage() {
         filters={productFilters.filters}
         onChange={productFilters.setFilters}
         availableBrands={productFilters.availableBrands}
-        baseProducts={search.results}
+        baseProducts={orderedProducts}
       />
 
       {/* Both render nothing for anyone who isn't an approved admin. */}

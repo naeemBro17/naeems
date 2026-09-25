@@ -2,6 +2,9 @@ import type { Toast as ToastData } from '../../types';
 
 interface ToastProps {
   toast: ToastData;
+  /** True for one last animation frame before removal — fades/slides the
+   *  toast back out instead of it vanishing. */
+  isLeaving?: boolean;
 }
 
 const TOAST_ICONS: Record<ToastData['type'], string> = {
@@ -10,9 +13,9 @@ const TOAST_ICONS: Record<ToastData['type'], string> = {
   info: 'M12 16v-4m0-4h.01',
 };
 
-export function Toast({ toast }: ToastProps) {
+export function Toast({ toast, isLeaving = false }: ToastProps) {
   return (
-    <div className={`toast toast--${toast.type}`}>
+    <div className={`toast toast--${toast.type}${isLeaving ? ' toast--leaving' : ''}`}>
       <svg
         className="toast__icon"
         viewBox="0 0 24 24"

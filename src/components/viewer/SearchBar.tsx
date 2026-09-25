@@ -12,10 +12,15 @@ interface SearchBarProps {
   onClear?: () => void;
   /** True while the autocomplete list is showing, for aria-expanded. */
   isExpanded?: boolean;
-  /** Opens the Brand/Skin Type filter sheet. */
-  onOpenFilters: () => void;
+  /** Opens the Brand/Skin Type filter sheet. Omit to hide the filter button
+   *  entirely — SearchPage has no use for it, only the home grid does. */
+  onOpenFilters?: () => void;
   /** Number of active filters, shown as a badge on the filter button. */
-  activeFilterCount: number;
+  activeFilterCount?: number;
+  /** SearchPage's way back to the home view — renders a back chevron before
+   *  the input when given. Omit on the home page, which has no "back". */
+  onBack?: () => void;
+  autoFocus?: boolean;
 }
 
 export function SearchBar({
@@ -28,15 +33,40 @@ export function SearchBar({
   onClear,
   isExpanded = false,
   onOpenFilters,
-  activeFilterCount,
+  activeFilterCount = 0,
+  onBack,
+  autoFocus = false,
 }: SearchBarProps) {
   const localRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? localRef;
 
   return (
     <div className="search-row">
-      {/* No autoFocus and no focus-on-mount effect — the keyboard must only
-          open when the reader taps the field themselves. */}
+      {onBack && (
+        <button
+          type="button"
+          className="search-row__back"
+          onClick={onBack}
+          aria-label="Back"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 12H5" />
+            <path d="M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+      )}
+
+      {/* No focus-on-mount effect here — SearchPage controls autoFocus
+          itself (only on a genuinely fresh, empty entry into search, never
+          on Back-navigation into an existing query — see SearchPage.tsx). */}
       <div className="search-bar">
         <svg
           className="search-bar__icon"
@@ -69,6 +99,7 @@ export function SearchBar({
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
+          autoFocus={autoFocus}
         />
         {value !== '' && (
           <button
@@ -96,35 +127,37 @@ export function SearchBar({
         )}
       </div>
 
-      <button
-        type="button"
-        className="filter-button"
-        onClick={onOpenFilters}
-        aria-label={
-          activeFilterCount > 0
-            ? `Filter products, ${activeFilterCount} active`
-            : 'Filter products'
-        }
-      >
-        <svg
-          className="filter-button__icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
+      {onOpenFilters && (
+        <button
+          type="button"
+          className="filter-button"
+          onClick={onOpenFilters}
+          aria-label={
+            activeFilterCount > 0
+              ? `Filter products, ${activeFilterCount} active`
+              : 'Filter products'
+          }
         >
-          <path d="M4 7h16" />
-          <path d="M7 12h10" />
-          <path d="M10 17h4" />
-        </svg>
-        {activeFilterCount > 0 && (
-          <span className="filter-button__badge" aria-hidden="true">
-            {activeFilterCount}
-          </span>
-        )}
-      </button>
+          <svg
+            className="filter-button__icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 7h16" />
+            <path d="M7 12h10" />
+            <path d="M10 17h4" />
+          </svg>
+          {activeFilterCount > 0 && (
+            <span className="filter-button__badge" aria-hidden="true">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      )}
     </div>
   );
 }

@@ -17,11 +17,33 @@ interface CardMenuProps {
  * The "..." overlay on a product card image and its popup. Every handler stops
  * propagation so opening the menu never navigates to the product detail page.
  */
+/** Must match .card-menu__popup--closing's animation duration in app.css. */
+const CLOSE_ANIMATION_MS = 150;
+
 export function CardMenu({ product, copyPrice, outOfStock }: CardMenuProps) {
   const { showToast } = useToast();
   const { isEditMode, openProductEdit } = useAdminEdit();
   const [isOpen, setIsOpen] = useState(false);
+  // Popup stays mounted for one extra animation frame on close so it fades/
+  // shrinks back out instead of vanishing — the same pattern as BottomSheet.
+  const [isRendered, setIsRendered] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRendered(true);
+      setIsClosing(false);
+      return;
+    }
+    if (!isRendered) return;
+    setIsClosing(true);
+    const timer = window.setTimeout(() => {
+      setIsRendered(false);
+      setIsClosing(false);
+    }, CLOSE_ANIMATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, isRendered]);
 
   // Close on a tap anywhere outside the menu, or on Escape.
   useEffect(() => {
@@ -89,8 +111,11 @@ export function CardMenu({ product, copyPrice, outOfStock }: CardMenuProps) {
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="card-menu__popup" role="menu">
+      {isRendered && (
+        <div
+          className={`card-menu__popup${isClosing ? ' card-menu__popup--closing' : ''}`}
+          role="menu"
+        >
           {/* Admin-only, and only while Edit Mode is on. */}
           {isEditMode && (
             <button

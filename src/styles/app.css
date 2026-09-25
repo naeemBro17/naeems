@@ -279,6 +279,27 @@ textarea {
   }
 }
 
+/* Held mounted (see ToastContainer.tsx) for this one extra animation
+   instead of just disappearing when its timer removes it from state. */
+.toast--leaving {
+  animation: toast-out 200ms ease-in forwards;
+}
+
+@keyframes toast-out {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(8px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+  .toast--leaving {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* ---------- Modal ---------- */
 
 .modal-backdrop {
@@ -322,6 +343,33 @@ textarea {
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+.modal-backdrop--closing {
+  animation: backdrop-out 180ms ease-in forwards;
+}
+
+.modal-panel--closing {
+  animation: panel-out 180ms ease-in forwards;
+}
+
+@keyframes backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes panel-out {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(16px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-panel,
+  .modal-backdrop--closing,
+  .modal-panel--closing {
+    animation: none;
   }
 }
 
@@ -2874,6 +2922,39 @@ textarea {
   height: 16px;
 }
 
+/* The home page's non-editable "looks like the search bar, is actually a
+   button to /search" trigger — see SearchEntryBar.tsx. */
+.search-bar--entry {
+  width: 100%;
+  padding: 11px 13px;
+  padding-left: 38px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 13px;
+  background: var(--color-bg-secondary);
+  text-align: left;
+}
+
+.search-bar__placeholder {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* SearchPage's back-to-home chevron, sitting before the input. */
+.search-row__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.search-row__back svg {
+  width: 20px;
+  height: 20px;
+}
+
 .filter-button {
   position: relative;
   display: flex;
@@ -3621,7 +3702,43 @@ textarea {
 /* ---------- Homepage sections ---------- */
 
 .home-chips {
-  padding: 0 var(--space-4) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* A second, fixed-position copy of the chip row that fades/slides in once
+   the in-flow row (.home-chips above) has scrolled up past the header, and
+   back out when scrolled back above it — see the isChipsPinned effect in
+   ViewerPage.tsx for why this is a duplicate rather than plain
+   `position: sticky` on the row itself. Always mounted so both directions
+   animate instead of snapping; pointer-events/opacity (not display) keep it
+   out of the way and out of tab order while hidden. */
+.home-chips-pinned {
+  position: fixed;
+  left: 0;
+  right: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  z-index: 90;
+  background: var(--color-bg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.home-chips-pinned--visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-chips-pinned {
+    transition: opacity 150ms ease;
+    transform: none;
+  }
 }
 
 .home-section-title {
@@ -4025,6 +4142,29 @@ textarea {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-md);
+  transform-origin: top right;
+  animation: cardMenuIn 150ms ease-out forwards;
+}
+
+.card-menu__popup--closing {
+  animation: cardMenuOut 150ms ease-in forwards;
+}
+
+@keyframes cardMenuIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cardMenuOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.92); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-menu__popup,
+  .card-menu__popup--closing {
+    animation: none;
+  }
 }
 
 .card-menu__item {
@@ -5202,8 +5342,9 @@ textarea {
 .page-transition {
   /* No fill-mode: the transform is gone once the animation ends, so fixed
      children (bottom nav, sticky headers) position against the viewport
-     again rather than against a transformed ancestor. */
-  animation: pageSlideForward 200ms ease-out;
+     again rather than against a transformed ancestor. 350ms matches
+     CLAUDE.md's page-transition motion tier (see reports/batch-17.txt). */
+  animation: pageSlideForward 350ms ease-out;
 }
 
 .page-transition--back {
@@ -7330,4 +7471,62 @@ textarea {
   font-weight: 600;
   /* Quiet on purpose — signing out is not a warning or a primary action. */
   color: var(--color-text-secondary);
+}
+
+/* ---------- Search page (Batch 17) ---------- */
+
+.search-page {
+  padding-bottom: var(--bottom-nav-height);
+}
+
+.search-page__bar-wrap {
+  position: relative;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+/* Overrides .search-panel's home-page offsets (which assume a filter button
+   on the right and no back button on the left) for this page's layout:
+   a 40px back button + gap on the left, no filter button on the right. */
+.search-page__bar-wrap .search-panel {
+  left: calc(var(--space-4) + 40px + var(--space-2));
+  right: var(--space-4);
+}
+
+.search-page__main {
+  padding: 0 var(--space-4);
+}
+
+.search-page__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* Recent searches as normal page content (not the home bar's focus-gated
+   floating panel) — persists whether or not the input is focused. */
+.search-recent--page {
+  padding: 0 0 var(--space-5);
+}
+
+.search-recent__page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 var(--space-1);
+}
+
+.search-recent--page .search-recent__label {
+  padding: 0;
+}
+
+.search-quickpicks {
+  padding-top: var(--space-2);
+}
+
+.search-quickpicks__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }

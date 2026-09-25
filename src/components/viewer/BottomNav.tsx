@@ -8,9 +8,6 @@ interface BottomNavProps {
   activeTab: NavTab;
   /** Scrolls the page back to the top. */
   onHome: () => void;
-  /** Scrolls to the top and focuses the search input. */
-  onSearch: () => void;
-  /** Opens the "coming soon" account sheet. */
   onAccount: () => void;
 }
 
@@ -72,13 +69,18 @@ function AccountIcon() {
  * Fixed frosted-glass tab bar. Home, Search and Account act on the current
  * page (see ViewerPage); Cart is a real route and navigates the router.
  */
-export function BottomNav({ activeTab, onHome, onSearch, onAccount }: BottomNavProps) {
+export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
   const navigate = useNavigate();
   const { itemCount } = useCart();
 
   const tabs = [
     { id: 'home' as const, label: 'Home', icon: <HomeIcon />, onClick: onHome },
-    { id: 'search' as const, label: 'Search', icon: <SearchIcon />, onClick: onSearch },
+    {
+      id: 'search' as const,
+      label: 'Search',
+      icon: <SearchIcon />,
+      onClick: () => navigate('/search'),
+    },
     {
       id: 'cart' as const,
       label: 'Cart',
