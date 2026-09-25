@@ -9,6 +9,7 @@ import { ToastContainer } from './components/shared/ToastContainer';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { PageTransition } from './components/shared/PageTransition';
 import { ViewerPage } from './pages/ViewerPage';
+import { SearchPage } from './pages/SearchPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ContactExpertPage } from './pages/ContactExpertPage';
 import { CartPage } from './features/checkout/CartPage';
@@ -33,6 +34,7 @@ export default function App() {
                   <PageTransition>
                     <Routes>
                       <Route path="/" element={<ViewerPage />} />
+                      <Route path="/search" element={<SearchPage />} />
                       {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
                       <Route path="/product/:slug" element={<ProductDetailPage />} />
                       <Route path="/contact" element={<ContactExpertPage />} />

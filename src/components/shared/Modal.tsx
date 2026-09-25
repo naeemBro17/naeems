@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useModalBackClose } from '../../hooks/useModalBackClose';
 
 interface ModalProps {
@@ -13,6 +13,9 @@ interface ModalProps {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Must match .modal-panel--closing's animation duration in app.css. */
+const CLOSE_ANIMATION_MS = 180;
+
 export function Modal({
   isOpen,
   onClose,
@@ -22,9 +25,28 @@ export function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Stays mounted for one extra animation frame on close so it fades/scales
+  // back out instead of vanishing — the same pattern as BottomSheet.
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
 
   // Device/browser back closes the modal instead of leaving the page.
   useModalBackClose(isOpen, onClose);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsRendered(true);
+      setIsClosing(false);
+      return;
+    }
+    if (!isRendered) return;
+    setIsClosing(true);
+    const timer = window.setTimeout(() => {
+      setIsRendered(false);
+      setIsClosing(false);
+    }, CLOSE_ANIMATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, isRendered]);
 
   // Focus trap + Escape to close + restore focus on close + scroll lock.
   useEffect(() => {
@@ -68,18 +90,20 @@ export function Modal({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
 
   return (
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop${isClosing ? ' modal-backdrop--closing' : ''}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
         ref={panelRef}
-        className={`modal-panel${fullScreenOnMobile ? ' modal-panel--full-mobile' : ''}`}
+        className={`modal-panel${fullScreenOnMobile ? ' modal-panel--full-mobile' : ''}${
+          isClosing ? ' modal-panel--closing' : ''
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

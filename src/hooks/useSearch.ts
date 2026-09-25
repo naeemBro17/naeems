@@ -31,6 +31,9 @@ interface UseSearchOptions {
   categoryId: string | null;
   /** Runs after a suggestion is chosen (tap or Enter) — the page navigates. */
   onSelectSuggestion: (product: Product) => void;
+  /** Seeds the query on first render — SearchPage restores this from the
+   *  ?q= URL param so a deep link or Back lands on the same search. */
+  initialQuery?: string;
 }
 
 export interface SearchState {
@@ -94,8 +97,9 @@ export function useSearch({
   defaultOrdered,
   categoryId,
   onSelectSuggestion,
+  initialQuery = '',
 }: UseSearchOptions): SearchState {
-  const [query, setQueryState] = useState('');
+  const [query, setQueryState] = useState(initialQuery);
   const [isFocused, setIsFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
