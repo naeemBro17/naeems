@@ -7055,6 +7055,18 @@ textarea {
   width: 100%;
 }
 
+.checkout-summary-page__consent {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: 0 0 var(--space-3);
+}
+
+.checkout-summary-page__consent a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+}
+
 .checkout-summary-page__error {
   color: var(--color-danger);
   background: var(--color-danger-bg);
@@ -7938,6 +7950,11 @@ textarea {
   color: var(--color-text-secondary);
 }
 
+.order-admin-detail__history-note {
+  display: block;
+  color: var(--color-text-muted);
+}
+
 .order-admin-detail__status-actions {
   display: flex;
   gap: var(--space-3);
@@ -8015,4 +8032,102 @@ textarea {
 
 .admin-order-row {
   border-bottom: none;
+}
+
+/* ---------- Policy pages (Batch 19 Part 4) ---------- */
+.policy-page {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  padding-top: var(--space-2);
+}
+
+.policy-page h2 {
+  font-size: 15px;
+  font-weight: 800;
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--color-text-primary);
+}
+
+.policy-page h2:first-child {
+  margin-top: 0;
+}
+
+.policy-page p {
+  margin: 0 0 var(--space-4);
+}
+
+.policy-page ul {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.policy-page li {
+  color: var(--color-text-secondary);
+}
+
+.policy-page a {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.policy-page strong {
+  color: var(--color-text-primary);
+}
+
+.policy-page__table-wrap {
+  overflow-x: auto;
+  margin: 0 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.policy-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.policy-page__table th,
+.policy-page__table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.policy-page__table th {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.policy-page__table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------- Site footer (home + account pages) ---------- */
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.site-footer a {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  text-decoration: underline;
 }

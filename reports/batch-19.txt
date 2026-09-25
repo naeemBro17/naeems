@@ -1,0 +1,203 @@
+BATCH 19 — Ad Readiness: Speed, Pixel + Analytics, Link Previews, Policy Pages
+=================================================================================
+
+1) SUMMARY
+-----------
+Site is now ready for Facebook ad traffic. The admin panel's code no longer
+downloads to customers at all (it's now a separate ~112KB chunk fetched only
+when someone opens /admin). Product photos get a small ~400px version for
+grid/search/cart use, with a one-time admin button to backfill it onto
+existing products. Facebook Pixel and Google Analytics 4 are wired in
+end-to-end but stay fully OFF until you paste an ID into Admin → Settings.
+Shared product links on Facebook/WhatsApp now show that product's real
+name/price/photo instead of the generic site card. Five policy pages exist
+with your exact text, linked from the menu, footer, and checkout. Inside
+Dhaka delivery dropped to ৳70, and admin can now bump the delivery fee on
+one heavy order without it needing a whole new system.
+
+
+2) SPEED
+---------
+Code-splitting (before/after, real production build numbers):
+  Before this batch: one JS file, 787.92KB (219.36KB compressed) — every
+  visitor downloaded this, including all of /admin's code.
+  After: main file is now 696.38KB (198.24KB compressed) — AND a separate
+  admin-only file, 112.09KB (29.40KB compressed), that a customer's browser
+  never fetches at all. The main file didn't shrink by the full amount
+  pulled out because this same batch also added real new customer-facing
+  code (the Pixel/GA4 script loader, five new policy pages, the footer) —
+  but the number that matters for ad spend is: every real customer now
+  downloads about 91KB (21KB compressed) LESS than before, and the admin
+  code is fully out of their way.
+
+Product images: added a small ~400px WebP "card" version, generated
+alongside the existing full-size photo every time one is uploaded from now
+on (kept the 1200px version untouched for the product page's own photo
+viewer — nothing there changed). Grid cards, bento tiles, search results and
+cart thumbnails all switched to the small version; if a product doesn't have
+one yet (anything uploaded before this batch), it falls back to the
+full-size photo automatically — never a broken image.
+  For every EXISTING product photo: added a "Generate small images" button
+  in Admin → Products (only appears while there's work to do) that
+  backfills the small version for every product, one at a time, without
+  touching or deleting any original photo. I could not run this myself or
+  measure real before/after network data in a browser (no admin login in
+  this environment — same limitation noted in earlier batch reports).
+  Rough math instead: a photo shrinking from ~1200px wide to ~400px wide is
+  about 9x fewer pixels, which for a real photo typically works out to
+  somewhere around 5–10x less data per image in practice. Please click that
+  button once, then compare a real phone's data usage on the home page
+  before/after if you want the exact number — I'd trust that over my estimate.
+
+Hero banner: checked it — the first slide already loads eagerly (not lazy)
+from Batch 15's audit; added `fetchPriority="high"` on top of that so the
+browser fetches it ahead of everything else competing for bandwidth on that
+first paint. No visual change.
+
+Nothing about design, layout or existing behaviour changed in this section.
+
+
+3) FACEBOOK PIXEL & GOOGLE ANALYTICS
+--------------------------------------
+Both are wired in but OFF until you add an ID — Admin → Settings → "Facebook
+Pixel & Google Analytics" (new panel, right under the delivery/bKash one).
+
+What's tracked (never your customer's name/phone/address/email — only
+product id/name/price in BDT, quantities, an order's total + order number,
+and a typed search term):
+  - ViewContent / view_item — a product page opens
+  - AddToCart / add_to_cart — from a product card OR the product page
+  - InitiateCheckout / begin_checkout — tapping "Checkout" in the cart
+  - Purchase / purchase — on the order success page, with the real order
+    number as the event/transaction id, so Facebook/Google themselves
+    de-duplicate it if the page is ever refreshed — the same order can never
+    get counted as two sales
+  - Search / search — pressing Enter or picking a suggestion in search
+  - PageView / page_view — every in-app navigation, not just the first load
+    (this is a single-page app, so without this only the very first page
+    would ever count)
+Never fires anything on /admin or /wholesaler-access.
+
+How to set it up (step by step for Naeem):
+  Facebook Pixel:
+    1. Go to business.facebook.com → Events Manager → "Connect Data
+       Sources" → Web → Facebook Pixel → give it a name.
+    2. Skip the "install code" step (choose "Manually add code" if asked,
+       but no code needs pasting anywhere else) — just copy the Pixel ID
+       number it shows you (looks like 123456789012345).
+    3. Paste it into Admin → Settings → Facebook Pixel ID → Save.
+    4. To confirm it's working: Events Manager → your Pixel → "Test Events"
+       tab, then open the site on your phone/browser — you should see
+       PageView events appear live within a few seconds.
+  Google Analytics 4:
+    1. Go to analytics.google.com → Admin → Create Property → follow the
+       prompts (choose "Web" as the platform).
+    2. It gives you a Measurement ID that looks like G-XXXXXXXXXX.
+    3. Paste it into Admin → Settings → Google Analytics Measurement ID →
+       Save.
+    4. To confirm: Analytics → Reports → Realtime — browse the site
+       yourself and you should see yourself show up as an active user
+       within about 30 seconds.
+
+
+4) PRODUCT LINK PREVIEWS (Facebook/WhatsApp)
+-----------------------------------------------
+How it works: this site is a single-page app, so a link-preview bot
+(Facebook, WhatsApp, etc. — they don't run JavaScript) normally only ever
+sees the one generic description in index.html, never a specific product's
+real name/price/photo. Added a small Vercel function (api/product-og.ts)
+that only kicks in for a request whose User-Agent matches a known
+preview-bot (Facebook, WhatsApp, Twitter, Telegram, Slack, LinkedIn, Discord
+— Googlebot deliberately excluded, exactly as asked, since Google already
+handles this app correctly on its own). A real visitor's browser is never
+touched by this — same app, same speed, zero difference.
+I tested the HTML-generation logic directly (mocked the database response
+and an unsafe/malicious slug) and it behaved correctly both times — but the
+actual routing rule only exists on Vercel itself, so I could not curl-test
+it against a live deployment from here.
+  How Naeem can test after this is deployed:
+    1. curl -A "facebookexternalhit/1.1" https://naeems-all.vercel.app/product/<any-real-product-slug>
+       → should return a small HTML page with that product's real name,
+       price and photo in the og:title/og:image tags (view-source or just
+       read the curl output).
+    2. Better: paste a product link into Facebook's Sharing Debugger
+       (developers.facebook.com/tools/debug/) and click "Scrape Again" — it
+       should show that product's real photo and price, not the generic
+       site card.
+Also gave the home page a proper og:site_name and Twitter card tags (it
+already had a real 1200×630 share image and title/description from an
+earlier batch — just completed what was missing).
+
+
+5) POLICY PAGES
+-----------------
+Five new pages, your exact text, only formatted (headings/lists/a table):
+  /about            — About Us ("Talk with Naeem" line links to /contact)
+  /delivery         — Delivery Info (has the fee/time table)
+  /return-policy    — Return Policy
+  /terms            — Terms & Conditions
+  /privacy          — Privacy Policy (kept at exactly this URL — already
+                       registered with Google login, as instructed)
+Linked from: the hamburger menu (five new rows), a small footer at the
+bottom of the home page and the Account page, and the checkout's final step
+(the exact consent line you gave, with শর্তাবলি → /terms and রিটার্ন পলিসি
+→ /return-policy as real links). All five added to the sitemap. The
+WhatsApp number and email on the Privacy page are real tappable
+wa.me/mailto links.
+
+
+6) DELIVERY FEE CHANGES
+--------------------------
+Inside Dhaka: ৳80 → ৳70 (Outside Dhaka unchanged at ৳130) — both the code's
+own fallback numbers and the live database value need updating; see the SQL
+below for the live value (I can't run SQL directly against your database,
+by design — see CLAUDE.md).
+Both zone fees were already editable in Admin → Settings since Batch 18 —
+confirmed still true, nothing more needed there.
+New: admin can now change the delivery fee on ONE specific order (for a
+heavy parcel) — while it's still Pending or Confirmed, from that order's
+detail screen in Admin → Orders. The total recalculates itself in the
+database (never trusts anything from the browser), the change is logged in
+that order's history ("Delivery fee changed ৳70 → ৳120 by admin"), and the
+customer's own order page shows the new total automatically. Enforced
+server-side — a non-admin calling the same function gets rejected.
+
+
+7) SQL NAEEM MUST RUN IN SUPABASE
+-------------------------------------
+File: supabase/migration-024-batch19.sql — copy the whole file into the SQL
+Editor and run it. Safe to re-run if you're ever unsure whether it went
+through. In plain terms, it:
+  - Adds a new (empty by default) column for the small product photos —
+    doesn't touch or remove any existing photo.
+  - Updates the Inside Dhaka delivery fee to ৳70 in your live settings.
+  - Adds two blank settings rows for the Facebook Pixel ID / GA4 ID (so they
+    show up ready to fill in on the Settings page).
+  - Adds the new function that lets admin change a single order's delivery
+    fee (nothing works differently until you actually use that button).
+Nothing here changes any existing order, product, or customer data.
+
+
+8) WHAT I COULD NOT TEST LIVE
+---------------------------------
+- The admin "Generate small images" button and the whole image-thumbnail
+  pipeline — needs a real admin login and real product photos in storage,
+  neither available in this environment (same limitation as every earlier
+  batch's report).
+- The Vercel bot-detection rewrite (vercel.json) and api/product-og.ts
+  together as a live deployment — verified the HTML-generation code works
+  correctly on its own (see section 4), but the actual routing only exists
+  once this is deployed to Vercel.
+- Facebook Pixel / GA4 actually firing in a real browser, and the admin
+  Settings panel that saves their IDs — same "no live login" limitation.
+- The admin per-order delivery-fee edit control, end-to-end in a browser.
+- Real phone network measurements for the image-size claim in section 2
+  (gave a reasoned estimate instead, clearly marked as such).
+
+
+BUILD & TEST STATUS
+----------------------
+npm run build   → PASSED, zero errors
+npx vitest run  → PASSED (9/9)
+
+Branch: feature/batch-19-ad-readiness

@@ -478,6 +478,83 @@ function OrderPaymentSettingsPanel() {
   );
 }
 
+/** Facebook Pixel + GA4 Measurement IDs (Batch 19 Part 2) — blank means that
+ *  tracker never loads on the site at all, no errors either way. */
+function AdTrackingSettingsPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+
+  const [fbPixelId, setFbPixelId] = useState('');
+  const [gaMeasurementId, setGaMeasurementId] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setFbPixelId(settings.fb_pixel_id);
+    setGaMeasurementId(settings.ga_measurement_id);
+  }, [settings]);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const { error } = await supabase.from('app_settings').upsert(
+      [
+        { key: 'fb_pixel_id', value: fbPixelId.trim() },
+        { key: 'ga_measurement_id', value: gaMeasurementId.trim() },
+      ],
+      { onConflict: 'key' }
+    );
+    setIsSaving(false);
+    if (error) {
+      console.error('Ad tracking settings save failed:', error);
+      showToast('Could not save. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast('Saved');
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Facebook Pixel &amp; Google Analytics</h3>
+      <p className="admin-panel__description">
+        Paste the IDs from your Facebook Events Manager and Google Analytics here. Leave a field
+        blank to keep that tracker turned off — nothing loads on the site until you fill it in.
+      </p>
+      <form onSubmit={handleSave} className="form" noValidate>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-fb-pixel">
+            Facebook Pixel ID
+          </label>
+          <input
+            id="settings-fb-pixel"
+            type="text"
+            className="form-input"
+            placeholder="123456789012345"
+            value={fbPixelId}
+            onChange={(e) => setFbPixelId(e.target.value)}
+          />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-ga-id">
+            Google Analytics Measurement ID
+          </label>
+          <input
+            id="settings-ga-id"
+            type="text"
+            className="form-input"
+            placeholder="G-XXXXXXXXXX"
+            value={gaMeasurementId}
+            onChange={(e) => setGaMeasurementId(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="button button--primary" disabled={isSaving}>
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 /** Hero banner slides — the swipeable card at the top of the homepage. */
 function BannerSlidesPanel() {
   const { settings, refetch } = useProducts();
@@ -836,6 +913,8 @@ export function SettingsTab() {
       <ShopWhatsAppPanel />
 
       <OrderPaymentSettingsPanel />
+
+      <AdTrackingSettingsPanel />
 
       <BannerSlidesPanel />
 

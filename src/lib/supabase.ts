@@ -40,6 +40,19 @@ export function storagePathFromUrl(url: string): string | null {
 }
 
 /**
+ * The small "card" version of a full-size product image path lives one
+ * folder deeper, same filename — products/{id}.webp's card copy is
+ * products/thumb/{id}.webp. Keeping the same filename means a full image's
+ * thumb is always derivable from its own path, no separate id needed.
+ */
+export function productThumbPath(fullPath: string): string {
+  const slashIndex = fullPath.lastIndexOf('/');
+  return slashIndex === -1
+    ? `thumb/${fullPath}`
+    : `${fullPath.slice(0, slashIndex)}/thumb/${fullPath.slice(slashIndex + 1)}`;
+}
+
+/**
  * Shared single-image upload used by every admin "one photo" field (banner
  * slide image, category image, expert photo) — resizes client-side, then
  * upserts to a fixed path in the product-images bucket so replacing a photo

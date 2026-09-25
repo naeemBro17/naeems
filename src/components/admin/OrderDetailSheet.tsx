@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useToast } from '../../hooks/useToast';
-import { fetchOrderDetail, adminSetOrderStatus, adminUpdateOrder } from '../../lib/orders';
+import {
+  fetchOrderDetail,
+  adminSetOrderStatus,
+  adminUpdateOrder,
+  adminUpdateOrderDeliveryFee,
+} from '../../lib/orders';
 import { formatTaka } from '../../lib/format';
 import { buildOrderPdf } from '../../lib/orderExport';
 import { copyToClipboard } from '../../lib/clipboard';
@@ -91,7 +96,11 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   const [isLoading, setIsLoading] = useState(true);
   const [trackingInput, setTrackingInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
-  const [isSavingField, setIsSavingField] = useState<'tracking' | 'note' | 'paid' | null>(null);
+  const [feeInput, setFeeInput] = useState('');
+  const [isEditingFee, setIsEditingFee] = useState(false);
+  const [isSavingField, setIsSavingField] = useState<'tracking' | 'note' | 'paid' | 'fee' | null>(
+    null
+  );
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
@@ -107,6 +116,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
       setOrder(data);
       setTrackingInput(data?.tracking_number ?? '');
       setNoteInput(data?.admin_note ?? '');
+      setFeeInput(data ? String(data.delivery_fee) : '');
+      setIsEditingFee(false);
       setIsLoading(false);
     });
     return () => {
@@ -176,6 +187,25 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
       return;
     }
     showToast('Note saved');
+    await reload();
+  };
+
+  const handleSaveFee = async () => {
+    if (!order) return;
+    const fee = Number(feeInput);
+    if (!Number.isFinite(fee) || fee < 0) {
+      showToast('Delivery fee must be a positive number.', 'error');
+      return;
+    }
+    setIsSavingField('fee');
+    const { error } = await adminUpdateOrderDeliveryFee(order.id, fee);
+    setIsSavingField(null);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showToast('Delivery fee updated');
+    setIsEditingFee(false);
     await reload();
   };
 
@@ -255,6 +285,52 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                 </li>
               ))}
             </ul>
+            <div className="checkout-summary-card__row">
+              <span>Subtotal</span>
+              <span>{formatTaka(order.subtotal)}</span>
+            </div>
+            <div className="checkout-summary-card__row">
+              <span>Delivery fee</span>
+              {isEditingFee ? (
+                <span className="order-admin-detail__field-row">
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    value={feeInput}
+                    onChange={(e) => setFeeInput(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    onClick={handleSaveFee}
+                    disabled={isSavingField === 'fee'}
+                  >
+                    {isSavingField === 'fee' ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+                  </button>
+                </span>
+              ) : (
+                <span>
+                  {formatTaka(order.delivery_fee)}
+                  {(order.status === 'pending' || order.status === 'confirmed') && (
+                    <button
+                      type="button"
+                      className="account-card__edit"
+                      style={{ marginLeft: 8 }}
+                      onClick={() => setIsEditingFee(true)}
+                    >
+                      Edit
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+            {order.discount > 0 && (
+              <div className="checkout-summary-card__row">
+                <span>Discount</span>
+                <span>-{formatTaka(order.discount)}</span>
+              </div>
+            )}
             <div className="checkout-summary-card__row checkout-summary-card__row--total">
               <span>Total</span>
               <span>{formatTaka(order.total)}</span>
@@ -353,14 +429,17 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               <ul className="order-admin-detail__history">
                 {order.history.map((row) => (
                   <li key={row.id}>
-                    {row.old_status ? `${ORDER_STATUS_LABELS[row.old_status]} → ` : ''}
-                    {ORDER_STATUS_LABELS[row.new_status]} —{' '}
+                    {row.old_status && row.old_status !== row.new_status
+                      ? `${ORDER_STATUS_LABELS[row.old_status]} → ${ORDER_STATUS_LABELS[row.new_status]}`
+                      : ORDER_STATUS_LABELS[row.new_status]}
+                    {' — '}
                     {new Date(row.changed_at).toLocaleString('en-GB', {
                       day: 'numeric',
                       month: 'short',
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
+                    {row.note && <span className="order-admin-detail__history-note">{row.note}</span>}
                   </li>
                 ))}
               </ul>

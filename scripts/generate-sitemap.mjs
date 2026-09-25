@@ -32,7 +32,15 @@ function loadEnv() {
   return { url: vars.VITE_SUPABASE_URL, anonKey: vars.VITE_SUPABASE_ANON_KEY };
 }
 
-const STATIC_ROUTES = ['/', '/contact'];
+const STATIC_ROUTES = [
+  '/',
+  '/contact',
+  '/about',
+  '/delivery',
+  '/return-policy',
+  '/terms',
+  '/privacy',
+];
 
 function buildXml(productUrls) {
   const staticEntries = STATIC_ROUTES.map(

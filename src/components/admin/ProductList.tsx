@@ -3,7 +3,7 @@ import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
-import { productImages, coverImage } from '../../lib/productImages';
+import { productImages, coverImage, generateCardThumb } from '../../lib/productImages';
 import { ProductForm } from './ProductForm';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -41,6 +41,12 @@ export function ProductList() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [combineOpen, setCombineOpen] = useState(false);
+  // One-time (self-healing) backfill for products saved before Batch 19's
+  // small "card" image column existed — see generateCardThumb.
+  const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false);
+  const [thumbBackfillProgress, setThumbBackfillProgress] = useState<{ done: number; total: number } | null>(
+    null
+  );
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -73,6 +79,55 @@ export function ProductList() {
     }
     return result;
   }, [products, search, categoryFilter, statusFilter]);
+
+  // Batch 19: products saved before the small "card" image column existed
+  // (or with a photo added/kept since then that never got backfilled).
+  const productsNeedingThumb = useMemo(
+    () =>
+      products.filter((p) => {
+        const full = productImages(p);
+        return full.length > 0 && (p.image_urls_thumb ?? []).length < full.length;
+      }),
+    [products]
+  );
+
+  const handleGenerateThumbnails = async () => {
+    setIsBackfillingThumbs(true);
+    const total = productsNeedingThumb.length;
+    let done = 0;
+    let failed = 0;
+    setThumbBackfillProgress({ done: 0, total });
+
+    for (const product of productsNeedingThumb) {
+      try {
+        const full = productImages(product);
+        const existing = product.image_urls_thumb ?? [];
+        const thumbs: string[] = [];
+        for (let i = 0; i < full.length; i += 1) {
+          thumbs.push(existing[i] ?? (await generateCardThumb(full[i])));
+        }
+        const { error } = await supabase
+          .from('products')
+          .update({ image_urls_thumb: thumbs })
+          .eq('id', product.id);
+        if (error) throw error;
+        patchProductLocal(product.id, { image_urls_thumb: thumbs });
+        done += 1;
+      } catch {
+        failed += 1;
+      }
+      setThumbBackfillProgress({ done: done + failed, total });
+    }
+
+    setIsBackfillingThumbs(false);
+    setThumbBackfillProgress(null);
+    showToast(
+      failed === 0
+        ? `Done — generated small images for ${done} product${done === 1 ? '' : 's'}`
+        : `Done — ${done} succeeded, ${failed} failed (run it again to retry those)`,
+      failed === 0 ? 'success' : 'error'
+    );
+  };
 
   const handleToggleActive = async (product: Product) => {
     const nextValue = !product.is_active;
@@ -231,6 +286,28 @@ export function ProductList() {
           <option value="inactive">Inactive</option>
         </select>
       </div>
+
+      {(productsNeedingThumb.length > 0 || isBackfillingThumbs) && (
+        <div className="admin-panel" style={{ marginBottom: 16 }}>
+          <h3 className="admin-panel__title">Speed up product photos</h3>
+          <p className="admin-panel__description">
+            {isBackfillingThumbs
+              ? `Generating small card images — ${thumbBackfillProgress?.done ?? 0} of ${
+                  thumbBackfillProgress?.total ?? 0
+                } done. Keep this tab open.`
+              : `${productsNeedingThumb.length} product${
+                  productsNeedingThumb.length === 1 ? '' : 's'
+                } still send${
+                  productsNeedingThumb.length === 1 ? 's' : ''
+                } the full-size photo to the grid/search/cart instead of a small one. One-time fix, safe to run — it only adds a small extra copy of each photo, nothing is deleted.`}
+          </p>
+          {!isBackfillingThumbs && (
+            <button type="button" className="button button--primary button--small" onClick={handleGenerateThumbnails}>
+              Generate small images
+            </button>
+          )}
+        </div>
+      )}
 
       {products.length === 0 ? (
         <div className="empty-state">

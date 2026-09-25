@@ -9,13 +9,14 @@ import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { CartIcon } from '../../components/viewer/CartButton';
-import { coverImage } from '../../lib/productImages';
+import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { formatTaka } from '../../lib/format';
 import { useAuth } from '../../contexts/AuthContext';
 import { CheckoutLoginSheet } from '../../components/checkout/CheckoutLoginSheet';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
+import { trackInitiateCheckout } from '../../lib/analytics';
 import type { CartItem } from './types';
 
 export function CartPage() {
@@ -27,6 +28,15 @@ export function CartPage() {
   const [showLoginSheet, setShowLoginSheet] = useState(false);
 
   const handleCheckout = () => {
+    trackInitiateCheckout(
+      items.map((item) => ({
+        id: item.product.id,
+        name: item.product.name,
+        price: item.unitPrice,
+        quantity: item.quantity,
+      })),
+      subtotal
+    );
     // Already logged in — customer, wholesaler, or admin alike — skip the
     // ask entirely. Only a fully logged-out visitor sees the sheet.
     if (session) {
@@ -75,8 +85,8 @@ export function CartPage() {
             {items.map((item) => (
               <li key={`${item.product.id}::${item.variantId ?? ''}`} className="checkout-cart__row">
                 <Link to={productPath(item.product)} className="checkout-cart__thumb">
-                  {item.variantImage ?? coverImage(item.product) ? (
-                    <img src={item.variantImage ?? coverImage(item.product) ?? ''} alt={item.product.name} />
+                  {item.variantImage ?? cardImage(item.product) ? (
+                    <img src={item.variantImage ?? cardImage(item.product) ?? ''} alt={item.product.name} />
                   ) : (
                     <span className="checkout-cart__thumb-empty" aria-hidden="true" />
                   )}

@@ -2,24 +2,31 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
 export const MAX_IMAGE_WIDTH = 1200;
 export const WEBP_QUALITY = 0.85;
 
+/** Small "card" size — grid cards, bento tiles, search results, cart
+ *  thumbnails never display wider than this, so there is no reason to ship
+ *  the full 1200px photo to them (see Batch 15/19 performance notes). */
+export const CARD_IMAGE_WIDTH = 400;
+export const CARD_WEBP_QUALITY = 0.8;
+
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export function isAcceptedImageType(file: File): boolean {
   return ACCEPTED_TYPES.includes(file.type);
 }
 
-/**
- * Resize an image file client-side using an HTML Canvas:
- * max 600px wide (aspect ratio preserved), WebP format, 0.85 quality.
- */
-export function resizeImage(file: File): Promise<Blob> {
+/** Shared resize core — draws `source` onto a canvas capped at `maxWidth`
+ *  (aspect ratio preserved) and encodes it as WebP at `quality`. Accepts any
+ *  Blob, not just a file picker's File, so the same code path resizes a
+ *  freshly chosen photo AND an existing photo re-fetched over the network
+ *  (see generateCardThumb, used by the one-time thumbnail backfill). */
+function resizeToWidth(source: Blob, maxWidth: number, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(source);
     const img = new Image();
 
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, MAX_IMAGE_WIDTH / img.naturalWidth);
+      const scale = Math.min(1, maxWidth / img.naturalWidth);
       const width = Math.round(img.naturalWidth * scale);
       const height = Math.round(img.naturalHeight * scale);
 
@@ -41,7 +48,7 @@ export function resizeImage(file: File): Promise<Blob> {
           }
         },
         'image/webp',
-        WEBP_QUALITY
+        quality
       );
     };
 
@@ -52,4 +59,17 @@ export function resizeImage(file: File): Promise<Blob> {
 
     img.src = objectUrl;
   });
+}
+
+/**
+ * Resize an image file client-side using an HTML Canvas:
+ * max 1200px wide (aspect ratio preserved), WebP format, 0.85 quality.
+ */
+export function resizeImage(file: Blob): Promise<Blob> {
+  return resizeToWidth(file, MAX_IMAGE_WIDTH, WEBP_QUALITY);
+}
+
+/** Small-card version of the same image — max 400px wide, WebP, 0.8 quality. */
+export function resizeImageCard(file: Blob): Promise<Blob> {
+  return resizeToWidth(file, CARD_IMAGE_WIDTH, CARD_WEBP_QUALITY);
 }

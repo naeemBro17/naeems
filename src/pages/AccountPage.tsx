@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
+import { SiteFooter } from '../components/shared/SiteFooter';
 import { Modal } from '../components/shared/Modal';
 import { GoogleSignInButton } from '../components/shared/GoogleSignInButton';
 import { EditDeliveryDetailsSheet } from '../components/account/EditDeliveryDetailsSheet';
@@ -305,6 +306,7 @@ export function AccountPage() {
         ) : (
           <CustomerAccountView />
         )}
+        <SiteFooter />
       </main>
     </div>
   );

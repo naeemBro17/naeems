@@ -1,6 +1,6 @@
 import type { Product } from '../../types';
 import type { SearchState } from '../../hooks/useSearch';
-import { coverImage } from '../../lib/productImages';
+import { cardImage } from '../../lib/productImages';
 
 interface SearchSuggestionsProps {
   search: SearchState;
@@ -15,7 +15,7 @@ function SuggestionRow({
   highlighted: boolean;
   onSelect: () => void;
 }) {
-  const image = coverImage(product);
+  const image = cardImage(product);
   return (
     <li role="option" aria-selected={highlighted}>
       <button

@@ -2,6 +2,11 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://naeems-all.vercel.app/</loc><changefreq>daily</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/contact</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/about</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/delivery</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/return-policy</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/terms</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/privacy</loc><changefreq>daily</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/beauty-of-joseon-red-bean-water-gel</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/beauty-of-joseon-relief-sun-aqua-fresh-rice-b5-50ml</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/dove-deeply-nourishing-body-wash-500ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
@@ -24,8 +29,8 @@
   <url><loc>https://naeems-all.vercel.app/product/neutrogena-hydro-boost-water-gel-50g</loc><lastmod>2026-07-16</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cerave-hydrating-cleanser</loc><lastmod>2026-09-18</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/la-roche-posay-anthelios-invisible-fluid-spf-50-50ml</loc><lastmod>2026-09-23</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/product/the-ordinary-niacinamide-10-zinc-1-30ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/aveeno-oat-milk-blend-moisturising-conditioner-354ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/product/the-ordinary-niacinamide-10-zinc-1-30ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/blistex-ultra-lip-balm-spf-50-425gm</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cancer-council-spf-50-day-wear-face-fluid-matte-invisible-50ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cancer-council-spf-50-ultra-sunscreen-lip-balm-4g</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>

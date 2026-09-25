@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Fuse, { type IFuseOptions } from 'fuse.js';
+import { trackSearch } from '../lib/analytics';
 import type { Product } from '../types';
 
 /** localStorage key for the recent-search list (newest first, max 5). */
@@ -163,6 +164,7 @@ export function useSearch({
 
   const commitQuery = useCallback(() => {
     pushRecent(query);
+    trackSearch(query);
     setDismissed(true);
   }, [pushRecent, query]);
 
@@ -170,6 +172,7 @@ export function useSearch({
     (term: string) => {
       setQueryState(term);
       pushRecent(term);
+      trackSearch(term);
       setDismissed(true);
     },
     [pushRecent]

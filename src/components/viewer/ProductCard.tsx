@@ -6,7 +6,7 @@ import { getDisplayPrice } from '../../lib/pricing';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
-import { coverImage } from '../../lib/productImages';
+import { cardImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
@@ -62,7 +62,7 @@ export function ProductCard({ product }: ProductCardProps) {
     }
   };
 
-  const cover = coverImage(product);
+  const cover = cardImage(product);
   const showImage = cover !== null && !imageFailed;
   const outOfStock = isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);

@@ -4,13 +4,14 @@ import {
   STORAGE_BUCKET,
   newProductImagePath,
   storagePathFromUrl,
+  productThumbPath,
 } from '../../lib/supabase';
-import { resizeImage } from '../../lib/imageResize';
+import { resizeImage, resizeImageCard } from '../../lib/imageResize';
 import { slugify } from '../../lib/format';
 import { uniqueProductSlug } from '../../lib/slugify';
 import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
-import { productImages } from '../../lib/productImages';
+import { productImages, generateCardThumb } from '../../lib/productImages';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -239,41 +240,79 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
   };
 
   /**
-   * Resolve the final image_urls, in display order:
-   * - pending files → resize + upload each to products/{uuid}.webp
+   * Resolve the final image_urls (and their small "card" counterparts, see
+   * Batch 19), in display order:
+   * - pending files → resize + upload each to products/{uuid}.webp, plus a
+   *   small card version at products/thumb/{uuid}.webp
+   * - kept existing images → reuse their existing thumb if this product
+   *   already had one at the same URL, otherwise backfill one now (a
+   *   pre-Batch-19 image being kept for the first time since)
    * - existing images removed from the form → delete their stored files
+   *   (full + thumb)
    * Storage paths are random (SKU-independent), so SKU changes need no moves.
    * Throws on upload failure; removals are best-effort.
    */
-  const resolveImageUrls = async (): Promise<string[]> => {
+  const resolveImageUrls = async (): Promise<{ urls: string[]; thumbUrls: string[] }> => {
     const keptUrls = new Set(
       images.filter((img) => img.url !== null).map((img) => img.url as string)
     );
-    const removedPaths = product
+    const removedFullPaths = product
       ? productImages(product)
           .filter((url) => !keptUrls.has(url))
           .map(storagePathFromUrl)
           .filter((path): path is string => path !== null)
       : [];
+    const removedPaths = removedFullPaths.flatMap((path) => [path, productThumbPath(path)]);
 
-    const hasNewFiles = images.some((img) => img.file !== null);
+    // Existing product's own full URL -> thumb URL, so a kept image (order
+    // may have changed) still finds its own thumb by URL, not by index.
+    const existingThumbByUrl = new Map<string, string>();
+    if (product) {
+      const fullList = productImages(product);
+      const thumbList = product.image_urls_thumb ?? [];
+      fullList.forEach((url, i) => {
+        if (thumbList[i]) existingThumbByUrl.set(url, thumbList[i]);
+      });
+    }
+
+    // Also true when a kept image still needs its thumb backfilled — that
+    // does real network work (fetch + resize + upload) even though no new
+    // file was chosen, and the admin should see the same spinner for it.
+    const hasNewFiles = images.some(
+      (img) => img.file !== null || (img.url !== null && !existingThumbByUrl.has(img.url))
+    );
     if (hasNewFiles) setIsUploadingImage(true);
     try {
       const urls: string[] = [];
+      const thumbUrls: string[] = [];
       for (const image of images) {
         if (image.url !== null) {
           urls.push(image.url);
+          thumbUrls.push(
+            existingThumbByUrl.get(image.url) ?? (await generateCardThumb(image.url))
+          );
           continue;
         }
         if (!image.file) continue;
-        const blob = await resizeImage(image.file);
         const path = newProductImagePath();
-        const { error } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(path, blob, { contentType: 'image/webp' });
-        if (error) throw error;
-        const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-        urls.push(data.publicUrl);
+        const [blob, thumbBlob] = await Promise.all([
+          resizeImage(image.file),
+          resizeImageCard(image.file),
+        ]);
+        const thumbPath = productThumbPath(path);
+        const [fullUpload, thumbUpload] = await Promise.all([
+          supabase.storage.from(STORAGE_BUCKET).upload(path, blob, { contentType: 'image/webp' }),
+          supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(thumbPath, thumbBlob, { contentType: 'image/webp' }),
+        ]);
+        if (fullUpload.error) throw fullUpload.error;
+        urls.push(supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl);
+        thumbUrls.push(
+          thumbUpload.error
+            ? urls[urls.length - 1]
+            : supabase.storage.from(STORAGE_BUCKET).getPublicUrl(thumbPath).data.publicUrl
+        );
       }
 
       if (removedPaths.length > 0) {
@@ -284,7 +323,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
           .catch(() => undefined);
       }
 
-      return urls;
+      return { urls, thumbUrls };
     } finally {
       if (hasNewFiles) setIsUploadingImage(false);
     }
@@ -305,8 +344,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
     setUploadError(null);
 
     let imageUrls: string[];
+    let imageThumbUrls: string[];
     try {
-      imageUrls = await resolveImageUrls();
+      ({ urls: imageUrls, thumbUrls: imageThumbUrls } = await resolveImageUrls());
     } catch {
       setUploadError('Upload failed. Please try again.');
       setIsSaving(false);
@@ -350,6 +390,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
       skin_types: form.skin_types,
       skin_conditions: form.skin_conditions,
       image_urls: imageUrls,
+      image_urls_thumb: imageThumbUrls,
       image_url: imageUrls[0] ?? null,
       is_active: form.is_active,
     };

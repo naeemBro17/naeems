@@ -31,6 +31,7 @@ import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
 import { ProductGrid } from '../components/viewer/ProductGrid';
 import { BottomNav } from '../components/viewer/BottomNav';
+import { SiteFooter } from '../components/shared/SiteFooter';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
@@ -449,6 +450,8 @@ export function ViewerPage() {
           onClearFilters={productFilters.clear}
         />
       </main>
+
+      <SiteFooter />
 
       <BottomNav activeTab="home" onHome={handleHomeTab} onAccount={handleAccountTab} />
 
