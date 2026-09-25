@@ -21,12 +21,15 @@ interface OrdersTabProps {
    *  badge — re-fetched by the parent after any change, same pattern as
    *  WholesalerList/onReload. */
   onReload: () => Promise<void> | void;
+  /** Order id from the ?order= URL param (e.g. a Telegram notification
+   *  link) — opens that order's sheet immediately instead of the list. */
+  initialOrderId?: string | null;
 }
 
-export function OrdersTab({ orders, onReload }: OrdersTabProps) {
+export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
-  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

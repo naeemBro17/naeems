@@ -1,0 +1,26 @@
+-- ============================================================
+-- Naeem's Price Hub — Migration 023: service_role grants on order tables
+-- Run this in the Supabase SQL Editor. Safe to re-run.
+--
+-- THE BUG
+-- Same class of bug as migration-011 (reviews): migration-021 created
+-- orders/order_items/order_status_history with RLS policies and a GRANT
+-- for "authenticated", but never an explicit GRANT for "service_role" —
+-- and in this project, Supabase's default privileges do not reliably reach
+-- new tables. service_role bypasses RLS, but RLS and table-level GRANTs are
+-- two separate checks; without the GRANT, service_role still gets
+-- "permission denied for table order_items".
+--
+-- This is why the notify-telegram-order Edge Function (which reads
+-- order_items using the service role key) always got an empty items list:
+-- the SELECT failed silently (caught and only console.error'd, so the
+-- order notification still sent, just with no items).
+--
+-- THE FIX
+-- Explicit SELECT grant for service_role on all three order tables (only
+-- SELECT — service_role should never need to write these directly; every
+-- write already goes through place_order()/cancel_order()/
+-- admin_set_order_status()).
+-- ============================================================
+
+GRANT SELECT ON orders, order_items, order_status_history TO service_role;
