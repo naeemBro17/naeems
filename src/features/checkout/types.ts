@@ -4,7 +4,9 @@
 // PromoCode itself is defined in the global types module (the admin Promo
 // Codes panel manages the same rows outside the checkout flow) and is just
 // re-exported here so this file stays the one-stop import for the feature.
-import type { Product, PromoCode } from '../../types';
+import type { OrderPaymentMethod, Product, PromoCode } from '../../types';
+
+export type { OrderPaymentMethod };
 
 export type { PromoCode };
 
@@ -61,11 +63,15 @@ export interface AppliedPromo {
 }
 
 /**
- * A finalized order, captured the instant "Pay and Order" is tapped. This is
- * what OrderSuccessPage renders and exports — it survives the live cart
- * being cleared once the customer reaches that screen.
+ * A finalized order, captured the instant place_order() succeeds (see
+ * OrderSummaryPage). This is what OrderSuccessPage renders and exports — it
+ * survives the live cart being cleared once the customer reaches that
+ * screen. orderId/orderNumber are the real database order (migration-021);
+ * everything else is the snapshot shown alongside them.
  */
 export interface OrderSnapshot {
+  orderId: string;
+  orderNumber: string;
   items: CartItem[];
   zone: DeliveryZoneOption;
   address: DeliveryAddress;
@@ -73,5 +79,7 @@ export interface OrderSnapshot {
   subtotal: number;
   discount: number;
   total: number;
+  paymentMethod: OrderPaymentMethod;
+  bkashTrxId: string | null;
   placedAt: string;
 }

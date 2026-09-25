@@ -7,6 +7,7 @@ export type AdminTab =
   | 'categories'
   | 'import-export'
   | 'wholesalers'
+  | 'orders'
   | 'reviews'
   | 'bento'
   | 'promo-codes'
@@ -17,6 +18,8 @@ interface AdminLayoutProps {
   onTabChange: (tab: AdminTab) => void;
   /** Number of pending wholesaler requests, shown as a badge on that tab. */
   pendingWholesalers: number;
+  /** Number of orders still 'pending', shown as a badge on the Orders tab. */
+  pendingOrders: number;
   children: ReactNode;
 }
 
@@ -68,6 +71,17 @@ const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
     ),
   },
   {
+    id: 'orders',
+    label: 'Orders',
+    iconPath: (
+      <>
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+        <path d="M3 6h18" />
+        <path d="M16 10a4 4 0 01-8 0" />
+      </>
+    ),
+  },
+  {
     id: 'reviews',
     label: 'Reviews',
     iconPath: (
@@ -113,8 +127,14 @@ export function AdminLayout({
   activeTab,
   onTabChange,
   pendingWholesalers,
+  pendingOrders,
   children,
 }: AdminLayoutProps) {
+  const badgeFor = (tabId: AdminTab): number => {
+    if (tabId === 'wholesalers') return pendingWholesalers;
+    if (tabId === 'orders') return pendingOrders;
+    return 0;
+  };
   return (
     <div className="admin-shell">
       <header className="admin-header">
@@ -151,9 +171,9 @@ export function AdminLayout({
               </svg>
               <span className="admin-nav__label">
                 {tab.label}
-                {tab.id === 'wholesalers' && pendingWholesalers > 0 && (
-                  <span className="admin-nav__badge" aria-label={`${pendingWholesalers} pending`}>
-                    {pendingWholesalers}
+                {badgeFor(tab.id) > 0 && (
+                  <span className="admin-nav__badge" aria-label={`${badgeFor(tab.id)} pending`}>
+                    {badgeFor(tab.id)}
                   </span>
                 )}
               </span>

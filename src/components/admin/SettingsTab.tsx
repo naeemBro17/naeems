@@ -375,6 +375,109 @@ function ShopWhatsAppPanel() {
   );
 }
 
+/** bKash advance-payment number + the two delivery zone fees (Batch 18) —
+ *  the same app_settings rows place_order() reads server-side
+ *  (migration-021), so a change here takes effect for both what the
+ *  customer sees at checkout and what the order is actually priced at. */
+function OrderPaymentSettingsPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+
+  const [bkashNumber, setBkashNumber] = useState('');
+  const [feeInsideDhaka, setFeeInsideDhaka] = useState('');
+  const [feeOutsideDhaka, setFeeOutsideDhaka] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setBkashNumber(settings.shop_bkash_number);
+    setFeeInsideDhaka(settings.delivery_fee_inside_dhaka);
+    setFeeOutsideDhaka(settings.delivery_fee_outside_dhaka);
+  }, [settings]);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    const inside = Number(feeInsideDhaka);
+    const outside = Number(feeOutsideDhaka);
+    if (!Number.isFinite(inside) || inside < 0 || !Number.isFinite(outside) || outside < 0) {
+      showToast('Delivery fees must be a positive number', 'error');
+      return;
+    }
+    setIsSaving(true);
+    const { error } = await supabase.from('app_settings').upsert(
+      [
+        { key: 'shop_bkash_number', value: bkashNumber.trim() },
+        { key: 'delivery_fee_inside_dhaka', value: String(inside) },
+        { key: 'delivery_fee_outside_dhaka', value: String(outside) },
+      ],
+      { onConflict: 'key' }
+    );
+    setIsSaving(false);
+    if (error) {
+      console.error('Order payment settings save failed:', error);
+      showToast('Could not save. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast('Saved');
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Orders: Payment &amp; Delivery</h3>
+      <p className="admin-panel__description">
+        The bKash number customers send advance payment to (leave blank to hide the bKash
+        option at checkout), and the delivery fee for each zone.
+      </p>
+      <form onSubmit={handleSave} className="form" noValidate>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-bkash-number">
+            bKash number
+          </label>
+          <input
+            id="settings-bkash-number"
+            type="text"
+            className="form-input"
+            placeholder="01XXXXXXXXX"
+            value={bkashNumber}
+            onChange={(e) => setBkashNumber(e.target.value)}
+          />
+        </div>
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label" htmlFor="settings-fee-inside">
+              Inside Dhaka fee (৳)
+            </label>
+            <input
+              id="settings-fee-inside"
+              type="number"
+              min="0"
+              className="form-input"
+              value={feeInsideDhaka}
+              onChange={(e) => setFeeInsideDhaka(e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="settings-fee-outside">
+              Outside Dhaka fee (৳)
+            </label>
+            <input
+              id="settings-fee-outside"
+              type="number"
+              min="0"
+              className="form-input"
+              value={feeOutsideDhaka}
+              onChange={(e) => setFeeOutsideDhaka(e.target.value)}
+            />
+          </div>
+        </div>
+        <button type="submit" className="button button--primary" disabled={isSaving}>
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 /** Hero banner slides — the swipeable card at the top of the homepage. */
 function BannerSlidesPanel() {
   const { settings, refetch } = useProducts();
@@ -731,6 +834,8 @@ export function SettingsTab() {
       <ExpertSettingsPanel />
 
       <ShopWhatsAppPanel />
+
+      <OrderPaymentSettingsPanel />
 
       <BannerSlidesPanel />
 

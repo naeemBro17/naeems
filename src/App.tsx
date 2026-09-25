@@ -20,6 +20,8 @@ import { AdminPage } from './pages/AdminPage';
 import { AdminAccessPage } from './pages/AdminAccessPage';
 import { WholesalerAccessPage } from './pages/WholesalerAccessPage';
 import { AccountPage } from './pages/AccountPage';
+import { OrdersListPage } from './pages/OrdersListPage';
+import { OrderDetailPage } from './pages/OrderDetailPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export default function App() {
@@ -39,6 +41,8 @@ export default function App() {
                       <Route path="/product/:slug" element={<ProductDetailPage />} />
                       <Route path="/contact" element={<ContactExpertPage />} />
                       <Route path="/account" element={<AccountPage />} />
+                      <Route path="/orders" element={<OrdersListPage />} />
+                      <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                       {/* Cart & checkout flow — see src/features/checkout. */}
                       <Route path="/cart" element={<CartPage />} />
                       <Route path="/checkout/delivery" element={<DeliveryDetailsPage />} />

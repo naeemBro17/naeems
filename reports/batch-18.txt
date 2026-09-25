@@ -1,0 +1,226 @@
+BATCH 18 — Real On-Site Orders
+================================
+
+1) SUMMARY
+----------
+Orders are now stored in the database instead of only existing as WhatsApp text.
+Checkout adds a payment step (Cash on Delivery or bKash), an order is created by
+a server-side function that re-checks every price and stock level itself, and
+Naeem gets a Telegram message the moment a new order comes in (or is cancelled).
+Customers can see and cancel their own orders under "My Orders". Also fixed the
+screen-shake bug when pressing Back from Search to Home.
+
+2) SECURITY — WHAT WAS TESTED LIVE, AND RESULT
+-----------------------------------------------
+migration-021-orders.sql has NOT been run in production yet (confirmed live: the
+`orders` table returns HTTP 404 "not found" when queried with the anon key, and
+`place_order` returns "function not found"). This is expected — per CLAUDE.md,
+migrations are never auto-applied, Naeem runs them by hand. Because of this,
+the three specific attack tests from the spec (tampered price, reading another
+customer's order, directly updating order status) could NOT be run against a
+live database this session — there is nothing there yet to attack.
+
+What I could and did verify instead:
+- Read the full 547-line migration line by line, twice, specifically hunting
+  for logic bugs since I cannot execute it live to catch them at runtime.
+  Found and fixed one real bug: a `RAISE EXCEPTION 'Only %s of...'` used `%s`
+  (that's C/printf syntax) instead of Postgres's own `%` placeholder — it
+  would have printed a literal "5s" instead of "5" in the stock-shortage
+  message. Fixed to `%`.
+- Confirmed by re-reading the SQL that every one of the three attacks the spec
+  asks about is structurally blocked before it can even reach a row:
+  · Tampered price: `place_order()` never accepts a price from the caller at
+    all — it only accepts product_id/variant_id/quantity, and looks up
+    price, stock and active-status itself for every line, every time.
+  · Reading another customer's order: `orders_read_own` RLS policy is
+    `customer_id = auth.uid()`, and `order_items`/`order_status_history` are
+    only visible through an EXISTS join back to an order you can see. There
+    is no policy that grants broader access to a non-admin.
+  · Direct status/total update: there is no INSERT policy at all for
+    customers (place_order/cancel_order are SECURITY DEFINER, they bypass
+    RLS by design, nothing else can insert). The UPDATE grant only exists
+    for the `orders_admin_update` policy, and even that column-level GRANT
+    only covers status/payment_status/tracking_number/admin_note/updated_at
+    — `total`, `subtotal`, `discount`, `delivery_fee` are deliberately
+    excluded from the GRANT list entirely, so even an admin cannot change
+    the amount on an order with a raw UPDATE; only place_order() computes it.
+- Re-confirmed the pre-existing wholesale-price protection (products_view
+  hides wholesale_price from anon) is unaffected by anything in this batch.
+
+Once Naeem runs the migration, he should run the 5 checks written at the
+bottom of migration-021-orders.sql, logged in as a real customer, exactly as
+listed there (place order / stock-limit rejection / direct total UPDATE must
+fail / cross-customer SELECT must return zero rows / cancel restores stock).
+
+3) WHAT WAS BUILT
+------------------
+Part 2 — Checkout flow:
+  src/features/checkout/OrderSummaryPage.tsx — payment method step (COD
+    default / bKash with number shown from settings, TrxID + sender fields),
+    calls the real place_order() function, double-tap guarded, keeps the
+    cart intact and shows a friendly error on failure.
+  src/features/checkout/OrderSuccessPage.tsx — shows the real order number,
+    a receipt, "what happens next" text, Download invoice, "আমার অর্ডার
+    দেখুন", Continue shopping. WhatsApp send button removed.
+  src/lib/orders.ts — placeOrder/cancelOrder/fetchMyOrders/fetchOrderDetail/
+    fetchAllOrders/adminSetOrderStatus/adminUpdateOrder — all calls to the
+    database go through this one file.
+  src/lib/orderExport.ts — WhatsApp text builder removed; PDF invoice now
+    includes the real order number and payment method.
+  src/features/checkout/useCheckoutState.ts, types.ts — delivery fee now
+    read from app_settings (falls back to the old hardcoded numbers if
+    settings aren't loaded yet); OrderSnapshot carries orderId/orderNumber/
+    paymentMethod/bkashTrxId.
+
+Part 3 — Telegram notification:
+  supabase/functions/notify-telegram-order/index.ts — Edge Function, sends a
+  Bangla+English message on every new order and every cancellation. Fails
+  soft everywhere (missing secrets, Telegram API errors) — never blocks or
+  fails an order. Bot token lives only in Supabase secrets, never in this
+  repo or the frontend.
+
+Part 4 — Admin Orders tab:
+  src/components/admin/OrdersTab.tsx, OrderDetailSheet.tsx — new "Orders" tab
+  in /admin with a pending-count badge, search + status filter, and a detail
+  sheet (Call/WhatsApp buttons, address with Copy, Mark as paid, status
+  buttons, tracking number, admin note, history timeline, invoice download).
+  src/pages/AdminPage.tsx, src/components/admin/AdminLayout.tsx — wired the
+  new tab in, orders are fetched once and shared (same pattern as the
+  existing Wholesalers tab, not fetched twice).
+  src/components/admin/SettingsTab.tsx — new panel for the bKash number and
+  the two delivery fees.
+
+Part 5 — Customer "My Orders":
+  src/pages/OrdersListPage.tsx, OrderDetailPage.tsx — list + detail at
+  /orders and /orders/:orderId, filled into the AccountPage placeholder from
+  Batch 16. Status timeline, tracking number, cancel (pending only, with
+  confirmation), WhatsApp help pre-filled with the order number, empty state
+  with a "start shopping" link.
+
+Part 6 — Search-back shake, root cause and fix:
+  Root cause: the browser's own scroll-restoration ('auto', the default) was
+  racing against React fully remounting the page (PageTransition keys on the
+  URL) plus its 350ms slide transition, on any Back navigation that wasn't
+  already specifically handled — the only page that had ever handled its own
+  scroll position on return was the product grid, and only for the one path
+  of returning from a product page. Search back-to-home was never covered by
+  that mechanism, so the browser's guess and React's real layout fought each
+  other and visibly jumped.
+  Fix: src/main.tsx now turns off native scroll restoration app-wide
+  (`history.scrollRestoration = 'manual'`) and src/pages/ViewerPage.tsx now
+  always sets a deterministic scroll position once per real mount, instead of
+  only doing so for the one product-return path. This only changes Back/
+  Forward behaviour — forward (pushState) navigation never used native
+  restoration in the first place, so nothing else is affected. Verified this
+  doesn't reopen Batch 11's variant-tap-no-replay fix or the product hero
+  view-transition — neither touches scrollRestoration or this effect.
+
+4) WHOLESALER ORDER BEHAVIOUR
+-------------------------------
+Confirmed by reading how price is picked all the way from the product page
+and add-to-cart button through checkout: wholesalers pay the exact same
+retail/offer price as any other customer. `wholesale_price` is only ever
+shown as a reference number behind the "tap to reveal" component — it was
+never charged at checkout before this batch, and place_order() keeps that
+unchanged: it has no role-based branching at all, it always computes
+retail/offer price server-side for everyone. If wholesale checkout pricing is
+wanted later, that is a deliberate new feature, not something this batch
+silently changed.
+
+5) WHERE DELIVERY FEES NOW LIVE
+---------------------------------
+app_settings, keys `delivery_fee_inside_dhaka` and `delivery_fee_outside_dhaka`
+(seeded to 80 and 130 — the same numbers already hardcoded in
+src/lib/deliveryZones.ts, so nothing changes until Naeem edits them). Editable
+from Admin → Settings, in the new panel next to the bKash number. The
+checkout page and place_order() both read from this same source now, so they
+can no longer disagree.
+
+6) NAEEM'S SETUP STEPS
+------------------------
+None of this blocks the site — everything below fails silently (no Telegram
+message, no bKash option shown) until you do it.
+
+A) Run the SQL migration (required for orders to work at all)
+   1. Open the Supabase dashboard → SQL Editor.
+   2. Open the file supabase/migration-021-orders.sql from this project, copy
+      all of it, paste into the SQL Editor, click Run.
+   3. It's safe to run more than once if you're ever unsure whether it ran.
+
+B) Create your Telegram bot (5 minutes, one-time)
+   1. In Telegram, search for "BotFather" and open a chat with it.
+   2. Send /newbot, give it a name and a username (must end in "bot").
+   3. BotFather replies with a long token like
+      `123456789:AAExampleTokenTextHere`. Copy it — this is your
+      TELEGRAM_BOT_TOKEN.
+   4. Send your new bot any message (e.g. "hi") so it knows about you.
+   5. In your browser, visit:
+      https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+      (replace <YOUR_TOKEN> with the token from step 3). Look for a number
+      next to "chat":{"id": — that number is your TELEGRAM_CHAT_ID.
+
+C) Add the two secrets in Supabase
+   1. Supabase dashboard → Project Settings → Edge Functions → Secrets.
+   2. Add TELEGRAM_BOT_TOKEN with the value from step B3.
+   3. Add TELEGRAM_CHAT_ID with the value from step B5.
+
+D) Deploy the Edge Function (needs the Supabase CLI once)
+   1. If you don't have it yet: npm install -g supabase
+   2. From this project's folder, run:
+      supabase functions deploy notify-telegram-order
+   3. (If asked to log in / link the project first, follow the prompts — it
+      will point you to a login link.)
+
+E) Turn on the webhook that calls it
+   1. Supabase dashboard → Database → Webhooks → Create a new webhook.
+   2. Table: orders. Events: Insert and Update (both).
+   3. Type: Supabase Edge Function. Function: notify-telegram-order.
+   4. Save. From then on, every new order and every cancellation sends you a
+      Telegram message automatically.
+
+F) Turn on bKash as a payment option (optional, whenever you're ready)
+   1. Admin → Settings → find the new "Order payment settings" panel.
+   2. Enter your bKash number and Save.
+   3. The bKash option appears on checkout automatically. Leave it blank to
+      keep Cash on Delivery as the only option.
+
+7) SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------
+File: supabase/migration-021-orders.sql — copy the whole file and run it in
+the SQL Editor. Safe to re-run if you're ever unsure. It only adds new
+tables/functions — it does not touch any existing table's data.
+
+What it does, in plain terms: creates three new tables (orders, the items in
+each order, and a history log of status changes), and three functions that
+are the only way those tables can ever be written to — one that creates an
+order (checking real prices and real stock itself, never trusting the
+browser), one that cancels an order and puts any reserved stock back, and one
+the admin panel uses to change an order's status. It also adds your delivery
+fees and bKash number as editable settings.
+
+(The full SQL is in the file itself — reproducing all 547 lines here would
+make this report far longer than the "under ~180 lines" limit. Naeem: open
+supabase/migration-021-orders.sql directly, that is the exact, complete,
+paste-ready SQL.)
+
+8) WHAT COULD NOT BE TESTED LIVE
+-----------------------------------
+- The entire order-placing flow end-to-end, because the migration isn't
+  applied to production yet (by design — see CLAUDE.md).
+- All three specific attack tests from the spec (see Security section above)
+  — blocked for the same reason, but verified by careful reading instead,
+  and 5 ready-to-run verification queries are included at the bottom of the
+  migration file for Naeem/a future session to run once it's applied.
+- Google sign-in isn't configured in this environment, so no real customer
+  session could be created even after a migration — this is the same
+  limitation noted in the Batch 16 and 17 reports.
+- Telegram delivery itself (no bot token exists yet).
+- Visual/interactive testing of the new checkout payment step, My Orders
+  pages and admin Orders tab in an actual browser — code was written and
+  compiles, but has not been clicked through, because doing so meaningfully
+  needs a real signed-in session and the migration applied.
+
+BUILD: npm run build — PASSED, zero errors.
+TESTS: npx vitest run — PASSED (9/9).
+
+Branch: feature/batch-18-orders

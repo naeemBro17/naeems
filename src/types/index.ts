@@ -215,6 +215,16 @@ export interface AppSettings {
   /* --- Cart & checkout (Session 11) --- */
   /** Bare phone number or full wa.me link the checkout flow sends orders to. */
   shop_whatsapp_number: string;
+
+  /* --- Orders (Batch 18) --- */
+  /** Taka fee for each delivery zone — the authoritative copy place_order()
+   *  reads lives in these same app_settings rows; DELIVERY_ZONES in
+   *  features/checkout/types.ts is only the pre-login/offline fallback. */
+  delivery_fee_inside_dhaka: string;
+  delivery_fee_outside_dhaka: string;
+  /** bKash number customers send advance payment to. Blank hides the bKash
+   *  payment option entirely at checkout. */
+  shop_bkash_number: string;
 }
 
 /**
@@ -412,4 +422,76 @@ export interface PromoCodeFormData {
   /** datetime-local input value, or '' for no expiry. */
   expires_at: string;
   active: boolean;
+}
+
+/* ============================================================
+   Orders (Batch 18)
+   ============================================================ */
+
+export type OrderPaymentMethod = 'cod' | 'bkash';
+export type OrderPaymentStatus = 'unpaid' | 'pending_verification' | 'paid';
+export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+
+/** One saved order. Address/customer fields are a snapshot taken at order
+ *  time (place_order()) — a later profile edit never changes a past order. */
+export interface Order {
+  id: string;
+  order_number: string;
+  customer_id: string;
+  customer_name: string;
+  customer_phone: string;
+  division: string;
+  district: string;
+  thana: string;
+  address_line: string;
+  delivery_zone: 'inside_dhaka' | 'outside_dhaka';
+  delivery_fee: number;
+  subtotal: number;
+  discount: number;
+  promo_code: string | null;
+  total: number;
+  payment_method: OrderPaymentMethod;
+  bkash_trx_id: string | null;
+  bkash_sender: string | null;
+  payment_status: OrderPaymentStatus;
+  status: OrderStatus;
+  tracking_number: string | null;
+  customer_note: string | null;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One line item of an order — also a snapshot (product_name/variant_label/
+ *  unit_price as they were at order time), even if the product changes or
+ *  is deleted afterwards. product_id/variant_id go null (not the row) if
+ *  the underlying catalog row is later deleted — see migration-021. */
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string | null;
+  variant_id: string | null;
+  product_name: string;
+  variant_label: string | null;
+  image_url: string | null;
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+}
+
+/** One row of an order's status timeline. */
+export interface OrderStatusHistoryRow {
+  id: string;
+  order_id: string;
+  old_status: OrderStatus | null;
+  new_status: OrderStatus;
+  changed_by: string | null;
+  changed_at: string;
+  note: string | null;
+}
+
+/** An order plus its items and timeline, as the detail screens need it. */
+export interface OrderWithDetails extends Order {
+  items: OrderItem[];
+  history: OrderStatusHistoryRow[];
 }

@@ -1,64 +1,31 @@
 // Step 4 of the checkout flow — the final confirmation screen. Reads the
-// order snapshot useCheckoutState captured when "Pay and Order" was tapped
-// (not the live cart, which this screen clears on mount). Offers a PDF
-// export and a WhatsApp handoff to the shop; there is no payment gateway,
-// so this is the actual end of the flow. If a promo code was used, its
-// usage count is committed here (not when it was typed in) via the
-// increment_promo_usage SECURITY DEFINER function.
-import { useEffect, useRef } from 'react';
+// order snapshot useCheckoutState captured the instant place_order()
+// succeeded (not the live cart, which is already cleared and reset by the
+// time this page is reached — see OrderSummaryPage). The order itself is
+// already saved in the database with a real order number; this screen is
+// just a receipt, "what happens next", and a way to the order's own page
+// or back to shopping. Promo usage is committed server-side inside
+// place_order() now, not here.
 import { Navigate, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { useProducts } from '../../contexts/ProductContext';
-import { whatsAppUrl, openExternal } from '../../lib/expertLinks';
-import { buildOrderPdf, buildOrderWhatsAppText } from '../../lib/orderExport';
+import { formatTaka } from '../../lib/format';
+import { buildOrderPdf } from '../../lib/orderExport';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
 export function OrderSuccessPage() {
   useDocumentTitle("Order Placed — Naeem's");
-  const { lastOrder, resetAfterOrder } = useCheckoutState();
-  const { settings } = useProducts();
+  const { lastOrder } = useCheckoutState();
   const navigate = useNavigate();
-  const hasRunRef = useRef(false);
-
-  useEffect(() => {
-    if (hasRunRef.current || !lastOrder) return;
-    hasRunRef.current = true;
-
-    if (lastOrder.promo) {
-      void supabase.rpc('increment_promo_usage', { promo_code: lastOrder.promo.code }).then(({ error }) => {
-        // The discount already shown to this customer is honored regardless
-        // of whether the code was still valid at this exact moment — see
-        // migration-014's increment_promo_usage for the re-check. We only
-        // log here so a missing/failed function isn't silently invisible.
-        if (error) console.error('increment_promo_usage failed:', error.message);
-      });
-    }
-    resetAfterOrder();
-    // resetAfterOrder is stable (useCallback) but intentionally excluded so
-    // this effect never re-fires from a state change it itself causes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastOrder]);
 
   if (!lastOrder) {
     return <Navigate to="/cart" replace />;
   }
 
-  const handleSavePdf = async () => {
+  const handleDownloadInvoice = async () => {
     const doc = await buildOrderPdf(lastOrder);
-    doc.save(`order-summary-${Date.now()}.pdf`);
+    doc.save(`${lastOrder.orderNumber}.pdf`);
   };
-
-  const handleSendWhatsApp = () => {
-    const base = whatsAppUrl(settings.shop_whatsapp_number);
-    if (!base) return;
-    const separator = base.includes('?') ? '&' : '?';
-    const url = `${base}${separator}text=${encodeURIComponent(buildOrderWhatsAppText(lastOrder))}`;
-    openExternal(url);
-  };
-
-  const whatsAppConfigured = whatsAppUrl(settings.shop_whatsapp_number) !== null;
 
   return (
     <div className="viewer-shell detail-shell">
@@ -85,24 +52,42 @@ export function OrderSuccessPage() {
         </div>
 
         <h2 className="checkout-success__heading">Order has been placed!</h2>
-        <p className="checkout-success__subtext">Just one more step to confirm it with us.</p>
+        <p className="checkout-success__order-number">{lastOrder.orderNumber}</p>
+        <p className="checkout-success__subtext">Thank you, {lastOrder.address.fullName.split(' ')[0]}!</p>
+
+        <div className="checkout-success__receipt">
+          <div className="checkout-success__receipt-row">
+            <span>Items</span>
+            <span>
+              {lastOrder.items.reduce((sum, item) => sum + item.quantity, 0)} item
+              {lastOrder.items.reduce((sum, item) => sum + item.quantity, 0) === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="checkout-success__receipt-row">
+            <span>Payment</span>
+            <span>{lastOrder.paymentMethod === 'bkash' ? 'bKash' : 'Cash on Delivery'}</span>
+          </div>
+          <div className="checkout-success__receipt-row checkout-success__receipt-row--total">
+            <span>Total paid</span>
+            <span>{formatTaka(lastOrder.total)}</span>
+          </div>
+        </div>
 
         <div className="checkout-success__instructions">
-          Tap "Save as PDF" to keep a copy of your order summary, then tap "Send on WhatsApp"
-          to send it to us so we can confirm it.
+          আমরা শীঘ্রই আপনার অর্ডার confirm করব। কোনো প্রশ্ন থাকলে "সাহায্য দরকার?" থেকে
+          যোগাযোগ করুন।
         </div>
 
         <div className="checkout-success__actions">
-          <button type="button" className="button button--secondary" onClick={handleSavePdf}>
-            Save as PDF
+          <button type="button" className="button button--secondary" onClick={handleDownloadInvoice}>
+            Download invoice
           </button>
           <button
             type="button"
             className="button button--primary"
-            onClick={handleSendWhatsApp}
-            disabled={!whatsAppConfigured}
+            onClick={() => navigate(`/orders/${lastOrder.orderId}`)}
           >
-            Send on WhatsApp
+            আমার অর্ডার দেখুন
           </button>
         </div>
 

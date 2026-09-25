@@ -10,11 +10,14 @@ import { ReviewsTab } from '../components/admin/ReviewsTab';
 import { BentoTilesTab } from '../components/admin/BentoTilesTab';
 import { PromoCodesTab } from '../components/admin/PromoCodesTab';
 import { SettingsTab } from '../components/admin/SettingsTab';
-import type { WholesalerAccount } from '../types';
+import { OrdersTab } from '../components/admin/OrdersTab';
+import { fetchAllOrders } from '../lib/orders';
+import type { WholesalerAccount, Order } from '../types';
 
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('products');
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   // Loaded once for the pending-count badge and reused by the Wholesalers tab.
   const loadWholesalers = useCallback(async () => {
@@ -24,9 +27,17 @@ export function AdminPage() {
     }
   }, []);
 
+  // Same pattern as loadWholesalers: loaded once here, passed down to
+  // OrdersTab, and re-run after any change (status update, cancel) so both
+  // the tab's own list and the sidebar's pending-count badge stay in sync.
+  const loadOrders = useCallback(async () => {
+    setOrders(await fetchAllOrders());
+  }, []);
+
   useEffect(() => {
     void loadWholesalers();
-  }, [loadWholesalers]);
+    void loadOrders();
+  }, [loadWholesalers, loadOrders]);
 
   // A client-side navigation (e.g. the hamburger menu's Admin Panel link)
   // keeps whatever scroll position the previous page was at — this page
@@ -41,12 +52,14 @@ export function AdminPage() {
   const pendingWholesalers = wholesalers.filter(
     (w) => w.role === 'wholesaler' && w.status === 'pending'
   ).length;
+  const pendingOrders = orders.filter((o) => o.status === 'pending').length;
 
   return (
     <AdminLayout
       activeTab={activeTab}
       onTabChange={setActiveTab}
       pendingWholesalers={pendingWholesalers}
+      pendingOrders={pendingOrders}
     >
       {activeTab === 'products' && <ProductList />}
       {activeTab === 'categories' && (
@@ -59,6 +72,7 @@ export function AdminPage() {
       {activeTab === 'wholesalers' && (
         <WholesalerList accounts={wholesalers} onReload={loadWholesalers} />
       )}
+      {activeTab === 'orders' && <OrdersTab orders={orders} onReload={loadOrders} />}
       {activeTab === 'reviews' && <ReviewsTab />}
       {activeTab === 'bento' && <BentoTilesTab />}
       {activeTab === 'promo-codes' && <PromoCodesTab />}
