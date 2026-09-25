@@ -1,0 +1,45 @@
+BATCH 18 FIX — "DELETE requires a WHERE clause" on place_order()
+====================================================================
+
+WHAT WAS WRONG
+---------------
+Supabase turns on a protection ("safeupdate") that blocks any UPDATE or
+DELETE that doesn't have a WHERE clause, for any request coming in over the
+API — including one running inside a database function like place_order().
+
+place_order() clears its own private scratch table (used to hold each cart
+line while prices/stock are checked) with:
+  DELETE FROM _order_lines;
+That line has no WHERE clause (it's meant to clear the whole table), so
+Supabase blocked it and the order failed with error 21000.
+
+I checked cancel_order() and admin_set_order_status() (the other two
+functions from migration-021) line by line for the same pattern — every
+UPDATE in both of those already has a WHERE id = ... clause, so only
+place_order() had this problem.
+
+THE FIX
+--------
+Changed that one line to TRUNCATE _order_lines; — it clears the table the
+same way, but TRUNCATE isn't subject to the safeupdate check at all. Nothing
+else about the function changed.
+
+WHAT YOU MUST DO
+------------------
+Run supabase/migration-022-fix-safeupdate.sql in the Supabase SQL Editor
+(Supabase dashboard → SQL Editor → paste the whole file → Run). It's safe to
+run more than once. It only replaces the place_order() function — it doesn't
+touch any table or any existing data.
+
+I also fixed the same line inside migration-021-orders.sql itself, so if you
+ever set this project up fresh on a brand-new database, it won't have this
+bug either — migration-022 is only needed because migration-021 was already
+run once with the old, broken version.
+
+BUILD / TESTS
+--------------
+npm run build — PASSED, zero errors.
+npx vitest run — PASSED (9/9).
+This was a SQL-only fix, no frontend code changed.
+
+Branch: fix/batch-18-safeupdate
