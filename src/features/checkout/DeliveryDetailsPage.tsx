@@ -7,33 +7,70 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
 import { formatTaka } from '../../lib/format';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useAuth } from '../../contexts/AuthContext';
+import { zoneForAddress } from '../../lib/deliveryZones';
+import {
+  AddressFormFields,
+  validateAddress,
+  type AddressFieldErrors,
+} from '../../components/checkout/AddressFormFields';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { DELIVERY_ZONES, type DeliveryAddress } from './types';
 
-type FieldErrors = Partial<Record<keyof DeliveryAddress, string>>;
-
-/** Bangladeshi mobile numbers: 01[3-9]XXXXXXXX (11 digits), optionally with
- *  a +880/880 country code prefix. Spaces/hyphens are stripped before testing
- *  so "017 1234 5678" and "01712345678" both pass. */
-function isValidBangladeshiPhone(raw: string): boolean {
-  const digitsOnly = raw.replace(/[\s-]/g, '');
-  return /^(\+?880|0)1[3-9]\d{8}$/.test(digitsOnly);
-}
-
 export function DeliveryDetailsPage() {
   useDocumentTitle("Delivery Details — Naeem's");
-  const { items, zoneId, setZoneId, address, setAddress } = useCheckoutState();
+  const { items, isCatalogLoading, zoneId, setZoneId, address, setAddress } = useCheckoutState();
+  const { profile, isCustomer, updateOwnProfile } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState<DeliveryAddress>(address);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const [errors, setErrors] = useState<AddressFieldErrors>({});
 
   // Keep the local draft in sync if the shared address changes elsewhere
   // (e.g. the customer went back from Order Summary to edit it).
   useEffect(() => {
     setForm(address);
   }, [address]);
+
+  // A returning, logged-in customer's saved delivery details prefill the
+  // form the first time it's empty — first-time customers just see it blank.
+  // Never overwrites something the customer already typed this session.
+  useEffect(() => {
+    if (!profile) return;
+    const hasSavedAddress = profile.district || profile.thana || profile.address_line;
+    if (!hasSavedAddress) return;
+    setForm((current) => {
+      if (current.fullName || current.phone || current.district || current.fullAddress) {
+        return current;
+      }
+      const next = {
+        fullName: current.fullName || profile.full_name || '',
+        phone: current.phone || profile.phone || '',
+        division: profile.division ?? '',
+        district: profile.district ?? '',
+        thana: profile.thana ?? '',
+        fullAddress: profile.address_line ?? '',
+      };
+      setZoneId(zoneForAddress(next.district || null, next.thana || null));
+      return next;
+    });
+    // Only meant to run once, right when the profile first becomes
+    // available — not every time the profile object identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
+  // Cart items resolve against the product catalog, which is still empty on
+  // a cold load straight onto this route (e.g. returning from the Google
+  // OAuth redirect) — wait for it rather than bouncing a customer whose
+  // cart is actually fine back to an apparently-empty cart page.
+  if (isCatalogLoading) {
+    return (
+      <div className="full-screen-center" aria-label="Loading your cart">
+        <span className="spinner spinner--large" aria-hidden="true" />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return <Navigate to="/cart" replace />;
@@ -43,16 +80,13 @@ export function DeliveryDetailsPage() {
     setForm((current) => ({ ...current, ...patch }));
   };
 
+  const handleLocationChange = (district: string, thana: string) => {
+    setZoneId(zoneForAddress(district || null, thana || null));
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const nextErrors: FieldErrors = {};
-    if (form.fullName.trim() === '') nextErrors.fullName = 'Full name is required';
-    if (form.phone.trim() === '') {
-      nextErrors.phone = 'Phone number is required';
-    } else if (!isValidBangladeshiPhone(form.phone)) {
-      nextErrors.phone = 'Enter a valid Bangladeshi phone number (e.g. 01XXXXXXXXX)';
-    }
-    if (form.fullAddress.trim() === '') nextErrors.fullAddress = 'Full address is required';
+    const nextErrors = validateAddress(form);
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -61,6 +95,19 @@ export function DeliveryDetailsPage() {
 
     setErrors({});
     setAddress(form);
+    // Remember these details on the customer's profile for next visit — not
+    // blocking navigation on it, and never for admin/wholesaler sessions
+    // (they aren't customer profiles and shouldn't gain address fields).
+    if (isCustomer) {
+      void updateOwnProfile({
+        full_name: form.fullName,
+        phone: form.phone,
+        division: form.division,
+        district: form.district,
+        thana: form.thana,
+        address_line: form.fullAddress,
+      });
+    }
     navigate('/checkout/summary');
   };
 
@@ -100,89 +147,13 @@ export function DeliveryDetailsPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="form checkout-delivery-form" noValidate>
-          <div className="form-field">
-            <label className="form-label" htmlFor="delivery-name">
-              Full name <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <input
-              id="delivery-name"
-              type="text"
-              className="form-input"
-              value={form.fullName}
-              onChange={(e) => updateField({ fullName: e.target.value })}
-            />
-            {errors.fullName && (
-              <p className="form-error" role="alert">
-                {errors.fullName}
-              </p>
-            )}
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="delivery-phone">
-              Phone number <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <input
-              id="delivery-phone"
-              type="tel"
-              inputMode="numeric"
-              className="form-input"
-              value={form.phone}
-              onChange={(e) => updateField({ phone: e.target.value })}
-            />
-            {errors.phone && (
-              <p className="form-error" role="alert">
-                {errors.phone}
-              </p>
-            )}
-          </div>
-
-          <div className="form-row">
-            <div className="form-field">
-              <label className="form-label" htmlFor="delivery-district">
-                District
-              </label>
-              <input
-                id="delivery-district"
-                type="text"
-                className="form-input"
-                value={form.district}
-                onChange={(e) => updateField({ district: e.target.value })}
-              />
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor="delivery-thana">
-                Thana / Area
-              </label>
-              <input
-                id="delivery-thana"
-                type="text"
-                className="form-input"
-                value={form.thana}
-                onChange={(e) => updateField({ thana: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="delivery-address">
-              Full address <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <textarea
-              id="delivery-address"
-              className="form-input form-textarea"
-              rows={3}
-              placeholder="House, road, landmark"
-              value={form.fullAddress}
-              onChange={(e) => updateField({ fullAddress: e.target.value })}
-            />
-            {errors.fullAddress && (
-              <p className="form-error" role="alert">
-                {errors.fullAddress}
-              </p>
-            )}
-          </div>
+          <AddressFormFields
+            form={form}
+            errors={errors}
+            onChange={updateField}
+            onLocationChange={handleLocationChange}
+            idPrefix="delivery"
+          />
 
           <button type="submit" className="button button--primary checkout-delivery-form__submit">
             Save and continue

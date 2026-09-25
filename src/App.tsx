@@ -18,6 +18,7 @@ import { OrderSuccessPage } from './features/checkout/OrderSuccessPage';
 import { AdminPage } from './pages/AdminPage';
 import { AdminAccessPage } from './pages/AdminAccessPage';
 import { WholesalerAccessPage } from './pages/WholesalerAccessPage';
+import { AccountPage } from './pages/AccountPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
                       {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
                       <Route path="/product/:slug" element={<ProductDetailPage />} />
                       <Route path="/contact" element={<ContactExpertPage />} />
+                      <Route path="/account" element={<AccountPage />} />
                       {/* Cart & checkout flow — see src/features/checkout. */}
                       <Route path="/cart" element={<CartPage />} />
                       <Route path="/checkout/delivery" element={<DeliveryDetailsPage />} />

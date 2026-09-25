@@ -6629,6 +6629,102 @@ textarea {
   margin-top: var(--space-3);
 }
 
+/* Division/District/Thana trigger buttons — a button styled to read as a
+   select field (see .form-select's chevron), opening a PickerSheet instead
+   of a native dropdown (490+ thanas is unusable as a plain <select> on
+   mobile — see PickerSheet.tsx). */
+.form-picker-button {
+  width: 100%;
+  text-align: left;
+  padding: 11px var(--space-3);
+  padding-right: var(--space-8);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 16px;
+  transition: border-color var(--transition-base);
+}
+
+.form-picker-button:disabled {
+  opacity: 0.5;
+}
+
+.form-picker-button--placeholder {
+  color: var(--color-text-muted);
+}
+
+/* ---------- PickerSheet: searchable long-list picker ---------- */
+
+.picker-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.picker-sheet__search {
+  margin-bottom: var(--space-3);
+  flex-shrink: 0;
+}
+
+.picker-sheet__list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.picker-sheet__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: left;
+  min-height: 44px;
+  transition: background-color var(--transition-base);
+}
+
+.picker-sheet__row--selected {
+  background: var(--color-bg-secondary);
+}
+
+.picker-sheet__row-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.picker-sheet__row-sub {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.picker-sheet__check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.picker-sheet__empty {
+  padding: var(--space-6) 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
 /* ---------- Step 3: Order summary ---------- */
 
 /* A deliberately inverted "receipt" card — the one screen where the review
@@ -6927,4 +7023,311 @@ textarea {
 
 .checkout-success__continue {
   margin-top: var(--space-3);
+}
+
+/* ---------- Google sign-in button (Batch 16) ---------- */
+/* Styled per Google's own sign-in button guidelines rather than the app's
+   usual .button classes — this must read as Google's button, not the site's,
+   so a customer trusts what they're tapping. White in both themes. */
+.google-signin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid #DADCE0;
+  background: #FFFFFF;
+  color: #3C4043;
+  font-size: 15px;
+  font-weight: 600;
+  transition: box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+.google-signin-button:hover:not(:disabled) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.google-signin-button:active:not(:disabled) {
+  background: #F8F9FA;
+}
+
+.google-signin-button:disabled {
+  opacity: 0.6;
+}
+
+/* ---------- Checkout login sheet ---------- */
+
+.login-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.login-sheet__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.login-sheet__message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+.login-sheet__actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.login-sheet__cancel {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.login-sheet__error {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ---------- Account page (Batch 16) ---------- */
+
+.account-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: var(--space-6);
+}
+
+/* ---------- Logged-out welcome ---------- */
+
+.account-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4) var(--space-4);
+}
+
+.account-welcome__mark {
+  width: 88px;
+  height: 88px;
+  margin-bottom: var(--space-4);
+}
+
+.account-welcome__mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.account-welcome__title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.account-welcome__message {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-5);
+  max-width: 280px;
+}
+
+.account-welcome .google-signin-button {
+  max-width: 320px;
+}
+
+/* ---------- Skeleton ---------- */
+
+.account-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+}
+
+.account-skeleton__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+}
+
+.account-skeleton__line {
+  height: 14px;
+  border-radius: var(--radius-sm);
+}
+
+.account-skeleton__line--name {
+  width: 140px;
+}
+
+.account-skeleton__line--email {
+  width: 180px;
+  margin-bottom: var(--space-4);
+}
+
+.account-skeleton__card {
+  width: 100%;
+  height: 84px;
+  border-radius: var(--radius-md);
+}
+
+/* ---------- Logged-in header ---------- */
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.account-header__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: var(--color-bg-secondary);
+}
+
+.account-header__avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  border: 1.5px solid var(--color-border);
+}
+
+.account-header__info {
+  min-width: 0;
+}
+
+.account-header__name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-header__email {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Cards ---------- */
+
+.account-card {
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.account-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.account-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.account-card__edit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  min-height: 32px;
+  padding: 0 var(--space-2);
+}
+
+.account-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-card__line {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.account-card__line--muted {
+  color: var(--color-text-secondary);
+}
+
+.account-card__empty {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ---------- Rows (Help, staff panel link) ---------- */
+
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.account-row__chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------- Log out ---------- */
+
+.account-logout {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  font-size: 14px;
+  font-weight: 600;
+  /* Quiet on purpose — signing out is not a warning or a primary action. */
+  color: var(--color-text-secondary);
 }

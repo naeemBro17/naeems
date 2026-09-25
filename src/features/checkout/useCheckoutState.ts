@@ -60,6 +60,13 @@ function loadPersisted(): PersistedState {
 interface CheckoutStateValue {
   /** Live cart resolved against the product catalog. */
   items: CartItem[];
+  /** True until the product catalog has loaded at least once. Cart items
+   *  resolve against `products`, which starts empty — on a COLD load
+   *  straight onto /checkout/delivery or /checkout/summary (e.g. returning
+   *  from the Google OAuth redirect), `items` is transiently [] before the
+   *  catalog finishes loading. Pages must wait for this instead of reading
+   *  items.length === 0 as "cart is empty" on their very first render. */
+  isCatalogLoading: boolean;
   subtotal: number;
   zoneId: DeliveryZoneId;
   zone: DeliveryZoneOption;
@@ -85,7 +92,7 @@ const CheckoutStateContext = createContext<CheckoutStateValue | null>(null);
 
 export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   const { items: rawItems, updateQuantity, removeItem, clearCart } = useCart();
-  const { products, variantsFor } = useProducts();
+  const { products, variantsFor, isLoading: isCatalogLoading } = useProducts();
 
   const [zoneId, setZoneId] = useState<DeliveryZoneId>(() => loadPersisted().zoneId);
   const [address, setAddress] = useState<DeliveryAddress>(() => loadPersisted().address);
@@ -169,6 +176,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CheckoutStateValue>(
     () => ({
       items,
+      isCatalogLoading,
       subtotal,
       zoneId,
       zone,
@@ -187,6 +195,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
     }),
     [
       items,
+      isCatalogLoading,
       subtotal,
       zoneId,
       zone,

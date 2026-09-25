@@ -36,7 +36,6 @@ import { CategoryChips } from '../components/viewer/CategoryChips';
 import { ProductGrid } from '../components/viewer/ProductGrid';
 import { BottomNav, type NavTab } from '../components/viewer/BottomNav';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
-import { AccountSheet } from '../components/viewer/AccountSheet';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
 import { ProductEditSheet } from '../components/admin/edit-sheets/ProductEditSheet';
@@ -94,7 +93,6 @@ export function ViewerPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<NavTab>('home');
 
@@ -200,14 +198,8 @@ export function ViewerPage() {
   };
 
   const handleAccountTab = () => {
-    setActiveTab('account');
-    setAccountOpen(true);
+    navigate('/account');
   };
-
-  const closeAccount = useCallback(() => {
-    setAccountOpen(false);
-    setActiveTab('home');
-  }, []);
 
   // Homepage section order. 'products' is pinned last and never dragged, so
   // only the four movable sections take part in the drag.
@@ -418,7 +410,6 @@ export function ViewerPage() {
       />
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
-      <AccountSheet isOpen={accountOpen} onClose={closeAccount} />
       <FilterSheet
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}
