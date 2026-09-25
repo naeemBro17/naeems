@@ -6,13 +6,23 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
 import { formatTaka } from '../../lib/format';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { DELIVERY_ZONES, type DeliveryAddress } from './types';
 
 type FieldErrors = Partial<Record<keyof DeliveryAddress, string>>;
 
+/** Bangladeshi mobile numbers: 01[3-9]XXXXXXXX (11 digits), optionally with
+ *  a +880/880 country code prefix. Spaces/hyphens are stripped before testing
+ *  so "017 1234 5678" and "01712345678" both pass. */
+function isValidBangladeshiPhone(raw: string): boolean {
+  const digitsOnly = raw.replace(/[\s-]/g, '');
+  return /^(\+?880|0)1[3-9]\d{8}$/.test(digitsOnly);
+}
+
 export function DeliveryDetailsPage() {
+  useDocumentTitle("Delivery Details — Naeem's");
   const { items, zoneId, setZoneId, address, setAddress } = useCheckoutState();
   const navigate = useNavigate();
 
@@ -37,7 +47,11 @@ export function DeliveryDetailsPage() {
     e.preventDefault();
     const nextErrors: FieldErrors = {};
     if (form.fullName.trim() === '') nextErrors.fullName = 'Full name is required';
-    if (form.phone.trim() === '') nextErrors.phone = 'Phone number is required';
+    if (form.phone.trim() === '') {
+      nextErrors.phone = 'Phone number is required';
+    } else if (!isValidBangladeshiPhone(form.phone)) {
+      nextErrors.phone = 'Enter a valid Bangladeshi phone number (e.g. 01XXXXXXXXX)';
+    }
     if (form.fullAddress.trim() === '') nextErrors.fullAddress = 'Full address is required';
 
     if (Object.keys(nextErrors).length > 0) {

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin-access
+Disallow: /wholesaler-access
+Disallow: /cart
+Disallow: /checkout/
+
+Sitemap: https://naeems-all.vercel.app/sitemap.xml
