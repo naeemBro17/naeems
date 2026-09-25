@@ -279,7 +279,11 @@ BEGIN
     quantity      integer,
     line_total    numeric(10,2)
   ) ON COMMIT DROP;
-  DELETE FROM _order_lines;
+  -- TRUNCATE, not "DELETE FROM ... ;" — Supabase's safeupdate protection
+  -- blocks any UPDATE/DELETE without a WHERE clause, even inside a
+  -- SECURITY DEFINER function called over the RPC API. TRUNCATE isn't
+  -- subject to that check and clears the table just the same.
+  TRUNCATE _order_lines;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP

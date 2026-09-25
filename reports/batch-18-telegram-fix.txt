@@ -1,0 +1,122 @@
+BATCH 18 FIX — Telegram order notification showing no items
+=============================================================
+
+1. WHAT I DID
+--------------
+Found the real cause of the empty "Items:" list: when order NM-1002 was
+placed, migration-021 gave "authenticated" read access to orders/order_items/
+order_status_history, but never gave "service_role" that same access — and
+this project's Supabase instance does not auto-apply default privileges to
+new tables (this exact bug already hit the "reviews" table once before, see
+migration-011). The notify-telegram-order function reads order_items using
+the service role key, so its query was silently failing with "permission
+denied for table order_items" — caught, logged only to the function's
+server-side log, and treated as "no items" instead of an error. I confirmed
+this directly by querying the live database's grant table, which showed
+service_role had no SELECT privilege on any of the three order tables.
+
+Fixed by:
+- Writing migration-023 (paste-ready SQL below) to grant SELECT on all
+  three order tables to service_role — read-only, matches how "authenticated"
+  is already scoped; every write still only happens through
+  place_order()/cancel_order()/admin_set_order_status().
+- Updating the item line format to "product name (variant) × quantity —
+  price", and added a fallback line ("no items found for this order") in
+  the rare case the items list is genuinely empty, so a future problem is
+  visible in the message instead of just a blank section.
+- Made the admin link in the message open the specific order: added
+  ?tab=orders&order=<uuid> deep-link support to the admin panel
+  (src/pages/AdminPage.tsx reads those two params on load; OrdersTab now
+  accepts an initialOrderId to auto-open that order's detail sheet). The
+  admin panel had no deep-linking at all before this — tabs were plain
+  component state — so this is a small new capability, not a pre-existing
+  one I just wired up.
+- Redeployed the function (npx supabase functions deploy notify-telegram-order)
+  — deploy succeeded.
+
+I could not run the GRANT statement myself — the environment blocked a
+direct database write as a safety measure — so it still needs to be run by
+hand, same as every other migration in this project.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+-----------------------------------
+File: supabase/migration-023-service-role-order-grants.sql
+
+    GRANT SELECT ON orders, order_items, order_status_history TO service_role;
+
+This is the one thing standing between this fix and it actually working —
+until you run it, the Telegram message will keep showing no items (or the
+new "no items found" fallback line), because service_role still can't read
+order_items.
+
+
+3. WHAT I COULD NOT FINISH
+----------------------------
+Nothing — code changes are done, function is redeployed. Only the SQL grant
+above is outstanding, and only because I'm not allowed to run it myself.
+
+
+4. WHAT I FOUND ALONG THE WAY
+-------------------------------
+- The admin panel (AdminPage.tsx) has never had URL-based state — no tab or
+  record ever survived a refresh or a shared link. This fix only adds
+  reading ?tab= and ?order= on initial load; it does not add deep links
+  anywhere else (e.g. still no /admin?tab=wholesalers style links elsewhere
+  in the app). If you want other admin links (e.g. from a future email/SMS
+  alert) to jump to a specific wholesaler or review, that would need the
+  same small pattern repeated for that tab.
+- Errors from the order_items query were only ever going to the Edge
+  Function's own server log (Supabase dashboard → Functions → Logs), which
+  nobody was checking — that's how a permission error went unnoticed. Worth
+  keeping in mind for any future Edge Function: a silent "fails soft" design
+  is good for not breaking the order flow, but it also means a real bug can
+  sit invisible unless someone thinks to check the function logs.
+
+
+5. DESIGN DECISIONS
+---------------------
+- Used "×" (multiplication sign) instead of "x" for the quantity separator,
+  matching exactly what you asked for.
+- Kept the "fails soft" philosophy of the function (never breaks the order
+  flow), but added the one-line "no items found" fallback so a future
+  version of this exact bug is visible in the Telegram message itself, not
+  just buried in a log nobody reads.
+- Grant service_role SELECT on all three order tables (not just
+  order_items) even though only order_items is used today — orders and
+  order_status_history are the same trust level and will very likely be
+  needed by some future Edge Function; better to close the whole gap once
+  than patch it table-by-table.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+--------------------------------------------------
+- Small: The Edge Function has no alerting for its own failures (e.g. if
+  Telegram's API is down, or a future permission bug recurs) beyond a log
+  line. Consider a periodic manual check of Functions → Logs, or in the
+  future a fallback channel (e.g. also write a "notification_failed" row
+  somewhere) if missed order alerts become costly.
+- Small: The Supabase default-privileges issue (this bug and the earlier
+  "reviews" one) suggests every NEW table migration should end with an
+  explicit checklist line: "does service_role need to read this table from
+  an Edge Function? If yes, GRANT it explicitly — do not rely on defaults."
+  Worth a one-line reminder in CLAUDE.md's migration section so this class
+  of bug doesn't recur a third time.
+
+
+TESTING
+--------
+How to verify once you've run the migration-023 SQL above:
+1. Place a small test order on the live site (any product, COD is
+   simplest).
+2. Within a few seconds you should get a Telegram message. Open the
+   "Items:" section — it should now list every product you ordered, in the
+   form: product name (variant) × quantity — price.
+3. Tap the admin link at the bottom of the message. It should open the
+   admin panel directly on the Orders tab with that exact order's detail
+   sheet already open, instead of landing on the Products tab.
+4. If you want to test a cancellation notification too: cancel that test
+   order (as the customer, while it's still "pending", from
+   /orders/<order id>, or as admin from the Orders tab) — you should get
+   the "অর্ডার বাতিল হয়েছে" message, and its admin link should also open
+   that same order directly.

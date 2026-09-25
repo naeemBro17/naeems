@@ -48,7 +48,13 @@ interface WebhookPayload {
   old_record: OrderRow | null;
 }
 
-const ADMIN_URL = 'https://naeems-all.vercel.app/admin';
+const ADMIN_BASE_URL = 'https://naeems-all.vercel.app/admin';
+
+/** Deep links straight to the Orders tab with this order's sheet open
+ *  (AdminPage reads ?tab= and ?order= — see src/pages/AdminPage.tsx). */
+function adminOrderUrl(orderId: string): string {
+  return `${ADMIN_BASE_URL}?tab=orders&order=${orderId}`;
+}
 
 function formatTaka(amount: number): string {
   return '৳' + amount.toLocaleString('en-BD');
@@ -75,9 +81,12 @@ function buildNewOrderMessage(order: OrderRow, items: OrderItemRow[]): string {
   lines.push(`📍 ${order.thana}, ${order.district}, ${order.division}`);
   lines.push('');
   lines.push('🛒 <b>Items:</b>');
+  if (items.length === 0) {
+    lines.push('(no items found for this order)');
+  }
   for (const item of items) {
     const variant = item.variant_label ? ` (${item.variant_label})` : '';
-    lines.push(`- ${item.product_name}${variant} x${item.quantity} — ${formatTaka(item.line_total)}`);
+    lines.push(`- ${item.product_name}${variant} × ${item.quantity} — ${formatTaka(item.line_total)}`);
   }
   lines.push('');
   lines.push(`💰 <b>Total: ${formatTaka(order.total)}</b>`);
@@ -87,7 +96,7 @@ function buildNewOrderMessage(order: OrderRow, items: OrderItemRow[]): string {
     lines.push('💳 Cash on Delivery');
   }
   lines.push('');
-  lines.push(`🔗 ${ADMIN_URL}`);
+  lines.push(`🔗 ${adminOrderUrl(order.id)}`);
   return lines.join('\n');
 }
 
@@ -99,7 +108,7 @@ function buildCancelMessage(order: OrderRow): string {
     `👤 ${order.customer_name} · 📞 ${order.customer_phone}`,
     `💰 ${formatTaka(order.total)}`,
     '',
-    `🔗 ${ADMIN_URL}`,
+    `🔗 ${adminOrderUrl(order.id)}`,
   ].join('\n');
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { AdminLayout, type AdminTab } from '../components/admin/AdminLayout';
 import { ProductList } from '../components/admin/ProductList';
@@ -14,10 +14,24 @@ import { OrdersTab } from '../components/admin/OrdersTab';
 import { fetchAllOrders } from '../lib/orders';
 import type { WholesalerAccount, Order } from '../types';
 
+const ADMIN_TABS: readonly AdminTab[] = [
+  'products', 'categories', 'import-export', 'wholesalers', 'orders',
+  'reviews', 'bento', 'promo-codes', 'settings',
+];
+
+/** Supports a deep link like /admin?tab=orders&order=<uuid> — used by the
+ *  Telegram order notification to jump straight to the order that arrived,
+ *  instead of just landing on the Products tab and making Naeem hunt for it. */
+function initialTabFromUrl(): AdminTab {
+  const tabParam = new URLSearchParams(window.location.search).get('tab');
+  return (ADMIN_TABS as string[]).includes(tabParam ?? '') ? (tabParam as AdminTab) : 'products';
+}
+
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('products');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTabFromUrl);
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const initialOrderId = useMemo(() => new URLSearchParams(window.location.search).get('order'), []);
 
   // Loaded once for the pending-count badge and reused by the Wholesalers tab.
   const loadWholesalers = useCallback(async () => {
@@ -72,7 +86,9 @@ export function AdminPage() {
       {activeTab === 'wholesalers' && (
         <WholesalerList accounts={wholesalers} onReload={loadWholesalers} />
       )}
-      {activeTab === 'orders' && <OrdersTab orders={orders} onReload={loadOrders} />}
+      {activeTab === 'orders' && (
+        <OrdersTab orders={orders} onReload={loadOrders} initialOrderId={initialOrderId} />
+      )}
       {activeTab === 'reviews' && <ReviewsTab />}
       {activeTab === 'bento' && <BentoTilesTab />}
       {activeTab === 'promo-codes' && <PromoCodesTab />}
