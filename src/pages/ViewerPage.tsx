@@ -143,17 +143,35 @@ export function ViewerPage() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [headerHeight]);
 
-  // Coming back from a product detail page: put the grid back where it was.
-  // Runs after products land so the list is tall enough to scroll into.
+  // Owns this page's scroll position on every fresh mount — not just the
+  // "coming back from a product" case below. Without this, returning here
+  // via the browser Back button from anywhere that ISN'T a product page
+  // (e.g. /search — see reports/batch-18.txt Part 6) left the browser's own
+  // native scroll restoration to guess a position, which then visibly
+  // fought the page-slide transition and this component's full remount
+  // (PageTransition keys on pathname, so navigating back here is a real
+  // unmount+remount, not just a re-render) — a jump/shake as the two
+  // settled into different final positions. history.scrollRestoration is
+  // set to 'manual' once in main.tsx specifically so this effect is the
+  // only thing deciding where a fresh mount of this page starts.
+  //
+  // The guard ref means this only ever runs once per actual mount — a
+  // later `products` reference change (e.g. an admin's edit triggering
+  // refetch()) must NOT re-trigger a scroll jump while they're already
+  // browsing the page.
+  const hasSetInitialScroll = useRef(false);
   useEffect(() => {
+    if (hasSetInitialScroll.current) return;
+    if (isLoading) return; // wait for real content, same as before
+    hasSetInitialScroll.current = true;
+
     const savedY = takeGridScroll();
-    if (savedY === null) return;
     requestAnimationFrame(() => {
       setTimeout(() => {
-        window.scrollTo({ top: savedY, behavior: 'instant' });
+        window.scrollTo({ top: savedY ?? 0, behavior: 'instant' });
       }, 80);
     });
-  }, [products]);
+  }, [products, isLoading]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);

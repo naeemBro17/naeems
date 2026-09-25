@@ -88,6 +88,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   homepage_section_order: '',
 
   shop_whatsapp_number: '',
+
+  delivery_fee_inside_dhaka: '80',
+  delivery_fee_outside_dhaka: '130',
+  shop_bkash_number: '',
 };
 
 /**
@@ -124,6 +128,9 @@ const TEXT_SETTING_KEYS = [
   'bento_tile_order',
   'homepage_section_order',
   'shop_whatsapp_number',
+  'delivery_fee_inside_dhaka',
+  'delivery_fee_outside_dhaka',
+  'shop_bkash_number',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];

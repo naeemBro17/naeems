@@ -153,12 +153,15 @@ function CustomerAccountView() {
         )}
       </section>
 
-      <section className="account-card">
+      <Link to="/orders" className="account-card account-card--link">
         <div className="account-card__head">
           <h2 className="account-card__title">My Orders</h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="account-row__chevron">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
         </div>
-        <p className="account-card__empty">আপনার অর্ডারগুলো এখানে দেখাবে — coming very soon.</p>
-      </section>
+        <p className="account-card__empty">Track and manage your orders</p>
+      </Link>
 
       {waLink && (
         <button

@@ -16,6 +16,7 @@ import {
 } from 'react';
 import { useCart } from '../../contexts/CartContext';
 import { useProducts } from '../../contexts/ProductContext';
+import type { AppSettings } from '../../types';
 import {
   DELIVERY_ZONES,
   emptyDeliveryAddress,
@@ -80,9 +81,15 @@ interface CheckoutStateValue {
   updateQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
   removeItem: (productId: string, variantId?: string | null) => void;
   lastOrder: OrderSnapshot | null;
-  /** Captures the current cart/zone/address/promo into lastOrder. Called the
-   *  instant "Pay and Order" is tapped, before the cart is touched. */
-  finalizeOrder: () => OrderSnapshot;
+  /** Captures the current cart/zone/address/promo plus the real order id/
+   *  number place_order() just returned into lastOrder — called the instant
+   *  it succeeds, before the cart is cleared. */
+  finalizeOrder: (result: {
+    orderId: string;
+    orderNumber: string;
+    paymentMethod: OrderSnapshot['paymentMethod'];
+    bkashTrxId: string | null;
+  }) => OrderSnapshot;
   /** Empties the live cart and resets zone/address/promo for a fresh visit.
    *  Leaves lastOrder in place so OrderSuccessPage keeps its snapshot. */
   resetAfterOrder: () => void;
@@ -92,7 +99,7 @@ const CheckoutStateContext = createContext<CheckoutStateValue | null>(null);
 
 export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   const { items: rawItems, updateQuantity, removeItem, clearCart } = useCart();
-  const { products, variantsFor, isLoading: isCatalogLoading } = useProducts();
+  const { products, variantsFor, settings, isLoading: isCatalogLoading } = useProducts();
 
   const [zoneId, setZoneId] = useState<DeliveryZoneId>(() => loadPersisted().zoneId);
   const [address, setAddress] = useState<DeliveryAddress>(() => loadPersisted().address);
@@ -143,28 +150,49 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
     [items]
   );
 
-  const zone = useMemo(
-    () => DELIVERY_ZONES.find((z) => z.id === zoneId) ?? DELIVERY_ZONES[0],
-    [zoneId]
-  );
+  // app_settings (delivery_fee_inside_dhaka / _outside_dhaka) is the
+  // authoritative fee — the same source place_order() reads server-side
+  // (migration-021) — so a fee Naeem changes in Settings shows up here
+  // immediately rather than needing a code change. DELIVERY_ZONES' own
+  // numbers are only the fallback for the instant before settings load.
+  const zone = useMemo(() => {
+    const base = DELIVERY_ZONES.find((z) => z.id === zoneId) ?? DELIVERY_ZONES[0];
+    const settingKey = `delivery_fee_${base.id}` as keyof AppSettings;
+    const fromSettings = Number(settings[settingKey]);
+    return Number.isFinite(fromSettings) && fromSettings >= 0
+      ? { ...base, fee: fromSettings }
+      : base;
+  }, [zoneId, settings]);
 
   const discount = promo?.computedDiscount ?? 0;
   const total = Math.max(0, subtotal + zone.fee - discount);
 
-  const finalizeOrder = useCallback((): OrderSnapshot => {
-    const snapshot: OrderSnapshot = {
-      items,
-      zone,
-      address,
-      promo,
-      subtotal,
-      discount,
-      total,
-      placedAt: new Date().toISOString(),
-    };
-    setLastOrder(snapshot);
-    return snapshot;
-  }, [items, zone, address, promo, subtotal, discount, total]);
+  const finalizeOrder = useCallback(
+    (result: {
+      orderId: string;
+      orderNumber: string;
+      paymentMethod: OrderSnapshot['paymentMethod'];
+      bkashTrxId: string | null;
+    }): OrderSnapshot => {
+      const snapshot: OrderSnapshot = {
+        orderId: result.orderId,
+        orderNumber: result.orderNumber,
+        items,
+        zone,
+        address,
+        promo,
+        subtotal,
+        discount,
+        total,
+        paymentMethod: result.paymentMethod,
+        bkashTrxId: result.bkashTrxId,
+        placedAt: new Date().toISOString(),
+      };
+      setLastOrder(snapshot);
+      return snapshot;
+    },
+    [items, zone, address, promo, subtotal, discount, total]
+  );
 
   const resetAfterOrder = useCallback(() => {
     clearCart();

@@ -7055,6 +7055,110 @@ textarea {
   width: 100%;
 }
 
+.checkout-summary-page__error {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: 13.5px;
+  margin-bottom: var(--space-3);
+}
+
+/* ---------- Payment method (Batch 18) ---------- */
+
+.checkout-payment {
+  margin-top: var(--space-5);
+}
+
+.checkout-payment__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.checkout-payment__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkout-payment__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  text-align: left;
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+/* Neutral selected state, not orange — the primary action on this screen is
+   "Place order" below, see CLAUDE.md's colour rule. */
+.checkout-payment__option--selected {
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.checkout-payment__option-radio {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border-strong);
+  transition: border-color var(--transition-base), background-color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+.checkout-payment__option--selected .checkout-payment__option-radio {
+  border-color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  box-shadow: inset 0 0 0 3px var(--color-surface);
+}
+
+.checkout-payment__option-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.checkout-bkash {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.checkout-bkash__instructions {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.checkout-bkash__instructions strong {
+  color: var(--color-text-primary);
+}
+
+.checkout-bkash__number {
+  font-family: var(--font-price);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--color-text-primary);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1.5px dashed var(--color-border-strong);
+  text-align: center;
+}
+
 /* ---------- Step 4: Order success ---------- */
 
 .checkout-success {
@@ -7135,10 +7239,46 @@ textarea {
   margin-bottom: var(--space-2);
 }
 
+.checkout-success__order-number {
+  font-family: var(--font-price);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
 .checkout-success__subtext {
   font-size: 13.5px;
   color: var(--color-text-secondary);
   margin-bottom: var(--space-5);
+}
+
+.checkout-success__receipt {
+  width: 100%;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  text-align: left;
+}
+
+.checkout-success__receipt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  padding: 6px 0;
+}
+
+.checkout-success__receipt-row--total {
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
 .checkout-success__instructions {
@@ -7391,6 +7531,21 @@ textarea {
   background: var(--color-surface);
 }
 
+/* The My Orders card is a whole tappable <a>, not a <section> — reset link
+   defaults so it still reads as the same neutral card. */
+.account-card--link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.account-card--link .account-row__chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
 .account-card__head {
   display: flex;
   align-items: center;
@@ -7529,4 +7684,335 @@ textarea {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+/* ---------- Orders: status badge tones (Batch 18) ----------
+   Reuses the existing .status-badge base (app.css ~L1572, already shared by
+   the admin Wholesalers/Products tabs) — just four more tone modifiers,
+   named generically (not order-specific) since "neutral/info/success/danger"
+   is a reasonable shared vocabulary for any future status pill too. */
+
+.status-badge--neutral {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.status-badge--info {
+  background: var(--color-text-primary);
+  color: var(--color-bg);
+}
+
+.status-badge--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-badge--danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+/* ---------- My Orders list ---------- */
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.orders-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.orders-list__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.orders-list__number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.orders-list__date {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.orders-list__row-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.orders-list__total {
+  font-family: var(--font-price);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.orders-list__skeleton-row {
+  height: 64px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+}
+
+/* ---------- Order detail ---------- */
+
+.order-detail__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.order-detail__date {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.order-detail__skeleton-block {
+  height: 80px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.order-timeline {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding-left: var(--space-1);
+  border-left: 2px solid var(--color-border);
+}
+
+.order-timeline__step {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.order-timeline__dot {
+  position: absolute;
+  left: calc(-1 * var(--space-1) - 6px);
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.order-timeline__step--reached {
+  color: var(--color-text-primary);
+}
+
+.order-timeline__step--reached .order-timeline__dot {
+  background: var(--color-text-primary);
+}
+
+.order-timeline__label {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.order-timeline__time {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.order-detail__tracking {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.order-detail__tracking strong {
+  color: var(--color-text-primary);
+}
+
+.order-detail__section {
+  margin-top: var(--space-5);
+}
+
+.order-detail__section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.order-detail__address {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.order-detail__payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.order-detail__trx {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+
+.order-detail__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* ---------- Admin: order detail sheet (Batch 18) ---------- */
+
+.order-admin-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.order-admin-detail__actions-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.order-admin-detail__actions-row .button {
+  flex: 1;
+}
+
+.order-detail__section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.order-detail__section-title-row .order-detail__section-title {
+  margin-bottom: 0;
+}
+
+.order-admin-detail__field-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.order-admin-detail__field-row .form-input {
+  flex: 1;
+}
+
+.order-admin-detail__history {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.order-admin-detail__status-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.order-admin-detail__status-actions .button {
+  flex: 1;
+}
+
+/* ---------- Admin: Orders tab list ---------- */
+
+.admin-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.admin-order-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-order-row__number {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.admin-order-row__customer {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-order-row__time {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.admin-order-row__end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-order-row__total {
+  font-family: var(--font-price);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.admin-list {
+  list-style: none;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.admin-list li + li .admin-order-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.admin-order-row {
+  border-bottom: none;
 }

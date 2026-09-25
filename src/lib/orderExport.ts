@@ -1,11 +1,8 @@
-import { formatTaka } from './format';
 import type { OrderSnapshot } from '../features/checkout/types';
 
 /**
  * jsPDF's built-in fonts only cover WinAnsi, not the Bengali Taka sign (৳),
- * so the PDF export spells it out as "Tk" instead. The WhatsApp message
- * uses formatTaka's ৳ normally — that's just UTF-8 text WhatsApp renders
- * natively, no font involved.
+ * so the PDF export spells it out as "Tk" instead.
  */
 function formatTakaAscii(amount: number): string {
   const hasDecimals = amount % 1 !== 0;
@@ -22,39 +19,13 @@ function areaLine(order: OrderSnapshot): string {
     .join(', ');
 }
 
-/** Pre-filled WhatsApp message text for OrderSuccessPage's "Send on WhatsApp". */
-export function buildOrderWhatsAppText(order: OrderSnapshot): string {
-  const lines: string[] = [];
-  lines.push("New order from Naeem's");
-  lines.push('');
-  lines.push(`Name: ${order.address.fullName}`);
-  lines.push(`Phone: ${order.address.phone}`);
-  const area = areaLine(order);
-  if (area !== '') lines.push(`Area: ${area}`);
-  lines.push(`Address: ${order.address.fullAddress}`);
-  lines.push('');
-  lines.push('Items:');
-  for (const item of order.items) {
-    const variant = item.variantLabel ? ` (${item.variantLabel})` : '';
-    lines.push(
-      `- ${item.product.name}${variant} x${item.quantity} - ${formatTaka(item.unitPrice * item.quantity)}`
-    );
-  }
-  lines.push('');
-  lines.push(`Delivery: ${order.zone.label} (${formatTaka(order.zone.fee)})`);
-  if (order.promo) {
-    lines.push(`Promo applied: ${order.promo.code} (-${formatTaka(order.discount)})`);
-  }
-  lines.push(`Total: ${formatTaka(order.total)}`);
-  return lines.join('\n');
-}
-
 /**
- * Renders the order into a one-page PDF for OrderSuccessPage's "Save as PDF".
+ * Renders the order into a one-page PDF invoice for OrderSuccessPage's
+ * "Download invoice" (and the admin Orders tab's matching action).
  * jsPDF pulls in html2canvas (~230kB) as a hard dependency of its .html()
  * plugin even though this file never calls it, so the import is deferred
- * here — the cost is only paid when a customer actually taps the button,
- * not on every page load.
+ * here — the cost is only paid when someone actually taps the button, not
+ * on every page load.
  */
 export async function buildOrderPdf(order: OrderSnapshot) {
   const { default: jsPDF } = await import('jspdf');
@@ -70,7 +41,8 @@ export async function buildOrderPdf(order: OrderSnapshot) {
     y += lineHeight * (size > 14 ? 1.4 : 1);
   };
 
-  writeLine('Order Summary', true, 18);
+  writeLine(`Order ${order.orderNumber}`, true, 18);
+  writeLine(new Date(order.placedAt).toLocaleString('en-GB'), false, 10);
   y += lineHeight * 0.5;
 
   writeLine(`Name: ${order.address.fullName}`);
@@ -95,6 +67,13 @@ export async function buildOrderPdf(order: OrderSnapshot) {
     writeLine(`Promo (${order.promo.code}): -${formatTakaAscii(order.discount)}`);
   }
   writeLine(`Total: ${formatTakaAscii(order.total)}`, true);
+  y += lineHeight * 0.5;
+
+  const paymentLine =
+    order.paymentMethod === 'bkash'
+      ? `Payment: bKash (TrxID: ${order.bkashTrxId ?? '-'})`
+      : 'Payment: Cash on Delivery';
+  writeLine(paymentLine);
 
   return doc;
 }
