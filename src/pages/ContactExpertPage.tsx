@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useProducts } from '../contexts/ProductContext';
 import { useToast } from '../hooks/useToast';
 import { averageRating, REVIEW_SELECT } from '../lib/reviews';
@@ -65,6 +66,7 @@ function PersonPlusIcon() {
 }
 
 export function ContactExpertPage() {
+  useDocumentTitle("Talk to an Expert — Naeem's");
   const { settings } = useProducts();
   const { showToast } = useToast();
   const { isEditMode } = useAdminEdit();

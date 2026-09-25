@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useProducts } from '../../contexts/ProductContext';
 import { whatsAppUrl, openExternal } from '../../lib/expertLinks';
 import { buildOrderPdf, buildOrderWhatsAppText } from '../../lib/orderExport';
@@ -15,6 +16,7 @@ import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
 export function OrderSuccessPage() {
+  useDocumentTitle("Order Placed — Naeem's");
   const { lastOrder, resetAfterOrder } = useCheckoutState();
   const { settings } = useProducts();
   const navigate = useNavigate();

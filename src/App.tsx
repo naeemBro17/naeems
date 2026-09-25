@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProductProvider } from './contexts/ProductContext';
@@ -18,6 +18,7 @@ import { OrderSuccessPage } from './features/checkout/OrderSuccessPage';
 import { AdminPage } from './pages/AdminPage';
 import { AdminAccessPage } from './pages/AdminAccessPage';
 import { WholesalerAccessPage } from './pages/WholesalerAccessPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -50,7 +51,7 @@ export default function App() {
                           </ProtectedRoute>
                         }
                       />
-                      <Route path="*" element={<Navigate to="/" replace />} />
+                      <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                   </PageTransition>
                 </AdminEditProvider>

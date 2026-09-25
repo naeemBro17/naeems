@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { CartIcon } from '../../components/viewer/CartButton';
 import { coverImage } from '../../lib/productImages';
@@ -16,6 +17,7 @@ import { CheckoutProgressBar } from './CheckoutProgressBar';
 import type { CartItem } from './types';
 
 export function CartPage() {
+  useDocumentTitle("Your Cart — Naeem's");
   const { items, subtotal, updateQuantity, removeItem } = useCheckoutState();
   const navigate = useNavigate();
   const [pendingRemove, setPendingRemove] = useState<CartItem | null>(null);

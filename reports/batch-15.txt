@@ -1,0 +1,253 @@
+BATCH 15 — FULL CODEBASE AUDIT (before Orders + Ads)
+======================================================
+
+SUMMARY
+-------
+I tested your live database directly with the same public key your website uses (not just
+by reading the SQL files) to make sure the security rules are actually turned on, not just
+written down. Good news first: I could NOT find any Critical or High security hole. Every
+attempt to read wholesale prices, write to products, read other people's data, or upload files
+as a random visitor was correctly blocked by the database itself.
+
+Issues found: 0 Critical, 0 High, 3 Medium, 6 Low/Medium (code health + SEO gaps).
+Added in this batch: robots.txt, an auto-generated sitemap.xml (106 pages), a real "Page not
+found" page, per-page browser tab titles, Google-readable product info (JSON-LD) on every
+product page, Bangladeshi phone number validation at checkout, and two small stale-copy fixes.
+
+My single most important recommendation: before you spend money on ads, fix the "no code
+splitting" performance issue (see Performance section) — every visitor, even one who never
+touches your admin panel, currently downloads your entire admin panel's code (CSV import,
+image editors, etc.) before they can see a single product. On a slow Bangladeshi mobile
+connection this is the single biggest thing slowing down the page ad traffic will land on.
+
+Build: PASSED (zero errors). Tests: PASSED (9/9).
+
+
+1. FIXED OR ADDED IN THIS BATCH
+--------------------------------
+
+a) Real "Page not found" page
+   Before: visiting any broken/old link silently teleported the visitor to the homepage with
+   no explanation. Now they see a clear "Page not found" message with a button back home.
+   Files: src/pages/NotFoundPage.tsx (new), src/App.tsx
+
+b) robots.txt + sitemap.xml
+   Neither existed before, which makes it harder for Google to find and list all your
+   product pages, and gives Google no signal to stay out of /admin, /cart, /checkout.
+   The sitemap is generated automatically every time the site is built (scripts/generate-
+   sitemap.mjs), so it always lists your current active products — you never have to update
+   it by hand. It currently lists 106 pages (104 active products + home + contact).
+   Files: public/robots.txt (new), scripts/generate-sitemap.mjs (new), package.json
+
+c) Google product rich-results (JSON-LD)
+   Added machine-readable product info (name, price, in-stock/out-of-stock, brand) to every
+   product page. This is what lets Google show a price and stock badge directly in search
+   results instead of a plain blue link — a real, free visibility boost once Google
+   re-crawls the site.
+   File: src/pages/ProductDetailPage.tsx
+
+d) Browser tab titles per page
+   Before: every single page (home, a product, your cart, checkout, contact) showed the
+   exact same browser tab title "Naeem's". Now each page shows its own title (e.g. a
+   product's name, "Your Cart", "Delivery Details") — helps people find the right tab when
+   they have several open, and is a small, free SEO signal.
+   Files: src/hooks/useDocumentTitle.ts (new), and 6 page files
+
+e) Bangladeshi phone number validation at checkout
+   Before: the phone field only checked "is it empty," so "abc" or "123" would be accepted
+   and you'd get an order you can't call. Now it checks for a real BD mobile shape
+   (01XXXXXXXXX, 11 digits, optionally with +880) before letting the order continue.
+   File: src/features/checkout/DeliveryDetailsPage.tsx
+
+f) Two stale-copy fixes
+   - The page's meta description (what shows under your link in search results and when
+     shared) still said "Internal price lookup tool" — a leftover from before this was a
+     public storefront. Changed to a real customer-facing description.
+   - The iPhone home-screen icon was pointing at the generic icon-192.png instead of the
+     dedicated apple-touch-icon.png file that was already sitting unused in public/icons/.
+     Now it uses the correct file.
+   File: index.html
+
+None of these touch your existing design, colours, or working flows — all additive.
+
+
+2. NEEDS FUTURE WORK (highest severity/impact first)
+------------------------------------------------------
+
+[MEDIUM — Performance] No code-splitting: every visitor downloads the entire admin panel
+  What it means for the business: a first-time visitor from a Facebook ad has to download
+  ~700KB of JavaScript (before compression; ~196KB after) before the page becomes
+  interactive — and that includes all the code for CSV import, the admin image editors, the
+  banner editor, etc., which a customer will never use. On a slow mobile connection in
+  Bangladesh this directly costs you money on ads (slower page = more people leave before
+  it loads = wasted ad spend).
+  Status: Needs a future batch. Effort: Medium.
+  Fix approach: split /admin into its own downloaded chunk using React's built-in lazy
+  loading, so customers only download the customer-facing code, and the admin code only
+  loads when Naeem himself opens /admin.
+
+[MEDIUM — Performance] Product photos are sent at full size to small thumbnails
+  What it means for the business: I measured this directly on your live site — a product
+  card that displays a photo at 140×140 pixels is downloading a 1200×1200 pixel image, about
+  73 times more picture data than the screen actually shows. Multiply that across the ~20
+  product cards visible on the home page and it's a large, unnecessary amount of data for a
+  customer on a limited mobile data plan.
+  Status: Needs a future batch. Effort: Medium.
+  Fix approach: generate a second, smaller image (e.g. 400px) at upload time specifically for
+  grid/card use, and keep the current 1200px version only for the full-size product page
+  photo viewer.
+
+[MEDIUM — Code health] Two different places save the expert photo to two different files
+  Admin → Settings → "Talk to an Expert" uploads to storage path
+  settings/expert-photo.webp. The /contact page's own "Edit Mode" (ExpertEditSheet.tsx)
+  uploads the same photo to a *different* file: expert-photo.webp (no folder). Whichever one
+  you used most recently silently "wins" for what's displayed, and the old file from the
+  other path is left behind in storage forever, unused. Business impact: confusing if you
+  update the photo in one place and don't see the change, and slowly wastes storage space.
+  Status: Needs a future batch (pick one path as the real one, delete the other). Effort: Small.
+
+[LOW — Code health] Banner slides can be edited from two places that both save the same data
+  BannerEditSheet.tsx (swipe-through edit sheet) and the "Banner Slides" panel inside
+  SettingsTab.tsx both write to the same app_settings row. If two browser tabs/sessions have
+  both open and save around the same time, one save can silently overwrite the other's
+  changes. Not a security issue, just a "you might lose an edit" risk.
+  Status: Needs a future batch (pick one as the real editor, or make the other read-only).
+  Effort: Small–Medium.
+
+[LOW — Security hardening, not urgent] Two database helper functions
+  (is_admin(), is_wholesaler_or_admin(), admin_list_profiles()) don't pin down their own
+  internal search path. This is a Postgres best-practice hardening step that Supabase's own
+  security checklist recommends — in your specific setup the actual risk is very low (nothing
+  exploitable was found), but it's a one-line-per-function fix that costs nothing to apply.
+  See "SQL Naeem must run" below if you want it done.
+  Status: Optional — SQL ready below. Effort: Small.
+
+[LOW — Performance] All ~150 products load and render in one shot on the home page
+  No pagination or "load more" — every visit fetches every active product in a single
+  database call and renders every card into the page at once. With lazy-loaded images this
+  isn't dramatic today, but it will get slower as the catalog grows past a few hundred items.
+  Status: Report only for now, revisit once catalog grows. Effort: Medium.
+
+[LOW — Code health] flag-icons library ships ~540 country flag SVGs (~4.8MB) for a site
+  that in practice only ever shows a handful of countries (Bangladesh, Australia, reviewer
+  countries). They're not downloaded until actually used on screen so this isn't costing
+  load time today, but it's worth knowing this library exists in the project mostly unused.
+  Status: Report only, low priority. Effort: Small if ever revisited.
+
+
+3. TRUST & LEGAL / SEO — PAGES MISSING, QUESTIONS FOR NAEEM
+---------------------------------------------------------------
+
+I did NOT write any of this content myself — these need your real business rules, and
+getting them wrong could cause a real customer dispute. Also: Facebook commonly rejects or
+restricts ad accounts for stores that don't have a visible Privacy Policy and Return Policy,
+so these matter directly for Batch 17's ad launch, not just "nice to have."
+
+MISSING: Privacy Policy
+  Questions I need answered to write it: What customer data do you collect (name, phone,
+  address — anything else)? Is it ever shared with anyone outside your business (e.g. the
+  courier)? Do you use cookies/analytics (this becomes relevant once Batch 17 adds Facebook
+  Pixel and Google Analytics — those must be disclosed)?
+
+MISSING: Terms of Service
+  Questions: Any rules on how orders can be cancelled? Any liability limits you want stated
+  (e.g. delays caused by the courier, not you)?
+
+MISSING: Return / Refund Policy
+  Questions: How many days can a customer return a product? Is an opened skincare product
+  returnable (many skincare stores say no, for hygiene reasons — is that your rule)? Who
+  pays for return delivery? Refund to original payment method, store credit, or replacement
+  only?
+
+MISSING: Delivery Information page
+  Questions: Typical delivery time for Inside Dhaka vs Outside Dhaka (you already have the
+  two delivery fees — what are the matching time estimates)? What happens if a delivery
+  attempt fails (redelivery, contact the customer, etc.)?
+
+MISSING: About page
+  Not legally required, but every serious store has one — a short page about who you are and
+  why customers should trust an import business. Purely a business/trust decision, not
+  something I should write for you.
+
+Once you send me answers to the above, I can write and add all five pages in one future
+batch — this is a same-day task once the content decisions are made.
+
+
+4. PERFORMANCE NUMBERS (measured against the live site, naeems-all.vercel.app)
+---------------------------------------------------------------------------------
+
+- Main JavaScript bundle: 699.8KB before compression, ~196KB gzipped (confirmed from the
+  actual production build). This is the one chunk every visitor downloads before anything
+  renders — see the code-splitting recommendation above.
+- jsPDF (390KB) and html2canvas (202KB) — used only for the "export order as PDF" feature —
+  are already correctly lazy-loaded; they are NOT part of the initial page load. Good.
+- CSS: 137KB before compression, ~25KB gzipped.
+- Product images: confirmed live — a 140×140px card slot is downloading a 1200×1200px
+  source image (see Medium finding above).
+- Images already use loading="lazy" for everything below the first screen, and are already
+  served as WebP (a modern, efficient format) — both are already done correctly.
+- The home page fetches all ~150 products in one request with no pagination (see Low
+  finding above).
+- I could not get a reliable Largest Contentful Paint number through the remote browser tool
+  in this environment (its caching and background-tab timing made the number
+  meaningless/contradictory on repeated tries) — the bundle-size numbers above are measured
+  directly from the real production build output and are accurate; treat any LCP/FCP number
+  from a one-off browser tool run with suspicion and prefer testing on an actual phone before
+  and after the code-splitting fix.
+
+
+5. NOTES FOR BATCH 16 (real orders) AND BATCH 17 (ads/analytics)
+---------------------------------------------------------------------
+
+Batch 16 — Orders table
+  Good news: the checkout flow is already very well set up for this. useCheckoutState.ts
+  already builds a complete "OrderSnapshot" object the instant "Pay and Order" is tapped —
+  it already has every line item with its price *at the time it was added to cart* (so later
+  price changes can't retroactively alter a placed order), the delivery zone, the full
+  address, any promo code applied, and the computed subtotal/discount/total. This is
+  essentially the exact shape an `orders` + `order_items` table needs — Batch 16 should be
+  straightforward: take that existing OrderSnapshot and write it to two new tables instead
+  of (or alongside) the current WhatsApp/PDF export.
+
+Batch 17 — Pixel / Analytics / link previews
+  Important limitation to know about: this is a client-rendered React app (a "SPA"), and
+  Facebook's link-preview crawler does NOT run JavaScript. Your product pages already update
+  their preview info (title, photo, price) live via JavaScript when a real browser opens
+  them, but a bot fetching the raw page for a link preview only ever sees the one static
+  description in index.html — never any specific product's actual name/photo/price.
+  What this means in practice: if you share a specific product link on Facebook/WhatsApp
+  today, the preview card will show your generic site image, not that product's photo.
+  My recommendation for Batch 17: add a small Vercel serverless function that, only for
+  requests coming from known link-preview bots (Facebook, WhatsApp, Twitter), serves a tiny
+  pre-rendered HTML snippet with that specific product's real title/photo/price baked in —
+  real visitors continue to get the exact same fast app they get today. This is the standard,
+  well-understood fix for this exact problem on a Vercel-hosted SPA and doesn't require
+  rewriting the site.
+  Facebook Pixel and Google Analytics themselves are straightforward script-tag additions
+  with no structural blockers I found.
+
+
+6. SQL NAEEM MUST RUN IN SUPABASE
+-------------------------------------
+
+Optional hardening only — nothing here is urgent, nothing here changes any behavior you'll
+notice, and it's safe to skip until a batch where you're already in the SQL editor. It only
+pins down the internal search path of three existing helper functions, closing a
+best-practice gap Supabase's own security checklist flags. Safe to re-run any time.
+
+-- ============================================================
+-- Optional hardening: pin search_path on existing SECURITY DEFINER functions
+-- Safe to re-run. Does not change any behaviour — purely a hardening step.
+-- ============================================================
+
+ALTER FUNCTION is_admin() SET search_path = public;
+ALTER FUNCTION is_wholesaler_or_admin() SET search_path = public;
+ALTER FUNCTION admin_list_profiles() SET search_path = public;
+
+
+BUILD & TEST STATUS
+--------------------
+npm run build   → PASSED, zero errors
+npx vitest run  → PASSED, 9/9 tests
+
+Branch: fix/batch-15-audit (pushed to GitHub, not merged to main)

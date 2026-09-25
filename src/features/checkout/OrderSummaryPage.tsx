@@ -7,6 +7,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { coverImage } from '../../lib/productImages';
 import { formatTaka } from '../../lib/format';
 import { computePromoDiscount, findValidPromoCode } from '../../lib/promoCodes';
@@ -14,6 +15,7 @@ import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
 export function OrderSummaryPage() {
+  useDocumentTitle("Order Summary — Naeem's");
   const { items, subtotal, zone, address, promo, setPromo, discount, total, finalizeOrder } =
     useCheckoutState();
   const navigate = useNavigate();

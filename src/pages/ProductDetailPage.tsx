@@ -21,6 +21,7 @@ import {
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
 import { extractYouTubeId, youtubeEmbedUrl } from '../lib/youtube';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
 import { Modal } from '../components/shared/Modal';
@@ -40,7 +41,7 @@ const ADDED_RESET_MS = 600;
 const DEFAULT_OG = {
   title: "Naeem's Price Hub",
   description: 'Premium Australian skincare — check prices instantly',
-  image: '/og-image.png',
+  image: window.location.origin + '/og-image.png',
   url: window.location.origin + '/',
 };
 
@@ -57,6 +58,44 @@ function setOgTag(property: string, content: string): void {
   document
     .querySelector(`meta[property="og:${property}"]`)
     ?.setAttribute('content', content);
+}
+
+const JSON_LD_ID = 'product-json-ld';
+
+/** Google's Product rich-result schema, written into a <script> tag that
+ *  lives only as long as this page does. Facebook/Google crawlers that don't
+ *  run JS won't see this on a shared link preview (this is a client-rendered
+ *  SPA — see Batch 15 audit notes), but Google does execute JS when indexing,
+ *  so this still helps search rich results. */
+function setProductJsonLd(product: Product, price: number, inStock: boolean): void {
+  const existing = document.getElementById(JSON_LD_ID);
+  if (existing) existing.remove();
+
+  const script = document.createElement('script');
+  script.id = JSON_LD_ID;
+  script.type = 'application/ld+json';
+  script.textContent = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    image: coverImage(product) ?? undefined,
+    description: product.description ?? product.note ?? undefined,
+    brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'BDT',
+      price: price.toFixed(2),
+      availability: inStock
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      url: window.location.href,
+    },
+  });
+  document.head.appendChild(script);
+}
+
+function removeProductJsonLd(): void {
+  document.getElementById(JSON_LD_ID)?.remove();
 }
 
 function PlaceholderIcon() {
@@ -680,20 +719,25 @@ export function ProductDetailPage() {
   // Keep the og: tags in step with the product so a shared link previews it.
   useEffect(() => {
     if (!product) return;
-    const price = formatTaka(getDisplayPrice(product).mainPrice);
+    const mainPrice = getDisplayPrice(product).mainPrice;
+    const price = formatTaka(mainPrice);
     const note = product.note ?? '';
     setOgTag('title', product.name);
     setOgTag('description', note === '' ? price : `${price} — ${note}`);
     setOgTag('image', coverImage(product) ?? DEFAULT_OG.image);
     setOgTag('url', window.location.href);
+    setProductJsonLd(product, mainPrice, !isOutOfStock(product));
 
     return () => {
       setOgTag('title', DEFAULT_OG.title);
       setOgTag('description', DEFAULT_OG.description);
       setOgTag('image', DEFAULT_OG.image);
       setOgTag('url', DEFAULT_OG.url);
+      removeProductJsonLd();
     };
   }, [product]);
+
+  useDocumentTitle(product ? `${product.name} — Naeem's` : "Naeem's");
 
   const showLoading = !product && (isLoading || isFetching);
 
