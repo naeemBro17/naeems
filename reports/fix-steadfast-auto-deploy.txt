@@ -1,0 +1,110 @@
+DEPLOY: Steadfast automatic status updates — running the "WHAT NAEEM MUST
+DO" steps from reports/fix-steadfast-auto.txt
+==========================================================================
+
+WHAT I DID
+----------
+Naeem asked me to actually carry out the five deploy steps from the earlier
+report myself, with him approving along the way. This environment had no
+Supabase login saved at all (checked — no access token anywhere on this
+machine), so the first step was asking Naeem to run `npx supabase login`
+in his own terminal once. After that, I did the rest:
+
+  1. Generated a long random secret myself (openssl, 64 hex characters).
+     It only ever touched temporary files outside the repo (the session's
+     scratchpad folder, not this project), and both of those temp files
+     were deleted the moment they were no longer needed. It was never
+     printed to screen, never written into this repo, never put in this
+     report.
+  2. Set that value as the STEADFAST_CRON_REFRESH_SECRET Edge Function
+     secret via `supabase secrets set --env-file <temp file>`, then deleted
+     the temp file immediately.
+  3. Filled the one placeholder in migration-026-steadfast-auto.sql with
+     the same secret in a temp copy (again, outside the repo, never
+     committed), and ran it directly against the live database with
+     `supabase db query --file ... --linked`. Deleted the temp copy right
+     after confirming it worked. The repo's own copy of migration-026 still
+     has the placeholder text, exactly as it should.
+  4. Deployed all three Edge Functions: steadfast, steadfast-refresh-all,
+     notify-telegram-order.
+  5. Ran the verification query. Result: one row, active = true, schedule
+     = '0 */3 * * *'. Also confirmed the new steadfast_tracking_link column
+     exists and the secret is present in Vault (by name only — Vault never
+     shows the value itself, which is the point of using it).
+
+Found and fixed one real bug while verifying step 5, before calling it
+done — see below.
+
+
+A BUG I FOUND AND FIXED DURING DEPLOY
+--------------------------------------
+steadfast-refresh-all is called by our own pg_cron job, which sends our
+custom secret as the Authorization header — not a real Supabase login
+token. Supabase Edge Functions check the Authorization header themselves
+by default (checking it's a real signed token) BEFORE your own function
+code ever runs. Our custom secret isn't that kind of token, so every
+single cron call would have been silently rejected by Supabase itself,
+with the function's own secret-check code never even reached. The 3-hourly
+automatic refresh would have looked "deployed" and "active" but would
+never actually have updated a single order.
+
+Fixed by redeploying that one function with Supabase's own JWT check
+switched off for it (`--no-verify-jwt`) — the function's own secret check
+(already written, already correct) is what actually protects it; this only
+removes a redundant platform-level check that was actively wrong for a
+cron-triggered function. Confirmed the fix by calling the function
+directly with no secret at all: it now returns the function's own
+{"ok":false,"error":"Not authorized."} (HTTP 401) instead of Supabase's
+generic gateway rejection — proof the request is reaching our code.
+
+Also added supabase/config.toml (didn't exist before) with just this one
+setting recorded, so a future redeploy of this function doesn't silently
+turn the platform check back on and reintroduce the same silent failure.
+This file is new; it does not touch or override anything for the other
+two functions, which keep their normal JWT check untouched.
+
+
+WHAT I COULD NOT FINISH
+------------------------
+Nothing — all five steps completed and verified against the live project.
+
+
+WHAT I FOUND ALONG THE WAY (not fixed, for you to schedule)
+--------------------------------------------------------------
+- This project has never had a supabase/config.toml before now. Everything
+  Supabase-related has been deployed by typing the project ref on every
+  command instead. That's worked fine so far and I didn't change that
+  pattern — I only added the one entry needed to keep this bug fixed.
+
+
+DESIGN DECISIONS
+-----------------
+- Kept every secret out of the repo and out of chat at every stage —
+  generated it myself, used it only through temp files outside the project
+  folder, deleted each temp file the moment it was no longer needed.
+- Fixed the verify_jwt issue rather than just reporting it, since leaving
+  it broken would have made "deployed and active" misleading — the cron
+  job would run on schedule but do nothing, which is worse than an honest
+  failure because it looks fine from the dashboard.
+
+
+BUILD & TEST RESULTS
+----------------------
+npm run build  -> PASSED (zero TypeScript errors, zero build errors)
+
+Note: public/sitemap.xml changed as a side effect of running the build
+(it's regenerated from live product data each time) — left that change
+unstaged since it's unrelated to this task.
+
+
+SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None. Already run directly against the live database in step 3 above.
+
+
+GIT
+---
+Everything in this deploy touched only Supabase (secrets, database,
+Edge Functions) — no app code changed except the new supabase/config.toml
+file. Committed that one file to fix/steadfast-auto and merged the branch
+into main per Naeem's request (see his message approving this).
