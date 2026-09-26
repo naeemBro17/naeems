@@ -9,6 +9,7 @@ import {
   adminUpdateOrderDeliveryFee,
   bookSteadfastShipment,
   refreshSteadfastStatus,
+  steadfastNeedsAttention,
 } from '../../lib/orders';
 import { formatTaka } from '../../lib/format';
 import { buildOrderPdf } from '../../lib/orderExport';
@@ -237,7 +238,11 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
       showToast(result.error, 'error');
       return;
     }
-    showToast(result.markedDelivered ? 'Marked delivered' : `Courier status: ${result.courierStatus}`);
+    if (result.needsAttention) {
+      showToast(`Needs your attention — courier status: ${result.courierStatus}`, 'error');
+    } else {
+      showToast(result.markedDelivered ? 'Marked delivered' : `Courier status: ${result.courierStatus}`);
+    }
     await reload();
   };
 
@@ -426,7 +431,24 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                     <p className="order-detail__trx">Tracking code: {order.steadfast_tracking_code}</p>
                   )}
                   {order.steadfast_status && (
-                    <p className="order-detail__trx">Courier status: {order.steadfast_status}</p>
+                    <p className="order-detail__trx">
+                      Courier status: {order.steadfast_status}
+                      {steadfastNeedsAttention(order.steadfast_status) && (
+                        <span className="status-badge status-badge--danger" style={{ marginLeft: 8 }}>
+                          Needs attention
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {order.steadfast_tracking_link && (
+                    <a
+                      href={order.steadfast_tracking_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="order-detail__tracking-link"
+                    >
+                      Track on Steadfast →
+                    </a>
                   )}
                   {order.status === 'shipped' && (
                     <button

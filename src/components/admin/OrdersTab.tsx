@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { formatTaka } from '../../lib/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../lib/orderStatus';
-import { refreshSteadfastStatus } from '../../lib/orders';
+import { refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
 import { useToast } from '../../hooks/useToast';
 import { OrderDetailSheet } from './OrderDetailSheet';
 import type { Order, OrderStatus } from '../../types';
@@ -152,6 +152,9 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                   <span className={`status-badge status-badge--${PAYMENT_STATUS_TONE[order.payment_status]}`}>
                     {order.payment_method === 'bkash' ? 'bKash' : 'COD'} · {PAYMENT_STATUS_LABELS[order.payment_status]}
                   </span>
+                  {steadfastNeedsAttention(order.steadfast_status) && (
+                    <span className="status-badge status-badge--danger">Steadfast: needs attention</span>
+                  )}
                 </div>
               </button>
             </li>

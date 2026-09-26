@@ -163,7 +163,7 @@ export function OrderDetailPage() {
                 </div>
                 {order.steadfast_consignment_id && (
                   <a
-                    href="https://steadfast.com.bd/tracking"
+                    href={order.steadfast_tracking_link ?? 'https://steadfast.com.bd/tracking'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="order-detail__tracking-link"
