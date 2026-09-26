@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { formatTaka } from '../../lib/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../lib/orderStatus';
+import { refreshSteadfastStatus } from '../../lib/orders';
+import { useToast } from '../../hooks/useToast';
 import { OrderDetailSheet } from './OrderDetailSheet';
 import type { Order, OrderStatus } from '../../types';
 
@@ -27,9 +29,11 @@ interface OrdersTabProps {
 }
 
 export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) {
+  const { showToast } = useToast();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
   const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -43,10 +47,53 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     });
   }, [orders, statusFilter, search]);
 
+  // Batch 20: every shipped order that's actually been booked with
+  // Steadfast (a shipped order without a consignment id was marked shipped
+  // by hand, before this feature existed, or by a different courier).
+  const shippedWithSteadfast = orders.filter(
+    (o) => o.status === 'shipped' && Boolean(o.steadfast_consignment_id)
+  );
+
+  const handleBulkRefresh = async () => {
+    setIsBulkUpdating(true);
+    let delivered = 0;
+    let failed = 0;
+    for (const order of shippedWithSteadfast) {
+      const result = await refreshSteadfastStatus(order.id);
+      if (result.error) {
+        failed += 1;
+      } else if (result.markedDelivered) {
+        delivered += 1;
+      }
+    }
+    setIsBulkUpdating(false);
+    await onReload();
+    showToast(
+      failed === 0
+        ? `Updated ${shippedWithSteadfast.length} order${shippedWithSteadfast.length === 1 ? '' : 's'} — ${delivered} now delivered`
+        : `Updated ${shippedWithSteadfast.length - failed} order(s), ${failed} failed — try again for those`,
+      failed === 0 ? 'success' : 'error'
+    );
+  };
+
   return (
     <section aria-label="Orders">
       <header className="admin-section-header">
         <h2 className="admin-section-title">Orders</h2>
+        {shippedWithSteadfast.length > 0 && (
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            onClick={handleBulkRefresh}
+            disabled={isBulkUpdating}
+          >
+            {isBulkUpdating ? (
+              <span className="spinner" aria-hidden="true" />
+            ) : (
+              `Update all shipped (${shippedWithSteadfast.length})`
+            )}
+          </button>
+        )}
       </header>
 
       <div className="admin-filter-bar">

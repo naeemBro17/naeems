@@ -470,6 +470,13 @@ export interface Order {
   tracking_number: string | null;
   customer_note: string | null;
   admin_note: string | null;
+  /** Steadfast Courier booking (Batch 20) — all three null until "Steadfast-এ
+   *  পাঠাও" is used; see supabase/functions/steadfast. */
+  steadfast_consignment_id: string | null;
+  steadfast_tracking_code: string | null;
+  /** Steadfast's own raw status text (e.g. "in_review", "delivered") — shown
+   *  as-is to admin, never used to drive UI logic beyond that. */
+  steadfast_status: string | null;
   created_at: string;
   updated_at: string;
 }
