@@ -109,6 +109,28 @@ function isGoogleSession(session: Session): boolean {
   return session.user.app_metadata?.provider === 'google';
 }
 
+/**
+ * Google's own consent screen is a real page the browser adds to history —
+ * that one extra Back press is standard for any site using Google sign-in
+ * and isn't something this app's own code can remove. What IS ours to fix
+ * (reports/batch-21.txt Part 2) is making sure landing back here afterward
+ * doesn't ALSO leave behind a URL carrying Supabase's own auth tokens
+ * (`#access_token=...` for the implicit flow, `?code=...` for PKCE) as part
+ * of this page's history entry — reloading or sharing that URL later would
+ * try to reuse an already-consumed token. Replacing the entry in place
+ * (same path, no query/hash) rather than pushing a new one is the "callback
+ * step uses history REPLACE" the task describes, applied at the one place
+ * this app actually has control over the URL after the redirect back.
+ */
+function stripOAuthArtifactsFromUrl(): void {
+  const { hash, search, pathname } = window.location;
+  const hasAuthHash = hash.includes('access_token') || hash.includes('refresh_token');
+  const hasAuthQuery = /[?&]code=/.test(search);
+  if (!hasAuthHash && !hasAuthQuery) return;
+  const cleanSearch = search.replace(/([?&])code=[^&]*&?/, '$1').replace(/[?&]$/, '');
+  window.history.replaceState(null, '', pathname + cleanSearch);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -133,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (_event, newSession) => {
         setSession(newSession);
         setSessionChecked(true);
+        if (_event === 'SIGNED_IN') stripOAuthArtifactsFromUrl();
       }
     );
 
