@@ -1,0 +1,259 @@
+BATCH 21 — Polish & Safety
+==========================
+
+SUMMARY
+-------
+Fixed the real root cause of the page-transition flash/black-frame bug (a
+timing bug, not a design problem) and rebuilt navigation to use the browser's
+own native View Transitions for every in-app tap — real crossfades, a true
+two-image slide, and a hero morph on every product card including bento
+tiles, with a reverse morph on the way back. Cleaned up the one real gap in
+the Google login history trail. Built a safe, real test customer account and
+a 15-test Playwright suite that now runs on every commit, catching two real
+scroll bugs along the way that pure code review would have missed. Added
+admin bulk-delete for cancelled orders, enforced in the database. Everything
+below is on branch feature/batch-21-polish, five commits, one per Part.
+
+
+PART 1 — Page transitions
+--------------------------
+Root cause confirmed exactly as suspected: PageTransition set its animation
+class in a useEffect, which only runs after the new page has already
+committed and painted once in its final position — that one extra frame,
+fully visible with no animation yet, is the "flash then jump" and the
+Home-page black frame. Fixed by computing the class during render (React's
+own supported pattern for this), so the class exists on the first commit.
+
+Bigger change: in-app navigations (nav tabs, hamburger links, back buttons,
+category/search entry, checkout back) now run through a shared
+useAppNavigate/navigateWithTransition helper that drives them with the
+native View Transitions API instead of a hand-rolled CSS class — the browser
+composites real before/after snapshots, so a "fade" is a genuine overlapping
+crossfade and a "slide" never leaves the black gap the old single-element
+slide could. Bento cards now get the same hero morph grid/search cards
+already had, and the product page's own back button reverse-morphs into the
+exact grid/bento card it came from (via a shared view-transition-name,
+matched declaratively when that card re-renders). The bottom nav moved
+outside the animated part of the page entirely — a transform on an ancestor
+breaking position:fixed on a descendant was what made it vanish/jump during
+a slide; a snapshot-based transition doesn't have that problem either way,
+but moving it out fixes it for the manual fallback too. Scroll restoration
+now happens in useLayoutEffect with no artificial delay (the old
+80ms-after-a-frame guess was itself contributing to the wrong-position
+flash), and self-corrects (a bounded ResizeObserver retry, not a fixed
+delay) if the page hasn't finished growing to full height yet.
+
+One deliberate scope limit: a genuine phone back-gesture or the browser's
+own Back/Forward buttons fire outside any click handler, so they can't be
+wrapped in a native View Transition the way an in-app tap can — that one
+case still uses the same (now correctly-timed) manual CSS fallback, not a
+true crossfade or hero-reverse. It's a real, honest gap, not a hidden one.
+
+Proof: Playwright screenshot-sampling during every transition (real pixel
+luminance analysis, not just checking a class name) confirms no near-black
+frame on any tested navigation, and the bottom nav never disappears — see
+Part 3's product-transitions.spec.ts, now a permanent regression test.
+
+
+PART 2 — Google login history
+-------------------------------
+Read every navigate()/<Navigate> call in the auth and checkout code: this
+app's own code was already careful (DeliveryDetailsPage already used
+`replace` for its empty-cart-on-cold-load guard; nothing else pushes a new
+entry reactively when a session appears). The one real, fixable gap: landing
+back from Google left Supabase's own access_token/code sitting in the URL
+of that page's history entry. Fixed with history.replaceState the moment
+SIGNED_IN fires — reloading or sharing that URL later can no longer try to
+reuse an already-consumed token.
+
+Honest limit: the one Google consent-screen stop in the back-stack is
+inherent to any site using Google sign-in (a real page the user interacted
+with, not an automatic redirect) — not something app code removes, and not
+unique to this site. Could not run the real multi-hop Google redirect in
+this environment to count entries before/after directly; verified by
+reading every relevant navigate() call site instead. history.spec.ts (Part
+3) checks the same class of bug for in-app top-level navigation.
+
+
+PART 3 — Test account + Playwright
+-------------------------------------
+WHAT WAS ENABLED, AND WHY IT'S SAFE: one customer account,
+test-customer@naeems.test, created directly via Supabase's Admin API (not
+the public signup form — that stays fully disabled). There is still no
+email/password form anywhere in the site's UI; real customers see only
+"Continue with Google", unchanged. Playwright tests sign in by calling
+Supabase's own auth endpoint from Node and writing the session into
+localStorage before the page loads — the same "skip the UI" pattern used to
+test any site with third-party-only login. The account is a plain customer
+row (role=customer), never admin, so it can't reach anything admin-only.
+Its password is a random 32-character value that only ever touched a
+gitignored local file (.env.e2e) and this session's memory — never printed,
+logged, or committed.
+
+npm run test:e2e (package.json) now runs `npm run build` then the suite
+against a local preview server, phone viewport (Pixel 7 profile, touch,
+mobile UA). Added to CLAUDE.md: build + vitest + test:e2e all required
+before every commit, and visual/navigation fixes need frame captures, not
+just code review — exactly as instructed.
+
+FULL TEST LIST — all 15 pass:
+  home.spec.ts
+    - PASS home loads with grid + category chips
+    - PASS a category chip filters the grid; All resets it
+    - PASS a Browse circle filters the grid
+  product-transitions.spec.ts
+    - PASS grid card open + back restores scroll (scrolled far down)
+    - PASS a fully-visible card near the top + back stays at the top
+    - PASS bento card opens; bottom nav never disappears mid-slide
+    - PASS search result open + back returns to the same search
+    - PASS Home <-> Account crossfades, no black/blank frame
+  search.spec.ts
+    - PASS open search, type, open result, Back, Back -> Home
+    - PASS an empty query doesn't break the results page
+  cart.spec.ts
+    - PASS add a product, change quantity, remove it
+  policy-pages.spec.ts
+    - PASS every hamburger menu policy link opens + has a way back
+    - PASS a footer link on Home opens its policy page
+  history.spec.ts
+    - PASS browsing several top-level pages never over-adds history
+  checkout.spec.ts
+    - PASS logged-in: add to cart -> checkout -> place order -> see it in
+      My Orders -> cancel it. Verified directly against the live database
+      afterward (order NM-1012, status genuinely 'cancelled').
+
+Two real bugs found BY writing these tests (not by inspection) and fixed:
+  1. CategoryChips scrolled the whole page — not just its own chip row — to
+     keep the active chip visible, on every mount, including a fresh mount
+     that had just restored a deep scroll position after Back. Now only
+     reacts to an actual category change after mount.
+  2. ViewerPage's scroll restoration could land short of a deep saved
+     position if the grid hadn't finished growing to full height yet.
+     Self-corrects now (bounded ResizeObserver retry) instead of guessing a
+     fixed delay.
+A third finding that turned out NOT to be a bug: tapping a product card
+whose bottom edge is just below the fold makes Chrome auto-scroll it fully
+into view (standard focus-scroll behaviour for any tabIndex-focusable
+element, not something this app's code does) — confirmed by testing with
+`{force:true}` clicks, which still triggered it. Real behaviour, not a test
+artifact, and not something to change here (removing focusability would be
+an accessibility regression) — noted for awareness, not fixed.
+
+NAEEM'S TELEGRAM AND STEADFAST: verified safe by construction, not just
+hoped — Steadfast booking is a separate, manual admin action on a confirmed
+order that the e2e suite never touches; notify-telegram-order was updated
+to skip its alert for this one fixed test customer id (a new
+E2E_TEST_CUSTOMER_ID Edge Function secret, already set and deployed).
+Ad-tracking (Facebook Pixel, Google Analytics) network calls are blocked
+for every single test via one shared fixture — a fake checkout can never
+reach Naeem's real ad data.
+
+
+PART 4 — Admin: delete cancelled orders
+-------------------------------------------
+Cancelled orders can now be selected (checkbox appears only on cancelled
+rows) and deleted permanently, several at once, with a Bengali confirmation
+("এগুলো চিরতরে মুছে যাবে") that adds a specific warning if any selected order
+still has a Steadfast consignment (cancel it in Steadfast's own panel
+first). Enforced server-side: admin_delete_cancelled_orders() (migration-
+027, already run against the live database) re-checks is_admin() and each
+order's actual status before touching anything — a pending/confirmed/
+shipped/delivered order can never be deleted this way, and a mixed batch
+still deletes everything it safely can rather than failing the whole thing.
+Stock was already restored when the order was cancelled, so this never
+touches stock again. Order numbers keep counting upward afterward — that's
+the sequence working as designed, not a bug.
+
+Verified live: called the function directly against the database with no
+admin session — it correctly rejected with "Not authorized." before ever
+reaching the delete logic. Could not click through the actual admin screen
+in this environment (no admin login available here, same limitation every
+earlier batch has hit) — the UI is code-reviewed against this app's own
+existing patterns (OrderDetailSheet's sheet, ConfirmDialog) rather than
+click-tested.
+
+
+PART 5 — Steadfast
+--------------------
+Already done in fix/steadfast-auto, merged before this batch — nothing
+redone. Confirmed the e2e suite never books a real Steadfast parcel (see
+Part 3).
+
+
+PART 6 — Sweep
+-----------------
+Walked the customer journey a Facebook-ad visitor would take: a direct deep
+link straight to a product page (bypassing Home entirely) renders correctly
+and its Back button correctly falls back to Home when there's no real
+history to pop — no dead end. Most of the rest of this journey (browse,
+filter, search, cart, checkout, login, My Orders) is now the very thing
+Part 3's suite exercises on every commit going forward, which is a stronger
+guarantee than a one-time manual walkthrough would have been.
+
+Fixed (see Part 3): the two scroll-restoration bugs the new tests caught.
+
+Left for Naeem to decide (not fixed, out of scope for "small and safe"):
+  - The main JS bundle is still ~700KB before gzip (pre-existing, not
+    touched this batch) — splitting the checkout/account/orders routes the
+    way admin already is would help first-load speed on a slow connection.
+    Medium effort.
+  - The tabIndex-focusable product card auto-scroll-into-view behaviour
+    noted in Part 3 is real but minor (a few hundred pixels, once, on tap)
+    — not changed, since the fix (removing focusability) trades a UX
+    smoothness issue for an accessibility regression. Worth a design
+    decision, not a quick fix.
+
+
+WHAT NAEEM MUST DO
+--------------------
+1. Nothing to run in the SQL Editor — migration-027 already ran against
+   your live database this session, and the two secrets it needed
+   (STEADFAST_CRON_REFRESH_SECRET-style E2E_TEST_CUSTOMER_ID) are already
+   set. Nothing pasted in chat, nothing in this repo, ever held the test
+   account's password — it lives only in a gitignored .env.e2e file.
+2. The three Edge Functions this batch's Part 3 touched
+   (notify-telegram-order) are already deployed live.
+3. Before merging this branch, run `npm run test:e2e` yourself once if
+   you'd like to see it work — it needs the .env.e2e file this session
+   created locally; if that machine ever changes, a future Claude Code
+   session can regenerate the test account from scratch (it's described in
+   full in this report).
+4. Two leftover PENDING (not cancelled) test orders exist from earlier
+   failed test runs while these tests were being debugged: NM-1010 and
+   NM-1011, both under the test customer's name. They're harmless (never
+   booked with Steadfast, never alerted your Telegram) but visible in the
+   admin Orders list. Cancel them from the admin panel, then delete them
+   with this batch's new bulk-delete feature — or just leave them, they'll
+   never grow or do anything on their own.
+5. When you next have a phone in hand, a 2-minute real-device check of
+   opening a product from the home page and tapping Back is worth doing —
+   everything below explains why that's the one thing this session
+   genuinely couldn't verify itself.
+
+
+WHAT COULDN'T BE TESTED ON A REAL PHONE
+-------------------------------------------
+Everything in this report was verified either by an automated Chromium
+browser (Playwright, real screenshots, real pixel analysis) at a phone-
+sized viewport with touch enabled, or by careful reading of the code against
+this app's own established patterns. None of it ran on Naeem's actual
+Android phone — real GPU compositing, real touch latency, and an actual
+finger swipe-back gesture (as opposed to Playwright's simulated back
+navigation) can behave subtly differently than a desktop Chromium instance
+driving a mobile viewport. The admin-only parts of Part 4 additionally
+couldn't be click-tested at all in this environment (no admin login
+available here) and are code-reviewed only.
+
+
+BUILD & TEST RESULTS
+----------------------
+npm run build   -> PASSED (zero TypeScript errors, zero build errors)
+npx vitest run  -> PASSED (3 test files, 17 tests, all pre-existing/unchanged)
+npm run test:e2e -> PASSED (15/15, see the full list above)
+
+
+SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. migration-027-admin-delete-orders.sql is in the repo for the
+record, but it was already run directly against the live database this
+session (see "What Naeem must do" above).
