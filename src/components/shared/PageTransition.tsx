@@ -1,106 +1,78 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigationType } from 'react-router-dom';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { useLocation, useNavigationType, type Location } from 'react-router-dom';
 import type { ReactNode } from 'react';
-
-/**
- * Top-level screens reached from the bottom nav, hamburger menu, or footer —
- * lateral moves between "places", not a drill-down into one item. These never
- * slide (a directional push implies a hierarchy that isn't there); they get a
- * quick crossfade instead. Everything not listed here (product detail, order
- * detail, contact/expert, checkout steps, admin) is a "deeper" screen and
- * slides in from the right, exactly as before.
- */
-const TOP_LEVEL_PATHS = new Set([
-  '/',
-  '/search',
-  '/cart',
-  '/account',
-  '/orders',
-  '/return-policy',
-  '/delivery',
-  '/terms',
-  '/privacy',
-  '/about',
-]);
-
-function isTopLevel(pathname: string): boolean {
-  return TOP_LEVEL_PATHS.has(pathname);
-}
+import { isNativeTransitionActive } from '../../lib/heroTransition';
+import { classifyTransition, type TransitionKind } from '../../lib/routeClassification';
 
 const SLIDE_MS = 350;
 const FADE_MS = 150;
+
+function fallbackClassFor(kind: TransitionKind): string {
+  if (kind === 'fade') return 'page-fade';
+  return `page-transition page-transition--${kind === 'slide-back' ? 'back' : 'forward'}`;
+}
 
 /**
  * Slides each "deeper" route in from the right when navigating forward, and
  * mirrors that exactly (same distance, same easing, opposite edge) when the
  * browser/back button pops history. Top-level-to-top-level moves (e.g. Home
- * <-> Account) crossfade instead — see isTopLevel above.
+ * <-> Account) crossfade instead — see routeClassification.ts.
  *
- * The transition class lives in state, set by an effect keyed on the
- * pathname actually changing, and cleared by its own timer — not recomputed
- * fresh on every render. It used to be a plain per-render class derived from
- * "did the path just change", which a same-path REPLACE right behind a real
- * navigation (e.g. SearchPage syncing ?q= into the URL right after landing)
- * would immediately stomp back to "no class", cutting the just-started
- * animation off after a couple of frames (see reports/fix-animation-audit.txt
- * Part 3). Gating on a real pathname change and owning the class in state
- * means a same-path re-render simply leaves whatever's already playing alone.
+ * The animation class is computed DURING RENDER (React's own supported
+ * pattern for "derive state from a prop change", the same shape as tracking
+ * a previous prop to reset other state — see the React docs on "Adjusting
+ * state when a prop changes") rather than in a useEffect. A useEffect only
+ * runs after this component's render has already committed and the browser
+ * has painted it — which is exactly what let the new page show once, fully,
+ * in its final resting position, before the animation class ever arrived a
+ * frame later (the "flash + black frame on every transition" bug in
+ * reports/batch-21.txt Part 1). Computing the class here means it's already
+ * part of the very first commit, so there is never a frame without it.
  *
- * The animation carries no fill-mode, so the transform is gone the moment it
- * finishes — the fixed bottom nav and sticky headers inside a page are only
- * affected while it runs, and behave normally after.
+ * When a navigation is already being driven by a native View Transition
+ * (lib/viewTransition.ts — the product hero morph, or any navigation started
+ * through useAppNavigate), this component adds no class of its own at all —
+ * see isNativeTransitionActive. Doing both would show two animations at
+ * once. The one navigation trigger that can never be wrapped in a native
+ * transition is a genuine phone back-gesture or the browser's own Back
+ * button firing outside any of our click handlers; this component's class
+ * is what plays for that one case, and it gets the same before-paint timing
+ * fix as everything else.
  */
 export function PageTransition({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigationType = useNavigationType();
-  const isFirstRender = useRef(true);
-  const prevPathname = useRef(location.pathname);
-  const [transitionClass, setTransitionClass] = useState<string | undefined>(undefined);
+  const [prevLocation, setPrevLocation] = useState<Location>(location);
+  const [fallbackClass, setFallbackClass] = useState<string | undefined>(undefined);
   const clearTimer = useRef<number | undefined>(undefined);
 
-  useEffect(() => {
-    if (isFirstRender.current) {
-      // A cold load reports POP, which would slide/fade the first paint in
-      // for no reason — the first render is shown as-is.
-      isFirstRender.current = false;
-      prevPathname.current = location.pathname;
-      return;
-    }
-    if (location.pathname === prevPathname.current) {
-      // Same-page update (query/hash/state) — never (re)trigger a
-      // transition, and never touch one already playing.
-      return;
-    }
+  if (location.pathname !== prevLocation.pathname) {
+    const fromPathname = prevLocation.pathname;
+    setPrevLocation(location);
 
-    const fromTopLevel = isTopLevel(prevPathname.current);
-    const toTopLevel = isTopLevel(location.pathname);
-    const direction = navigationType === 'POP' ? 'back' : 'forward';
-    // Set by navigateToProductWithHero — a native View Transition is already
-    // driving this navigation's motion (the card's image morphing into the
-    // detail gallery), so the usual slide-in would just run underneath it.
-    const isHeroTransition = (location.state as { hero?: boolean } | null)?.hero === true;
-    prevPathname.current = location.pathname;
-
-    window.clearTimeout(clearTimer.current);
-
-    if (isHeroTransition) {
-      setTransitionClass(undefined);
-      return;
-    }
-
-    if (fromTopLevel && toTopLevel) {
-      setTransitionClass('page-fade');
-      clearTimer.current = window.setTimeout(() => setTransitionClass(undefined), FADE_MS);
+    if (isNativeTransitionActive()) {
+      setFallbackClass(undefined);
     } else {
-      setTransitionClass(`page-transition page-transition--${direction}`);
-      clearTimer.current = window.setTimeout(() => setTransitionClass(undefined), SLIDE_MS);
+      const direction = navigationType === 'POP' ? 'back' : 'forward';
+      const kind = classifyTransition(fromPathname, location.pathname, direction);
+      setFallbackClass(fallbackClassFor(kind));
     }
-  }, [location.pathname, location.state, navigationType]);
+  }
 
-  useEffect(() => () => window.clearTimeout(clearTimer.current), []);
+  // Owns clearing the class once its animation has actually had time to
+  // play — a timer, not onAnimationEnd, since the fade and slide classes
+  // apply two different animations at two different durations and either
+  // one might be skipped entirely (prefers-reduced-motion, see app.css).
+  useLayoutEffect(() => {
+    window.clearTimeout(clearTimer.current);
+    if (fallbackClass === undefined) return undefined;
+    const ms = fallbackClass.includes('page-fade') ? FADE_MS : SLIDE_MS;
+    clearTimer.current = window.setTimeout(() => setFallbackClass(undefined), ms);
+    return () => window.clearTimeout(clearTimer.current);
+  }, [fallbackClass]);
 
   return (
-    <div key={location.pathname} className={transitionClass}>
+    <div key={location.pathname} className={fallbackClass}>
       {children}
     </div>
   );

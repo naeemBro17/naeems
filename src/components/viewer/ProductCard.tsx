@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -10,6 +10,7 @@ import { cardImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
+import { getHeroReverseTarget } from '../../lib/heroTransition';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
 
@@ -79,6 +80,18 @@ export function ProductCard({ product }: ProductCardProps) {
       <div
         ref={imageWrapRef}
         className={`product-card__image-wrap${outOfStock ? ' product-media--out' : ''}`}
+        // Only set when this render is the one frame right after leaving
+        // THIS product's detail page — see lib/heroTransition.ts. Applied
+        // declaratively (not the imperative ref-set openDetail uses for the
+        // forward tap) because this element hasn't been created yet at the
+        // moment the back navigation starts; it only exists once React has
+        // remounted the grid, so it has to be baked into the very first
+        // render instead.
+        style={
+          getHeroReverseTarget() === product.id
+            ? ({ viewTransitionName: productHeroName(product.id) } as CSSProperties)
+            : undefined
+        }
       >
         {showImage ? (
           <img

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
 import { applyIdOrder, parseIdList } from '../../lib/settingsLists';

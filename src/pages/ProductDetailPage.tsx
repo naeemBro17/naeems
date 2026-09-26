@@ -753,7 +753,7 @@ export function ProductDetailPage() {
   return (
     <div className="viewer-shell detail-shell">
       <header className="detail-header">
-        <BackButton />
+        <BackButton heroProductId={product?.id} />
         <div className="detail-header__actions">
           <ThemeToggle />
           {product && <ShareButton product={product} variant="header" />}

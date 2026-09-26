@@ -6,7 +6,8 @@
 // (?q=...) so Back from a product returns to the same results, same scroll
 // position, without re-opening the keyboard.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useAppNavigate as useNavigate } from '../hooks/useAppNavigate';
 import { useProducts } from '../contexts/ProductContext';
 import { useSearch } from '../hooks/useSearch';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
