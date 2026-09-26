@@ -260,6 +260,45 @@ export async function refreshSteadfastStatus(orderId: string): Promise<Steadfast
   };
 }
 
+export interface DeleteOrdersResult {
+  orderId: string;
+  orderNumber: string | null;
+  deleted: boolean;
+  reason: string | null;
+}
+
+/** Admin: permanently remove one or more CANCELLED orders — see
+ *  admin_delete_cancelled_orders() (migration-027). Any id that isn't
+ *  actually cancelled (or doesn't exist) comes back with deleted: false and
+ *  a reason instead of the whole batch failing, so selecting a mixed batch
+ *  by mistake still deletes everything it safely can. */
+export async function adminDeleteCancelledOrders(orderIds: string[]): Promise<{
+  results: DeleteOrdersResult[];
+  error: string | null;
+}> {
+  const { data, error } = await supabase.rpc('admin_delete_cancelled_orders', {
+    p_order_ids: orderIds,
+  });
+  if (error) {
+    return { results: [], error: error.message || 'Could not delete these orders.' };
+  }
+  const rows = (data ?? []) as {
+    order_id: string;
+    order_number: string | null;
+    deleted: boolean;
+    reason: string | null;
+  }[];
+  return {
+    results: rows.map((r) => ({
+      orderId: r.order_id,
+      orderNumber: r.order_number,
+      deleted: r.deleted,
+      reason: r.reason,
+    })),
+    error: null,
+  };
+}
+
 /** Admin: mark a bKash order as paid after checking the bKash app by hand,
  *  set a courier tracking number, or edit the admin-only note — a plain
  *  UPDATE, gated by orders_admin_update + the column-level grant

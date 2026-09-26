@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { formatTaka } from '../../lib/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../lib/orderStatus';
-import { refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
+import { adminDeleteCancelledOrders, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
 import { useToast } from '../../hooks/useToast';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { OrderDetailSheet } from './OrderDetailSheet';
 import type { Order, OrderStatus } from '../../types';
 
@@ -34,6 +35,8 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const [search, setSearch] = useState('');
   const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -76,10 +79,55 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     );
   };
 
+  const toggleSelected = (orderId: string) => {
+    setSelectedForDelete((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const selectedOrders = orders.filter((o) => selectedForDelete.has(o.id));
+  const selectedHaveSteadfast = selectedOrders.some((o) => Boolean(o.steadfast_consignment_id));
+
+  const handleDeleteSelected = async () => {
+    const { results, error } = await adminDeleteCancelledOrders([...selectedForDelete]);
+    setIsConfirmingDelete(false);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    const deletedCount = results.filter((r) => r.deleted).length;
+    const failed = results.filter((r) => !r.deleted);
+    setSelectedForDelete(new Set());
+    await onReload();
+    if (failed.length === 0) {
+      showToast(`${deletedCount} order${deletedCount === 1 ? '' : 's'} deleted permanently`, 'success');
+    } else {
+      showToast(
+        `Deleted ${deletedCount}, could not delete ${failed.length} (${failed[0].reason ?? 'unknown reason'})`,
+        'error'
+      );
+    }
+  };
+
   return (
     <section aria-label="Orders">
       <header className="admin-section-header">
         <h2 className="admin-section-title">Orders</h2>
+        {selectedForDelete.size > 0 && (
+          <button
+            type="button"
+            className="button button--danger button--small"
+            onClick={() => setIsConfirmingDelete(true)}
+          >
+            Delete permanently ({selectedForDelete.size})
+          </button>
+        )}
         {shippedWithSteadfast.length > 0 && (
           <button
             type="button"
@@ -124,7 +172,17 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       ) : (
         <ul className="admin-list">
           {filtered.map((order) => (
-            <li key={order.id}>
+            <li key={order.id} className={order.status === 'cancelled' ? 'admin-order-row-wrap' : undefined}>
+              {order.status === 'cancelled' && (
+                <input
+                  type="checkbox"
+                  className="admin-order-row__select"
+                  checked={selectedForDelete.has(order.id)}
+                  onChange={() => toggleSelected(order.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Select order ${order.order_number} for deletion`}
+                />
+              )}
               <button
                 type="button"
                 className="admin-order-row"
@@ -163,6 +221,21 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       )}
 
       <OrderDetailSheet orderId={openOrderId} onClose={() => setOpenOrderId(null)} onChanged={onReload} />
+
+      <ConfirmDialog
+        isOpen={isConfirmingDelete}
+        title="এগুলো চিরতরে মুছে যাবে"
+        message={
+          selectedHaveSteadfast
+            ? `${selectedForDelete.size}টি অর্ডার স্থায়ীভাবে মুছে ফেলা হবে — এটি ফেরানো যাবে না। এর মধ্যে অন্তত একটি অর্ডার Steadfast-এ বুক করা আছে — আগে সেটি Steadfast-এর নিজস্ব প্যানেলে বাতিল করুন, তারপর এখান থেকে মুছুন।`
+            : `${selectedForDelete.size}টি অর্ডার স্থায়ীভাবে মুছে ফেলা হবে — এটি ফেরানো যাবে না।`
+        }
+        confirmLabel="Delete permanently"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={handleDeleteSelected}
+        onClose={() => setIsConfirmingDelete(false)}
+      />
     </section>
   );
 }
