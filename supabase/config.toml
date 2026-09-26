@@ -1,0 +1,10 @@
+project_id = "afkgkpuppmwmkyrbheew"
+
+# steadfast-refresh-all is called by our own pg_cron job (migration-026),
+# which sends our custom STEADFAST_CRON_REFRESH_SECRET as the Authorization
+# header, not a real Supabase-signed JWT. Supabase's gateway would 401 every
+# cron call before the function's own secret check ever runs unless JWT
+# verification is off for this one function. The function still checks its
+# own secret internally — this only disables the platform's separate check.
+[functions.steadfast-refresh-all]
+verify_jwt = false
