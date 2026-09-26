@@ -3,7 +3,7 @@ import type { CartItem, DeliveryAddress, DeliveryZoneId } from '../features/chec
 import type { Order, OrderItem, OrderPaymentMethod, OrderStatusHistoryRow, OrderWithDetails } from '../types';
 
 const ORDER_SELECT =
-  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_status, created_at, updated_at';
+  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
 
 const ORDER_ITEM_SELECT =
   'id, order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total';
@@ -165,19 +165,32 @@ export async function adminUpdateOrderDeliveryFee(
   return { error: error?.message ?? null };
 }
 
+/** Mirrors needsAttention() in supabase/functions/_shared/steadfast.ts —
+ *  the frontend has no access to that Deno-only module, so this is kept in
+ *  sync by hand; it's three literal strings, not worth a build step to
+ *  share. Used to badge an order in the admin list/detail screens the
+ *  moment Steadfast's own status (from either the manual refresh button or
+ *  the automatic 3-hourly one) needs Naeem to look at it himself. */
+export function steadfastNeedsAttention(courierStatus: string | null): boolean {
+  return courierStatus === 'cancelled' || courierStatus === 'hold' || courierStatus === 'exceptional';
+}
+
 interface SteadfastFunctionResponse {
   ok: boolean;
   error?: string;
   consignmentId?: string;
   trackingCode?: string;
+  trackingLink?: string;
   courierStatus?: string;
   markedDelivered?: boolean;
+  needsAttention?: boolean;
 }
 
 export interface SteadfastBookingResult {
   error: string | null;
   consignmentId: string | null;
   trackingCode: string | null;
+  trackingLink: string | null;
   courierStatus: string | null;
 }
 
@@ -190,7 +203,7 @@ export async function bookSteadfastShipment(orderId: string): Promise<SteadfastB
   const { data, error } = await supabase.functions.invoke('steadfast', {
     body: { action: 'create', orderId },
   });
-  const empty = { consignmentId: null, trackingCode: null, courierStatus: null };
+  const empty = { consignmentId: null, trackingCode: null, trackingLink: null, courierStatus: null };
   if (error) {
     return { error: error.message || 'Could not reach Steadfast. Please try again.', ...empty };
   }
@@ -202,6 +215,7 @@ export async function bookSteadfastShipment(orderId: string): Promise<SteadfastB
     error: null,
     consignmentId: body.consignmentId ?? null,
     trackingCode: body.trackingCode ?? null,
+    trackingLink: body.trackingLink ?? null,
     courierStatus: body.courierStatus ?? null,
   };
 }
@@ -210,6 +224,7 @@ export interface SteadfastStatusResult {
   error: string | null;
   courierStatus: string | null;
   markedDelivered: boolean;
+  needsAttention: boolean;
 }
 
 /** Admin: ask Steadfast for this order's current delivery status and save
@@ -225,16 +240,23 @@ export async function refreshSteadfastStatus(orderId: string): Promise<Steadfast
       error: error.message || 'Could not reach Steadfast. Please try again.',
       courierStatus: null,
       markedDelivered: false,
+      needsAttention: false,
     };
   }
   const body = data as SteadfastFunctionResponse;
   if (!body.ok) {
-    return { error: body.error ?? 'Could not refresh status.', courierStatus: null, markedDelivered: false };
+    return {
+      error: body.error ?? 'Could not refresh status.',
+      courierStatus: null,
+      markedDelivered: false,
+      needsAttention: false,
+    };
   }
   return {
     error: null,
     courierStatus: body.courierStatus ?? null,
     markedDelivered: body.markedDelivered ?? false,
+    needsAttention: body.needsAttention ?? false,
   };
 }
 

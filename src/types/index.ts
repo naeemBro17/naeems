@@ -470,10 +470,15 @@ export interface Order {
   tracking_number: string | null;
   customer_note: string | null;
   admin_note: string | null;
-  /** Steadfast Courier booking (Batch 20) — all three null until "Steadfast-এ
+  /** Steadfast Courier booking (Batch 20) — all null until "Steadfast-এ
    *  পাঠাও" is used; see supabase/functions/steadfast. */
   steadfast_consignment_id: string | null;
   steadfast_tracking_code: string | null;
+  /** Steadfast's own real per-parcel tracking page (consignment.tracking_link,
+   *  confirmed from their API guide — migration-026/Batch 20 Part 2). Null on
+   *  any order booked before this column existed; the UI falls back to the
+   *  generic steadfast.com.bd/tracking page for those. */
+  steadfast_tracking_link: string | null;
   /** Steadfast's own raw status text (e.g. "in_review", "delivered") — shown
    *  as-is to admin, never used to drive UI logic beyond that. */
   steadfast_status: string | null;

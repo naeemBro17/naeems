@@ -1,8 +1,12 @@
-// Supabase Edge Function: sends Naeem a Telegram message for every new order
-// (and every order a customer/admin cancels). Meant to be called by a
-// Supabase Database Webhook on the `orders` table (INSERT, and UPDATE —
-// see reports/batch-18.txt for the exact dashboard setup steps), which POSTs
-// the standard webhook payload shape:
+// Supabase Edge Function: sends Naeem a Telegram message for every new
+// order, every order a customer/admin cancels, and — Batch 20 Part 2 —
+// every order whose Steadfast courier status turns into something that
+// needs his attention (cancelled/hold/exceptional), whether that came from
+// the manual refresh button or the automatic 3-hourly one. Meant to be
+// called by a Supabase Database Webhook on the `orders` table (INSERT, and
+// UPDATE — see reports/batch-18.txt for the exact dashboard setup steps,
+// unchanged by Part 2: it already fires on every UPDATE, not just specific
+// columns), which POSTs the standard webhook payload shape:
 //   { type: "INSERT" | "UPDATE", table: "orders", record: {...}, old_record: {...} | null }
 //
 // Deliberately fails soft everywhere: if the bot token/chat id secrets
@@ -32,6 +36,16 @@ interface OrderRow {
   payment_method: 'cod' | 'bkash';
   bkash_trx_id: string | null;
   status: string;
+  steadfast_status: string | null;
+}
+
+/** Mirrors needsAttention() in functions/_shared/steadfast.ts — kept as a
+ *  separate literal here rather than a cross-function import since this
+ *  function's only other job (new-order/cancellation alerts) has nothing to
+ *  do with Steadfast; three status strings aren't worth coupling the two
+ *  together for. See reports/fix-steadfast-auto.txt Part 2. */
+function steadfastNeedsAttention(courierStatus: string): boolean {
+  return courierStatus === 'cancelled' || courierStatus === 'hold' || courierStatus === 'exceptional';
 }
 
 interface OrderItemRow {
@@ -112,6 +126,23 @@ function buildCancelMessage(order: OrderRow): string {
   ].join('\n');
 }
 
+/** Batch 20 Part 2: the 3-hourly automatic Steadfast refresh (and the
+ *  manual "refresh status" button) writes steadfast_status straight to the
+ *  order — it never auto-cancels the order itself. This is what makes an
+ *  automatic "cancelled" or "hold" or "exceptional" actually visible to
+ *  Naeem instead of sitting quietly in a field nobody's looking at. */
+function buildSteadfastAttentionMessage(order: OrderRow): string {
+  return [
+    `⚠️ <b>Steadfast: এই অর্ডারে নজর দিন</b>`,
+    '',
+    `Order: ${order.order_number}`,
+    `👤 ${order.customer_name} · 📞 ${order.customer_phone}`,
+    `📦 Courier status: ${order.steadfast_status}`,
+    '',
+    `🔗 ${adminOrderUrl(order.id)}`,
+  ].join('\n');
+}
+
 Deno.serve(async (req: Request) => {
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN');
   const chatId = Deno.env.get('TELEGRAM_CHAT_ID');
@@ -134,8 +165,19 @@ Deno.serve(async (req: Request) => {
       payload.type === 'UPDATE' &&
       order.status === 'cancelled' &&
       payload.old_record?.status !== 'cancelled';
+    // Fires for both the manual refresh button and the 3-hourly automatic
+    // one (both go through admin_update_steadfast_status /
+    // system_update_steadfast_status, an ordinary UPDATE this same webhook
+    // already receives) — only on the moment it FIRST becomes a status that
+    // needs Naeem's attention, not on every later poll that finds it still
+    // the same.
+    const isNewSteadfastAttention =
+      payload.type === 'UPDATE' &&
+      order.steadfast_status !== null &&
+      steadfastNeedsAttention(order.steadfast_status) &&
+      order.steadfast_status !== payload.old_record?.steadfast_status;
 
-    if (!isNewOrder && !isNewCancellation) {
+    if (!isNewOrder && !isNewCancellation && !isNewSteadfastAttention) {
       return new Response(JSON.stringify({ skipped: 'not a notifiable change' }), { status: 200 });
     }
 
@@ -151,8 +193,10 @@ Deno.serve(async (req: Request) => {
         console.error('Fetching order_items for notification failed:', error.message);
       }
       await sendTelegramMessage(token, chatId, buildNewOrderMessage(order, (items ?? []) as OrderItemRow[]));
-    } else {
+    } else if (isNewCancellation) {
       await sendTelegramMessage(token, chatId, buildCancelMessage(order));
+    } else {
+      await sendTelegramMessage(token, chatId, buildSteadfastAttentionMessage(order));
     }
 
     return new Response(JSON.stringify({ sent: true }), { status: 200 });

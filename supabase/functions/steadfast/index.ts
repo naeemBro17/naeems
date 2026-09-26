@@ -1,7 +1,8 @@
 // Supabase Edge Function: books an order's parcel with Steadfast Courier,
 // or refreshes its delivery status. Called directly from the admin order
 // detail screen (src/lib/orders.ts bookSteadfastShipment/
-// refreshSteadfastStatus), never automatically.
+// refreshSteadfastStatus), never automatically — see steadfast-refresh-all
+// for the automatic 3-hourly background refresh (Batch 20 Part 2 fix).
 //
 // SECURITY: the caller's own session JWT is forwarded (Supabase's client
 // does this automatically for supabase.functions.invoke) and used to build
@@ -12,7 +13,7 @@
 // inside a SECURITY DEFINER database function rather than trusting the
 // Edge Function's own checks, and this follows the same pattern — the
 // actual order read and every write below goes through RLS or a SECURITY
-// DEFINER RPC (migration-025), never a service-role bypass. The order
+// DEFINER RPC (migration-025/026), never a service-role bypass. The order
 // itself is always read fresh from the database by id; nothing about a
 // customer's name/phone/address/total is ever trusted from the request
 // body — the request body only ever carries an orderId and which action to
@@ -22,18 +23,27 @@
 // in Supabase Edge Function secrets (see reports/batch-20.txt) — never in
 // this repo, the frontend, or written to any log line below.
 //
-// PART 1 assumptions (see reports/batch-20.txt for what the official docs
-// confirmed vs. what had to be assumed): base URL, header names, and field
-// names below were verified against the source of a real, currently
-// maintained open-source Steadfast API client library (not guessed from
-// memory) — but there is no way to test them against a real Steadfast
-// account from this environment, so treat the very first real booking as
-// the actual test. Everything Steadfast-specific is isolated in the three
-// constants/helpers right below so a wrong assumption is a one-place fix.
+// Every endpoint, header, field name, response shape, status value and
+// error rule below is verified against Steadfast's own "API guide" PDF
+// (Merchant Dashboard -> API -> API guide) — Batch 20 originally built this
+// from a third-party open-source client's source code instead, which the
+// official guide confirmed was right on the basics (base URL, header
+// names, the main field names) but wrong or incomplete on: the full
+// delivery_status list (missed the four "_approval_pending" values and
+// "exceptional"), the create_order validation-error shape (`errors`, not
+// always `message`), and a real per-parcel tracking link
+// (`consignment.tracking_link`) that didn't exist in the assumed response
+// at all. See reports/fix-steadfast-auto.txt for the full diff against the
+// original assumptions.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-
-const STEADFAST_BASE_URL = 'https://portal.packzy.com/api/v1';
+import {
+  STEADFAST_BASE_URL,
+  steadfastHeaders,
+  extractSteadfastError,
+  checkSteadfastStatus,
+  type SteadfastStatusResponse,
+} from '../_shared/steadfast.ts';
 
 // Unlike notify-telegram-order (only ever invoked server-side by a database
 // webhook), this function is called directly from the admin's browser via
@@ -47,21 +57,12 @@ const CORS_HEADERS: HeadersInit = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-function steadfastHeaders(apiKey: string, secretKey: string): HeadersInit {
-  return {
-    'Api-Key': apiKey,
-    'Secret-Key': secretKey,
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
-}
-
-/** Steadfast's own delivery_status values that mean "actually delivered" —
- *  see status_by_cid's documented response. Everything else (cancelled,
- *  hold, in_review, pending, unknown, ...) is shown as-is, never acted on. */
-function meansDelivered(courierStatus: string): boolean {
-  return courierStatus === 'delivered' || courierStatus === 'partial_delivered';
-}
+/** Confirmed from the API guide's "Booking parcels" section — sending more
+ *  than this is rejected outright rather than truncated (unlike the text
+ *  fields, which Steadfast just cuts to fit). Checked here so a mispriced
+ *  bulk/wholesale order gets a clear message instead of a raw Steadfast
+ *  rejection. */
+const MAX_COD_AMOUNT = 1_000_000;
 
 interface OrderRow {
   id: string;
@@ -79,6 +80,7 @@ interface OrderRow {
   customer_note: string | null;
   steadfast_consignment_id: string | null;
   steadfast_tracking_code: string | null;
+  steadfast_tracking_link: string | null;
   steadfast_status: string | null;
 }
 
@@ -90,17 +92,13 @@ interface RequestBody {
 interface SteadfastCreateResponse {
   status?: number;
   message?: string;
+  errors?: Record<string, string[] | string>;
   consignment?: {
     consignment_id: number | string;
     tracking_code?: string;
+    tracking_link?: string;
     status?: string;
   };
-}
-
-interface SteadfastStatusResponse {
-  status?: number;
-  delivery_status?: string;
-  message?: string;
 }
 
 type SupabaseUserClient = ReturnType<typeof createClient>;
@@ -125,6 +123,7 @@ async function handleCreate(
       ok: true,
       consignmentId: order.steadfast_consignment_id,
       trackingCode: order.steadfast_tracking_code ?? undefined,
+      trackingLink: order.steadfast_tracking_link ?? undefined,
       courierStatus: order.steadfast_status ?? undefined,
     });
   }
@@ -144,6 +143,13 @@ async function handleCreate(
     codAmount = 0;
   } else {
     codAmount = order.total;
+  }
+
+  if (codAmount > MAX_COD_AMOUNT) {
+    return json({
+      ok: false,
+      error: `Steadfast's COD amount limit is ৳${MAX_COD_AMOUNT.toLocaleString('en-BD')} — this order's total is over that. Book it with Steadfast support directly, or split the order.`,
+    });
   }
 
   const recipientAddress = `${order.address_line}, ${order.thana}, ${order.district}`;
@@ -175,20 +181,19 @@ async function handleCreate(
   }
 
   if (!steadfastRes.ok || !body.consignment) {
-    return json({
-      ok: false,
-      error: body.message ?? `Steadfast rejected the request (HTTP ${steadfastRes.status}).`,
-    });
+    return json({ ok: false, error: extractSteadfastError(body as SteadfastStatusResponse, steadfastRes.status) });
   }
 
   const consignmentId = String(body.consignment.consignment_id);
   const trackingCode = body.consignment.tracking_code ?? '';
+  const trackingLink = body.consignment.tracking_link ?? '';
   const courierStatus = body.consignment.status ?? 'in_review';
 
   const { error: saveErr } = await userClient.rpc('admin_record_steadfast_shipment', {
     p_order_id: order.id,
     p_consignment_id: consignmentId,
     p_tracking_code: trackingCode,
+    p_tracking_link: trackingLink,
     p_courier_status: courierStatus,
   });
   if (saveErr) {
@@ -202,7 +207,7 @@ async function handleCreate(
     });
   }
 
-  return json({ ok: true, consignmentId, trackingCode, courierStatus });
+  return json({ ok: true, consignmentId, trackingCode, trackingLink, courierStatus });
 }
 
 async function handleStatus(
@@ -215,44 +220,26 @@ async function handleStatus(
     return json({ ok: false, error: 'This order has not been booked with Steadfast yet.' });
   }
 
-  let steadfastRes: Response;
-  try {
-    steadfastRes = await fetch(
-      `${STEADFAST_BASE_URL}/status_by_cid/${encodeURIComponent(order.steadfast_consignment_id)}`,
-      { headers: steadfastHeaders(apiKey, secretKey) }
-    );
-  } catch (err) {
-    console.error('Steadfast status_by_cid network error:', err);
-    return json({ ok: false, error: 'Could not reach Steadfast. Please try again.' });
+  const result = await checkSteadfastStatus(order.steadfast_consignment_id, apiKey, secretKey);
+  if (!result.ok || !result.courierStatus) {
+    return json({ ok: false, error: result.error ?? 'Could not refresh status.' });
   }
-
-  let body: SteadfastStatusResponse;
-  try {
-    body = (await steadfastRes.json()) as SteadfastStatusResponse;
-  } catch {
-    return json({ ok: false, error: `Steadfast returned an unreadable response (HTTP ${steadfastRes.status}).` });
-  }
-
-  if (!steadfastRes.ok || !body.delivery_status) {
-    return json({
-      ok: false,
-      error: body.message ?? `Steadfast rejected the request (HTTP ${steadfastRes.status}).`,
-    });
-  }
-
-  const courierStatus = body.delivery_status;
-  const markedDelivered = meansDelivered(courierStatus);
 
   const { error: saveErr } = await userClient.rpc('admin_update_steadfast_status', {
     p_order_id: order.id,
-    p_courier_status: courierStatus,
-    p_mark_delivered: markedDelivered,
+    p_courier_status: result.courierStatus,
+    p_mark_delivered: result.markedDelivered ?? false,
   });
   if (saveErr) {
     return json({ ok: false, error: `Got the status from Steadfast but could not save it: ${saveErr.message}` });
   }
 
-  return json({ ok: true, courierStatus, markedDelivered });
+  return json({
+    ok: true,
+    courierStatus: result.courierStatus,
+    markedDelivered: result.markedDelivered ?? false,
+    needsAttention: result.needsAttention ?? false,
+  });
 }
 
 Deno.serve(async (req: Request) => {
@@ -294,7 +281,7 @@ Deno.serve(async (req: Request) => {
   const { data: order, error: orderErr } = await userClient
     .from('orders')
     .select(
-      'id, order_number, customer_name, customer_phone, division, district, thana, address_line, total, payment_method, payment_status, status, customer_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_status'
+      'id, order_number, customer_name, customer_phone, division, district, thana, address_line, total, payment_method, payment_status, status, customer_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status'
     )
     .eq('id', requestBody.orderId)
     .maybeSingle();
