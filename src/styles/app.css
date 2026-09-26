@@ -5351,14 +5351,31 @@ textarea {
   animation-name: pageSlideBack;
 }
 
+/* Back travels the exact same distance as forward (100%, not the old 8%
+   nudge) so it's a true mirror — same sweep, opposite edge — instead of a
+   barely-there shuffle that read as a different, weaker animation than the
+   one that opened the page (see reports/fix-animation-audit.txt Part 2). */
 @keyframes pageSlideForward {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
 
 @keyframes pageSlideBack {
-  from { transform: translateX(-8%); }
+  from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
+}
+
+/* Top-level-to-top-level moves (Home/Search/Cart/Account/My Orders/policy
+   pages) never slide — there's no "deeper" to imply — just a quick
+   crossfade, same in both directions since a fade has no direction to
+   mirror. */
+.page-fade {
+  animation: pageFadeIn 150ms ease-out;
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ---------- Product card → detail: shared-element (hero) transition ----------
@@ -5539,6 +5556,7 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .page-transition,
+  .page-fade,
   .chip:active,
   .copy-button--copied,
   .cart-button__pulse,

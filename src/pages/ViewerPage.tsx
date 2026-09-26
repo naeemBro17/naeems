@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAdminEdit } from '../contexts/AdminEditContext';
 import { useNavigate } from 'react-router-dom';
 import { useProductFilters } from '../hooks/useProductFilters';
+import { filterByCategory } from '../lib/categoryFilter';
 import { useDragReorder } from '../hooks/useDragReorder';
 import { useToast } from '../hooks/useToast';
 import { takeGridScroll } from '../lib/gridScroll';
@@ -183,11 +184,16 @@ export function ViewerPage() {
       selectedCategoryId === null ? sortFeaturedFirst(activeProducts) : activeProducts,
     [activeProducts, selectedCategoryId]
   );
-  // Brand / Skin Type filtering sits on top of the category selection —
-  // free-text search now lives entirely on its own page (SearchPage), the
-  // home grid only ever shows the category-filtered catalog.
+  // Category selection — lost when search moved to its own page in Batch 17
+  // (the old useSearch hook applied this filter internally; nothing replaced
+  // it here, so every chip/circle silently did nothing). Restored as its own
+  // step, ahead of the Brand / Skin Type filtering that sits on top of it.
+  const categoryFilteredProducts = useMemo(
+    () => filterByCategory(orderedProducts, selectedCategoryId),
+    [orderedProducts, selectedCategoryId]
+  );
   const productFilters = useProductFilters(activeProducts);
-  const filteredProducts = productFilters.apply(orderedProducts);
+  const filteredProducts = productFilters.apply(categoryFilteredProducts);
 
   const scrollToProducts = useCallback(() => {
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -462,7 +468,7 @@ export function ViewerPage() {
         filters={productFilters.filters}
         onChange={productFilters.setFilters}
         availableBrands={productFilters.availableBrands}
-        baseProducts={orderedProducts}
+        baseProducts={categoryFilteredProducts}
       />
 
       {/* Both render nothing for anyone who isn't an approved admin. */}

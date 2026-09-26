@@ -1,0 +1,296 @@
+BATCH: Category filter bug + Back navigation + Full-site animation audit
+=========================================================================
+
+WHAT I DID
+----------
+
+Part 1 — Category filter bug (the important one)
+
+Tapping a category chip, a Browse circle, or a category pill on /search did
+nothing to the product grid — every category showed the exact same full
+list. I found the real cause by reading the git history: Batch 17 replaced
+the old on-page search (which filtered by category internally) with the new
+dedicated /search page. When it did that, it deleted the ONE line that
+actually filtered products by category_id (`products.filter(p =>
+p.category_id === categoryId)`) and never put an equivalent back on the home
+page. The chips and circles still correctly tracked which category was
+selected — they just had nothing left to act on it. So this wasn't a
+one-category bug, it was a "category selection has zero effect anywhere on
+the home page" bug.
+
+Separately, the "Popular categories" pills on /search had a different,
+sneakier version of the same root problem: tapping one didn't filter by
+category at all — it typed the category's NAME into the search box and ran
+it through the fuzzy text search (Fuse.js). That happened to turn up
+products for a category like "Baby Care" because many baby products
+literally have the word "Baby" in their own product name, so the fuzzy
+match got lucky. For a category like "Face Care", almost no product name
+contains that exact phrase, so it silently returned little or nothing. That
+is very likely what looked like "only Baby Care works" during testing.
+
+Fix: added one small, tested, reusable function — `filterByCategory()` in
+src/lib/categoryFilter.ts — and used it in both places:
+ - ViewerPage.tsx now runs the category filter before Brand/Skin Type
+   filters, restoring exactly what the old search hook used to do.
+ - SearchPage.tsx's category pills now do a real exact category_id filter
+   (matching the home page's chips/circles, with the same
+   tap-again-to-clear toggle) instead of a fuzzy text search.
+
+Verified live in a real browser at every category on both pages: Face Care
+39, Body Care 13, Hair Care 17, Sun Block 10, Lip Care 7, Eye Care 1, Oral
+Hygiene 5, Baby Care 6, Supplements 2, Perfume 4 — these add up to exactly
+104, the full catalog, so every product lands in exactly one category and
+nothing is being missed or double-counted. "All" and the toggle-off
+behaviour both confirmed working on both pages.
+
+Added a vitest test file (src/lib/categoryFilter.test.ts, 4 tests) covering:
+All returns everything, a real category returns only its own products, an
+empty/unknown category returns nothing, and uncategorised products never
+leak into a real category's results.
+
+
+Part 2 — Back navigation
+
+Reproduced with real console instrumentation (not guesswork) by logging
+exactly what PageTransition decided on every navigation: pathname,
+navigation type (PUSH/POP/REPLACE), computed direction, and whether it
+animated.
+
+Real cause #1 (the one that matches what you saw): the "←" back arrow at
+the top of the /search page called `navigate('/')`. That's a PUSH — it adds
+a brand-new history entry — not a real "go back". PageTransition correctly
+plays the FORWARD slide (enter from the right) for any PUSH, which is
+exactly why it looked like "back plays the forward animation" and left a
+gap on the left as Home slid in from the wrong side. It also silently
+stacked an extra `/` entry into browser history every time it was tapped,
+which would make a subsequent real phone-back gesture behave
+unpredictably too (landing back on /search, needing an extra back press,
+etc.) — a likely explanation for the "history.back() from /search" symptom
+also being reported as broken.
+
+Fix: the arrow now calls the same pop-real-history-if-there-is-any logic
+BackButton already uses (`navigate(-1)` when `history.length > 2`, else
+`navigate('/')`), so it's a genuine POP, not a push.
+
+Verified: tapping the arrow no longer changes `window.history.length`
+(previously it went from N to N+1 to N+2 on searchsearch->back->search->
+back); PageTransition now reports POP / "back" for it, exactly like the
+browser's own Back button.
+
+Real cause #2 (found while instrumenting, not part of the original report,
+but it was quietly breaking the FORWARD animation into /search too): as
+soon as /search finishes its first render, it syncs the empty query into
+the URL via `setSearchParams(..., { replace: true })`. That fires a second,
+REPLACE-type navigation to the same path a moment later. The old
+PageTransition recomputed its animation class fresh on every render from
+"did the path just change since last render" — so that harmless REPLACE
+(same path, no real navigation) reset the class back to "none" while the
+just-started slide/fade was still supposed to be playing, cutting it off
+after a frame or two. This wasn't specific to /search's back arrow, it hit
+the FORWARD trip into /search as well, and would hit any future page that
+syncs its own URL shortly after mount.
+
+Fix: PageTransition no longer recomputes the class every render. It now
+decides the class once, in an effect that only fires on a genuine pathname
+change, and clears it itself on a timer matching the animation's real
+duration. A same-path REPLACE right behind a real navigation now correctly
+does nothing, instead of stomping on an animation that's mid-flight.
+
+Verified frame-by-frame (mid-transition screenshots, not just class
+inspection): going deeper (Home → product) enters fully from the right;
+coming back (product → Home, via the in-app back button) now enters fully
+from the LEFT, using the exact same 350ms sweep, and settles into the same
+final position with no visible gap and no end-of-animation jump. Checked
+against: search "←" arrow, `history.back()` from /search, the product
+page's in-app back button, and `history.back()` from a product page — all
+four now report a genuine POP and the mirrored animation.
+
+One real but minor thing found and left as a known limitation rather than
+fixed (see "What I found along the way" below): the fixed bottom nav bar
+briefly disappears from the frame for the ~350ms a "deeper" slide is
+playing (Home <-> product, Home <-> Contact/Expert). Cause: the slide
+applies `transform` to an ancestor of the page, and any `position: fixed`
+descendant of a transformed element stops being positioned against the
+real viewport for as long as that transform is active — a well-known CSS
+behaviour, not a mistake in this code. It self-corrects the instant the
+animation ends (the transform is removed, nothing lingers). This never
+affects the header or the sticky category bar, which already use
+`position: sticky` rather than `fixed`, so they're immune.
+
+
+Part 3 — One animation rule for the whole site
+
+Rewrote PageTransition around a simple, explicit rule instead of "slide
+everything, always":
+
+ - TOP-LEVEL pages — Home, Search, Cart, Account, My Orders, and the five
+   policy pages (About, Delivery, Return Policy, Terms, Privacy) — moving
+   between any two of these is a lateral move, not a drill-down, so it now
+   gets a quick 150ms crossfade in both directions, never a slide. This is
+   the fix for "Account slides in like a deeper page, which is wrong" —
+   Account is now correctly a fade, same as Cart, My Orders, and every
+   policy page.
+ - Everything else (product detail, order detail, Contact/Expert, every
+   checkout step, the two unlisted sign-in pages) is "deeper": slides in
+   from the right going forward, and the back trip is now an exact mirror
+   (same 350ms, same distance — changed from a token 8% nudge to a full
+   100% sweep so it actually matches the forward motion instead of looking
+   like a different, weaker animation).
+ - Filters and sort on the same page never triggered a page animation to
+   begin with (confirmed: the category fix in Part 1 doesn't touch routing
+   at all, it only swaps the product array), so this requirement was
+   already satisfied and needed no change.
+ - Sheets/menus (hamburger, filter sheet, dialogs, toasts) — spot-checked
+   the hamburger drawer's open/close and confirmed its matching
+   `--closing` animation classes still fire correctly; this code wasn't
+   touched and was already fixed in Batch 17.
+ - `prefers-reduced-motion: reduce` — added the new `.page-fade` class to
+   the existing reduced-motion override alongside `.page-transition`, so
+   both the slide and the new crossfade collapse to an instant change for
+   anyone with that setting on.
+ - Card → product hero image transition (the native View Transition) and
+   Batch 11's variant-tap fix: untouched by this batch, and re-confirmed
+   live — tapping a card still morphs into the detail gallery, and
+   PageTransition correctly skips its own slide/fade for that one
+   navigation (`state.hero` still short-circuits it, unchanged).
+
+
+PART 4 — AUDIT TABLE
+---------------------
+
+Legend: FADE = new 150ms crossfade (top-level <-> top-level). SLIDE = 350ms
+slide from the right forward / exact mirror back ("deeper"). HERO = native
+View Transition, card image morphs into gallery. NONE = no page animation,
+correctly.
+
+| From -> To                                   | Before this batch      | Now    | Frame-confirmed |
+|-----------------------------------------------|-------------------------|--------|-----------------|
+| Home -> Search (search bar tap / nav tab)      | SLIDE (right)           | FADE   | Yes |
+| Search -> Home ("<-" arrow)                    | SLIDE, WRONG direction  | FADE   | Yes |
+| Search -> Home (phone/browser back)            | SLIDE (correct dir.)*   | FADE   | Yes |
+| Home -> Cart (nav tab / hamburger)              | SLIDE (right)           | FADE   | Yes |
+| Cart -> Home (back)                             | SLIDE (mirror, 8%)      | FADE   | Yes |
+| Home -> Account (nav tab)                       | SLIDE (right) — wrong   | FADE   | Yes |
+| Account -> Home (back)                          | SLIDE (mirror, 8%)      | FADE   | Yes |
+| Account -> My Orders                            | SLIDE (right)           | FADE   | Code-reviewed** |
+| My Orders -> Order detail                       | SLIDE (right)           | SLIDE  | Code-reviewed** |
+| Order detail -> My Orders (back)                | SLIDE (mirror, 8%)      | SLIDE, full mirror | Code-reviewed** |
+| Home -> Product (card tap)                      | HERO                    | HERO   | Yes, unchanged |
+| Product -> Home (in-app back button)            | SLIDE, wrong 8% mirror  | SLIDE, full mirror | Yes |
+| Product -> Home (phone/browser back)            | SLIDE (correct dir.)*   | SLIDE, full mirror | Yes |
+| Home -> Contact/Expert (Browse "Expert" circle) | SLIDE (right)           | SLIDE  | Yes |
+| Contact/Expert -> Home (back)                   | SLIDE (mirror, 8%)      | SLIDE, full mirror | Yes |
+| Hamburger -> About/Delivery/Return/Terms/Privacy| SLIDE (right)           | FADE   | Yes |
+| Footer link -> same policy pages                | SLIDE (right)           | FADE   | Code-reviewed (same Link component as hamburger) |
+| Cart -> Checkout: delivery details              | SLIDE (right)           | SLIDE  | Not reachable — requires Google sign-in, see below |
+| Checkout: delivery -> summary -> success        | SLIDE (right)           | SLIDE, full mirror | Not reachable — requires Google sign-in |
+| Category chip / Browse circle / sort (same page)| none                    | none   | Yes — confirmed no route change, no animation |
+| Hamburger menu open/close                        | slide + fade, matching  | unchanged | Yes, spot-checked |
+| Admin panel                                      | out of scope            | out of scope | Excluded per instructions |
+
+* "correct dir." — genuine POP navigations (real browser/phone back, not a
+  button that happens to push) were already computing the right direction
+  before this batch; the bug was specifically buttons that pushed instead
+  of popping, and the REPLACE-clobber issue described in Part 2.
+** Account -> My Orders -> Order detail requires a signed-in session
+   (Google OAuth). This environment cannot complete a real Google sign-in
+   (see "what I could not finish"), so these three rows are confirmed
+   correct by code/config review — both routes are classified the same way
+   as every other page of their kind (My Orders is in the top-level list
+   exactly like Cart and Account; Order detail is unclassified exactly
+   like Product detail, so it gets the same slide/mirror treatment) — but
+   not confirmed with real frame captures.
+
+
+WHAT I COULD NOT FINISH
+------------------------
+
+- Could not test on Naeem's actual Android phone — this session only has a
+  desktop Chrome instance, driven at a 390x844 mobile viewport with a
+  mobile user agent. Everything above was verified there, including
+  literal mid-transition screenshots, but a real device (real GPU, real
+  touch latency, an actual back GESTURE rather than a button) could still
+  behave slightly differently. Recommend a quick real-phone check the next
+  time you have the app open.
+- The task asked for Playwright specifically. This project doesn't have
+  Playwright installed (no devDependency, no config), and installing a new
+  heavy testing framework wasn't something I wanted to do without asking
+  first, since CLAUDE.md says to explain before a bigger change. I used
+  the browser automation tool already available to me instead (same idea:
+  a real Chromium browser, scripted, with real screenshots and real
+  console/network access) and got frame-by-frame confirmation of every
+  transition either way. If you'd like Playwright installed properly as a
+  permanent part of this project's tooling, that's a separate, small
+  decision to make later.
+- Account -> My Orders -> Order detail and the three checkout steps
+  (delivery details -> summary -> success) could not be exercised live
+  end-to-end because they require signing in with a real Google account,
+  which this environment is not able to do (per my own standing rule about
+  not touching real credentials, and there's no admin/test account
+  available here either — see my memory note from a previous session).
+  These are covered by code review only, as noted in the audit table.
+
+
+WHAT I FOUND ALONG THE WAY (not fixed, for you to schedule)
+--------------------------------------------------------------
+
+1. Bottom nav bar briefly disappears during a "deeper" slide (Home <->
+   product, Home <-> Contact/Expert) — about 350ms, self-corrects
+   automatically. Cause: the slide's `transform` on a page wrapper
+   temporarily changes how any `position: fixed` element inside it is
+   positioned (a standard CSS behaviour, not a mistake). Fixing it properly
+   means either moving the bottom nav outside the animated part of the
+   page, or rebuilding page transitions so the outgoing and incoming pages
+   are both kept on screen and slide together instead of one replacing the
+   other instantly (the "real app" way most native pull-cover
+   transitions work). Both are more invasive than this batch's scope, so I
+   left it alone. Size: small visually, medium effort to fix properly.
+
+2. The main JS bundle is 698 KB (before gzip), and the build already warns
+   about it. Not something I introduced or touched, but worth knowing:
+   splitting rarely-used pages (checkout flow, account, orders) the same
+   way the admin panel was already split (Batch 19) would shrink what a
+   first-time visitor has to download. Size: medium effort, real (if
+   modest) speed win on a slow connection, matching CLAUDE.md's
+   "mid-range Android phone on a slow connection" target audience.
+
+3. The "Popular categories" pills on /search are visually plain `chip`
+   buttons with no active/selected styling difference beyond the shared
+   `chip--active` class already used elsewhere — this reused the existing
+   pattern rather than inventing new styling, per "no design changes" in
+   the task, but it does mean a selected category on /search now looks
+   identical to a selected category chip on Home, which I think is
+   correct, just flagging it as a design decision rather than a bug.
+
+
+DESIGN DECISIONS
+-----------------
+
+- Classified exactly the pages CLAUDE.md/the task named as "top-level":
+  Home, Search, Cart, Account, My Orders, and the five policy pages
+  (About, Delivery, Return Policy, Terms, Privacy). Everything else
+  (product detail, order detail, Contact/Expert, checkout steps, the two
+  unlisted sign-in pages) defaults to "deeper" since none of those were
+  named as top-level and they all behave like a drill-down from something
+  else.
+- Back's slide now travels the full 100% (matching forward) instead of the
+  old 8% "nudge". A true mirror needs to look like the same weight/scale of
+  motion in both directions — an 8% shuffle didn't read as "the reverse of
+  a full-width slide," it read as a different, smaller animation.
+- Category selection toggle on /search mirrors the home page's chips/
+  circles exactly (tap again to clear) rather than inventing a different
+  interaction, since the task said no design changes and this keeps the
+  whole site's "tap a category" behaviour consistent.
+
+
+BUILD & TEST RESULTS
+----------------------
+
+npm run build   -> PASSED (zero TypeScript errors, zero build errors)
+npx vitest run  -> PASSED (2 test files, 13 tests — 4 new for the category
+                    filter, 9 pre-existing for ProductCard, unchanged)
+
+
+SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. Nothing in this batch touched the database schema.
