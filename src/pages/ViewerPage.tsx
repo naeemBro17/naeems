@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -11,7 +12,6 @@ import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminEdit } from '../contexts/AdminEditContext';
-import { useNavigate } from 'react-router-dom';
 import { useProductFilters } from '../hooks/useProductFilters';
 import { filterByCategory } from '../lib/categoryFilter';
 import { useDragReorder } from '../hooks/useDragReorder';
@@ -31,7 +31,6 @@ import { BrowseCircles } from '../components/viewer/BrowseCircles';
 import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
 import { ProductGrid } from '../components/viewer/ProductGrid';
-import { BottomNav } from '../components/viewer/BottomNav';
 import { SiteFooter } from '../components/shared/SiteFooter';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
@@ -80,7 +79,6 @@ function DragHandleGlyph() {
 }
 
 export function ViewerPage() {
-  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { isAdmin } = useAuth();
   const { isEditMode } = useAdminEdit();
@@ -162,17 +160,43 @@ export function ViewerPage() {
   // refetch()) must NOT re-trigger a scroll jump while they're already
   // browsing the page.
   const hasSetInitialScroll = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (hasSetInitialScroll.current) return;
     if (isLoading) return; // wait for real content, same as before
     hasSetInitialScroll.current = true;
 
+    // Synchronous, before this frame ever paints — the old version deferred
+    // this by a frame-plus-80ms (a requestAnimationFrame, then a setTimeout),
+    // which is exactly why coming back from a product showed Home at the top
+    // for a moment before jumping to the real scroll position (see
+    // reports/batch-21.txt Part 1, point 1 and point 5). useLayoutEffect runs
+    // after the grid's DOM is in the tree but before the browser paints it,
+    // so there is nothing to see before the jump — there is no "before".
     const savedY = takeGridScroll();
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        window.scrollTo({ top: savedY ?? 0, behavior: 'instant' });
-      }, 80);
-    });
+    const target = savedY ?? 0;
+    window.scrollTo({ top: target, behavior: 'instant' });
+
+    // A deep saved position can exceed how tall the page actually is yet —
+    // product images below the fold haven't finished loading and reserving
+    // their real height, so the browser clamps the scroll short. Rather than
+    // guessing a fixed delay (the old bug this batch removed), watch the page
+    // grow and re-apply the same target until it's reachable or a generous
+    // ceiling passes — a page that never reaches it just stays clamped, same
+    // as before.
+    if (target > 0 && window.scrollY < target) {
+      let attempts = 0;
+      const observer = new ResizeObserver(() => {
+        attempts += 1;
+        if (window.scrollY < target) {
+          window.scrollTo({ top: target, behavior: 'instant' });
+        }
+        if (window.scrollY >= target || attempts > 40) {
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body);
+      window.setTimeout(() => observer.disconnect(), 3000);
+    }
   }, [products, isLoading]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).
@@ -241,14 +265,6 @@ export function ViewerPage() {
     setIsRetrying(true);
     await refetch();
     setIsRetrying(false);
-  };
-
-  const handleHomeTab = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleAccountTab = () => {
-    navigate('/account');
   };
 
   // Homepage section order. 'products' is pinned last and never dragged, so
@@ -458,8 +474,6 @@ export function ViewerPage() {
       </main>
 
       <SiteFooter />
-
-      <BottomNav activeTab="home" onHome={handleHomeTab} onAccount={handleAccountTab} />
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <FilterSheet

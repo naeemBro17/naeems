@@ -4,7 +4,8 @@
 // itself reads the cart from CartContext). Routes to DeliveryDetailsPage
 // on "Checkout".
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ConfirmDialog } from '../../components/shared/ConfirmDialog';

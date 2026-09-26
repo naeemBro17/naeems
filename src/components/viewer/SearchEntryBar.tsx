@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 
 interface SearchEntryBarProps {
   /** Opens the Brand/Skin Type filter sheet — still lives on the home grid. */

@@ -7,6 +7,8 @@ import { isOutOfStock } from '../../lib/stockStatus';
 import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
+import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
+import { getHeroReverseTarget } from '../../lib/heroTransition';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
 import { applyIdOrder, parseIdList, saveSettings, serializeIdList } from '../../lib/settingsLists';
 import {
@@ -74,11 +76,18 @@ function ProductFaceBody({ product }: { product: Product }) {
  *  literal (mirrors BentoCustomTile's own image handling). */
 function faceImageProps(product: Product): { className: string; style?: CSSProperties } {
   const cover = cardImage(product);
-  if (cover === null) return { className: '' };
+  // Only set on the one face being returned to right after leaving its own
+  // detail page — see lib/heroTransition.ts — so the browser morphs the big
+  // image back into this exact tile instead of just crossfading the page.
+  const heroStyle: CSSProperties | undefined =
+    getHeroReverseTarget() === product.id
+      ? { viewTransitionName: productHeroName(product.id) }
+      : undefined;
+  if (cover === null) return { className: '', style: heroStyle };
   const safeUrl = cover.replace(/["\\\r\n]/g, '');
   return {
     className: ' bento-face--image',
-    style: { backgroundImage: `url("${safeUrl}")` },
+    style: { backgroundImage: `url("${safeUrl}")`, ...heroStyle },
   };
 }
 
@@ -134,10 +143,14 @@ function SwipeStackTile({
               key={product.id}
               role="button"
               tabIndex={0}
-              onClick={() => onOpen(product)}
+              onClick={(e) => {
+                e.currentTarget.style.setProperty('view-transition-name', productHeroName(product.id));
+                onOpen(product);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
+                  e.currentTarget.style.setProperty('view-transition-name', productHeroName(product.id));
                   onOpen(product);
                 }
               }}
@@ -194,7 +207,10 @@ function FlipTile({
           style={frontImage.style}
           role="button"
           tabIndex={-1}
-          onClick={() => onOpen(front)}
+          onClick={(e) => {
+            e.currentTarget.style.setProperty('view-transition-name', productHeroName(front.id));
+            onOpen(front);
+          }}
         >
           <ProductFaceBody product={front} />
         </div>
@@ -204,7 +220,10 @@ function FlipTile({
             style={backImage.style}
             role="button"
             tabIndex={-1}
-            onClick={() => onOpen(back)}
+            onClick={(e) => {
+              e.currentTarget.style.setProperty('view-transition-name', productHeroName(back.id));
+              onOpen(back);
+            }}
           >
             <ProductFaceBody product={back} />
           </div>
@@ -413,9 +432,11 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
   const featured = useMemo(() => products.filter((p) => p.is_featured), [products]);
 
   const openProduct = (product: Product) => {
-    // Same Back-restores-position contract the product grid follows.
+    // Same Back-restores-position contract the product grid follows, and now
+    // the same hero morph too — bento cards used to fall back to a plain
+    // slide with a near-black frame instead (reports/batch-21.txt Part 1).
     rememberGridScroll();
-    navigate(productPath(product));
+    navigateToProductWithHero(navigate, productPath(product), product);
   };
 
   // Default allocation when the admin hasn't arranged the tiles: the flip

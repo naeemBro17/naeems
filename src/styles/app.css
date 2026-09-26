@@ -5378,22 +5378,30 @@ textarea {
   to   { opacity: 1; }
 }
 
-/* ---------- Product card → detail: shared-element (hero) transition ----------
-   Triggered only by navigateToProductWithHero (lib/viewTransition.ts): the
-   tapped card's image box and the detail page's gallery box share a
-   view-transition-name, so the browser morphs one into the other natively.
-   Everything else on the page (the "root" group) fades and lifts in instead
-   of the site's usual slide, which PageTransition skips for this navigation. */
-::view-transition-group(*) {
+/* ---------- Native View Transitions — root animation per navigation kind ----------
+   lib/viewTransition.ts puts one of these classes on <html> just before
+   calling document.startViewTransition, so the browser's own before/after
+   snapshot picks the right motion for whatever kind of navigation this is —
+   see reports/batch-21.txt Part 1. Removed again once the transition
+   finishes. Real crossfades and reverse-hero all ride this same mechanism
+   now, not just the forward product-card tap it used to be limited to. */
+
+/* vt-hero — product card <-> detail page. The tapped card's image box and
+   the detail page's gallery box share a view-transition-name (set in
+   ProductCard/BentoGrid/ProductDetailPage), so the browser morphs one into
+   the other directly; everything else on the page (the "root" group) fades
+   and lifts instead of sliding, in both directions — a reverse hero is just
+   this same navigation run backwards. */
+html.vt-hero ::view-transition-group(*) {
   animation-duration: 320ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-::view-transition-old(root) {
+html.vt-hero::view-transition-old(root) {
   animation: detail-hero-root-out 220ms ease both;
 }
 
-::view-transition-new(root) {
+html.vt-hero::view-transition-new(root) {
   animation: detail-hero-root-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -5404,6 +5412,51 @@ textarea {
 @keyframes detail-hero-root-in {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* vt-fade — top-level <-> top-level (Home/Search/Cart/Account/My Orders/
+   policy pages). The browser's own default view-transition animation is
+   already a real overlapping crossfade (old fades 1->0, new fades 0->1, at
+   the same time) — exactly what's needed here — so this only tightens the
+   duration to the site's quicker 180ms top-level feel instead of redefining
+   the animation. */
+html.vt-fade::view-transition-old(root),
+html.vt-fade::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+
+/* vt-slide-forward / vt-slide-back — a "deeper" screen (product detail minus
+   the hero case, order detail, contact/expert, checkout steps). Both the old
+   and new page are real snapshots the browser is already compositing, so
+   sliding one out while the other slides in never leaves the black/empty gap
+   the old single-element slide could. Back is an exact mirror: same 350ms,
+   same distance, opposite edge. */
+html.vt-slide-forward::view-transition-old(root) {
+  animation: vt-slide-forward-out 350ms ease-out both;
+}
+html.vt-slide-forward::view-transition-new(root) {
+  animation: vt-slide-forward-in 350ms ease-out both;
+}
+html.vt-slide-back::view-transition-old(root) {
+  animation: vt-slide-back-out 350ms ease-out both;
+}
+html.vt-slide-back::view-transition-new(root) {
+  animation: vt-slide-back-in 350ms ease-out both;
+}
+
+@keyframes vt-slide-forward-out {
+  to { transform: translateX(-28%); }
+}
+@keyframes vt-slide-forward-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes vt-slide-back-out {
+  to { transform: translateX(28%); }
+}
+@keyframes vt-slide-back-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8046,6 +8099,20 @@ textarea {
 
 .admin-list li + li .admin-order-row {
   border-top: 1px solid var(--color-border);
+}
+
+/* Batch 21 Part 4 — bulk-delete selection, cancelled orders only. */
+.admin-order-row-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.admin-order-row__select {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-left: var(--space-3);
+  accent-color: var(--color-danger);
 }
 
 .admin-order-row {

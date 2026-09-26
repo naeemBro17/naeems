@@ -26,6 +26,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 interface OrderRow {
   id: string;
   order_number: string;
+  customer_id: string | null;
   customer_name: string;
   customer_phone: string;
   division: string;
@@ -160,6 +161,18 @@ Deno.serve(async (req: Request) => {
     }
 
     const order = payload.record;
+
+    // The Playwright e2e suite (reports/batch-21.txt Part 3) signs in as one
+    // fixed, known test customer and places a real order to exercise the
+    // checkout -> My Orders -> cancel flow end to end — a real database row
+    // is the whole point, but Naeem must never get paged for it. Set once as
+    // an Edge Function secret, not a real credential, so skip is a no-op
+    // (undefined !== any real order's customer_id) until that's configured.
+    const e2eCustomerId = Deno.env.get('E2E_TEST_CUSTOMER_ID');
+    if (e2eCustomerId && order.customer_id === e2eCustomerId) {
+      return new Response(JSON.stringify({ skipped: 'e2e test order' }), { status: 200 });
+    }
+
     const isNewOrder = payload.type === 'INSERT';
     const isNewCancellation =
       payload.type === 'UPDATE' &&

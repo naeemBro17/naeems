@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { useAppNavigate } from './hooks/useAppNavigate';
+import { BottomNav } from './components/viewer/BottomNav';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProductProvider } from './contexts/ProductContext';
@@ -42,6 +44,33 @@ function AdminPageFallback() {
     <div className="full-screen-center" aria-label="Loading admin panel">
       <span className="spinner spinner--large" aria-hidden="true" />
     </div>
+  );
+}
+
+/**
+ * Rendered as a sibling of PageTransition, not inside it — a `transform`
+ * applied to an ancestor breaks a `position: fixed` descendant's containing
+ * block (a standard CSS behaviour), which used to make this bar vanish or
+ * jump for the ~350ms a "deeper" slide played (reports/fix-animation-audit.txt
+ * "found along the way" #1; reports/batch-21.txt Part 1, point 6). Living
+ * outside the animated subtree — and, for any navigation the native View
+ * Transition path drives, being just part of a whole-page bitmap snapshot
+ * rather than a live positioned element — means there is no transformed
+ * ancestor to be broken by in the first place.
+ *
+ * Only shown on Home for now, matching the tab bar's existing scope; a
+ * future page that wants it too just needs adding to the path check here.
+ */
+function GlobalBottomNav() {
+  const location = useLocation();
+  const navigate = useAppNavigate();
+  if (location.pathname !== '/') return null;
+  return (
+    <BottomNav
+      activeTab="home"
+      onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      onAccount={() => navigate('/account')}
+    />
   );
 }
 
@@ -94,6 +123,7 @@ export default function App() {
                       <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                   </PageTransition>
+                  <GlobalBottomNav />
                 </AdminEditProvider>
               </CheckoutStateProvider>
             </CartProvider>

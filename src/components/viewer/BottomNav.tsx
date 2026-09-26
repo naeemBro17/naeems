@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { useCart } from '../../contexts/CartContext';
 import { CartIcon } from './CartButton';
 
@@ -70,7 +70,7 @@ function AccountIcon() {
  * page (see ViewerPage); Cart is a real route and navigates the router.
  */
 export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
   const { itemCount } = useCart();
 
   const tabs = [
