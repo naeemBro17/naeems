@@ -173,7 +173,30 @@ export function ViewerPage() {
     // after the grid's DOM is in the tree but before the browser paints it,
     // so there is nothing to see before the jump — there is no "before".
     const savedY = takeGridScroll();
-    window.scrollTo({ top: savedY ?? 0, behavior: 'instant' });
+    const target = savedY ?? 0;
+    window.scrollTo({ top: target, behavior: 'instant' });
+
+    // A deep saved position can exceed how tall the page actually is yet —
+    // product images below the fold haven't finished loading and reserving
+    // their real height, so the browser clamps the scroll short. Rather than
+    // guessing a fixed delay (the old bug this batch removed), watch the page
+    // grow and re-apply the same target until it's reachable or a generous
+    // ceiling passes — a page that never reaches it just stays clamped, same
+    // as before.
+    if (target > 0 && window.scrollY < target) {
+      let attempts = 0;
+      const observer = new ResizeObserver(() => {
+        attempts += 1;
+        if (window.scrollY < target) {
+          window.scrollTo({ top: target, behavior: 'instant' });
+        }
+        if (window.scrollY >= target || attempts > 40) {
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body);
+      window.setTimeout(() => observer.disconnect(), 3000);
+    }
   }, [products, isLoading]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).

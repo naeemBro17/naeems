@@ -67,6 +67,7 @@ Therefore:
 - `npm run build` must pass with **zero errors** at the end of every session.
 - No TypeScript `any` types.
 - No pseudo-code, no placeholder comments, no `// TODO`.
+- Before every commit, run `npm run build`, `npx vitest run` and `npm run test:e2e`. All must pass. Any visual/navigation fix must be verified with frame captures, not just code review.
 
 ### Session log — per-batch reports
 Starting with Batch 13, each batch writes its own report to `reports/batch-N.txt` (create the `reports/` folder if it doesn't exist) — do not append to a shared `Naeems.txt` file. This keeps concurrent batch branches from colliding on one file and keeps each report short enough to read on a phone. (`Naeems.txt` at the repo root holds every batch's report through Batch 12 — leave it as historical record, do not append to it. An older file `Wahidtodolist.txt` may also exist — leave it alone too, do not delete it, do not write to it.)
