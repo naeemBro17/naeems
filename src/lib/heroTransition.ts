@@ -38,3 +38,38 @@ export function setHeroReverseTarget(productId: string | null): void {
 export function getHeroReverseTarget(): string | null {
   return heroReverseTarget;
 }
+
+/**
+ * The pathname PageTransition last settled on, updated in its own
+ * useLayoutEffect after every commit. A genuine phone back/forward fires
+ * outside any click handler, so lib/popNavigation.ts has no other way to
+ * know what page is being left when it needs to classify the transition
+ * (fade vs. slide) the instant popstate fires — by then window.location
+ * already reflects the destination, not where we came from.
+ */
+let lastPathname: string = window.location.pathname;
+
+export function setLastPathname(pathname: string): void {
+  lastPathname = pathname;
+}
+
+export function getLastPathname(): string {
+  return lastPathname;
+}
+
+/**
+ * The product id ProductDetailPage is currently showing, if any — set in an
+ * effect there, read by lib/popNavigation.ts the instant a real popstate
+ * fires (before React has processed it) so a phone back off a product page
+ * gets the same reverse-hero morph the in-app <- button already gets, not
+ * just a plain crossfade.
+ */
+let currentDetailProductId: string | null = null;
+
+export function setCurrentDetailProductId(productId: string | null): void {
+  currentDetailProductId = productId;
+}
+
+export function getCurrentDetailProductId(): string | null {
+  return currentDetailProductId;
+}

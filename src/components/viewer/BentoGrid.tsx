@@ -9,6 +9,7 @@ import { productPath } from '../../lib/slugify';
 import { rememberGridScroll } from '../../lib/gridScroll';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
 import { getHeroReverseTarget } from '../../lib/heroTransition';
+import { heroReverseFaceFor, heroReverseIndexFor } from '../../lib/bentoHeroReverse';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
 import { applyIdOrder, parseIdList, saveSettings, serializeIdList } from '../../lib/settingsLists';
 import {
@@ -36,6 +37,9 @@ interface BentoGridProps {
 const STACK_SIZE = 4;
 /** Faces in the auto-flipping right tile — the CSS animation shows exactly two. */
 const FACES_PER_TILE = 2;
+/** How long the right tile's auto-flip stays paused after a reverse-hero
+ *  return, before it resumes cycling on its own. */
+const RESUME_FLIP_MS = 4000;
 
 function PriceLine({ product }: { product: Product }) {
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
@@ -110,7 +114,13 @@ function SwipeStackTile({
   /** Off while Edit Mode is on, where a press on the tile begins a drag. */
   swipeEnabled: boolean;
 }) {
-  const [index, setIndex] = useState(0);
+  // Starts on whichever product a reverse-hero return is targeting (see
+  // heroReverseIndex) instead of always the first slide, so a product opened
+  // after swiping deeper into the stack still morphs back into view instead
+  // of shrinking into a slide that's now scrolled out of sight.
+  const [index, setIndex] = useState(
+    () => heroReverseIndexFor(products, getHeroReverseTarget()) ?? 0
+  );
   const count = products.length;
 
   // A shrinking featured list must never leave the track parked past its end.
@@ -198,10 +208,33 @@ function FlipTile({
   const [front, back] = faces;
   const frontImage = faceImageProps(front);
   const backImage = back ? faceImageProps(back) : null;
+
+  // Which face (if any) a reverse-hero return is targeting, frozen at mount
+  // — the CSS animation that flips this tile has no JS timer to pause, so
+  // without this the auto-flip may well have moved on to the other face by
+  // the time the user comes back, and the morph would land on a face that's
+  // rotated away rather than the one actually facing the screen.
+  const [pausedFace, setPausedFace] = useState<'front' | 'back' | null>(() =>
+    heroReverseFaceFor(front, back, getHeroReverseTarget())
+  );
+
+  useEffect(() => {
+    if (!pausedFace) return undefined;
+    const timer = window.setTimeout(() => setPausedFace(null), RESUME_FLIP_MS);
+    return () => window.clearTimeout(timer);
+  }, [pausedFace]);
+
+  const pausedStyle: CSSProperties | undefined = pausedFace
+    ? { animation: 'none', transform: pausedFace === 'back' ? 'rotateX(180deg)' : 'rotateX(0deg)' }
+    : undefined;
+
   return (
     <div className="bento-tile bento-tile--short">
       <EditButton label="Edit right top tile products" onClick={onEdit} />
-      <div className={`bento-flipper${back ? '' : ' bento-flipper--static'}`}>
+      <div
+        className={`bento-flipper${back ? '' : ' bento-flipper--static'}`}
+        style={pausedStyle}
+      >
         <div
           className={`bento-face bento-face--front${frontImage.className}`}
           style={frontImage.style}

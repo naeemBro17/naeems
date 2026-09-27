@@ -1,0 +1,160 @@
+FIX — Phone back button + Bento reverse hero
+================================================
+
+SUMMARY
+-------
+Your Android screen recording caught two real bugs, both now fixed on
+branch fix/phone-back:
+
+1. The phone's own back button/gesture used to fall back to a hand-rolled
+   CSS slide that showed a black gap, instead of the smooth crossfade/hero
+   morph the in-app <- button already got.
+2. Products opened from the two bento tiles that move on their own (the
+   swipeable stack and the auto-flipping tile) didn't morph back into their
+   tile, even using the in-app <- button, because by the time you came back
+   the tile had already moved on to a different product.
+
+The in-app <- button was untouched and still works exactly as before.
+
+
+PART 1 — Phone back = same transition as the in-app <- button
+-----------------------------------------------------------------
+REAL CAUSE: batch 21 built the smooth in-app transitions around this app's
+own click handlers — every <- button and nav tap calls a helper that starts
+the browser's native "View Transition" itself before navigating. A phone's
+hardware/gesture back button doesn't go through any of that — it fires a
+raw browser event (called "popstate") that this app's own code never got a
+chance to react to, so that one case kept using the old, plainer fallback,
+which is a single box sliding onto the screen with nothing underneath it —
+hence the black gap in your recording.
+
+THE FIX: a new file, src/lib/popNavigation.ts, listens for that raw
+browser event directly, registered before anything else gets a chance to
+handle it (see main.tsx). The instant a phone back fires, it:
+  - starts the exact same native transition the in-app button uses,
+  - lets the app's normal page-change logic run completely untouched,
+  - waits (via a small signal from PageTransition, not a guessed delay)
+    until the new page has actually finished settling — including scroll
+    position — before letting the browser show it,
+  - and if you were on a product page, tags the transition to morph the
+    picture back into the exact card/tile it came from, the same way the
+    in-app button already did.
+
+A safety cutoff (500ms) makes sure that if this ever couldn't finish for
+some unrelated reason, it can't get stuck and silently break every
+transition after it — it just falls through to a plain instant change.
+
+FALLBACK FOR OLDER BROWSERS: on a browser that doesn't support the native
+transition at all (or a reader who has turned on "reduce motion"), back
+navigation now always does a quick crossfade instead of the old slide.
+That's the part that could show a black gap by construction — a single box
+sliding onto an empty background — so it no longer exists. This applies to
+any back navigation on such a browser, not just a phone gesture. Forward
+navigation still slides in the same case, which wasn't part of the reported
+bug and wasn't touched.
+
+
+PART 2 — Bento tiles now remember which product you opened
+----------------------------------------------------------
+REAL CAUSE, confirmed by reading the code, not guessed: the left tile (a
+manual swipeable stack of products) and the top-right tile (an automatic
+flip between two products, on an 8-second loop with no JavaScript timer at
+all — pure CSS) both reset to their first/default-facing product every time
+you come back to Home, because Home is fully rebuilt from scratch on every
+visit. If you'd swiped the left tile to its third product before opening
+it, or the top-right tile happened to be showing its "back" face when you
+tapped it, the picture had nowhere correct to morph back into — the right
+DOM element existed, just scrolled out of sight or rotated away.
+
+THE FIX: both tiles now check, on the very first render after coming back,
+whether the product you're returning from is one of theirs — and if so,
+start already showing that exact one (the swipeable tile) or freeze the
+flip on that exact face for 4 seconds before letting it resume its normal
+cycle (the auto-flip tile), rather than always resetting to the default.
+This matching logic lives in its own file, src/lib/bentoHeroReverse.ts, with
+its own fast unit tests (9 tests, no browser needed) covering: a match found
+mid-stack, no match (a different tile, or not a bento product at all), a
+front-face match, a back-face match, and the single-product tile that has
+no back face to match at all.
+
+
+WHAT COULDN'T BE FULLY TESTED HERE
+-----------------------------------
+This environment has no admin login (a known, pre-existing limit — see
+reports/batch-21.txt), so I couldn't add a second featured product to force
+the auto-flip tile to show two faces, or force the swipeable tile to hold
+enough products to swipe past the first. Your live catalog only had enough
+featured products for some of these branches today, so two of the new
+Playwright tests (the ones that specifically need "a second product in the
+flip tile" / "at least 2 products in the stack tile") skipped themselves
+rather than fail — this is normal, they check first and skip cleanly if the
+live data doesn't currently support them, they don't silently pass. The
+underlying logic they'd be checking is proven correct a different way: the
+9 unit tests above, which don't depend on your live catalog at all.
+
+Also, as always, this ran against a real Chromium browser at a phone-sized
+viewport with touch enabled (Playwright), not your actual Android phone —
+real GPU compositing and a real finger gesture can behave subtly
+differently than a simulated one, though a real hardware/gesture back does
+fire the exact same underlying browser event Playwright's page.goBack()
+does, which is why this is a much stronger test than the previous batch's
+manual-fallback code could get. A 2-minute real-phone check (open a product
+from Home, use your phone's own back gesture, watch for any flash) is still
+worth doing when you have a moment.
+
+
+WHAT I FOUND ALONG THE WAY
+----------------------------
+Nothing new and unrelated — this stayed inside the transition/navigation
+code the task described. One small thing worth knowing: `npm run build`
+also regenerates public/sitemap.xml from whatever's in your live product
+list right now, in whatever order the database happens to return rows.
+That file changes on every build regardless of any code change and isn't
+part of this fix — I reverted it before committing so this branch only
+contains the actual fix.
+
+
+DESIGN DECISIONS
+------------------
+- Chose a "wait for a completion signal" approach for the phone-back
+  transition instead of trying to force React to update synchronously.
+  Real hardware back events don't offer a hook to force synchronous
+  updates the way an in-app click does, so instead the transition just
+  waits for the app's own page-settle signal (already fires after every
+  navigation) — same end result, no extra risk to the very carefully-tuned
+  scroll-restoration timing from batch 21.
+- The auto-flip tile resumes on its own after 4 seconds ("a few seconds"
+  per the task) rather than staying frozen — long enough to comfortably see
+  the returned-to card, short enough that the tile doesn't look broken/stuck
+  if you just sit on the page.
+- Forward navigation's manual-fallback slide (browsers with no native
+  transition support) was left as-is — not reported as buggy, and changing
+  it wasn't asked for.
+
+
+INDUSTRY-LEVEL SUGGESTIONS
+-----------------------------
+Nothing new noticed this batch beyond what's already recorded in earlier
+reports (e.g. the ~700KB main bundle, reports/batch-21.txt Part 6) — this
+was a narrowly-scoped bug fix and didn't touch anything else.
+
+
+BUILD & TEST RESULTS
+-----------------------
+npm run build     -> PASSED (zero TypeScript errors, zero build errors)
+npx vitest run    -> PASSED (5 test files, 45 tests — 9 new, all others
+                     pre-existing/unchanged)
+npm run test:e2e  -> PASSED (21/23 — 2 skip cleanly on today's live catalog
+                     data, see "What couldn't be fully tested" above; 8 of
+                     those 23 are new in e2e/phone-back.spec.ts)
+
+
+SQL NAEEM MUST RUN IN SUPABASE
+----------------------------------
+None needed. This batch touched no database schema or data.
+
+
+BRANCH
+--------
+fix/phone-back, five files changed + four new files, ready to push for your
+review. Not merged to main.
