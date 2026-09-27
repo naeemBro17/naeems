@@ -20,6 +20,7 @@ import {
   variantOptionsFor,
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
+import { setCurrentDetailProductId } from '../lib/heroTransition';
 import { extractYouTubeId, youtubeEmbedUrl } from '../lib/youtube';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -724,6 +725,15 @@ export function ProductDetailPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [slug]);
+
+  // Lets a real phone back button/gesture (lib/popNavigation.ts — it fires
+  // outside any click handler, so it has no other way to know) reverse-hero
+  // into the exact card this product was opened from, the same way the
+  // in-app <- button already does via BackButton's heroProductId prop.
+  useEffect(() => {
+    setCurrentDetailProductId(product?.id ?? null);
+    return () => setCurrentDetailProductId(null);
+  }, [product?.id]);
 
   // Keep the og: tags in step with the product so a shared link previews it.
   useEffect(() => {

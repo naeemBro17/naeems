@@ -1,15 +1,29 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigationType, type Location } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { isNativeTransitionActive } from '../../lib/heroTransition';
+import { isNativeTransitionActive, setLastPathname } from '../../lib/heroTransition';
+import { notifyRouteCommitted } from '../../lib/popNavigation';
 import { classifyTransition, type TransitionKind } from '../../lib/routeClassification';
 
 const SLIDE_MS = 350;
 const FADE_MS = 150;
 
+/**
+ * A "back" fallback here only ever plays on a browser with no View
+ * Transitions support (or prefers-reduced-motion) — everywhere else, Part 1
+ * of reports/fix-phone-back.txt wraps the navigation in a real native
+ * transition instead, click or phone back alike. This manual path used to
+ * slide the new page in as the one and only element on screen — with the
+ * old page already unmounted underneath, that slide's uncovered edge showed
+ * bare background, not a real "old page sliding away", which is exactly the
+ * black-gap bug the frame-by-frame phone recording caught. A crossfade has
+ * no uncovered edge to leak through, so back always gets that instead now;
+ * forward keeps its slide (the same single-element mechanics, but never
+ * reported as showing a gap, and not this task's scope to change).
+ */
 function fallbackClassFor(kind: TransitionKind): string {
-  if (kind === 'fade') return 'page-fade';
-  return `page-transition page-transition--${kind === 'slide-back' ? 'back' : 'forward'}`;
+  if (kind === 'slide-forward') return 'page-transition';
+  return 'page-fade';
 }
 
 /**
@@ -70,6 +84,16 @@ export function PageTransition({ children }: { children: ReactNode }) {
     clearTimer.current = window.setTimeout(() => setFallbackClass(undefined), ms);
     return () => window.clearTimeout(clearTimer.current);
   }, [fallbackClass]);
+
+  // Fires after the new page's OWN layout effects (e.g. ViewerPage's scroll
+  // restoration) — React runs layout effects child-first — so by the time a
+  // phone-back-driven transition is told the DOM is ready (see
+  // lib/popNavigation.ts), the page underneath is already fully settled,
+  // not about to jump right after the browser captures its "after" snapshot.
+  useLayoutEffect(() => {
+    setLastPathname(location.pathname);
+    notifyRouteCommitted();
+  }, [location.pathname]);
 
   return (
     <div key={location.pathname} className={fallbackClass}>

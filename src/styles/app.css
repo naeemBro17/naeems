@@ -5347,23 +5347,18 @@ textarea {
   animation: pageSlideForward 350ms ease-out;
 }
 
-.page-transition--back {
-  animation-name: pageSlideBack;
-}
-
-/* Back travels the exact same distance as forward (100%, not the old 8%
-   nudge) so it's a true mirror — same sweep, opposite edge — instead of a
-   barely-there shuffle that read as a different, weaker animation than the
-   one that opened the page (see reports/fix-animation-audit.txt Part 2). */
 @keyframes pageSlideForward {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
 
-@keyframes pageSlideBack {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
-}
+/* pageSlideBack / .page-transition--back removed — see
+   reports/fix-phone-back.txt Part 1: a single unmounted-then-remounted div
+   sliding in from off-screen has no real "old page" left underneath it,
+   which is what showed as a black gap. The manual "back" fallback (only
+   ever used without View Transitions support, or prefers-reduced-motion —
+   everything else now rides a real native transition) crossfades instead;
+   see fallbackClassFor in PageTransition.tsx. */
 
 /* Top-level-to-top-level moves (Home/Search/Cart/Account/My Orders/policy
    pages) never slide — there's no "deeper" to imply — just a quick
