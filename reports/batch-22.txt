@@ -1,0 +1,151 @@
+BATCH 22 — Manual Orders + Tracker Check
+==========================================
+(This session resumed after Batch 22 was interrupted by a PC shutdown. Part
+4 — the GA4/Pixel tracker check — was already done and committed before the
+interruption; this session verified it was untouched and finished Parts 1-3.)
+
+1) SUMMARY
+-----------
+Most of Naeem's real orders come in over Facebook/WhatsApp, not the
+website. Admin -> Orders now has a "নতুন অর্ডার" button so he can type those
+in himself — pick where it came from, find or type the customer, add items
+(with an editable price or "ফ্রি" for family/gifts), set delivery and
+payment, and save. Once saved, it's a real order: same invoice, same
+Steadfast button, same status flow as a website order. Every price and
+stock check happens in the database, never trusted from the browser.
+
+2) HOW TO ENTER AN ORDER (for Naeem)
+---------------------------------------
+1. Admin -> Orders -> "নতুন অর্ডার".
+2. Tap where the order came from (Facebook/WhatsApp/Phone/Shop/Family/Other).
+3. Type the customer's phone number. If it matches someone before, you'll
+   see a small card offering to fill in their name/address — tap "তথ্য
+   পূরণ করুন" to use it, or "এই অ্যাকাউন্টের সাথে যুক্ত করুন" if you also
+   want to attach this order to their real online account (only do this if
+   you're sure it's really them — see the privacy note below).
+4. Fill in name, address, district/thana (same picker as the website).
+5. Search products by name, tap to add. For each item you can change the
+   price (e.g. ৳1,500 -> ৳700) or tap "ফ্রি" — a reason chip appears
+   (Family/Gift/Free sample/Personal use/Promotion/Other).
+6. Optional: a flat ৳ discount for the whole order, with its own reason.
+7. Pick delivery: Inside Dhaka / Outside Dhaka (fee auto-fills, editable)
+   or "ডেলিভারি নেই (হাতে দেওয়া)" for ৳0 hand delivery.
+8. Pick payment: Cash on Delivery / bKash / Cash paid / বাকি (due).
+9. If hand-delivered and already paid, a toggle appears to mark it
+   Delivered immediately instead of Confirmed.
+10. Check the summary at the bottom, tap Save. If a product doesn't have
+    enough tracked stock, you'll see a warning first — tap Continue anyway
+    if you know you actually have it (stock will show negative in red so
+    you remember to fix the count later).
+
+3) WHAT WAS BUILT, PER PART
+------------------------------
+Part 1 — the form itself: src/components/admin/NewOrderSheet.tsx. Source
+  chips, phone lookup with fill-in suggestions, the same district/thana
+  picker as checkout, product search (by name and by variant, e.g. typing
+  a size), per-line price/ফ্রি editing with reason chips, order discount,
+  delivery zone including hand-delivered, four payment options, a
+  "mark delivered" toggle for the hand-delivered+paid case, admin note, and
+  a live running total before Save.
+
+Part 2 — server-side rules: supabase/migration-028-manual-orders.sql adds
+  admin_create_order(), the only way a manual order is created. It re-reads
+  every product/variant's real price and stock itself (a tampered price
+  from the browser cannot get through), records list price vs sold price
+  per line so the exact discount is always known, and rejects anyone who
+  isn't an admin. Also fixed a real bug this change would otherwise have
+  caused: the Steadfast booking function only ever checked
+  payment_method === 'bkash' to decide whether ৳0 had already been
+  collected — with the new 'cash'/'due' methods, an already-paid manual
+  order shipped via courier would have told Steadfast to collect the full
+  amount again. Fixed in supabase/functions/steadfast/index.ts.
+
+Part 3 — Orders list + invoice: each order row and the detail sheet now
+  show a source badge (Web/FB/WA/Phone/Shop/Family/Other) and a source
+  filter. The invoice (PDF and the on-screen detail) shows a line's real
+  list price and the reason when it was sold for less or free, and the
+  order-level discount's reason. A compact "এই মাসে" card at the top of
+  Orders shows order count, total sales, discount given, value of free
+  items, and a count per source — cancelled orders excluded.
+
+Part 4 — tracker check (done in the earlier session, verified untouched
+  this session): Facebook Pixel already used real standard events
+  (fbq('track', ...) with PageView/ViewContent/AddToCart/InitiateCheckout/
+  Purchase/Search) — nothing to fix. GA4 showing 0 users was Google's own
+  Consent Mode defaulting analytics_storage to 'denied' until a page grants
+  it — src/lib/analytics.ts now grants that default (ad-related consent
+  stays denied; this site never runs Google Ads). Confirmed no duplicate
+  page_views. See the git history for the full write-up of this part.
+
+4) THE PRIVACY RULE, IN PLAIN WORDS
+---------------------------------------
+Phone numbers aren't verified — anyone can type someone else's number by
+mistake or on purpose. So typing a phone number that matches a real
+customer account NEVER automatically attaches the new order to that
+account. It only ever offers to copy their name/address text across (which
+you tap to accept, like autofill). The order only gets attached to a real
+account if you explicitly tap "এই অ্যাকাউন্টের সাথে যুক্ত করুন" for that
+specific match. Most manual orders will have no linked account at all —
+that's normal and expected, not a bug.
+
+5) TRACKER CHECK RESULTS
+----------------------------
+Already summarized in Part 4 above — no changes needed to Pixel; GA4's
+missing hits were a Consent Mode default, now fixed. See the "Batch 22
+Part 4" commit for the full detail (it predates this session).
+
+6) WHAT NAEEM MUST DO
+-------------------------
+A) Run the SQL migration (required — the "নতুন অর্ডার" button will show an
+   error until this is done; nothing else on the site is affected in the
+   meantime, see the note below).
+   1. Supabase dashboard -> SQL Editor.
+   2. Open supabase/migration-028-manual-orders.sql from this project,
+      copy the whole file, paste it in, click Run.
+   3. Safe to re-run if you're ever unsure whether it went through.
+
+B) Deploy the updated Steadfast function (the COD-amount fix from Part 2):
+   `supabase functions deploy steadfast` — or ask a future session to do it
+   alongside other deploy work. Nothing breaks if this waits; it only
+   matters once a 'cash'/'due' manual order is shipped via courier.
+
+Important: until you run the migration, "নতুন অর্ডার" will show "could not
+save this order" if tapped — but every OTHER order screen (My Orders,
+Admin -> Orders list, invoices, Steadfast) keeps working exactly as
+before. The order-reading code falls back to the old columns so this batch
+cannot silently break anything currently working while it waits for the
+SQL — confirmed by re-running the full checkout test end-to-end against
+the live database before and after that fallback was added.
+
+SQL NAEEM MUST RUN IN SUPABASE
+--------------------------------
+File: supabase/migration-028-manual-orders.sql — copy the whole file and
+run it in the SQL Editor. In plain terms it: lets an order have no online
+account attached (for manual orders with none linked), records where each
+order came from, adds a hand-delivery option and two more payment choices
+(cash paid / বাকি), and records each item's real price alongside what
+Naeem actually charged. It only adds new columns and one new function — it
+does not touch any existing order, product, or customer data.
+
+7) WHAT COULD NOT BE TESTED
+-------------------------------
+- Clicking through the "নতুন অর্ডার" form itself, phone lookup/account
+  linking, and the Steadfast COD fix for 'cash'/'due' — all need a real
+  admin login, unavailable in this environment (same limitation as every
+  earlier batch). Read through admin_create_order() line by line for the
+  same bugs Batch 18's review caught in place_order() (none found).
+- Calling admin_create_order() live as a non-admin — the migration hasn't
+  been run yet, so the function doesn't exist at all (confirmed live:
+  calling it returns "Could not find the function admin_create_order").
+  Once run, is_admin() is the first check in the function body, before it
+  even looks at the items array — five ready-to-run verification queries,
+  including one for the non-admin case, are at the bottom of the migration.
+
+BUILD & TEST STATUS
+-----------------------
+npm run build   -> PASSED, zero errors
+npx vitest run  -> PASSED (36/36 — 19 new tests for the price/discount/
+                    total and monthly-summary calculation logic)
+npm run test:e2e -> PASSED (15/15)
+
+Branch: feature/batch-22-manual-orders (not pushed to main)
