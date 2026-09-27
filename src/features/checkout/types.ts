@@ -4,7 +4,7 @@
 // PromoCode itself is defined in the global types module (the admin Promo
 // Codes panel manages the same rows outside the checkout flow) and is just
 // re-exported here so this file stays the one-stop import for the feature.
-import type { OrderPaymentMethod, Product, PromoCode } from '../../types';
+import type { DiscountReason, OrderPaymentMethod, Product, PromoCode } from '../../types';
 
 export type { OrderPaymentMethod };
 
@@ -24,9 +24,22 @@ export interface CartItem {
    *  shown — the variant may have been deleted since, so this is resolved
    *  live from the current variant list, not stored with the cart line. */
   variantImage: string | null;
+  /** The item's real price at order time, if different from unitPrice
+   *  (Batch 22) — undefined for a real website cart line, where the two are
+   *  always equal; set only when OrderDetailSheet's toOrderSnapshot()
+   *  reshapes a manual order's line for the invoice PDF. */
+  listPrice?: number;
+  /** Why unitPrice is below listPrice (Batch 22) — invoice-only, same rule. */
+  discountReason?: DiscountReason | null;
 }
 
-export type DeliveryZoneId = 'inside_dhaka' | 'outside_dhaka';
+// 'hand_delivered' (Batch 22) only ever appears on a manual order Naeem
+// typed in himself ("ডেলিভারি নেই — হাতে দেওয়া") — website checkout only
+// ever uses the other two; included here so a saved Order's real
+// delivery_zone (including a manual one) can round-trip through
+// OrderSnapshot/DeliveryZoneOption (see OrderDetailSheet's toOrderSnapshot)
+// without a separate parallel type.
+export type DeliveryZoneId = 'inside_dhaka' | 'outside_dhaka' | 'hand_delivered';
 
 export interface DeliveryZoneOption {
   id: DeliveryZoneId;
@@ -82,4 +95,7 @@ export interface OrderSnapshot {
   paymentMethod: OrderPaymentMethod;
   bkashTrxId: string | null;
   placedAt: string;
+  /** Why the order-level discount was given (Batch 22) — undefined/null for
+   *  a real checkout order (its discount, if any, is always a promo code). */
+  orderDiscountReason?: DiscountReason | null;
 }
