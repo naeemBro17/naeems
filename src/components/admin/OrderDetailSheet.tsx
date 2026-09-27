@@ -17,9 +17,11 @@ import { copyToClipboard } from '../../lib/clipboard';
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
+  PAYMENT_METHOD_LABELS,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
 } from '../../lib/orderStatus';
+import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../lib/manualOrders';
 import type { OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
 
@@ -56,10 +58,17 @@ function toOrderSnapshot(order: OrderWithDetails) {
     variantId: item.variant_id,
     variantLabel: item.variant_label,
     variantImage: null,
+    listPrice: item.list_price,
+    discountReason: item.reason,
   }));
   const zone: DeliveryZoneOption = {
     id: order.delivery_zone,
-    label: order.delivery_zone === 'inside_dhaka' ? 'Inside Dhaka' : 'Outside Dhaka',
+    label:
+      order.delivery_zone === 'inside_dhaka'
+        ? 'Inside Dhaka'
+        : order.delivery_zone === 'outside_dhaka'
+          ? 'Outside Dhaka'
+          : 'হাতে দেওয়া (Hand delivered)',
     fee: order.delivery_fee,
   };
   const promo: AppliedPromo | null = order.promo_code
@@ -90,6 +99,7 @@ function toOrderSnapshot(order: OrderWithDetails) {
     paymentMethod: order.payment_method,
     bkashTrxId: order.bkash_trx_id,
     placedAt: order.created_at,
+    orderDiscountReason: order.discount_reason,
   };
 }
 
@@ -259,15 +269,16 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   };
 
   const nextStatus = order ? NEXT_STATUS[order.status] : undefined;
-  // Mirrors the Edge Function's own COD logic (Batch 20) so the confirm
-  // dialog shows exactly what will be sent — null means "blocked", the
-  // bKash payment hasn't been verified yet.
+  // Mirrors the Edge Function's own COD logic (Batch 20, fixed for Batch
+  // 22's 'cash'/'due' methods) so the confirm dialog shows exactly what
+  // will be sent — null means "blocked", the bKash payment hasn't been
+  // verified yet.
   const steadfastCodAmount = order
-    ? order.payment_method === 'bkash'
-      ? order.payment_status === 'paid'
+    ? order.payment_method === 'bkash' && order.payment_status !== 'paid'
+      ? null
+      : order.payment_status === 'paid'
         ? 0
-        : null
-      : order.total
+        : order.total
     : null;
 
   return (
@@ -282,6 +293,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             <span className={`status-badge status-badge--${ORDER_STATUS_TONE[order.status]}`}>
               {ORDER_STATUS_LABELS[order.status]}
             </span>
+            <span className="status-badge status-badge--neutral">{ORDER_SOURCE_LABELS[order.source]}</span>
             <span className="order-detail__date">
               {new Date(order.created_at).toLocaleString('en-GB', {
                 day: 'numeric',
@@ -327,6 +339,12 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       <span className="checkout-summary-card__item-variant">{item.variant_label}</span>
                     )}
                     <span className="checkout-summary-card__item-qty">&times;{item.quantity}</span>
+                    {item.list_price !== item.unit_price && (
+                      <span className="checkout-summary-card__item-variant">
+                        {item.unit_price === 0 ? 'ফ্রি' : `List ${formatTaka(item.list_price)}`}
+                        {item.reason && ` — ${DISCOUNT_REASON_LABELS[item.reason]}`}
+                      </span>
+                    )}
                   </span>
                   <span className="checkout-summary-card__item-price">{formatTaka(item.line_total)}</span>
                 </li>
@@ -374,7 +392,10 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             </div>
             {order.discount > 0 && (
               <div className="checkout-summary-card__row">
-                <span>Discount</span>
+                <span>
+                  Discount
+                  {order.discount_reason && ` (${DISCOUNT_REASON_LABELS[order.discount_reason]})`}
+                </span>
                 <span>-{formatTaka(order.discount)}</span>
               </div>
             )}
@@ -397,7 +418,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
           <section className="order-detail__section">
             <h2 className="order-detail__section-title">Payment</h2>
             <div className="order-detail__payment-row">
-              <span>{order.payment_method === 'bkash' ? 'bKash' : 'Cash on Delivery'}</span>
+              <span>{PAYMENT_METHOD_LABELS[order.payment_method]}</span>
               <span className={`status-badge status-badge--${PAYMENT_STATUS_TONE[order.payment_status]}`}>
                 {PAYMENT_STATUS_LABELS[order.payment_status]}
               </span>

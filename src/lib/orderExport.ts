@@ -1,4 +1,5 @@
 import type { OrderSnapshot } from '../features/checkout/types';
+import { DISCOUNT_REASON_LABELS } from './manualOrders';
 
 /**
  * jsPDF's built-in fonts only cover WinAnsi, not the Bengali Taka sign (৳),
@@ -58,6 +59,17 @@ export async function buildOrderPdf(order: OrderSnapshot) {
     writeLine(
       `${item.product.name}${variant}  x${item.quantity}  ${formatTakaAscii(item.unitPrice * item.quantity)}`
     );
+    // Batch 22: a manual order line sold below (or at) list price shows the
+    // real list price and why — undefined listPrice (every website order)
+    // or an unchanged price prints nothing extra here.
+    if (item.listPrice !== undefined && item.listPrice !== item.unitPrice) {
+      const reasonLabel = item.discountReason ? DISCOUNT_REASON_LABELS[item.discountReason] : null;
+      const note =
+        item.unitPrice === 0
+          ? `FREE — list price ${formatTakaAscii(item.listPrice)}`
+          : `List price ${formatTakaAscii(item.listPrice)}, discount ${formatTakaAscii(item.listPrice - item.unitPrice)}`;
+      writeLine(`  ${note}${reasonLabel ? ` (${reasonLabel})` : ''}`, false, 9);
+    }
   }
   y += lineHeight * 0.5;
 
@@ -65,6 +77,9 @@ export async function buildOrderPdf(order: OrderSnapshot) {
   writeLine(`Subtotal: ${formatTakaAscii(order.subtotal)}`);
   if (order.promo) {
     writeLine(`Promo (${order.promo.code}): -${formatTakaAscii(order.discount)}`);
+  } else if (order.discount > 0) {
+    const reasonLabel = order.orderDiscountReason ? DISCOUNT_REASON_LABELS[order.orderDiscountReason] : null;
+    writeLine(`Discount${reasonLabel ? ` (${reasonLabel})` : ''}: -${formatTakaAscii(order.discount)}`);
   }
   writeLine(`Total: ${formatTakaAscii(order.total)}`, true);
   y += lineHeight * 0.5;

@@ -8036,6 +8036,40 @@ html.vt-slide-back::view-transition-new(root) {
   flex: 1;
 }
 
+/* ---------- Admin: monthly order summary card (Batch 22) ---------- */
+
+.order-monthly-summary {
+  width: 100%;
+}
+
+.order-monthly-summary__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+
+/* ---------- Admin: manual order form (Batch 22) ---------- */
+
+.manual-order-line__price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.manual-order-line__list-price {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+.manual-order-line__price-input {
+  width: 90px;
+  padding: 4px 8px;
+  height: 32px;
+}
+
 /* ---------- Admin: Orders tab list ---------- */
 
 .admin-order-row {

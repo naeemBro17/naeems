@@ -440,33 +440,68 @@ export interface PromoCodeFormData {
    Orders (Batch 18)
    ============================================================ */
 
-export type OrderPaymentMethod = 'cod' | 'bkash';
+export type OrderPaymentMethod = 'cod' | 'bkash' | 'cash' | 'due';
 export type OrderPaymentStatus = 'unpaid' | 'pending_verification' | 'paid';
 export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 
+/** Where an order came from. 'web' is the only source the checkout flow
+ *  itself ever writes; every other value is chosen by hand in the admin
+ *  "নতুন অর্ডার" form (Batch 22) for an order Naeem typed in himself. */
+export type OrderSource = 'web' | 'facebook' | 'whatsapp' | 'phone' | 'shop' | 'family' | 'other';
+
+/** Why a line's price was cut below its real (list) price, or an order-level
+ *  discount was given — chosen from a fixed chip list in the manual order
+ *  form (Batch 22); never freeform, so the monthly summary can be trusted. */
+export type DiscountReason = 'family' | 'gift' | 'free_sample' | 'personal_use' | 'promotion' | 'other';
+
 /** One saved order. Address/customer fields are a snapshot taken at order
- *  time (place_order()) — a later profile edit never changes a past order. */
+ *  time (place_order() / admin_create_order()) — a later profile edit never
+ *  changes a past order. */
 export interface Order {
   id: string;
   order_number: string;
-  customer_id: string;
+  /** The online account this order is attached to, if any. NULL for most
+   *  manual orders (Batch 22) — see CLAUDE.md's privacy rule: a manual
+   *  order is only ever linked to an account Naeem explicitly picked
+   *  himself, never inferred just because a typed phone number matched
+   *  one, since phone numbers aren't verified. Always set for a real
+   *  website order (place_order() requires a signed-in customer). */
+  customer_id: string | null;
   customer_name: string;
   customer_phone: string;
   division: string;
   district: string;
   thana: string;
   address_line: string;
-  delivery_zone: 'inside_dhaka' | 'outside_dhaka';
+  /** 'hand_delivered' (Batch 22) is admin-only — "ডেলিভারি নেই (হাতে দেওয়া)",
+   *  always ৳0, website checkout never offers it. */
+  delivery_zone: 'inside_dhaka' | 'outside_dhaka' | 'hand_delivered';
   delivery_fee: number;
   subtotal: number;
+  /** Flat ৳ discount off the whole order — a promo code's discount for a
+   *  website order, or a manual flat discount Naeem typed in (Batch 22),
+   *  never both on the same order. */
   discount: number;
+  /** Why the order-level discount was given (Batch 22) — null for a promo
+   *  code discount or when there's no order-level discount at all. */
+  discount_reason: DiscountReason | null;
+  discount_note: string | null;
   promo_code: string | null;
+  /** Sum of every line's real list price × quantity — what this order would
+   *  have cost at full price with no discounts (Batch 22). Equals subtotal
+   *  for every order with no discounted/free lines, which is every website
+   *  order and most manual ones. */
+  list_value: number;
+  /** Sum of list price × quantity for lines given away entirely free
+   *  (Batch 22) — 0 unless a manual order line was marked "ফ্রি". */
+  free_value: number;
   total: number;
   payment_method: OrderPaymentMethod;
   bkash_trx_id: string | null;
   bkash_sender: string | null;
   payment_status: OrderPaymentStatus;
   status: OrderStatus;
+  source: OrderSource;
   tracking_number: string | null;
   customer_note: string | null;
   admin_note: string | null;
@@ -498,9 +533,15 @@ export interface OrderItem {
   product_name: string;
   variant_label: string | null;
   image_url: string | null;
+  /** The product/variant's real price at order time (Batch 22) — equal to
+   *  unit_price unless Naeem sold this line below (or above) its list price. */
+  list_price: number;
   unit_price: number;
   quantity: number;
   line_total: number;
+  /** Why unit_price is below list_price (Batch 22) — null when they're equal. */
+  reason: DiscountReason | null;
+  reason_note: string | null;
 }
 
 /** One row of an order's status timeline. */

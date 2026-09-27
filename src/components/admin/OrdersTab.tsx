@@ -1,13 +1,22 @@
 import { useMemo, useState } from 'react';
 import { formatTaka } from '../../lib/format';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../lib/orderStatus';
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_TONE,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_TONE,
+} from '../../lib/orderStatus';
+import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
 import { adminDeleteCancelledOrders, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
+import { NewOrderSheet } from './NewOrderSheet';
 import { useToast } from '../../hooks/useToast';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { OrderDetailSheet } from './OrderDetailSheet';
 import type { Order, OrderStatus } from '../../types';
 
 type StatusFilter = OrderStatus | 'all';
+type SourceFilter = Order['source'] | 'all';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -16,6 +25,17 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'shipped', label: 'Shipped' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
+];
+
+const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
+  { value: 'all', label: 'All sources' },
+  { value: 'web', label: ORDER_SOURCE_LABELS.web },
+  { value: 'facebook', label: ORDER_SOURCE_LABELS.facebook },
+  { value: 'whatsapp', label: ORDER_SOURCE_LABELS.whatsapp },
+  { value: 'phone', label: ORDER_SOURCE_LABELS.phone },
+  { value: 'shop', label: ORDER_SOURCE_LABELS.shop },
+  { value: 'family', label: ORDER_SOURCE_LABELS.family },
+  { value: 'other', label: ORDER_SOURCE_LABELS.other },
 ];
 
 interface OrdersTabProps {
@@ -32,23 +52,28 @@ interface OrdersTabProps {
 export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) {
   const { showToast } = useToast();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [search, setSearch] = useState('');
   const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
+
+  const monthlySummary = useMemo(() => computeMonthlySummary(orders), [orders]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((o) => {
       if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+      if (sourceFilter !== 'all' && o.source !== sourceFilter) return false;
       if (term === '') return true;
       return (
         o.order_number.toLowerCase().includes(term) ||
         o.customer_phone.toLowerCase().includes(term)
       );
     });
-  }, [orders, statusFilter, search]);
+  }, [orders, statusFilter, sourceFilter, search]);
 
   // Batch 20: every shipped order that's actually been booked with
   // Steadfast (a shipped order without a consignment id was marked shipped
@@ -119,6 +144,13 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     <section aria-label="Orders">
       <header className="admin-section-header">
         <h2 className="admin-section-title">Orders</h2>
+        <button
+          type="button"
+          className="button button--primary button--small"
+          onClick={() => setIsNewOrderOpen(true)}
+        >
+          নতুন অর্ডার
+        </button>
         {selectedForDelete.size > 0 && (
           <button
             type="button"
@@ -144,6 +176,37 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         )}
       </header>
 
+      <div className="admin-panel order-monthly-summary">
+        <span className="admin-panel__title">এই মাসে</span>
+        <div className="checkout-summary-card__row">
+          <span>Orders</span>
+          <span>{monthlySummary.orderCount}</span>
+        </div>
+        <div className="checkout-summary-card__row">
+          <span>Total sales</span>
+          <span>{formatTaka(monthlySummary.totalSales)}</span>
+        </div>
+        <div className="checkout-summary-card__row">
+          <span>Discount given</span>
+          <span>{formatTaka(monthlySummary.totalDiscount)}</span>
+        </div>
+        <div className="checkout-summary-card__row">
+          <span>Free items (list value)</span>
+          <span>{formatTaka(monthlySummary.freeValue)}</span>
+        </div>
+        <div className="order-monthly-summary__sources">
+          {SOURCE_OPTIONS.filter((opt) => opt.value !== 'all').map((opt) => {
+            const count = monthlySummary.bySource[opt.value as Order['source']];
+            if (count === 0) return null;
+            return (
+              <span key={opt.value} className="status-badge status-badge--neutral">
+                {opt.label}: {count}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="admin-filter-bar">
         <input
           type="search"
@@ -160,6 +223,18 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           aria-label="Filter by status"
         >
           {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="form-input form-select"
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+          aria-label="Filter by source"
+        >
+          {SOURCE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -189,7 +264,12 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                 onClick={() => setOpenOrderId(order.id)}
               >
                 <div className="admin-order-row__main">
-                  <span className="admin-order-row__number">{order.order_number}</span>
+                  <span className="admin-order-row__number">
+                    {order.order_number}
+                    <span className="status-badge status-badge--neutral" style={{ marginLeft: 6 }}>
+                      {ORDER_SOURCE_LABELS[order.source]}
+                    </span>
+                  </span>
                   <span className="admin-order-row__customer">
                     {order.customer_name} &middot; {order.customer_phone}
                   </span>
@@ -208,7 +288,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                     {ORDER_STATUS_LABELS[order.status]}
                   </span>
                   <span className={`status-badge status-badge--${PAYMENT_STATUS_TONE[order.payment_status]}`}>
-                    {order.payment_method === 'bkash' ? 'bKash' : 'COD'} · {PAYMENT_STATUS_LABELS[order.payment_status]}
+                    {PAYMENT_METHOD_LABELS[order.payment_method]} · {PAYMENT_STATUS_LABELS[order.payment_status]}
                   </span>
                   {steadfastNeedsAttention(order.steadfast_status) && (
                     <span className="status-badge status-badge--danger">Steadfast: needs attention</span>
@@ -221,6 +301,16 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       )}
 
       <OrderDetailSheet orderId={openOrderId} onClose={() => setOpenOrderId(null)} onChanged={onReload} />
+
+      <NewOrderSheet
+        isOpen={isNewOrderOpen}
+        onClose={() => setIsNewOrderOpen(false)}
+        onCreated={async (orderId) => {
+          setIsNewOrderOpen(false);
+          await onReload();
+          setOpenOrderId(orderId);
+        }}
+      />
 
       <ConfirmDialog
         isOpen={isConfirmingDelete}

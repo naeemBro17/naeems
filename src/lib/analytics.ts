@@ -70,6 +70,20 @@ function initGa(measurementId: string): void {
   window.gtag = (...args: unknown[]) => {
     window.dataLayer?.push(args);
   };
+  // Newer gtag.js builds default analytics_storage to 'denied' (Google's
+  // Consent Mode) until a page explicitly grants it — without this, the
+  // script loads and even runs (dataLayer fills up, gtm.load/gtm.dom fire)
+  // but never actually sends a hit to Google, which is exactly what looked
+  // like "Realtime shows 0 users right after saving the ID" (reports/
+  // batch-22.txt Part 4). This site never runs Google Ads, so ad-related
+  // consent stays denied — only analytics_storage (needed for GA4 itself to
+  // work at all) is granted.
+  window.gtag('consent', 'default', {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'granted',
+  });
   window.gtag('js', new Date());
   // send_page_view: false — PageView is sent manually on every route change
   // (see useAnalyticsPageviews) so it's excluded from /admin and
