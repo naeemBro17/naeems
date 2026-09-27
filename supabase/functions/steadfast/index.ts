@@ -74,7 +74,7 @@ interface OrderRow {
   thana: string;
   address_line: string;
   total: number;
-  payment_method: 'cod' | 'bkash';
+  payment_method: 'cod' | 'bkash' | 'cash' | 'due';
   payment_status: 'unpaid' | 'pending_verification' | 'paid';
   status: string;
   customer_note: string | null;
@@ -132,18 +132,18 @@ async function handleCreate(
     return json({ ok: false, error: 'Only a confirmed order can be booked with Steadfast.' });
   }
 
-  let codAmount: number;
-  if (order.payment_method === 'bkash') {
-    if (order.payment_status !== 'paid') {
-      return json({
-        ok: false,
-        error: 'This bKash payment has not been verified yet — mark it as paid before booking with Steadfast.',
-      });
-    }
-    codAmount = 0;
-  } else {
-    codAmount = order.total;
+  // Batch 22: 'cash' and 'due' (manual orders only) join 'cod' here — the
+  // real question is never the payment METHOD, it's whether payment_status
+  // is already 'paid' (nothing left to collect on delivery). bKash keeps
+  // its own extra guard: 'pending_verification' must never fall through to
+  // "already paid" just because it isn't 'unpaid' either.
+  if (order.payment_method === 'bkash' && order.payment_status !== 'paid') {
+    return json({
+      ok: false,
+      error: 'This bKash payment has not been verified yet — mark it as paid before booking with Steadfast.',
+    });
   }
+  const codAmount = order.payment_status === 'paid' ? 0 : order.total;
 
   if (codAmount > MAX_COD_AMOUNT) {
     return json({

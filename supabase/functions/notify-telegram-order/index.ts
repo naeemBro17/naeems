@@ -34,10 +34,16 @@ interface OrderRow {
   thana: string;
   address_line: string;
   total: number;
-  payment_method: 'cod' | 'bkash';
+  payment_method: 'cod' | 'bkash' | 'cash' | 'due';
   bkash_trx_id: string | null;
   status: string;
   steadfast_status: string | null;
+  /** Batch 22: 'web' for a real checkout order; anything else means Naeem
+   *  typed it into the admin panel himself (Facebook/WhatsApp/phone/shop/
+   *  family/other) — he already knows about it, so it must never trigger
+   *  the "new order" alert below. Status-change alerts (cancellation,
+   *  Steadfast attention) still fire for these exactly as for any order. */
+  source: string;
 }
 
 /** Mirrors needsAttention() in functions/_shared/steadfast.ts — kept as a
@@ -173,7 +179,13 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ skipped: 'e2e test order' }), { status: 200 });
     }
 
-    const isNewOrder = payload.type === 'INSERT';
+    // Batch 22: an order Naeem typed in himself (any source other than
+    // 'web') must never send the "new order" alert — he already knows, he
+    // just made it. It still gets the same order_number/invoice/Steadfast
+    // flow as any other order, and its later status changes still alert
+    // normally (isNewCancellation / isNewSteadfastAttention below don't
+    // check source).
+    const isNewOrder = payload.type === 'INSERT' && order.source === 'web';
     const isNewCancellation =
       payload.type === 'UPDATE' &&
       order.status === 'cancelled' &&

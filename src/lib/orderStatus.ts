@@ -1,4 +1,14 @@
-import type { Order, OrderPaymentStatus, OrderStatus } from '../types';
+import type { Order, OrderPaymentMethod, OrderPaymentStatus, OrderStatus } from '../types';
+
+/** Plain-language labels for every payment method — website checkout only
+ *  ever produces 'cod'/'bkash'; 'cash' and 'due' (Batch 22) only ever come
+ *  from a manual order Naeem typed in himself. */
+export const PAYMENT_METHOD_LABELS: Record<OrderPaymentMethod, string> = {
+  cod: 'COD',
+  bkash: 'bKash',
+  cash: 'Cash paid',
+  due: 'বাকি (due)',
+};
 
 /** Plain-language labels — shared by the customer "My Orders" pages and the
  *  admin Orders tab so a status never reads differently in two places. */

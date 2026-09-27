@@ -1,14 +1,98 @@
 import { supabase } from './supabase';
 import type { CartItem, DeliveryAddress, DeliveryZoneId } from '../features/checkout/types';
-import type { Order, OrderItem, OrderPaymentMethod, OrderStatusHistoryRow, OrderWithDetails } from '../types';
+import type {
+  DiscountReason,
+  Order,
+  OrderItem,
+  OrderPaymentMethod,
+  OrderSource,
+  OrderStatusHistoryRow,
+  OrderWithDetails,
+} from '../types';
+import { parseStockWarning } from './manualOrders';
+import type { StockWarning } from './manualOrders';
 
 const ORDER_SELECT =
-  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
+  'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
 
 const ORDER_ITEM_SELECT =
+  'id, order_id, product_id, variant_id, product_name, variant_label, image_url, list_price, unit_price, quantity, line_total, reason, reason_note';
+
+// Batch 22 added columns to orders/order_items (migration-028) that Naeem
+// may not have run yet — per CLAUDE.md, a migration file existing is never
+// proof it's live. Postgrest fails a select's ENTIRE query (not just the
+// missing column) when any requested column doesn't exist yet (code
+// '42703'), which would otherwise take down every order screen — including
+// ones that have nothing to do with this batch — the moment this code
+// deploys, until Naeem gets to the SQL Editor. These legacy select strings
+// let every order screen keep working exactly as before in that window;
+// normalizeOrderRow/normalizeOrderItemRow below fill in sensible defaults
+// for the columns that came back missing.
+const ORDER_SELECT_LEGACY =
+  'id, order_number, customer_id, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
+
+const ORDER_ITEM_SELECT_LEGACY =
   'id, order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total';
 
 const ORDER_HISTORY_SELECT = 'id, order_id, old_status, new_status, changed_by, changed_at, note';
+
+/** Postgrest's "column does not exist" code — see the ORDER_SELECT_LEGACY
+ *  comment above for why this triggers a same-shape retry instead of an
+ *  error screen. */
+const UNDEFINED_COLUMN = '42703';
+
+function normalizeOrderRow(row: Record<string, unknown>): Order {
+  const subtotal = row.subtotal as number;
+  return {
+    ...(row as unknown as Order),
+    source: (row.source as OrderSource | undefined) ?? 'web',
+    discount_reason: (row.discount_reason as DiscountReason | null | undefined) ?? null,
+    discount_note: (row.discount_note as string | null | undefined) ?? null,
+    list_value: (row.list_value as number | undefined) ?? subtotal,
+    free_value: (row.free_value as number | undefined) ?? 0,
+  };
+}
+
+function normalizeOrderItemRow(row: Record<string, unknown>): OrderItem {
+  const unitPrice = row.unit_price as number;
+  return {
+    ...(row as unknown as OrderItem),
+    list_price: (row.list_price as number | undefined) ?? unitPrice,
+    reason: (row.reason as DiscountReason | null | undefined) ?? null,
+    reason_note: (row.reason_note as string | null | undefined) ?? null,
+  };
+}
+
+type OrdersQueryResult = { data: Record<string, unknown>[] | null; error: { code?: string; message: string } | null };
+
+async function selectOrdersList(): Promise<OrdersQueryResult> {
+  const res = await supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
+  if (res.error?.code === UNDEFINED_COLUMN) {
+    return supabase.from('orders').select(ORDER_SELECT_LEGACY).order('created_at', { ascending: false });
+  }
+  return res;
+}
+
+type OrderQueryResult = {
+  data: Record<string, unknown> | null;
+  error: { code?: string; message: string } | null;
+};
+
+async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const res = await supabase.from('orders').select(ORDER_SELECT).eq('id', orderId).maybeSingle();
+  if (res.error?.code === UNDEFINED_COLUMN) {
+    return supabase.from('orders').select(ORDER_SELECT_LEGACY).eq('id', orderId).maybeSingle();
+  }
+  return res;
+}
+
+async function selectOrderItems(orderId: string): Promise<OrdersQueryResult> {
+  const res = await supabase.from('order_items').select(ORDER_ITEM_SELECT).eq('order_id', orderId);
+  if (res.error?.code === UNDEFINED_COLUMN) {
+    return supabase.from('order_items').select(ORDER_ITEM_SELECT_LEGACY).eq('order_id', orderId);
+  }
+  return res;
+}
 
 export interface PlaceOrderInput {
   items: CartItem[];
@@ -88,23 +172,20 @@ export async function cancelOrder(orderId: string, note?: string): Promise<{ err
 /** The signed-in customer's own orders, newest first — list view only, no
  *  items/history (see fetchOrderDetail for a single order's full detail). */
 export async function fetchMyOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(ORDER_SELECT)
-    .order('created_at', { ascending: false });
+  const { data, error } = await selectOrdersList();
   if (error) {
     console.error('fetchMyOrders failed:', error.message);
     return [];
   }
-  return (data ?? []) as Order[];
+  return (data ?? []).map(normalizeOrderRow);
 }
 
 /** One order with its items and status timeline — RLS already limits this
  *  to the caller's own order (or any order, for an admin session). */
 export async function fetchOrderDetail(orderId: string): Promise<OrderWithDetails | null> {
   const [orderRes, itemsRes, historyRes] = await Promise.all([
-    supabase.from('orders').select(ORDER_SELECT).eq('id', orderId).maybeSingle(),
-    supabase.from('order_items').select(ORDER_ITEM_SELECT).eq('order_id', orderId),
+    selectOrderById(orderId),
+    selectOrderItems(orderId),
     supabase
       .from('order_status_history')
       .select(ORDER_HISTORY_SELECT)
@@ -115,23 +196,20 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderWithDetail
   if (orderRes.error || !orderRes.data) return null;
 
   return {
-    ...(orderRes.data as Order),
-    items: (itemsRes.data ?? []) as OrderItem[],
+    ...normalizeOrderRow(orderRes.data),
+    items: (itemsRes.data ?? []).map(normalizeOrderItemRow),
     history: (historyRes.data ?? []) as OrderStatusHistoryRow[],
   };
 }
 
 /** Admin Orders tab: every order, newest first (RLS: admin only). */
 export async function fetchAllOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(ORDER_SELECT)
-    .order('created_at', { ascending: false });
+  const { data, error } = await selectOrdersList();
   if (error) {
     console.error('fetchAllOrders failed:', error.message);
     return [];
   }
-  return (data ?? []) as Order[];
+  return (data ?? []).map(normalizeOrderRow);
 }
 
 /** Admin: change an order's status, always leaving a history row — see
@@ -312,4 +390,182 @@ export async function adminUpdateOrder(
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', orderId);
   return { error: error?.message ?? null };
+}
+
+/* ============================================================
+   Manual orders (Batch 22) — "নতুন অর্ডার" in Admin -> Orders
+   ============================================================ */
+
+export interface ManualOrderItemInput {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  /** Null = charge the product/variant's real current price (no discount). */
+  soldPrice: number | null;
+  reason: DiscountReason | null;
+  reasonNote: string | null;
+}
+
+export interface AdminCreateOrderInput {
+  source: OrderSource;
+  items: ManualOrderItemInput[];
+  fullName: string;
+  phone: string;
+  division: string;
+  district: string;
+  thana: string;
+  addressLine: string;
+  deliveryZone: 'inside_dhaka' | 'outside_dhaka' | 'hand_delivered';
+  deliveryFee: number;
+  orderDiscount: number;
+  discountReason: DiscountReason | null;
+  discountNote: string | null;
+  paymentMethod: OrderPaymentMethod;
+  bkashTrxId?: string | null;
+  bkashSender?: string | null;
+  /** Set only when Naeem explicitly picked an existing online account —
+   *  never inferred from a matching phone number. See CLAUDE.md's privacy
+   *  rule and migration-028's header comment. */
+  linkedCustomerId?: string | null;
+  markDelivered?: boolean;
+  adminNote?: string | null;
+  /** Resubmit with this true after the admin sees a stock warning and
+   *  chooses to continue anyway — see StockWarning / parseStockWarning. */
+  allowNegativeStock?: boolean;
+}
+
+export interface AdminCreateOrderResult {
+  orderId: string | null;
+  orderNumber: string | null;
+  error: string | null;
+  /** Populated only when the database rejected the order over insufficient
+   *  tracked stock — resubmit the same input with allowNegativeStock: true
+   *  to go ahead anyway. */
+  stockWarnings: StockWarning[] | null;
+}
+
+/** The ONLY way a manual order is created — see admin_create_order()
+ *  (migration-028). Every price/stock check re-reads the database itself;
+ *  this just shapes the form's state into the plain arguments the function
+ *  trusts. Rejected outright for a non-admin session. */
+export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<AdminCreateOrderResult> {
+  const items = input.items.map((item) => ({
+    product_id: item.productId,
+    variant_id: item.variantId,
+    quantity: item.quantity,
+    sold_price: item.soldPrice,
+    reason: item.reason,
+    reason_note: item.reasonNote,
+  }));
+
+  const { data, error } = await supabase.rpc('admin_create_order', {
+    p_source: input.source,
+    p_items: items,
+    p_full_name: input.fullName,
+    p_phone: input.phone,
+    p_division: input.division,
+    p_district: input.district,
+    p_thana: input.thana,
+    p_address_line: input.addressLine,
+    p_delivery_zone: input.deliveryZone,
+    p_delivery_fee: input.deliveryFee,
+    p_order_discount: input.orderDiscount,
+    p_discount_reason: input.discountReason,
+    p_discount_note: input.discountNote,
+    p_payment_method: input.paymentMethod,
+    p_bkash_trx_id: input.bkashTrxId ?? null,
+    p_bkash_sender: input.bkashSender ?? null,
+    p_linked_customer_id: input.linkedCustomerId ?? null,
+    p_mark_delivered: input.markDelivered ?? false,
+    p_admin_note: input.adminNote ?? null,
+    p_allow_negative_stock: input.allowNegativeStock ?? false,
+  });
+
+  if (error) {
+    const stockWarnings = parseStockWarning(error.message);
+    if (stockWarnings) {
+      return { orderId: null, orderNumber: null, error: error.message, stockWarnings };
+    }
+    return { orderId: null, orderNumber: null, error: error.message || 'Could not save this order.', stockWarnings: null };
+  }
+
+  const row = (data as { order_id: string; order_number: string }[] | null)?.[0];
+  if (!row) {
+    return { orderId: null, orderNumber: null, error: 'Could not save this order.', stockWarnings: null };
+  }
+  return { orderId: row.order_id, orderNumber: row.order_number, error: null, stockWarnings: null };
+}
+
+export interface CustomerMatch {
+  /** Present only for a real online account (profiles row) — a past order's
+   *  own snapshot fields never carry an id worth linking to. */
+  profileId: string | null;
+  fullName: string;
+  division: string;
+  district: string;
+  thana: string;
+  addressLine: string;
+}
+
+/** Looks up a typed phone number against past orders and customer profiles,
+ *  so the admin form can OFFER to fill in a name/address Naeem taps to
+ *  accept — never applied automatically. Matching on the last 10 digits
+ *  only, since phone numbers get typed with/without a country code or with
+ *  stray spaces/hyphens across different orders.
+ *
+ *  Privacy rule (CLAUDE.md): this never attaches the new order to
+ *  fromProfile's account by itself — a phone number isn't proof of identity
+ *  (anyone could type someone else's number). Linking to an account only
+ *  ever happens when Naeem explicitly picks it — see AdminCreateOrderInput
+ *  linkedCustomerId. */
+export async function findCustomerMatches(phone: string): Promise<{
+  fromProfile: CustomerMatch | null;
+  fromOrder: CustomerMatch | null;
+}> {
+  const digits = phone.replace(/\D/g, '');
+  const last10 = digits.slice(-10);
+  if (last10.length < 10) {
+    return { fromProfile: null, fromOrder: null };
+  }
+
+  const [profileRes, orderRes] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, role, full_name, division, district, thana, address_line, phone')
+      .eq('role', 'customer')
+      .ilike('phone', `%${last10}`)
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('orders')
+      .select('customer_name, division, district, thana, address_line, customer_phone')
+      .ilike('customer_phone', `%${last10}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const fromProfile = profileRes.data
+    ? {
+        profileId: profileRes.data.id as string,
+        fullName: (profileRes.data.full_name as string | null) ?? '',
+        division: (profileRes.data.division as string | null) ?? '',
+        district: (profileRes.data.district as string | null) ?? '',
+        thana: (profileRes.data.thana as string | null) ?? '',
+        addressLine: (profileRes.data.address_line as string | null) ?? '',
+      }
+    : null;
+
+  const fromOrder = orderRes.data
+    ? {
+        profileId: null,
+        fullName: orderRes.data.customer_name as string,
+        division: orderRes.data.division as string,
+        district: orderRes.data.district as string,
+        thana: orderRes.data.thana as string,
+        addressLine: orderRes.data.address_line as string,
+      }
+    : null;
+
+  return { fromProfile, fromOrder };
 }
