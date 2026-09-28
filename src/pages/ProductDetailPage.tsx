@@ -726,10 +726,11 @@ export function ProductDetailPage() {
     window.scrollTo(0, 0);
   }, [slug]);
 
-  // Lets a real phone back button/gesture (lib/popNavigation.ts — it fires
-  // outside any click handler, so it has no other way to know) reverse-hero
-  // into the exact card this product was opened from, the same way the
-  // in-app <- button already does via BackButton's heroProductId prop.
+  // Lets any back traversal (lib/navigationTransitions.ts — phone back and
+  // the in-app <- button are the same traversal now, see BackButton.tsx)
+  // reverse-hero morph into the exact card this product was opened from; it
+  // fires outside any click handler, so it has no other way to know which
+  // product is currently open.
   useEffect(() => {
     setCurrentDetailProductId(product?.id ?? null);
     return () => setCurrentDetailProductId(null);
@@ -763,7 +764,7 @@ export function ProductDetailPage() {
   return (
     <div className="viewer-shell detail-shell">
       <header className="detail-header">
-        <BackButton heroProductId={product?.id} />
+        <BackButton />
         <div className="detail-header__actions">
           <ThemeToggle />
           {product && <ShareButton product={product} variant="header" />}

@@ -1,0 +1,194 @@
+FIX — ONE transition system (stop the double animations)
+================================================================
+
+SUMMARY
+-------
+Your Android recording (frame-by-frame, after fix/phone-back) showed a
+product page vanishing INSTANTLY on back — no animation at all — and then
+about 0.6 seconds later a second, ghosted animation played on top of Home,
+with the category chip row popping in and pushing cards down at the same
+moment. I found the real cause: two separate transition systems were both
+trying to handle a phone back / in-app back at once, and the browser's
+"before" snapshot for the real one was taken AFTER the page had already
+silently changed underneath it — so the transition looked like a no-op
+followed, ~500ms later, by a delayed safety-timeout catching up. Everything
+below is on branch fix/one-transition-system, ready for your review. Not
+merged to main.
+
+WHAT WAS RUNNING TWICE, AND WHY
+--------------------------------
+Two mechanisms existed for the exact same navigation:
+  1. A hand-rolled CSS class ("slide" or "fade") that PageTransition applied
+     itself, as a fallback for whenever the real system couldn't run.
+  2. A real browser "View Transition" (document.startViewTransition), driven
+     for phone/browser back by listening for the raw `popstate` event and
+     hoping to catch the DOM update in time.
+
+Mechanism 2 had a real, structural bug: `popstate` fires, and separately
+(completely outside our control) React re-renders the new page — usually a
+few milliseconds later, but NOT synchronized with the moment the browser
+actually takes its "before" picture for the transition. In practice, React
+finished updating the screen BEFORE the browser got around to taking that
+picture, so the "before" picture was already the "after" page — the
+transition had nothing left to animate, which is exactly the instant,
+un-animated cut you saw. The transition was then just sitting there waiting
+for a signal that had ALREADY fired and been missed, until a 500ms safety
+timer finally freed it — and only then did the browser take its real "after"
+snapshot and play a (now pointless) crossfade between two nearly-identical
+pictures. Because a few things (like the pinned category-chip bar) hadn't
+fully settled by that later moment, that crossfade visibly showed the chip
+row shifting in — the "pop-in" you saw.
+
+CODE DELETED
+-------------
+- src/lib/popNavigation.ts (the popstate + "hope it arrives in time" system)
+- PageTransition's own CSS slide/fade classes and the timers that cleared
+  them (src/components/shared/PageTransition.tsx cut from ~100 lines to 20)
+- The .page-transition / .page-fade CSS classes and their @keyframes
+  (src/styles/app.css)
+- navigateBackWithHeroReverse (the old click-triggered "back" helper) —
+  every in-app back button (product page, cart, checkout, account, order
+  history, policy pages) now just calls the same plain
+  `useNavigate()`-from-react-router `navigate(-1)`, exactly like a phone
+  back button does, so they share ONE code path by construction rather than
+  by two systems agreeing to behave the same.
+
+THE ONE MECHANISM THAT'S LEFT
+-------------------------------
+New file: src/lib/navigationTransitions.ts. It uses the browser's newer
+"Navigation API" (specifically `navigation.addEventListener('navigate', ...)`
+with `event.intercept()`) instead of `popstate`. The key difference: when you
+call `intercept()`, the browser holds the OLD page on screen and waits for
+your own code to say when the new page is ready — there's no "hope it
+arrives in time" anymore, because nothing else is allowed to change the page
+until we say so. Inside that handler, the actual page swap happens the exact
+same proven way opening a product already worked (React's `flushSync` inside
+`document.startViewTransition`), so the "before" and "after" pictures the
+browser takes are always the real before and after, never a stale one.
+
+This one listener now covers a phone back button, a browser Back/Forward
+button, AND the in-app "<-" button — they all fire the same underlying
+browser event, so there's no way for them to drift apart again.
+
+One deliberate carve-out: opening a sheet/dialog (admin edit panels, confirm
+dialogs) also uses the back button to close itself, via a different,
+existing mechanism (`useModalBackClose`) that doesn't change the page's
+address, just an internal marker. The new listener recognizes "the address
+didn't change" and steps aside for those, so closing a sheet with your
+phone's back button still works exactly as before.
+
+WHICH NAVIGATIONS ANIMATE, AND HOW
+------------------------------------
+  Navigation                          | Animation
+  -------------------------------------|-----------------------------------
+  Open a product (grid/bento/search)  | Hero morph (image grows into place)
+  Back off a product (either back)    | Hero morph in reverse
+  Top-level <-> top-level             | Quick crossfade
+  (Home/Search/Cart/Account/My Orders/policy pages/Expert)
+  Anything else "deeper" (forward)    | Slide in from the right
+  Anything else "deeper" (back)       | Mirror slide, exact reverse
+  Any of the above, reduced-motion ON | Instant, no animation
+  Any of the above, very old browser  | Instant, no animation (documented
+  (no Navigation API — old Safari/Firefox) scope limit, same as the task doc)
+
+Opening and closing always mirror each other now, by construction — there is
+only one place ("classifyTransition") that decides fade vs. slide vs. hero,
+and both the forward tap and the backward traversal read from it.
+
+THE CHIP-ROW "POPS IN AND PUSHES CARDS DOWN" BUG
+----------------------------------------------------
+Traced this all the way down. There is no separate late-loading category
+list — the product/category data is already cached from the first page load
+and does not reset on a Back navigation, so the chip row itself never
+actually mounts late with a different height. What I found instead: the
+FIXED, floating copy of the chip row (the one that appears once you've
+scrolled the real row out of view) computed whether to show itself in a
+plain `useEffect`, which runs one frame AFTER the page is already painted —
+so on a fresh Back arrival that's already scrolled deep, that floating bar
+could flash into view a frame late. Not the dramatic "pushes every card
+down" your recording showed (that was the mistimed-snapshot bug above,
+fully fixed by the one-mechanism rewrite), but a real, related timing gap —
+fixed it too, moving that same check into `useLayoutEffect` (the exact
+pattern already used for scroll-position restoration on the same page), so
+it's decided before the browser ever paints that frame.
+
+PROOF — NEW PERMANENT TESTS
+------------------------------
+New file: e2e/one-transition-system.spec.ts (14 tests), plus new helpers in
+e2e/helpers/frames.ts (assertSingleCleanTransition). For every navigation
+this task listed — grid card, bento card, and search result open + BOTH
+backs; Home <-> Expert both backs; Home <-> Account; Home <-> Cart; Home
+scrolled to the top and scrolled far down — it now:
+  - samples real screenshots from the tap until a full 2 seconds later
+    (comfortably past 1.5s after the page visibly settles) and fails on any
+    near-black frame,
+  - fails if the page changes in two separate bursts (a settle, a quiet
+    gap, then a SECOND change) — the exact shape of the bug your recording
+    caught, which the old tests (checking only for black frames) could not
+    have caught,
+  - checks the real browser Web Animations API to confirm an actual
+    animation played, not an instant hard cut, for every case that should
+    animate,
+  - measures real Cumulative Layout Shift with a PerformanceObserver (the
+    same signal Chrome's own Web Vitals use) and fails on anything a real
+    "chip row pushes cards down" bug would produce.
+
+All 35 e2e tests (2 skip cleanly on today's catalog data, same as before,
+unrelated to this fix) pass, including the pre-existing product-transitions
+and phone-back suites, unmodified and still green.
+
+ONE HONEST CAVEAT ABOUT THE NEW TESTS
+------------------------------------------
+While tuning the layout-shift check I found that Home's bento section (the
+tile that auto-flips between two products, and the one you swipe — both
+already deliberately always-animating, "no JavaScript timer" tiles, exactly
+as designed) can trip a small, real CLS reading purely because heavy
+automated screenshot-taking during a test slows the one browser render
+thread doing that flip, which measurably stretches how far it visibly moves
+between two frames. I proved this by re-running the exact same tap without
+the heavy screenshot polling: the real number dropped from ~0.31 to
+~0.0002. So the layout-shift threshold in the new tests is set well above
+Web Vitals' "good" bar (0.5, versus a target of ~0) specifically to absorb
+that measurement noise, while staying far below what an actual "chip row
+pushes every card down" regression would produce (that moves dozens of
+cards across the whole screen at once, not one badge by a few pixels). This
+is a testing-environment limitation, not a product bug — nothing about your
+real site changed here.
+
+WHAT I FOUND ALONG THE WAY (not fixed, out of scope)
+----------------------------------------------------------
+Nothing new. The ~700KB main JS bundle flagged in earlier batch reports is
+still there and still untouched — not part of this task.
+
+BUILD & TEST RESULTS
+-----------------------
+npm run build     -> PASSED (zero TypeScript errors, zero build errors)
+npx vitest run    -> PASSED (5 test files, 45 tests, all pre-existing/unchanged)
+npm run test:e2e  -> PASSED (35/37 — 2 skip cleanly on today's live catalog
+                     data, unrelated to this fix and unchanged from before;
+                     14 of those 37 are new in e2e/one-transition-system.spec.ts)
+
+WHAT COULDN'T BE TESTED ON A REAL PHONE
+-------------------------------------------
+Same limitation every batch touching this area has had: everything here ran
+against a real Chromium browser at a phone-sized viewport with touch
+enabled (Playwright, Pixel 7 profile), not your actual Android phone. Real
+GPU compositing and a real finger gesture can still behave subtly
+differently than a simulated one — though a real hardware/gesture back does
+fire the exact same underlying "navigate" event this fix listens for, the
+same event `page.goBack()` fires, which is a stronger guarantee than the
+previous branch's `popstate`-based approach could offer (that one had a
+registration-order dependency that a real device's timing could plausibly
+violate in ways a simulated back button can't). A 2-minute real-phone check
+— open a product, tap your phone's back button, watch for any flash or
+double-motion — is worth doing when you have a moment; if you see anything
+odd, screen-record it the same way as last time and it'll be just as easy
+to pin down.
+
+SQL NAEEM MUST RUN IN SUPABASE
+----------------------------------
+None needed. This branch touched no database schema or data.
+
+BRANCH
+--------
+fix/one-transition-system, ready for your review. Not merged to main.

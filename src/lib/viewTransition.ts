@@ -1,10 +1,7 @@
 import { flushSync } from 'react-dom';
 import type { NavigateFunction, NavigateOptions, To } from 'react-router-dom';
 import type { Product } from '../types';
-import {
-  setHeroReverseTarget,
-  setNativeTransitionActive,
-} from './heroTransition';
+import { runExclusiveTransition } from './heroTransition';
 import { classifyTransition } from './routeClassification';
 
 /** view-transition-name shared by a product card's image box and the detail
@@ -28,8 +25,10 @@ export function supportsViewTransitions(): boolean {
  * added to <html> before the transition starts (so ::view-transition-old/new
  * CSS scoped to it applies — see app.css) and removed once it finishes; this
  * is the standard way to give different navigations different transition
- * animations. Also flips the nativeTransitionActive flag PageTransition reads
- * to avoid ever layering its own manual CSS class on top of a native one.
+ * animations. Queued through lib/heroTransition.ts's runExclusiveTransition
+ * so this never starts a second native transition while a back/forward
+ * traversal (lib/navigationTransitions.ts) still has one in flight, or vice
+ * versa — see that queue's own doc comment for the abort bug this avoids.
  */
 function runWithViewTransition(mutate: () => void, htmlClass?: string, onDone?: () => void): void {
   if (!supportsViewTransitions() || prefersReducedMotion()) {
@@ -37,18 +36,27 @@ function runWithViewTransition(mutate: () => void, htmlClass?: string, onDone?: 
     onDone?.();
     return;
   }
-  if (htmlClass) document.documentElement.classList.add(htmlClass);
-  setNativeTransitionActive(true);
-  const transition = document.startViewTransition(() => {
-    flushSync(mutate);
+  runExclusiveTransition(async () => {
+    if (htmlClass) document.documentElement.classList.add(htmlClass);
+    const transition = document.startViewTransition(() => {
+      flushSync(mutate);
+    });
+    // `ready` and `finished` are separate promises — both can reject
+    // independently (e.g. a skipped/aborted transition), and each needs its
+    // own rejection handler or it surfaces as an uncaught error even though
+    // `finished` below is already handled.
+    transition.ready.catch(() => undefined);
+    try {
+      await transition.finished;
+    } catch {
+      // A skipped/aborted transition (e.g. reduced-motion toggled mid-flight,
+      // or the document going hidden) still needs its class cleared below —
+      // nothing more to do here.
+    } finally {
+      if (htmlClass) document.documentElement.classList.remove(htmlClass);
+      onDone?.();
+    }
   });
-  const clear = () => {
-    setNativeTransitionActive(false);
-    if (htmlClass) document.documentElement.classList.remove(htmlClass);
-    onDone?.();
-  };
-  transition.ready.catch(() => undefined);
-  transition.finished.then(clear, clear);
 }
 
 /**
@@ -71,57 +79,33 @@ export function navigateToProductWithHero(
   runWithViewTransition(() => navigate(path, { state: { product } }), 'vt-hero');
 }
 
-/**
- * The reverse of the above: leaving a product's detail page back to wherever
- * it was opened from. Tags `productId` as the "hero reverse target" for the
- * one frame the destination renders after this navigation — see
- * lib/heroTransition.ts for how the grid/bento cards use that to morph the
- * big image back into the exact card it came from, and what happens when no
- * card matches (a plain crossfade, not an error).
- */
-export function navigateBackWithHeroReverse(navigate: NavigateFunction, productId: string): void {
-  if (!supportsViewTransitions() || prefersReducedMotion()) {
-    navigate(-1);
-    return;
-  }
-  setHeroReverseTarget(productId);
-  runWithViewTransition(() => navigate(-1), 'vt-hero', () => setHeroReverseTarget(null));
-}
-
 function resolveToPathname(to: To): string | null {
   if (typeof to === 'string') return to.split('?')[0].split('#')[0];
   return to.pathname ?? null;
 }
 
 /**
- * Generic replacement for a plain `navigate(to)` / `navigate(-1)` call, used
- * by useAppNavigate (hooks/useAppNavigate.ts) so every in-app-triggered
- * navigation — not just the product hero case — gets the same "no flash,
- * no black frame" native crossfade/slide instead of the manual CSS classes
- * PageTransition falls back to for a navigation it never got to wrap (a real
- * phone back-gesture or browser Back button, which fires outside any of our
- * own click handlers — see reports/batch-21.txt Part 1 for why that one case
- * stays a documented fallback rather than something this helper can reach).
+ * Generic replacement for a plain `navigate(to)` push/replace call, used by
+ * useAppNavigate (hooks/useAppNavigate.ts) so every in-app "go deeper" or
+ * "go sideways" navigation — not just the product hero case — gets the same
+ * "no flash, no black frame" native crossfade/slide.
+ *
+ * Deliberately forward/lateral-only: a real "go back" is a browser
+ * traversal (`navigate(-1)` calls `history.go(-1)` under the hood, same as a
+ * phone back button), so it's handled by lib/navigationTransitions.ts
+ * instead — the ONE mechanism for back, in-app button or phone alike. A
+ * caller that needs to go back should call plain react-router `useNavigate()`
+ * (`navigate(-1)`), not this — see BackButton.tsx, SearchPage.tsx,
+ * CollapsingHeader.tsx.
  */
 export function navigateWithTransition(
   navigate: NavigateFunction,
-  to: To | number,
+  to: To,
   options?: NavigateOptions
 ): void {
   const fromPathname = window.location.pathname;
-  const direction: 'forward' | 'back' = typeof to === 'number' ? 'back' : 'forward';
-  const toPathname = typeof to === 'number' ? null : resolveToPathname(to);
-  const kind = toPathname
-    ? classifyTransition(fromPathname, toPathname, direction)
-    : direction === 'back'
-      ? 'slide-back'
-      : 'slide-forward';
+  const toPathname = resolveToPathname(to);
+  const kind = toPathname ? classifyTransition(fromPathname, toPathname, 'forward') : 'slide-forward';
 
-  runWithViewTransition(() => {
-    if (typeof to === 'number') {
-      navigate(to);
-    } else {
-      navigate(to, options);
-    }
-  }, `vt-${kind}`);
+  runWithViewTransition(() => navigate(to, options), `vt-${kind}`);
 }

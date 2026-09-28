@@ -5337,42 +5337,6 @@ textarea {
    Session 4 Part 6 — site-wide animation polish
    ============================================================ */
 
-/* ---------- Page transitions ---------- */
-
-.page-transition {
-  /* No fill-mode: the transform is gone once the animation ends, so fixed
-     children (bottom nav, sticky headers) position against the viewport
-     again rather than against a transformed ancestor. 350ms matches
-     CLAUDE.md's page-transition motion tier (see reports/batch-17.txt). */
-  animation: pageSlideForward 350ms ease-out;
-}
-
-@keyframes pageSlideForward {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-
-/* pageSlideBack / .page-transition--back removed — see
-   reports/fix-phone-back.txt Part 1: a single unmounted-then-remounted div
-   sliding in from off-screen has no real "old page" left underneath it,
-   which is what showed as a black gap. The manual "back" fallback (only
-   ever used without View Transitions support, or prefers-reduced-motion —
-   everything else now rides a real native transition) crossfades instead;
-   see fallbackClassFor in PageTransition.tsx. */
-
-/* Top-level-to-top-level moves (Home/Search/Cart/Account/My Orders/policy
-   pages) never slide — there's no "deeper" to imply — just a quick
-   crossfade, same in both directions since a fade has no direction to
-   mirror. */
-.page-fade {
-  animation: pageFadeIn 150ms ease-out;
-}
-
-@keyframes pageFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
 /* ---------- Native View Transitions — root animation per navigation kind ----------
    lib/viewTransition.ts puts one of these classes on <html> just before
    calling document.startViewTransition, so the browser's own before/after
@@ -5603,8 +5567,6 @@ html.vt-slide-back::view-transition-new(root) {
 /* ---------- Reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .page-transition,
-  .page-fade,
   .chip:active,
   .copy-button--copied,
   .cart-button__pulse,
