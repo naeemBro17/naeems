@@ -124,7 +124,16 @@ export function ViewerPage() {
   // categories load in after first paint), which would otherwise mean
   // recreating the observer's rootMargin whenever that height settles.
   // rAF-throttled so this never runs more than once per frame.
-  useEffect(() => {
+  //
+  // useLayoutEffect, not useEffect: on a fresh mount that's already scrolled
+  // deep (e.g. Back from a product, restored by the scroll-position effect
+  // above — which itself runs in the same layout-effect phase, child-first,
+  // so it's already applied by the time this reads window.scrollY), the
+  // initial checkPinned() call needs to land before the browser ever paints
+  // this frame — otherwise the fixed pinned-chip bar starts invisible
+  // (isChipsPinned's initial state) and only becomes visible a frame later,
+  // popping in on top of an already-correctly-scrolled page.
+  useLayoutEffect(() => {
     let ticking = false;
     const checkPinned = () => {
       ticking = false;

@@ -6,9 +6,9 @@
  * detail, contact/expert, checkout steps, admin) is a "deeper" screen and
  * slides in from the right, exactly as before.
  *
- * Shared by PageTransition (its own fallback CSS classing) and
- * lib/viewTransition.ts (picks the same kind for the native View Transition
- * path) so the two systems never disagree about what a given navigation is.
+ * Shared by lib/viewTransition.ts (forward/lateral taps) and
+ * lib/navigationTransitions.ts (real back/forward traversals) so the two
+ * never disagree about what a given navigation is.
  */
 const TOP_LEVEL_PATHS = new Set([
   '/',

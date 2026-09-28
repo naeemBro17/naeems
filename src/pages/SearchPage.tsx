@@ -6,8 +6,8 @@
 // (?q=...) so Back from a product returns to the same results, same scroll
 // position, without re-opening the keyboard.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useAppNavigate as useNavigate } from '../hooks/useAppNavigate';
+import { useNavigate as useRouterNavigate, useSearchParams } from 'react-router-dom';
+import { useAppNavigate } from '../hooks/useAppNavigate';
 import { useProducts } from '../contexts/ProductContext';
 import { useSearch } from '../hooks/useSearch';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -38,7 +38,8 @@ function ClockIcon() {
 
 export function SearchPage() {
   useDocumentTitle("Search — Naeem's");
-  const navigate = useNavigate();
+  const navigate = useAppNavigate();
+  const routerNavigate = useRouterNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { products, categories, isLoading } = useProducts();
 
@@ -65,18 +66,20 @@ export function SearchPage() {
   );
 
   // Pops real history when there is any (same rule as BackButton) so this
-  // is a genuine back-navigation (POP), not a fresh push — pushing '/' here
-  // used to make PageTransition play the forward slide-in on what the user
-  // saw as going back (see reports/fix-animation-audit.txt Part 2), and left
-  // an extra '/' entry sitting in history for a subsequent real Back to trip
-  // over.
+  // is a genuine back-navigation (a real traversal, animated by
+  // lib/navigationTransitions.ts — see BackButton.tsx for why this uses
+  // plain react-router navigate rather than the wrapped one), not a fresh
+  // push — pushing '/' here used to make PageTransition play the forward
+  // slide-in on what the user saw as going back (see
+  // reports/fix-animation-audit.txt Part 2), and left an extra '/' entry
+  // sitting in history for a subsequent real Back to trip over.
   const goBack = useCallback(() => {
     if (window.history.length > 2) {
-      navigate(-1);
+      routerNavigate(-1);
     } else {
       navigate('/');
     }
-  }, [navigate]);
+  }, [navigate, routerNavigate]);
 
   const search = useSearch({
     products: activeProducts,
