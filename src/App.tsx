@@ -31,6 +31,7 @@ import { DeliveryPolicyPage } from './pages/policy/DeliveryPolicyPage';
 import { TermsPage } from './pages/policy/TermsPage';
 import { PrivacyPolicyPage } from './pages/policy/PrivacyPolicyPage';
 import { AboutPage } from './pages/policy/AboutPage';
+import { forgetScroll } from './lib/scrollMemory';
 
 // Admin panel (product editor, CSV import, image editors, banner/bento
 // editors, etc.) is the single biggest chunk of this app's JS — a customer
@@ -68,7 +69,12 @@ function GlobalBottomNav() {
   return (
     <BottomNav
       activeTab="home"
-      onHome={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      onHome={() => {
+        // Back to the top, and forget the old spot so nothing (a reload, a
+        // later Back) can jump down to it again.
+        forgetScroll(location.key);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}
       onAccount={() => navigate('/account')}
     />
   );
