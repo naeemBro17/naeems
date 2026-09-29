@@ -33,7 +33,35 @@ export function extractYouTubeId(rawUrl: string): string | null {
   return null;
 }
 
-/** Privacy-enhanced embed domain, autoplaying once the viewer opens it. */
-export function youtubeEmbedUrl(id: string): string {
-  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
+/** Where the embedded player lives — also the only origin its messages are
+ *  trusted from (components/viewer/VideoReview.tsx). */
+export const YOUTUBE_EMBED_ORIGIN = 'https://www.youtube-nocookie.com';
+
+/**
+ * The inline review player (Batch 23 Part 7): privacy-enhanced domain,
+ * autoplaying on the shopper's tap, with every YouTube control, keyboard
+ * shortcut, fullscreen button, annotation and related-video suggestion
+ * turned off that YouTube lets an embed turn off. `enablejsapi` lets the
+ * page's own play/pause and sound buttons drive it.
+ */
+export function youtubeEmbedUrl(id: string, pageOrigin: string): string {
+  const params = new URLSearchParams({
+    autoplay: '1',
+    controls: '0',
+    rel: '0',
+    modestbranding: '1',
+    playsinline: '1',
+    disablekb: '1',
+    fs: '0',
+    iv_load_policy: '3',
+    enablejsapi: '1',
+    origin: pageOrigin,
+  });
+  return `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?${params.toString()}`;
+}
+
+/** YouTube's own still for a video — shown before it plays, while paused
+ *  and after it ends. */
+export function youtubeThumbnailUrl(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 }

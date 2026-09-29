@@ -99,6 +99,6 @@ test.describe('Logged-in checkout', () => {
     // Confirms inside a dialog whose own confirm button carries the same
     // label — see OrderDetailPage's ConfirmDialog confirmLabel.
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel order' }).click();
-    await expect(page.getByText(/cancelled|বাতিল/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/cancelled/i).first()).toBeVisible({ timeout: 10_000 });
   });
 });

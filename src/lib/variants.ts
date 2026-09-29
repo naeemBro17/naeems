@@ -157,7 +157,7 @@ function leadingSizeNumber(size: string): number {
 }
 
 /** Every variant's own photo, smallest Size first — variants with no photo
- *  of their own contribute nothing here (see mergedGalleryImages). */
+ *  of their own contribute nothing here (see optionGalleryImages). */
 export function variantImagesBySize(variants: ProductVariant[]): string[] {
   return [...variants]
     .filter((v): v is ProductVariant & { image_url: string } => v.image_url !== null)
@@ -166,29 +166,34 @@ export function variantImagesBySize(variants: ProductVariant[]): string[] {
 }
 
 /**
- * The detail page's full image gallery: every variant's own photo (smallest
- * Size first), then the product's own multi-image gallery, each url appearing
- * once. Selecting an option (see ProductDetailPage) moves just that option's
- * own image to the front — the rest keeps this same smallest-to-largest
- * order, so a variant's photo is never missing from the gallery just because
- * a different size is currently selected.
+ * The detail page's gallery for the selected option — the one image rule the
+ * whole site follows (Batch 23 Part 3):
+ *
+ * - The default option (the product's own data) shows the product's own
+ *   photos first. Grid cards, bento tiles and search results show that same
+ *   first photo (cardImage), so opening a product lands on exactly the image
+ *   its card showed, and the hero morph lands on it too.
+ * - Any other option shows its own photo first; with no photo of its own it
+ *   falls back to the product's photos.
+ * - Every other photo (the product's, other options') follows, each once, so
+ *   nothing is ever missing from the gallery. Loading variants later only
+ *   ever appends — it never changes which photo is first.
  */
-export function mergedGalleryImages(baseImages: string[], variants: ProductVariant[]): string[] {
+export function optionGalleryImages(
+  baseImages: string[],
+  option: VariantOption,
+  variants: ProductVariant[]
+): string[] {
+  const own = !option.isBase && option.image_url !== null ? [option.image_url] : baseImages;
   const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const url of variantImagesBySize(variants)) {
+  const ordered: string[] = [];
+  for (const url of [...own, ...baseImages, ...variantImagesBySize(variants)]) {
     if (!seen.has(url)) {
-      merged.push(url);
+      ordered.push(url);
       seen.add(url);
     }
   }
-  for (const url of baseImages) {
-    if (!seen.has(url)) {
-      merged.push(url);
-      seen.add(url);
-    }
-  }
-  return merged;
+  return ordered;
 }
 
 /** Display label for one option: "Region · Size", just one half if only one

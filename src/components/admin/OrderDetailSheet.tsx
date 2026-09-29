@@ -24,6 +24,8 @@ import {
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../lib/manualOrders';
 import type { OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
+import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
+import { orderHistoryNote } from '../../lib/orderHistoryNotes';
 
 interface OrderDetailSheetProps {
   orderId: string | null;
@@ -68,7 +70,7 @@ function toOrderSnapshot(order: OrderWithDetails) {
         ? 'Inside Dhaka'
         : order.delivery_zone === 'outside_dhaka'
           ? 'Outside Dhaka'
-          : 'হাতে দেওয়া (Hand delivered)',
+          : 'Hand delivered',
     fee: order.delivery_fee,
   };
   const promo: AppliedPromo | null = order.promo_code
@@ -341,7 +343,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                     <span className="checkout-summary-card__item-qty">&times;{item.quantity}</span>
                     {item.list_price !== item.unit_price && (
                       <span className="checkout-summary-card__item-variant">
-                        {item.unit_price === 0 ? 'ফ্রি' : `List ${formatTaka(item.list_price)}`}
+                        {item.unit_price === 0 ? 'Free' : `List ${formatTaka(item.list_price)}`}
                         {item.reason && ` — ${DISCOUNT_REASON_LABELS[item.reason]}`}
                       </span>
                     )}
@@ -461,16 +463,17 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       )}
                     </p>
                   )}
-                  {order.steadfast_tracking_link && (
-                    <a
-                      href={order.steadfast_tracking_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="order-detail__tracking-link"
-                    >
-                      Track on Steadfast →
-                    </a>
-                  )}
+                  {/* The same link the customer's "Track parcel" opens. */}
+                  <a
+                    href={steadfastTrackingUrl(order.steadfast_tracking_link)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="order-detail__tracking-link"
+                  >
+                    {hasOwnTrackingLink(order.steadfast_tracking_link)
+                      ? 'Track parcel on Steadfast →'
+                      : 'Track on Steadfast (generic page, enter the tracking code) →'}
+                  </a>
                   {order.status === 'shipped' && (
                     <button
                       type="button"
@@ -482,7 +485,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       {isRefreshingSteadfast ? (
                         <span className="spinner" aria-hidden="true" />
                       ) : (
-                        'ডেলিভারির অবস্থা দেখো'
+                        'Check delivery status'
                       )}
                     </button>
                   )}
@@ -499,7 +502,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                   onClick={() => setSteadfastConfirmOpen(true)}
                   disabled={isBookingSteadfast}
                 >
-                  {isBookingSteadfast ? <span className="spinner" aria-hidden="true" /> : 'Steadfast-এ পাঠাও'}
+                  {isBookingSteadfast ? <span className="spinner" aria-hidden="true" /> : 'Send to Steadfast'}
                 </button>
               )}
             </section>
@@ -570,7 +573,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
-                    {row.note && <span className="order-admin-detail__history-note">{row.note}</span>}
+                    {row.note && <span className="order-admin-detail__history-note">{orderHistoryNote(row.note)}</span>}
                   </li>
                 ))}
               </ul>

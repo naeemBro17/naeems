@@ -263,7 +263,7 @@ export function OrderSummaryPage() {
                 aria-pressed={paymentMethod === 'bkash'}
               >
                 <span className="checkout-payment__option-radio" aria-hidden="true" />
-                <span className="checkout-payment__option-label">bKash-এ আগাম পেমেন্ট</span>
+                <span className="checkout-payment__option-label">Pay in advance with bKash</span>
               </button>
             )}
           </div>
@@ -271,8 +271,8 @@ export function OrderSummaryPage() {
           {paymentMethod === 'bkash' && bkashAvailable && (
             <div className="checkout-bkash">
               <p className="checkout-bkash__instructions">
-                এই নম্বরে <strong>{formatTaka(total)}</strong> Send Money করুন, তারপর নিচে
-                Transaction ID দিন।
+                Send Money <strong>{formatTaka(total)}</strong> to this number, then enter the
+                Transaction ID below.
               </p>
               <div className="checkout-bkash__number">{settings.shop_bkash_number}</div>
 
@@ -325,8 +325,8 @@ export function OrderSummaryPage() {
         )}
 
         <p className="checkout-summary-page__consent">
-          অর্ডার করে আপনি আমাদের <Link to="/terms">শর্তাবলি</Link> ও{' '}
-          <Link to="/return-policy">রিটার্ন পলিসি</Link> মেনে নিচ্ছেন
+          By placing this order you agree to our <Link to="/terms">Terms</Link> and{' '}
+          <Link to="/return-policy">Return policy</Link>.
         </p>
 
         <button

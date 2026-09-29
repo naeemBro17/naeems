@@ -58,3 +58,19 @@ export function rememberScroll(entryKey: string, y: number): void {
 export function recallScroll(entryKey: string): number | null {
   return memory.get(entryKey) ?? null;
 }
+
+export function forgetScroll(entryKey: string): void {
+  if (memory.delete(entryKey)) persist();
+}
+
+/**
+ * How this document itself was loaded. A reload or a fresh open always
+ * starts at the top; only arriving through the browser's Back/Forward
+ * (e.g. Back from another site into this one) may restore a saved position.
+ * The router can't tell these apart — it reports every first page as a
+ * "Pop", which is why a refresh used to jump back down (Batch 23 Part 2).
+ */
+export function documentLoadWasTraverse(): boolean {
+  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+  return entry?.type === 'back_forward';
+}

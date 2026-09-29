@@ -446,7 +446,7 @@ export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'c
 
 /** Where an order came from. 'web' is the only source the checkout flow
  *  itself ever writes; every other value is chosen by hand in the admin
- *  "নতুন অর্ডার" form (Batch 22) for an order Naeem typed in himself. */
+ *  "New order" form (Batch 22) for an order Naeem typed in himself. */
 export type OrderSource = 'web' | 'facebook' | 'whatsapp' | 'phone' | 'shop' | 'family' | 'other';
 
 /** Why a line's price was cut below its real (list) price, or an order-level
@@ -473,7 +473,7 @@ export interface Order {
   district: string;
   thana: string;
   address_line: string;
-  /** 'hand_delivered' (Batch 22) is admin-only — "ডেলিভারি নেই (হাতে দেওয়া)",
+  /** 'hand_delivered' (Batch 22) is admin-only — "No delivery (hand delivered)",
    *  always ৳0, website checkout never offers it. */
   delivery_zone: 'inside_dhaka' | 'outside_dhaka' | 'hand_delivered';
   delivery_fee: number;
@@ -493,7 +493,7 @@ export interface Order {
    *  order and most manual ones. */
   list_value: number;
   /** Sum of list price × quantity for lines given away entirely free
-   *  (Batch 22) — 0 unless a manual order line was marked "ফ্রি". */
+   *  (Batch 22) — 0 unless a manual order line was marked "Free". */
   free_value: number;
   total: number;
   payment_method: OrderPaymentMethod;
@@ -505,8 +505,8 @@ export interface Order {
   tracking_number: string | null;
   customer_note: string | null;
   admin_note: string | null;
-  /** Steadfast Courier booking (Batch 20) — all null until "Steadfast-এ
-   *  পাঠাও" is used; see supabase/functions/steadfast. */
+  /** Steadfast Courier booking (Batch 20) — all null until "Send to
+   *  Steadfast" is used; see supabase/functions/steadfast. */
   steadfast_consignment_id: string | null;
   steadfast_tracking_code: string | null;
   /** Steadfast's own real per-parcel tracking page (consignment.tracking_link,
