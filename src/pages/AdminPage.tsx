@@ -12,6 +12,7 @@ import { PromoCodesTab } from '../components/admin/PromoCodesTab';
 import { SettingsTab } from '../components/admin/SettingsTab';
 import { OrdersTab } from '../components/admin/OrdersTab';
 import { fetchAllOrders } from '../lib/orders';
+import { useUrlParam } from '../hooks/useUrlParams';
 import type { WholesalerAccount, Order } from '../types';
 
 const ADMIN_TABS: readonly AdminTab[] = [
@@ -19,16 +20,13 @@ const ADMIN_TABS: readonly AdminTab[] = [
   'reviews', 'bento', 'promo-codes', 'settings',
 ];
 
-/** Supports a deep link like /admin?tab=orders&order=<uuid> — used by the
- *  Telegram order notification to jump straight to the order that arrived,
- *  instead of just landing on the Products tab and making Naeem hunt for it. */
-function initialTabFromUrl(): AdminTab {
-  const tabParam = new URLSearchParams(window.location.search).get('tab');
-  return (ADMIN_TABS as string[]).includes(tabParam ?? '') ? (tabParam as AdminTab) : 'products';
-}
 
 export function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTabFromUrl);
+  // The open tab lives in the URL (?tab=...) — which also keeps supporting a
+  // deep link like /admin?tab=orders&order=<uuid> from the Telegram order
+  // notification — so Back from a page opened out of the admin panel returns
+  // to the same tab, not always Products.
+  const [activeTab, setActiveTab] = useUrlParam<AdminTab>('tab', 'products', ADMIN_TABS);
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const initialOrderId = useMemo(() => new URLSearchParams(window.location.search).get('order'), []);
@@ -52,16 +50,6 @@ export function AdminPage() {
     void loadWholesalers();
     void loadOrders();
   }, [loadWholesalers, loadOrders]);
-
-  // A client-side navigation (e.g. the hamburger menu's Admin Panel link)
-  // keeps whatever scroll position the previous page was at — this page
-  // never got its own reset, unlike ProductDetailPage's equivalent effect,
-  // which is what made landing here look like a jump/bounce from wherever
-  // the home grid had been scrolled to. Runs once, on mount, not per tab
-  // switch.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   const pendingWholesalers = wholesalers.filter(
     (w) => w.role === 'wholesaler' && w.status === 'pending'

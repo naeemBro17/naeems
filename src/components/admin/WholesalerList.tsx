@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../hooks/useToast';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -11,6 +12,7 @@ interface WholesalerListProps {
 }
 
 type StatusFilter = 'pending' | 'approved' | 'all';
+const STATUS_FILTERS: readonly StatusFilter[] = ['pending', 'approved', 'all'];
 
 const STATUS_META: Record<ProfileStatus, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'status-badge status-badge--pending' },
@@ -27,7 +29,8 @@ function formatDate(iso: string): string {
 
 export function WholesalerList({ accounts, onReload }: WholesalerListProps) {
   const { showToast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
+  // In the URL so it survives leaving the admin panel and coming Back.
+  const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('wstatus', 'pending', STATUS_FILTERS);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<WholesalerAccount | null>(null);
 

@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Product } from '../types';
+import { useUrlParams } from './useUrlParams';
 
 export interface ProductFilterState {
   brands: string[];
@@ -7,6 +8,11 @@ export interface ProductFilterState {
 }
 
 export const EMPTY_FILTERS: ProductFilterState = { brands: [], skinTypes: [] };
+
+/** URL param names — repeated once per selected value (?brand=A&brand=B), so
+ *  a brand name containing a comma can never be split apart by mistake. */
+const BRAND_PARAM = 'brand';
+const SKIN_PARAM = 'skin';
 
 /**
  * Pure filter-application, exported so the filter sheet can preview a result
@@ -32,9 +38,36 @@ export function applyProductFilters(products: Product[], filters: ProductFilterS
  * across the two facets, OR within each (e.g. Brand=CeraVe OR Avene, AND
  * SkinType=Sensitive). Applied on top of the existing category/search
  * pipeline, never inside it, so neither of those is touched.
+ *
+ * The applied selection lives in the URL (see hooks/useUrlParams.ts) so Back
+ * from a product returns to the same filtered grid.
  */
 export function useProductFilters(catalog: Product[]) {
-  const [filters, setFilters] = useState<ProductFilterState>(EMPTY_FILTERS);
+  const [searchParams, updateParams] = useUrlParams();
+  const brandKey = searchParams.getAll(BRAND_PARAM).join('\u0000');
+  const skinKey = searchParams.getAll(SKIN_PARAM).join('\u0000');
+
+  // Keyed on the joined values so the object is only rebuilt when the
+  // selection actually changes, not on every unrelated URL update.
+  const filters = useMemo<ProductFilterState>(
+    () => ({
+      brands: brandKey === '' ? [] : brandKey.split('\u0000'),
+      skinTypes: skinKey === '' ? [] : skinKey.split('\u0000'),
+    }),
+    [brandKey, skinKey]
+  );
+
+  const setFilters = useCallback(
+    (next: ProductFilterState) => {
+      updateParams((params) => {
+        params.delete(BRAND_PARAM);
+        params.delete(SKIN_PARAM);
+        for (const brand of next.brands) params.append(BRAND_PARAM, brand);
+        for (const skin of next.skinTypes) params.append(SKIN_PARAM, skin);
+      });
+    },
+    [updateParams]
+  );
 
   /** Every brand actually present in the active catalog, alphabetised. */
   const availableBrands = useMemo(() => {
@@ -50,7 +83,7 @@ export function useProductFilters(catalog: Product[]) {
   ]);
 
   const activeCount = filters.brands.length + filters.skinTypes.length;
-  const clear = useCallback(() => setFilters(EMPTY_FILTERS), []);
+  const clear = useCallback(() => setFilters(EMPTY_FILTERS), [setFilters]);
 
   return { filters, setFilters, availableBrands, apply, activeCount, clear };
 }
