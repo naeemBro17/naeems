@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -12,6 +13,7 @@ import { VARIANTS_VIEW } from '../../lib/variants';
 import type { Product } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
+const STATUS_FILTERS: readonly StatusFilter[] = ['all', 'active', 'inactive'];
 
 /**
  * Availability comes from isOutOfStock(), which derives it from
@@ -30,9 +32,11 @@ export function ProductList() {
   const { products, categories, refetch, patchProductLocal } = useProducts();
   const { showToast } = useToast();
 
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Filters live in the URL so they survive leaving the admin panel and
+  // coming Back (hooks/useUrlParams.ts).
+  const [search, setSearch] = useUrlParam<string>('pq', '');
+  const [categoryFilter, setCategoryFilter] = useUrlParam<string>('pcat', '');
+  const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('pstatus', 'all', STATUS_FILTERS);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);

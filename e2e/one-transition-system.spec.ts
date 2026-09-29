@@ -1,12 +1,15 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { assertSingleCleanTransition } from './helpers/frames';
+import { phoneBackHeroEnabled, waitForViewTransitionsToFinish } from './helpers/animations';
 
 /**
- * Covers reports/fix-one-transition.txt: proves there is exactly ONE
- * transition mechanism left, for every navigation the task doc listed —
- * both the in-app "<-" button AND a real phone back (page.goBack(), which
- * fires the same underlying browser event a hardware/gesture back does).
+ * Covers reports/fix-one-transition.txt, updated for
+ * reports/fix-back-known-good.txt: every navigation settles in ONE burst —
+ * the in-app "<-" button (which starts its own View Transition) AND a real
+ * phone back (page.goBack(), the same browser event a hardware/gesture back
+ * fires; it only animates, as a reverse hero, when the switch in
+ * src/lib/phoneBackTransition.ts is ON — otherwise it's an instant switch).
  *
  * assertSingleCleanTransition samples frames from the moment of the tap
  * until well past 1.5s after the page first settles, and fails on: a
@@ -15,6 +18,8 @@ import { assertSingleCleanTransition } from './helpers/frames';
  * animation ~0.6s later" bug this branch fixes), and any measurable real
  * layout shift (a real PerformanceObserver CLS reading, not a proxy).
  */
+
+const PHONE_BACK_HERO = phoneBackHeroEnabled();
 
 /** Picks a product card whose whole box is already inside the viewport
  *  before clicking — the same card a real tap would land on, and avoids
@@ -63,16 +68,20 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
       await expect(page).toHaveURL('/');
     });
 
-    test('phone back (page.goBack()) reverses the hero exactly the same way', async ({ page }) => {
+    test('phone back (page.goBack()) settles once — reverse hero when switched on', async ({ page }) => {
       await page.goto('/');
       await page.waitForSelector('.product-card');
       const card = await fullyVisibleCard(page);
       await card.click();
       await expect(page).toHaveURL(/\/product\//);
+      // A real signal, not a timeout: the product page's own opening morph
+      // has finished (a Back pressed DURING it is deliberately an instant
+      // switch — see src/lib/phoneBackTransition.ts).
+      await waitForViewTransitionsToFinish(page);
 
       await assertSingleCleanTransition(page, () => page.goBack(), {
         expectNavVisible: true,
-        expectGradual: true,
+        expectGradual: PHONE_BACK_HERO,
       });
       await expect(page).toHaveURL('/');
     });
@@ -98,13 +107,13 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
       await expect(page).toHaveURL('/');
     });
 
-    test('phone back reverses the hero into the bento tile the same way', async ({ page }) => {
+    test('phone back into the bento tile settles once — reverse hero when switched on', async ({ page }) => {
       await page.goto('/');
       await openFirstBentoCard(page);
 
       await assertSingleCleanTransition(page, () => page.goBack(), {
         expectNavVisible: true,
-        expectGradual: true,
+        expectGradual: PHONE_BACK_HERO,
       });
       await expect(page).toHaveURL('/');
     });
@@ -117,13 +126,14 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
       await expect(page).toHaveURL(/\/search/);
       const searchInput = page.getByRole('combobox', { name: 'Search products' });
       await searchInput.fill('cerave');
-      await page.waitForTimeout(400);
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(400);
+      await expect(page).toHaveURL(/[?&]q=cerave/i);
       const result = page.locator('.product-card').first();
       await expect(result).toBeVisible({ timeout: 5000 });
+      await searchInput.blur();
       await result.click();
       await expect(page).toHaveURL(/\/product\//);
+      await waitForViewTransitionsToFinish(page);
     }
 
     test('in-app back returns to the same search, one clean transition', async ({ page }) => {
@@ -138,7 +148,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
 
     test('phone back returns to the same search, one clean transition', async ({ page }) => {
       await openSearchResult(page);
-      await assertSingleCleanTransition(page, () => page.goBack(), { expectGradual: true });
+      await assertSingleCleanTransition(page, () => page.goBack(), { expectGradual: PHONE_BACK_HERO });
       await expect(page).toHaveURL(/\/search\?q=cerave/i);
     });
   });

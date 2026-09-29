@@ -16,7 +16,7 @@ import { useProductFilters } from '../hooks/useProductFilters';
 import { filterByCategory } from '../lib/categoryFilter';
 import { useDragReorder } from '../hooks/useDragReorder';
 import { useToast } from '../hooks/useToast';
-import { takeGridScroll } from '../lib/gridScroll';
+import { useUrlParams } from '../hooks/useUrlParams';
 import { saveSettings, serializeIdList } from '../lib/settingsLists';
 import {
   DEFAULT_SECTION_ORDER,
@@ -86,7 +86,12 @@ export function ViewerPage() {
   const { products, categories, settings, isLoading, isOffline, loadFailed, refetch } =
     useProducts();
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  // The selected category lives in the URL (?cat=<slug>) so Back from a
+  // product returns to the same filtered grid — component state would be
+  // thrown away the moment this page unmounts.
+  const [searchParams, updateParams] = useUrlParams();
+  const catSlug = searchParams.get('cat');
+  const selectedCategoryId = categories.find((c) => c.slug === catSlug)?.id ?? null;
   const [isRetrying, setIsRetrying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -106,6 +111,21 @@ export function ViewerPage() {
   // reports/batch-17.txt Part 1 for how this was found). A fixed duplicate,
   // toggled by scroll position, sidesteps that entirely.
   const [isChipsPinned, setIsChipsPinned] = useState(false);
+  // True only for the first frame(s) after this page mounts: the pinned bar
+  // then takes its correct initial state with no fade/slide (a Back that
+  // lands deep in the grid must show the bar already there, not animate it
+  // in afterwards — the "chip row pops in a frame later" on the phone).
+  const [pinnedInstant, setPinnedInstant] = useState(true);
+  useEffect(() => {
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setPinnedInstant(false));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, []);
 
   // Measures the header's real height (used both for the pinned chips'
   // top offset and the scroll-target math below) and re-measures on resize.
@@ -126,9 +146,9 @@ export function ViewerPage() {
   // rAF-throttled so this never runs more than once per frame.
   //
   // useLayoutEffect, not useEffect: on a fresh mount that's already scrolled
-  // deep (e.g. Back from a product, restored by the scroll-position effect
-  // above — which itself runs in the same layout-effect phase, child-first,
-  // so it's already applied by the time this reads window.scrollY), the
+  // deep (e.g. Back from a product, restored by PageTransition's
+  // ScrollRestorer — whose layout effect runs before this one, so it's
+  // already applied by the time this reads window.scrollY), the
   // initial checkPinned() call needs to land before the browser ever paints
   // this frame — otherwise the fixed pinned-chip bar starts invisible
   // (isChipsPinned's initial state) and only becomes visible a frame later,
@@ -151,62 +171,6 @@ export function ViewerPage() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [headerHeight]);
-
-  // Owns this page's scroll position on every fresh mount — not just the
-  // "coming back from a product" case below. Without this, returning here
-  // via the browser Back button from anywhere that ISN'T a product page
-  // (e.g. /search — see reports/batch-18.txt Part 6) left the browser's own
-  // native scroll restoration to guess a position, which then visibly
-  // fought the page-slide transition and this component's full remount
-  // (PageTransition keys on pathname, so navigating back here is a real
-  // unmount+remount, not just a re-render) — a jump/shake as the two
-  // settled into different final positions. history.scrollRestoration is
-  // set to 'manual' once in main.tsx specifically so this effect is the
-  // only thing deciding where a fresh mount of this page starts.
-  //
-  // The guard ref means this only ever runs once per actual mount — a
-  // later `products` reference change (e.g. an admin's edit triggering
-  // refetch()) must NOT re-trigger a scroll jump while they're already
-  // browsing the page.
-  const hasSetInitialScroll = useRef(false);
-  useLayoutEffect(() => {
-    if (hasSetInitialScroll.current) return;
-    if (isLoading) return; // wait for real content, same as before
-    hasSetInitialScroll.current = true;
-
-    // Synchronous, before this frame ever paints — the old version deferred
-    // this by a frame-plus-80ms (a requestAnimationFrame, then a setTimeout),
-    // which is exactly why coming back from a product showed Home at the top
-    // for a moment before jumping to the real scroll position (see
-    // reports/batch-21.txt Part 1, point 1 and point 5). useLayoutEffect runs
-    // after the grid's DOM is in the tree but before the browser paints it,
-    // so there is nothing to see before the jump — there is no "before".
-    const savedY = takeGridScroll();
-    const target = savedY ?? 0;
-    window.scrollTo({ top: target, behavior: 'instant' });
-
-    // A deep saved position can exceed how tall the page actually is yet —
-    // product images below the fold haven't finished loading and reserving
-    // their real height, so the browser clamps the scroll short. Rather than
-    // guessing a fixed delay (the old bug this batch removed), watch the page
-    // grow and re-apply the same target until it's reachable or a generous
-    // ceiling passes — a page that never reaches it just stays clamped, same
-    // as before.
-    if (target > 0 && window.scrollY < target) {
-      let attempts = 0;
-      const observer = new ResizeObserver(() => {
-        attempts += 1;
-        if (window.scrollY < target) {
-          window.scrollTo({ top: target, behavior: 'instant' });
-        }
-        if (window.scrollY >= target || attempts > 40) {
-          observer.disconnect();
-        }
-      });
-      observer.observe(document.body);
-      window.setTimeout(() => observer.disconnect(), 3000);
-    }
-  }, [products, isLoading]);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
@@ -252,10 +216,14 @@ export function ViewerPage() {
   // either place lights up the other.
   const handleSelectCategory = useCallback(
     (id: string | null) => {
-      setSelectedCategoryId(id);
+      const slug = id === null ? null : categories.find((c) => c.id === id)?.slug ?? null;
+      updateParams((next) => {
+        if (slug === null) next.delete('cat');
+        else next.set('cat', slug);
+      });
       // scrollToChips measures chipsRowRef's CURRENT position — calling it
       // synchronously here measures the layout from before this filter took
-      // effect (setSelectedCategoryId is async/batched), then starts a smooth
+      // effect (the ?cat= URL update re-renders asynchronously), then starts a smooth
       // scroll toward that stale target just as the grid's real height (very
       // different depending on how many products the category has) lands
       // underneath it. Waiting two animation frames lets the browser finish
@@ -267,7 +235,7 @@ export function ViewerPage() {
         });
       });
     },
-    [scrollToChips]
+    [scrollToChips, categories, updateParams]
   );
 
   const handleRetry = async () => {
@@ -384,7 +352,9 @@ export function ViewerPage() {
       {/* Always mounted (so it can animate in/out smoothly, no snap-in),
           only actually visible once isChipsPinned — see the effect above. */}
       <div
-        className={`home-chips-pinned${isChipsPinned ? ' home-chips-pinned--visible' : ''}`}
+        className={`home-chips-pinned${isChipsPinned ? ' home-chips-pinned--visible' : ''}${
+          pinnedInstant ? ' home-chips-pinned--instant' : ''
+        }`}
         style={{ top: headerHeight }}
         aria-hidden={!isChipsPinned}
       >

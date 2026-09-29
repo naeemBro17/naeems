@@ -2,17 +2,19 @@
 // nav's Search tab lands here instead of expanding suggestions in place over
 // the home content. No hero banner, Browse circles, bento grid, or category
 // chips here on purpose (see reports/batch-17.txt Part 2): this screen is
-// just the input and whatever it turns up. The query lives in the URL
-// (?q=...) so Back from a product returns to the same results, same scroll
-// position, without re-opening the keyboard.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate as useRouterNavigate, useSearchParams } from 'react-router-dom';
+// just the input and whatever it turns up. The query AND the picked category
+// live in the URL (?q=...&cat=<slug>) so Back from a product — phone or
+// in-app — returns to the same results, same scroll position (restored by
+// PageTransition), without re-opening the keyboard.
+import { useCallback, useEffect, useRef } from 'react';
+import { NavigationType, useNavigate as useRouterNavigate, useNavigationType } from 'react-router-dom';
 import { useAppNavigate } from '../hooks/useAppNavigate';
+import { useUrlParams } from '../hooks/useUrlParams';
 import { useProducts } from '../contexts/ProductContext';
 import { useSearch } from '../hooks/useSearch';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { rememberSearchScroll, takeSearchScroll } from '../lib/searchScroll';
 import { productPath } from '../lib/slugify';
+import { navigateBack } from '../lib/viewTransition';
 import { SearchBar } from '../components/viewer/SearchBar';
 import { SearchSuggestions } from '../components/viewer/SearchSuggestions';
 import { ProductGrid } from '../components/viewer/ProductGrid';
@@ -40,7 +42,8 @@ export function SearchPage() {
   useDocumentTitle("Search — Naeem's");
   const navigate = useAppNavigate();
   const routerNavigate = useRouterNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, updateParams] = useUrlParams();
+  const navigationType = useNavigationType();
   const { products, categories, isLoading } = useProducts();
 
   const activeProducts = products.filter((p) => p.is_active);
@@ -50,36 +53,30 @@ export function SearchPage() {
   // ever coincidentally worked for a category whose products happen to have
   // that word in their own name/brand (e.g. "Baby"), and silently returned
   // nothing for most others. This is an exact category_id filter instead,
-  // same as the home page's chips/circles, and toggles like them too.
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  // Autofocus only on a genuinely fresh, empty entry into search — never
-  // when Back-navigation restores an existing query, which is exactly the
-  // "keyboard pops up unexpectedly" bug this page is built to avoid.
-  const shouldAutoFocus = useRef(urlQuery === '').current;
+  // same as the home page's chips/circles, and toggles like them too. Kept
+  // in the URL as the category's slug (readable, stable across renames of
+  // nothing but the name) so it survives Back.
+  const catSlug = searchParams.get('cat');
+  const selectedCategoryId = categories.find((c) => c.slug === catSlug)?.id ?? null;
+  // Autofocus only on a genuinely fresh, empty entry into search — never on
+  // a Back (the page being returned to already shows what the shopper was
+  // looking at), and never when there's already a query or category to show.
+  // That was the "keyboard pops up and the results are gone" bug.
+  const shouldAutoFocus = useRef(
+    navigationType !== NavigationType.Pop && urlQuery === '' && catSlug === null
+  ).current;
 
   const openProduct = useCallback(
     (product: Product) => {
-      rememberSearchScroll();
       navigate(productPath(product));
     },
     [navigate]
   );
 
-  // Pops real history when there is any (same rule as BackButton) so this
-  // is a genuine back-navigation (a real traversal, animated by
-  // lib/navigationTransitions.ts — see BackButton.tsx for why this uses
-  // plain react-router navigate rather than the wrapped one), not a fresh
-  // push — pushing '/' here used to make PageTransition play the forward
-  // slide-in on what the user saw as going back (see
-  // reports/fix-animation-audit.txt Part 2), and left an extra '/' entry
-  // sitting in history for a subsequent real Back to trip over.
-  const goBack = useCallback(() => {
-    if (window.history.length > 2) {
-      routerNavigate(-1);
-    } else {
-      navigate('/');
-    }
-  }, [navigate, routerNavigate]);
+  // A genuine back-navigation (same helper as BackButton), not a fresh push
+  // of '/' — that used to leave an extra '/' entry sitting in history for a
+  // subsequent real Back to trip over (reports/fix-animation-audit.txt).
+  const goBack = useCallback(() => navigateBack(routerNavigate), [routerNavigate]);
 
   const search = useSearch({
     products: activeProducts,
@@ -94,27 +91,11 @@ export function SearchPage() {
   // creates a real history entry to come back from.
   useEffect(() => {
     const trimmed = search.query.trim();
-    const next = new URLSearchParams(searchParams);
-    if (trimmed === '') next.delete('q');
-    else next.set('q', trimmed);
-    setSearchParams(next, { replace: true });
-    // Only ever reacts to the query changing — including searchParams would
-    // re-run this on every URL change this effect itself causes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.query]);
-
-  // Restore scroll position when returning from a product, once there's
-  // something to scroll into.
-  useEffect(() => {
-    if (isLoading) return;
-    const savedY = takeSearchScroll();
-    if (savedY === null) return;
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        window.scrollTo({ top: savedY, behavior: 'instant' });
-      }, 80);
+    updateParams((next) => {
+      if (trimmed === '') next.delete('q');
+      else next.set('q', trimmed);
     });
-  }, [isLoading]);
+  }, [search.query, updateParams]);
 
   const trimmed = search.query.trim();
   // Below Fuse's 2-character minimum, `search.results` falls back to the
@@ -135,7 +116,11 @@ export function SearchPage() {
   // Tapping the already-selected category again clears it (same toggle
   // behaviour as the home page's chips/circles), returning to quick-picks.
   const handlePickCategory = (categoryId: string) => {
-    setSelectedCategoryId((current) => (current === categoryId ? null : categoryId));
+    const slug = categories.find((c) => c.id === categoryId)?.slug ?? null;
+    updateParams((next) => {
+      if (slug === null || next.get('cat') === slug) next.delete('cat');
+      else next.set('cat', slug);
+    });
   };
 
   return (

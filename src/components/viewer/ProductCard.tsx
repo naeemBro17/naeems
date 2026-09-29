@@ -5,12 +5,11 @@ import { formatTaka } from '../../lib/format';
 import { getDisplayPrice } from '../../lib/pricing';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { productPath } from '../../lib/slugify';
-import { rememberGridScroll } from '../../lib/gridScroll';
 import { cardImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
-import { getHeroReverseTarget } from '../../lib/heroTransition';
+import { heroReverseTargetFor, rememberHeroOrigin } from '../../lib/heroTransition';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
 
@@ -35,14 +34,15 @@ export function ProductCard({ product }: ProductCardProps) {
   const imageWrapRef = useRef<HTMLDivElement>(null);
 
   const openDetail = () => {
-    // Remember where the grid was so Back can restore it instead of jumping to top.
-    rememberGridScroll();
+    // Where the grid was is saved by lib/appHistory.ts as this page is left,
+    // so Back restores it (see PageTransition's ScrollRestorer).
     // Tag only THIS card's image box for the shared-element transition, set
     // imperatively at tap time rather than on every card up front — tagging
     // all ~100+ grid cards at once forces the browser to snapshot every one
     // of them for a transition only one of them is actually part of, which
     // is exactly what was making the tap-to-open feel slow.
     imageWrapRef.current?.style.setProperty('view-transition-name', productHeroName(product.id));
+    rememberHeroOrigin(product.id, 'grid');
     navigateToProductWithHero(navigate, productPath(product), product);
   };
 
@@ -88,7 +88,7 @@ export function ProductCard({ product }: ProductCardProps) {
         // remounted the grid, so it has to be baked into the very first
         // render instead.
         style={
-          getHeroReverseTarget() === product.id
+          heroReverseTargetFor('grid') === product.id
             ? ({ viewTransitionName: productHeroName(product.id) } as CSSProperties)
             : undefined
         }

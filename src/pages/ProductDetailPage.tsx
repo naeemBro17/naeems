@@ -721,16 +721,13 @@ export function ProductDetailPage() {
       : fetchedVariants
     : [];
 
-  // Scroll to top whenever the viewed product changes.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [slug]);
+  // Scroll position (top on a fresh open, restored on Back/Forward) is set
+  // for every page by PageTransition's ScrollRestorer, before first paint.
 
-  // Lets any back traversal (lib/navigationTransitions.ts — phone back and
-  // the in-app <- button are the same traversal now, see BackButton.tsx)
-  // reverse-hero morph into the exact card this product was opened from; it
-  // fires outside any click handler, so it has no other way to know which
-  // product is currently open.
+  // Lets a Back off this page (in-app <-: lib/viewTransition.ts's
+  // navigateBack; phone back: lib/appHistory.ts) reverse-hero morph into, or
+  // restore, the exact card this product was opened from — both read it the
+  // moment the Back starts, before React has processed anything.
   useEffect(() => {
     setCurrentDetailProductId(product?.id ?? null);
     return () => setCurrentDetailProductId(null);

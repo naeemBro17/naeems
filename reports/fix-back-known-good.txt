@@ -1,0 +1,213 @@
+FIX — Back behaviour: restore what worked + "back returns you exactly where you were"
+======================================================================================
+Branch: fix/back-known-good (from latest main). Not merged, not on main.
+
+
+1. WHAT I DID
+-------------
+
+THE ROOT CAUSE (why your phone disagreed with the tests)
+Two separate things were fighting over every Back. React Router listens for
+the browser's "back happened" event and redraws the page straight away. The
+last fix added a second listener (the "Navigation API") to start an
+animation for the same Back. On your phone, React Router won that race: the
+page had already changed before the animation took its "before" picture.
+The result was a hard cut, then a pointless crossfade between two nearly
+identical pictures (your "ghost" frames).
+
+The fix: the app now owns the browser history object React Router runs on
+(new file src/lib/appHistory.ts). Every Back passes through it FIRST, so
+nothing can redraw the page before we decide how that Back should look.
+There is no second listener and no race any more. The Navigation API code
+is deleted.
+
+A SECOND REAL BUG (found by the new tests, not by reading code)
+The reverse hero was silently failing for the top products on Home. A
+featured product appears twice on Home (in a bento tile AND at the top of
+the grid), and both copies claimed "I'm the card to shrink back into".
+Chrome refuses that ("duplicate view-transition-name") and cancels the
+whole animation, which looks like a hard cut. Now only the copy you
+actually tapped claims it.
+
+PART 1 — Back returns you exactly where you were
+What is now preserved, for BOTH the phone back button and the in-app arrow:
+  - Search (/search): the typed text (?q=), the category chip you picked
+    (?cat=baby-care), the results and the scroll position. The keyboard
+    does NOT pop up when you come back. It only opens on a fresh, empty
+    visit to search.
+  - Home: the selected category chip (?cat=), the Brand / Skin-type filters
+    (?brand= / ?skin=), the scroll position, and the bento tile you opened
+    from (the swipe stack comes back on the same card; the flip tile stays
+    on the same face).
+  - My Orders: scroll position. (There are no filters on this page.)
+  - Admin: the open tab (?tab=), the Orders filters (status, source,
+    search), the Products filters (search, category, active/inactive) and
+    the Wholesalers filter. They survive leaving the admin panel and coming
+    back.
+  - Every other page: scroll position on Back, and the very top on any
+    fresh open.
+How it works in plain terms: filters live in the page address, so they
+can't be forgotten. Tapping a chip edits the current address rather than
+adding a new Back step. Scroll positions are saved for each page you leave
+and put back before the first frame is drawn, not a frame later. The old
+per-page "remember scroll" code (gridScroll / searchScroll) is replaced by
+this one system.
+
+PART 2 — In-app arrow: Batch 21's reverse hero restored
+The in-app arrow once again starts the animation itself, from your tap,
+before anything changes. That is the Batch 21 approach you saw working on
+your phone. One improvement: Batch 21 hoped the new page would be ready in
+time for the "after" picture; now the animation waits until it genuinely
+is. This works for grid, bento and search-result products (search results
+use the same card as the grid, so they share the same image name).
+
+PART 3 — Phone back button
+  - Navigation API interception: removed.
+  - Baseline: phone back is handed to the page in one synchronous step,
+    with the right scroll and state on the very first frame.
+  - Phone-back reverse hero: built as a separate, small module
+    (src/lib/phoneBackTransition.ts) with one on/off switch,
+    PHONE_BACK_HERO_ENABLED.
+
+  THE SWITCH IS ON. Why: the e2e test proves both conditions you set:
+    (a) the "before" picture is the product page. The image's recorded
+        start width is the full product-photo width, its end width is the
+        card's, and a frame sampled mid-flight is in between.
+    (b) nothing animates for 1.5 s after it settles.
+  It is structurally different from the two failed attempts: the page
+  change is held back until Chrome asks for it, instead of racing a second
+  listener. It never touches the in-app arrow or any forward navigation.
+  It steps aside (instant switch instead) when:
+    - the product page's own opening animation is still playing, or
+    - Chrome already played its own back animation (predictive-back
+      swipe), or
+    - reduced motion is on.
+  TO TURN IT OFF: in src/lib/phoneBackTransition.ts, change
+  PHONE_BACK_HERO_ENABLED = true to false. That is one word. Phone back
+  then becomes the clean instant switch, and the tests automatically
+  switch to checking for that instead.
+
+PART 4 — Expert page
+  - Always opens at the very top. The page used to inherit Home's scroll
+    position; now any fresh open starts at 0 before the first frame. The
+    collapsing header now decides its state before the first frame too, so
+    it can't flip a frame late.
+  - Opens and closes with the same quick crossfade as other pages.
+  - There is no horizontal slide anywhere on the site now (see Design
+    decisions for why forward slides went too).
+
+ALSO FIXED (both things that "played after Back" on your phone)
+  - The bottom nav's Home icon did a little bounce every time Home
+    appeared, including after every Back. Now it only bounces when you
+    actually switch tabs.
+  - The floating (pinned) category bar faded in after arriving deep in the
+    grid. It now starts in its correct state with no fade.
+
+HOW EACH KIND OF BACK BEHAVES
+  From -> to                        | In-app arrow            | Phone back button
+  ----------------------------------|-------------------------|-------------------------------
+  Product -> grid/search/bento      | reverse hero            | reverse hero (switch ON);
+  (product opened from there)       | (image shrinks into     |  instant if pressed while the
+                                    |  its card)              |  opening animation still runs,
+                                    |                         |  or if Chrome played its own
+                                    |                         |  back animation
+  Expert -> Home                    | quick crossfade         | instant switch
+  Cart/Account/Orders/policy ->     | quick crossfade         | instant switch
+    previous page                   |                         |
+  A sheet or dialog is open         | -                       | closes the sheet, nothing else
+  Reduced motion turned on          | instant                 | instant
+  Every case                        | right scroll, filters and chip on the first frame;
+                                    | nothing plays afterwards
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. No database changes.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+- Nothing in the brief was left undone in code.
+- Real-device confirmation (the honest limit, same as every batch): all
+  proof is from Chrome driving a phone-sized, touch-enabled window
+  (Playwright, Pixel 7 profile), not your Android phone. These parts
+  depend on real-device timing and can only be confirmed on your phone:
+    * the phone-back reverse hero itself: how smooth it is on your GPU,
+      and whether your Chrome plays its OWN back-swipe animation (if it
+      does, ours deliberately steps aside, so you'd see an instant switch,
+      not a hero);
+    * the in-app arrow's reverse hero smoothness;
+    * scroll restore when photos load slowly on mobile data (the page
+      keeps re-applying the position for up to 3 s as it grows, and stops
+      the moment you touch the screen).
+  Not device-dependent (proven by structure and by tests): filters, chips,
+  query and results surviving Back; the keyboard not opening; the Expert
+  page opening at the top; no slide anywhere.
+  Two-minute check on your phone: Home -> pick a chip -> scroll -> open a
+  product -> phone back. Do the same from Search -> Baby Care. If anything
+  looks off, screen-record it like last time.
+- Commits are not exactly one per Part: Parts 2, 3 and 4 share one
+  mechanism (the history object and the transition helper). Splitting them
+  would have meant commits that don't work on their own. Commit list:
+    1. Parts 2, 3, 4 (history ownership, in-app hero, phone back, Expert/no slide)
+    2. Part 1 (filters/chips/search in the URL, bento restore, the
+       duplicate-name fix)
+    3. Tests (new spec, stricter helpers, serial runs)
+    4. This report
+  The build, unit tests and full e2e suite (3 times in a row) were run on
+  the final code. The in-between commits were checked to build.
+
+
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+-----------------------------------------
+- The hero banner's dots animate their WIDTH. The motion rules say only
+  transform/opacity. It's small, but it is layout work on every autoplay
+  tick on a mid-range phone.
+- Each full e2e run places one real test order and cancels it (by
+  design, Batch 21). This session's runs added several more CANCELLED test
+  orders under the test customer. Delete them with admin bulk-delete when
+  convenient.
+- The main JS bundle is still ~700 KB before gzip (unchanged, flagged
+  before).
+
+
+5. DESIGN DECISIONS
+-------------------
+- No slide anywhere, forward included. You asked for no slide on Back, and
+  the site rules say a Back must mirror its forward move. The only way to
+  keep both is a crossfade both ways. Product opens keep the hero morph.
+- Category in the URL as its slug (?cat=baby-care), not its database id.
+  It's readable, and the link can be shared.
+- Filters edit the current history entry rather than adding one, so
+  picking five chips never needs five Back presses.
+- Phone back pressed during an animation = instant switch. Stacking a
+  second animation on top makes Chrome abort the first one (a glitch). The
+  in-app arrow instead waits for the running one to finish, because it
+  owns its own animation.
+- Test runs are now serial (one test at a time). The flaky "different
+  animation test fails each run" was several spec files competing for the
+  same CPU. It's slower (about 4 minutes per run) but deterministic. The
+  timing tests also now wait for real signals (the animation actually
+  finishing) instead of fixed pauses.
+- The old tests' "did it animate?" check counted ANY animation on the page
+  (the bento flip tile animates forever), so on Home it was always true.
+  That is how they passed while your phone was broken. It now counts only
+  real page-transition animations.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Real-device check before merging animation work (medium, process). Two
+   branches in a row passed every automated test but misbehaved on your
+   phone. A 5-minute routine on one real Android phone for any
+   navigation/animation branch, or a cheap real-device cloud run, would
+   catch this class of bug before you do.
+2. Keep My Orders in memory between visits (small). Coming Back to it
+   refetches the list, so it shows a skeleton first and the scroll can
+   only be restored once the list arrives. Showing the last list instantly
+   while refreshing in the background feels faster.
+3. Filtered and search URLs are now shareable (small). Add a canonical tag
+   / noindex for ?cat=/?q= pages so Google doesn't index hundreds of
+   near-duplicate filter pages.
+4. Hero banner dots: switch from animating width to transform: scaleX
+   (small), per the motion rules above.

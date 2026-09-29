@@ -6,9 +6,13 @@ import { formatTaka } from '../../lib/format';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
-import { rememberGridScroll } from '../../lib/gridScroll';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
-import { getHeroReverseTarget } from '../../lib/heroTransition';
+import {
+  heroReverseTargetFor,
+  rememberHeroOrigin,
+  returningFromProductIdFor,
+  type HeroOrigin,
+} from '../../lib/heroTransition';
 import { heroReverseFaceFor, heroReverseIndexFor } from '../../lib/bentoHeroReverse';
 import { BENTO_TILE_SELECT } from '../../lib/bentoTiles';
 import { applyIdOrder, parseIdList, saveSettings, serializeIdList } from '../../lib/settingsLists';
@@ -78,13 +82,16 @@ function ProductFaceBody({ product }: { product: Product }) {
  *  when the product has one, the same plain ground as before when it
  *  doesn't. Quotes/backslashes/newlines would break out of the url()
  *  literal (mirrors BentoCustomTile's own image handling). */
-function faceImageProps(product: Product): { className: string; style?: CSSProperties } {
+function faceImageProps(
+  product: Product,
+  origin: HeroOrigin
+): { className: string; style?: CSSProperties } {
   const cover = cardImage(product);
   // Only set on the one face being returned to right after leaving its own
   // detail page — see lib/heroTransition.ts — so the browser morphs the big
   // image back into this exact tile instead of just crossfading the page.
   const heroStyle: CSSProperties | undefined =
-    getHeroReverseTarget() === product.id
+    heroReverseTargetFor(origin) === product.id
       ? { viewTransitionName: productHeroName(product.id) }
       : undefined;
   if (cover === null) return { className: '', style: heroStyle };
@@ -114,12 +121,13 @@ function SwipeStackTile({
   /** Off while Edit Mode is on, where a press on the tile begins a drag. */
   swipeEnabled: boolean;
 }) {
-  // Starts on whichever product a reverse-hero return is targeting (see
-  // heroReverseIndex) instead of always the first slide, so a product opened
-  // after swiping deeper into the stack still morphs back into view instead
-  // of shrinking into a slide that's now scrolled out of sight.
+  // Starts on whichever product the shopper is coming Back from (see
+  // heroReverseIndex) instead of always the first slide — animated or
+  // instant Back alike — so a product opened after swiping deeper into the
+  // stack comes back into view (and morphs into it, when the Back animates)
+  // instead of the stack resetting to its first card.
   const [index, setIndex] = useState(
-    () => heroReverseIndexFor(products, getHeroReverseTarget()) ?? 0
+    () => heroReverseIndexFor(products, returningFromProductIdFor('bento-stack')) ?? 0
   );
   const count = products.length;
 
@@ -145,7 +153,7 @@ function SwipeStackTile({
         }}
       >
         {products.map((product) => {
-          const { className, style } = faceImageProps(product);
+          const { className, style } = faceImageProps(product, 'bento-stack');
           return (
             <div
               className={`bento-face bento-face--front bento-stack__slide${className}`}
@@ -206,16 +214,16 @@ function FlipTile({
   onEdit: () => void;
 }) {
   const [front, back] = faces;
-  const frontImage = faceImageProps(front);
-  const backImage = back ? faceImageProps(back) : null;
+  const frontImage = faceImageProps(front, 'bento-flip');
+  const backImage = back ? faceImageProps(back, 'bento-flip') : null;
 
-  // Which face (if any) a reverse-hero return is targeting, frozen at mount
+  // Which face (if any) the shopper is coming Back from, frozen at mount
   // — the CSS animation that flips this tile has no JS timer to pause, so
   // without this the auto-flip may well have moved on to the other face by
   // the time the user comes back, and the morph would land on a face that's
   // rotated away rather than the one actually facing the screen.
   const [pausedFace, setPausedFace] = useState<'front' | 'back' | null>(() =>
-    heroReverseFaceFor(front, back, getHeroReverseTarget())
+    heroReverseFaceFor(front, back, returningFromProductIdFor('bento-flip'))
   );
 
   useEffect(() => {
@@ -464,11 +472,10 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
   const activeTiles = useMemo(() => tiles.filter((t) => t.is_active), [tiles]);
   const featured = useMemo(() => products.filter((p) => p.is_featured), [products]);
 
-  const openProduct = (product: Product) => {
-    // Same Back-restores-position contract the product grid follows, and now
-    // the same hero morph too — bento cards used to fall back to a plain
-    // slide with a near-black frame instead (reports/batch-21.txt Part 1).
-    rememberGridScroll();
+  const openProduct = (product: Product, origin: HeroOrigin) => {
+    rememberHeroOrigin(product.id, origin);
+    // Same hero morph the product grid uses — bento cards used to fall back
+    // to a plain slide with a near-black frame instead (batch-21 Part 1).
     navigateToProductWithHero(navigate, productPath(product), product);
   };
 
@@ -505,7 +512,7 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
       stackProducts.length > 0 ? (
         <SwipeStackTile
           products={stackProducts}
-          onOpen={openProduct}
+          onOpen={(product) => openProduct(product, 'bento-stack')}
           onEdit={() => setEditTarget('left')}
           swipeEnabled={!isEditMode}
         />
@@ -516,7 +523,7 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
       flipFaces.length > 0 ? (
         <FlipTile
           faces={flipFaces}
-          onOpen={openProduct}
+          onOpen={(product) => openProduct(product, 'bento-flip')}
           onEdit={() => setEditTarget('right-top')}
         />
       ) : (

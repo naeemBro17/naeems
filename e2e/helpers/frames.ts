@@ -127,7 +127,14 @@ function pixelDiffFraction(a: PNG, b: PNG): number {
  *  its ENTIRE duration, not just one instant, so even one check shortly
  *  after the trigger reliably catches a real one and never a hard cut. */
 async function hasActiveDocumentAnimation(page: Page): Promise<boolean> {
-  return page.evaluate(() => document.getAnimations({ subtree: true }).length > 0);
+  // Only ::view-transition-* pseudo animations count (fix/back-known-good):
+  // Home's bento flip tile animates forever, so "any animation at all" was
+  // always true there and let a hard cut pass as a real transition.
+  return page.evaluate(() =>
+    document
+      .getAnimations()
+      .some((a) => ((a.effect as KeyframeEffect | null)?.pseudoElement ?? '').startsWith('::view-transition'))
+  );
 }
 
 /** Polls quickly (no screenshots — those alone can take 100ms+ per call over

@@ -10,6 +10,11 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   fullyParallel: false,
+  // One test at a time. Several spec files running side by side made the
+  // screenshot- and frame-timing tests share one machine's CPU, so a
+  // different timing test failed on each full run while every one passed
+  // alone (fix/back-known-good). Serial is slower but deterministic.
+  workers: 1,
   retries: 0,
   reporter: [['list']],
   use: {

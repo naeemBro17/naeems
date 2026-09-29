@@ -1,7 +1,6 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAppNavigate } from './hooks/useAppNavigate';
-import { setupNavigationApiTransitions } from './lib/navigationTransitions';
 import { BottomNav } from './components/viewer/BottomNav';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -75,23 +74,6 @@ function GlobalBottomNav() {
   );
 }
 
-/**
- * Registers THE one handler for a real back/forward traversal — phone back,
- * browser Back/Forward, and the in-app "<-" button, which is just a
- * traversal too now (see lib/navigationTransitions.ts's doc comment). Needs
- * react-router's own `navigate` function, which only exists once inside
- * <BrowserRouter>, hence a tiny component rather than main.tsx (where the
- * old popstate-based version lived, before <BrowserRouter> ever mounted —
- * that ordering trick is gone along with it, since the Navigation API's
- * `intercept()` doesn't need to win a listener-registration race the way a
- * plain `popstate` listener did).
- */
-function NavigationApiBridge() {
-  const navigate = useNavigate();
-  useEffect(() => setupNavigationApiTransitions(navigate), [navigate]);
-  return null;
-}
-
 export default function App() {
   return (
     <ThemeProvider>
@@ -102,7 +84,6 @@ export default function App() {
               <CheckoutStateProvider>
                 <AdminEditProvider>
                   <AnalyticsTracker />
-                  <NavigationApiBridge />
                   <PageTransition>
                     <Routes>
                       <Route path="/" element={<ViewerPage />} />

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import {
   ORDER_STATUS_LABELS,
@@ -51,9 +52,20 @@ interface OrdersTabProps {
 
 export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) {
   const { showToast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const [search, setSearch] = useState('');
+  // Filters live in the URL so leaving the admin panel and coming Back keeps
+  // them (hooks/useUrlParams.ts); prefixed so they can't clash with the
+  // Products tab's own.
+  const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>(
+    'ostatus',
+    'all',
+    STATUS_OPTIONS.map((opt) => opt.value)
+  );
+  const [sourceFilter, setSourceFilter] = useUrlParam<SourceFilter>(
+    'osource',
+    'all',
+    SOURCE_OPTIONS.map((opt) => opt.value)
+  );
+  const [search, setSearch] = useUrlParam<string>('oq', '');
   const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
