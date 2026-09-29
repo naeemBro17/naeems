@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,8 +10,7 @@ import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
 import {
   isVariantInStock,
-  mergedGalleryImages,
-  regionsOf,
+  optionGalleryImages,
   sortVariants,
   VARIANT_SELECT,
   VARIANTS_VIEW,
@@ -30,6 +29,7 @@ import { Modal } from '../components/shared/Modal';
 import { ShareButton } from '../components/viewer/ShareButton';
 import { CartIcon } from '../components/viewer/CartButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
+import { VariantSelector } from '../components/viewer/VariantSelector';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
 import type { Product, ProductVariant, VariantOption } from '../types';
 
@@ -165,141 +165,6 @@ function VideoReviewCard({ url }: { url: string }) {
   );
 }
 
-/** One row of pill chips — a Region row, a Size row, or (for the flat
- *  fallback) a row of full option labels. */
-function ChipRow({
-  label,
-  options,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  options: string[];
-  selected: string;
-  onSelect: (value: string) => void;
-}) {
-  return (
-    <div className="variant-row" role="group" aria-label={label}>
-      <span className="variant-row__label">{label}</span>
-      <div className="variant-row__chips">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`chip-select${option === selected ? ' chip-select--on' : ''}`}
-            aria-pressed={option === selected}
-            onClick={() => onSelect(option)}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Flat single row, one chip per option, each showing its own full label —
- *  the fallback for a product whose options don't cleanly split into a
- *  Region×Size matrix (see VariantSelector's doc comment). */
-function FlatOptionRow({
-  options,
-  productName,
-  selected,
-  onSelect,
-}: {
-  options: VariantOption[];
-  productName: string;
-  selected: VariantOption;
-  onSelect: (option: VariantOption) => void;
-}) {
-  return (
-    <div className="variant-selector">
-      <div className="variant-row" role="group" aria-label="Choose an option">
-        <div className="variant-row__chips">
-          {options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`chip-select${option.id === selected.id ? ' chip-select--on' : ''}`}
-              aria-pressed={option.id === selected.id}
-              onClick={() => onSelect(option)}
-            >
-              {variantOptionLabel(option, productName)}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Option picker, rendered only when a product has 2+ selectable options (its
- * own base entry plus one or more real variant rows — see variantOptionsFor).
- *
- * Two-level by default — a Region row, then a Size row filtered to whatever
- * that region actually has — because that's what reads best for the common
- * case where every option cleanly carries both. Falls back to one flat row
- * of full labels only when it can't: an option with a blank Region or Size
- * (a product with no label at all, showing its bare name as the fallback
- * option — see variantOptionLabel — or an option built by the "combine
- * products into variants" flow that was only given one half of a label)
- * can't be placed in a region×size grid at all, so the whole selector drops
- * to the flat list rather than showing a broken or misleading grid.
- */
-function VariantSelector({
-  options,
-  productName,
-  selected,
-  onSelect,
-}: {
-  options: VariantOption[];
-  productName: string;
-  selected: VariantOption;
-  onSelect: (option: VariantOption) => void;
-}) {
-  const canGroup = options.every((o) => o.region.trim() !== '' && o.size.trim() !== '');
-
-  if (!canGroup) {
-    return (
-      <FlatOptionRow
-        options={options}
-        productName={productName}
-        selected={selected}
-        onSelect={onSelect}
-      />
-    );
-  }
-
-  const regions = regionsOf(options);
-  const optionsInRegion = options.filter((o) => o.region === selected.region);
-  const sizesInRegion = Array.from(new Set(optionsInRegion.map((o) => o.size)));
-
-  const pickRegion = (region: string) => {
-    // Keep the same size selected across the region switch when that size
-    // exists there too; otherwise fall back to the first option in it.
-    const sameSize = options.find((o) => o.region === region && o.size === selected.size);
-    const first = sameSize ?? options.find((o) => o.region === region);
-    if (first) onSelect(first);
-  };
-
-  const pickSize = (size: string) => {
-    const match = optionsInRegion.find((o) => o.size === size);
-    if (match) onSelect(match);
-  };
-
-  return (
-    <div className="variant-selector">
-      {regions.length > 1 && (
-        <ChipRow label="Region" options={regions} selected={selected.region} onSelect={pickRegion} />
-      )}
-      {sizesInRegion.length > 1 && (
-        <ChipRow label="Size" options={sizesInRegion} selected={selected.size} onSelect={pickSize} />
-      )}
-    </div>
-  );
-}
-
 function DetailContent({
   product,
   variants,
@@ -351,15 +216,11 @@ function DetailContent({
     };
   }, []);
 
-  // Every variant's own photo (smallest Size first) plus the product's own
-  // gallery, merged into one set — then whichever option is selected moves
-  // its own photo to the front, the same way Amazon's size picker does.
-  const baseImages = productImages(product);
-  const galleryImages = mergedGalleryImages(baseImages, variants);
-  const images =
-    selectedOption.image_url !== null
-      ? [selectedOption.image_url, ...galleryImages.filter((url) => url !== selectedOption.image_url)]
-      : galleryImages;
+  // The selected option's own photos first (the default option's are the
+  // product's own — the same photo its card showed), then every other photo
+  // once. See optionGalleryImages for the one rule the whole site follows.
+  const images = optionGalleryImages(productImages(product), selectedOption, variants);
+  const firstImage = images[0] ?? null;
 
   // The carousel keeps its own scroll position across re-renders — without
   // this, the browser's native scroll anchoring "helpfully" compensates for
@@ -369,10 +230,12 @@ function DetailContent({
   // instant the images array reordered). Snap back to the first slide —
   // wherever the selected option's own image now sits in the array —
   // every time the selection actually changes.
-  useEffect(() => {
+  // Layout effect, keyed on the first photo itself: the reset lands before
+  // the browser paints, so no frame ever shows the previous photo.
+  useLayoutEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
     setActiveImage(0);
-  }, [selectedOption.id]);
+  }, [selectedOption.id, firstImage]);
 
   const outOfStock = hasSelector ? !isVariantInStock(selectedOption) : isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = hasSelector

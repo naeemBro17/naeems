@@ -192,3 +192,54 @@ test.describe('Part 2 — reload starts at the top; Back restores', () => {
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
   });
 });
+
+test.describe('Part 3 — variants: sizes appear, the image follows the choice', () => {
+  test('CeraVe Hydrating Cleanser: opens on the card image, Korea shows its size and its own image', async ({
+    page,
+  }) => {
+    await page.goto('/search?q=hydrating%20cleanser');
+    const card = page.locator('.product-card', { hasText: 'CeraVe Hydrating Cleanser' }).first();
+    await expect(card).toBeVisible();
+    const cardSrc = (await card.locator('.product-card__image').getAttribute('src')) ?? '';
+    await card.click();
+    await expect(page).toHaveURL(/\/product\/cerave-hydrating-cleanser/);
+    await waitForViewTransitionsToFinish(page);
+
+    const firstImage = page.locator('.product-detail__image').first();
+    const shownSrc = async () =>
+      page.evaluate(() => {
+        const carousel = document.querySelector<HTMLElement>('.product-detail__carousel');
+        if (!carousel) return '';
+        const index = Math.round(carousel.scrollLeft / carousel.clientWidth);
+        return carousel.querySelectorAll('img')[index]?.getAttribute('src') ?? '';
+      });
+
+    // The same photo the card showed (the card may use its small version).
+    const openedOn = (await firstImage.getAttribute('src')) ?? '';
+    expect(openedOn).toBe(cardSrc.replace('/thumb/', '/'));
+    // ...and it never changes by itself afterwards.
+    for (let i = 0; i < 8; i++) {
+      expect(await shownSrc()).toBe(openedOn);
+      await page.waitForTimeout(500);
+    }
+
+    const regionRow = page.getByRole('group', { name: 'Region' });
+    const sizeRow = page.getByRole('group', { name: 'Size' });
+    await expect(regionRow).toBeVisible();
+    await expect(sizeRow).toBeVisible();
+    await expect(sizeRow.locator('[aria-pressed="true"]')).toHaveCount(1);
+    const priceBefore = await page.locator('.product-detail__price').textContent();
+
+    await regionRow.getByRole('button', { name: /korea/i }).click();
+    await expect(sizeRow).toBeVisible();
+    await expect(sizeRow.locator('[aria-pressed="true"]')).toHaveCount(1);
+    await expect(page.locator('.product-detail__price')).not.toHaveText(priceBefore ?? '');
+    await expect.poll(shownSrc).not.toBe(openedOn);
+    const koreaSrc = await shownSrc();
+    expect(koreaSrc).not.toBe('');
+
+    await regionRow.getByRole('button', { name: /australia/i }).click();
+    await expect.poll(shownSrc).toBe(openedOn);
+    await expect(page.locator('.product-detail__price')).toHaveText(priceBefore ?? '');
+  });
+});
