@@ -243,3 +243,75 @@ test.describe('Part 3 — variants: sizes appear, the image follows the choice',
     await expect(page.locator('.product-detail__price')).toHaveText(priceBefore ?? '');
   });
 });
+
+test.describe('Part 4 — every card cart button works', () => {
+  test('tapping each Home card\'s cart button adds it, or opens its option picker and adds from there', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto('/');
+    await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
+    await page.reload();
+    await expect(page.locator('.product-card').first()).toBeVisible();
+
+    const cards = page.locator('.product-card');
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(10);
+    const failures: string[] = [];
+    let added = 0;
+    let picked = 0;
+    let outOfStock = 0;
+
+    const cartLines = () =>
+      page.evaluate(() => (JSON.parse(localStorage.getItem('nph_cart') ?? '[]') as unknown[]).length);
+
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      const button = card.locator('.cart-button');
+      await button.scrollIntoViewIfNeeded();
+      const label = (await button.getAttribute('aria-label')) ?? '';
+      const name = (await card.locator('.product-card__name').textContent())?.trim() ?? `card ${i}`;
+      if (await button.isDisabled()) {
+        outOfStock += 1;
+        continue;
+      }
+      const linesBefore = await cartLines();
+      await button.tap();
+
+      if (label.startsWith('Choose options for')) {
+        const sheet = page.getByRole('dialog', { name: 'Choose options' });
+        try {
+          await expect(sheet).toBeVisible({ timeout: 3000 });
+          await sheet.getByRole('button', { name: 'Add to Cart' }).tap();
+          await expect(sheet).toBeHidden({ timeout: 3000 });
+          picked += 1;
+        } catch {
+          failures.push(`${name}: option picker did not open or could not add`);
+          await page.keyboard.press('Escape');
+          continue;
+        }
+      } else {
+        added += 1;
+      }
+
+      if (!page.url().endsWith('/')) {
+        failures.push(`${name}: tapping the cart button left the page (${page.url()})`);
+        await page.goto('/');
+        continue;
+      }
+      await expect
+        .poll(cartLines, { timeout: 2000 })
+        .toBeGreaterThan(linesBefore)
+        .catch(() => failures.push(`${name}: nothing was added to the cart`));
+      await expect(button)
+        .toHaveClass(/cart-button--added/, { timeout: 2000 })
+        .catch(() => failures.push(`${name}: button does not show it is in the cart`));
+    }
+
+    console.log(
+      `Cart buttons: ${count} cards — ${added} added directly, ${picked} via the option picker, ${outOfStock} out of stock (disabled).`
+    );
+    expect(failures, failures.join('\n')).toEqual([]);
+    await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
+  });
+});

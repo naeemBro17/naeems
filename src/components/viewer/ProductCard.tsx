@@ -12,6 +12,7 @@ import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransi
 import { heroReverseTargetFor, rememberHeroOrigin } from '../../lib/heroTransition';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
+import { VariantPickerSheet } from './VariantPickerSheet';
 
 interface ProductCardProps {
   product: Product;
@@ -31,6 +32,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const navigate = useNavigate();
   const { variantsFor } = useProducts();
   const [imageFailed, setImageFailed] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const imageWrapRef = useRef<HTMLDivElement>(null);
 
   const openDetail = () => {
@@ -69,126 +71,136 @@ export function ProductCard({ product }: ProductCardProps) {
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
 
   return (
-    <article
-      className="product-card"
-      role="button"
-      tabIndex={0}
-      onClick={openDetail}
-      onKeyDown={handleCardKeyDown}
-      aria-label={`View details for ${product.name}`}
-    >
-      <div
-        ref={imageWrapRef}
-        className={`product-card__image-wrap${outOfStock ? ' product-media--out' : ''}`}
-        // Only set when this render is the one frame right after leaving
-        // THIS product's detail page — see lib/heroTransition.ts. Applied
-        // declaratively (not the imperative ref-set openDetail uses for the
-        // forward tap) because this element hasn't been created yet at the
-        // moment the back navigation starts; it only exists once React has
-        // remounted the grid, so it has to be baked into the very first
-        // render instead.
-        style={
-          heroReverseTargetFor('grid') === product.id
-            ? ({ viewTransitionName: productHeroName(product.id) } as CSSProperties)
-            : undefined
-        }
+    <>
+      <article
+        className="product-card"
+        role="button"
+        tabIndex={0}
+        onClick={openDetail}
+        onKeyDown={handleCardKeyDown}
+        aria-label={`View details for ${product.name}`}
       >
-        {showImage ? (
-          <img
-            className="product-card__image"
-            src={cover ?? ''}
-            alt={product.name}
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <div className="product-card__placeholder" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
-              <path d="M3 8l9 5 9-5" />
-              <path d="M12 13v8" />
-            </svg>
-          </div>
-        )}
-
-        {/* The menu stays functional on out-of-stock cards. */}
-        <CardMenu product={product} copyPrice={fromPrice ?? mainPrice} outOfStock={outOfStock} />
-      </div>
-
-      <div className="product-card__body">
-        {/* Reserving a dedicated column (not absolute positioning) for the cart
-            button means text here physically cannot flow under it. */}
-        <div className="product-card__info">
-          <ProductCardName name={product.name} />
-
-          {fromPrice !== null ? (
-            <div className="product-card__prices">
-              <span
-                className={`product-card__price${
-                  outOfStock ? ' product-card__price--out' : ''
-                }`}
-              >
-                <span className="product-card__from">from</span>
-                {formatTaka(fromPrice)}
-              </span>
-            </div>
-          ) : strikePrice !== null ? (
-            <div className="product-card__prices">
-              <span
-                className={`product-card__price${
-                  outOfStock ? ' product-card__price--out' : ''
-                }`}
-              >
-                {formatTaka(mainPrice)}
-              </span>
-              <span className="product-card__price-sub">
-                <span className="product-card__strike">{formatTaka(strikePrice)}</span>
-                {savePercent !== null && !outOfStock && (
-                  <span className="product-card__save">Save {savePercent}%</span>
-                )}
-              </span>
-            </div>
+        <div
+          ref={imageWrapRef}
+          className={`product-card__image-wrap${outOfStock ? ' product-media--out' : ''}`}
+          // Only set when this render is the one frame right after leaving
+          // THIS product's detail page — see lib/heroTransition.ts. Applied
+          // declaratively (not the imperative ref-set openDetail uses for the
+          // forward tap) because this element hasn't been created yet at the
+          // moment the back navigation starts; it only exists once React has
+          // remounted the grid, so it has to be baked into the very first
+          // render instead.
+          style={
+            heroReverseTargetFor('grid') === product.id
+              ? ({ viewTransitionName: productHeroName(product.id) } as CSSProperties)
+              : undefined
+          }
+        >
+          {showImage ? (
+            <img
+              className="product-card__image"
+              src={cover ?? ''}
+              alt={product.name}
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
-            <div className="product-card__prices">
-              <span
-                className={`product-card__price${
-                  outOfStock ? ' product-card__price--out' : ''
-                }`}
+            <div className="product-card__placeholder" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                {formatTaka(mainPrice)}
-              </span>
+                <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
+                <path d="M3 8l9 5 9-5" />
+                <path d="M12 13v8" />
+              </svg>
             </div>
           )}
 
-          <p className="product-card__stock">
-            <span
-              className={`product-card__dot product-card__dot--${
-                outOfStock ? 'out' : 'in'
-              }`}
-              aria-hidden="true"
-            />
-            {outOfStock ? 'Out of Stock' : 'In Stock'}
-          </p>
+          {/* The menu stays functional on out-of-stock cards. */}
+          <CardMenu product={product} copyPrice={fromPrice ?? mainPrice} outOfStock={outOfStock} />
         </div>
 
-        <div className="product-card__cart-slot">
-          <CartButton
-            productId={product.id}
-            productName={product.name}
-            price={fromPrice ?? mainPrice}
-            outOfStock={outOfStock}
-            hasVariants={fromPrice !== null}
-            onRequiresVariant={openDetail}
-          />
+        <div className="product-card__body">
+          {/* Reserving a dedicated column (not absolute positioning) for the cart
+              button means text here physically cannot flow under it. */}
+          <div className="product-card__info">
+            <ProductCardName name={product.name} />
+
+            {fromPrice !== null ? (
+              <div className="product-card__prices">
+                <span
+                  className={`product-card__price${
+                    outOfStock ? ' product-card__price--out' : ''
+                  }`}
+                >
+                  <span className="product-card__from">from</span>
+                  {formatTaka(fromPrice)}
+                </span>
+              </div>
+            ) : strikePrice !== null ? (
+              <div className="product-card__prices">
+                <span
+                  className={`product-card__price${
+                    outOfStock ? ' product-card__price--out' : ''
+                  }`}
+                >
+                  {formatTaka(mainPrice)}
+                </span>
+                <span className="product-card__price-sub">
+                  <span className="product-card__strike">{formatTaka(strikePrice)}</span>
+                  {savePercent !== null && !outOfStock && (
+                    <span className="product-card__save">Save {savePercent}%</span>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="product-card__prices">
+                <span
+                  className={`product-card__price${
+                    outOfStock ? ' product-card__price--out' : ''
+                  }`}
+                >
+                  {formatTaka(mainPrice)}
+                </span>
+              </div>
+            )}
+
+            <p className="product-card__stock">
+              <span
+                className={`product-card__dot product-card__dot--${
+                  outOfStock ? 'out' : 'in'
+                }`}
+                aria-hidden="true"
+              />
+              {outOfStock ? 'Out of Stock' : 'In Stock'}
+            </p>
+          </div>
+
+          <div className="product-card__cart-slot">
+            <CartButton
+              productId={product.id}
+              productName={product.name}
+              price={fromPrice ?? mainPrice}
+              outOfStock={outOfStock}
+              hasVariants={fromPrice !== null}
+              onRequiresVariant={() => setPickerOpen(true)}
+            />
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+      {realVariants.length > 0 && (
+        <VariantPickerSheet
+          product={product}
+          variants={realVariants}
+          isOpen={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </>
   );
 }

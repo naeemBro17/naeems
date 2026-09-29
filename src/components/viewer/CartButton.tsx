@@ -11,7 +11,7 @@ interface CartButtonProps {
    *  a "from" price, so which exact variant to add is ambiguous here. */
   hasVariants?: boolean;
   /** Called instead of adding to cart when hasVariants is true, so the
-   *  customer picks a variant on the detail page first. */
+   *  customer picks a variant first (the card opens VariantPickerSheet). */
   onRequiresVariant?: () => void;
 }
 
@@ -71,9 +71,9 @@ export function CartButton({
   onRequiresVariant,
 }: CartButtonProps) {
   const { items, addItem } = useCart();
-  // A card only ever adds the plain product (variants require the detail
-  // page — see onRequiresVariant), so "in cart" here means any line for this
-  // product, regardless of which variant it ended up as.
+  // A product with variants is added through its picker (see
+  // onRequiresVariant), so "in cart" here means any line for this product,
+  // regardless of which variant it ended up as.
   const inCart = items.some((item) => item.productId === productId);
   // Bumped on every tap so the pulse ring span remounts and its CSS
   // animation restarts, even on rapid repeat taps.
