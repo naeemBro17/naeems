@@ -87,8 +87,22 @@ export interface ViewTransitionRecord {
    *  state the browser's "after" picture (the first new frame) is taken from. */
   scrollYAfterUpdate: number | null;
   /** For a product hero group: its keyframed start/end width in px, and
-   *  its live width sampled on every frame while it animated. */
-  hero: { name: string; fromWidth: number; toWidth: number; samples: number[] } | null;
+   *  its live width sampled on every frame while it animated. `radii` is
+   *  the group's live top-left corner radius on those same frames, and
+   *  `fromRadius`/`toRadius` the real on-page element's visible top-left
+   *  radius just before the transition and just after it finished — the
+   *  first and last frames must equal them (Batch 23 Part 1). */
+  hero: HeroRecord | null;
+}
+
+export interface HeroRecord {
+  name: string;
+  fromWidth: number;
+  toWidth: number;
+  samples: number[];
+  radii: number[];
+  fromRadius: number | null;
+  toRadius: number | null;
 }
 
 /**
@@ -105,12 +119,51 @@ export async function recordViewTransitions(page: Page): Promise<void> {
     w.__vtRecords = [];
     const original = document.startViewTransition?.bind(document);
     if (!original) return;
+    // The visible top-left corner radius of whichever element carries a
+    // product-hero name: its own radius, or a clipping ancestor's inner
+    // radius when it sits in that ancestor's corner (the grid card).
+    const visibleTopLeftRadius = (): number | null => {
+      const el = Array.from(document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]')).find(
+        (candidate) => candidate.style.getPropertyValue('view-transition-name').startsWith('product-hero-')
+      );
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      let radius = Number.parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const style = getComputedStyle(a);
+        if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+        const outer = a.getBoundingClientRect();
+        const bt = Number.parseFloat(style.borderTopWidth) || 0;
+        const bl = Number.parseFloat(style.borderLeftWidth) || 0;
+        if (Math.abs(rect.top - (outer.top + bt)) <= 1.5 && Math.abs(rect.left - (outer.left + bl)) <= 1.5) {
+          const theirs = Number.parseFloat(style.borderTopLeftRadius) || 0;
+          radius = Math.max(radius, theirs - Math.max(bt, bl));
+        }
+      }
+      return radius;
+    };
     document.startViewTransition = ((update?: ViewTransitionUpdateCallback) => {
+      const fromRadius = visibleTopLeftRadius();
       const transition = original(update);
+      // Registered before the app's own `await transition.finished`, so it
+      // measures the returned-to card before the app clears its name.
+      let toRadius: number | null = null;
+      const measureEnd = () => {
+        toRadius = visibleTopLeftRadius();
+      };
+      transition.finished.then(measureEnd, measureEnd);
       const record: {
         pseudos: string[];
         scrollYAfterUpdate: number | null;
-        hero: { name: string; fromWidth: number; toWidth: number; samples: number[] } | null;
+        hero: {
+          name: string;
+          fromWidth: number;
+          toWidth: number;
+          samples: number[];
+          radii: number[];
+          fromRadius: number | null;
+          toRadius: number | null;
+        } | null;
       } = { pseudos: [], scrollYAfterUpdate: null, hero: null };
       w.__vtRecords.push(record);
       transition.updateCallbackDone
@@ -127,9 +180,16 @@ export async function recordViewTransitions(page: Page): Promise<void> {
               record.pseudos.push(effect.pseudoElement);
             }
           }
+          // The group's size/position animation — not the corner-radius one
+          // lib/heroCorners.ts runs on the same pseudo-element.
           const heroGroup = animations.find((animation) => {
-            const pseudo = (animation.effect as KeyframeEffect | null)?.pseudoElement ?? '';
-            return pseudo.startsWith('::view-transition-group(product-hero-');
+            const effect = animation.effect as KeyframeEffect | null;
+            const pseudo = effect?.pseudoElement ?? '';
+            return (
+              pseudo.startsWith('::view-transition-group(product-hero-') &&
+              effect !== null &&
+              effect.getKeyframes().some((frame) => frame.width !== undefined)
+            );
           });
           if (!heroGroup) return;
           const effect = heroGroup.effect as KeyframeEffect;
@@ -141,18 +201,26 @@ export async function recordViewTransitions(page: Page): Promise<void> {
             fromWidth: px(frames[0]?.width),
             toWidth: px(frames[frames.length - 1]?.width),
             samples: [],
+            radii: [],
+            fromRadius,
+            toRadius: null,
           };
           // Sampled on the page's own frames until the transition ends — a
           // single fixed-time sample could land before the first animated
           // frame when the machine is busy.
           let done = false;
-          transition.finished.then(
-            () => (done = true),
-            () => (done = true)
-          );
+          const hero = record.hero;
+          const settle = () => {
+            done = true;
+            hero.toRadius = toRadius;
+          };
+          transition.finished.then(settle, settle);
           while (!done) {
-            const width = px(getComputedStyle(document.documentElement, pseudo).width);
-            if (Number.isFinite(width)) record.hero.samples.push(width);
+            const groupStyle = getComputedStyle(document.documentElement, pseudo);
+            const width = px(groupStyle.width);
+            if (Number.isFinite(width)) hero.samples.push(width);
+            const radius = px(groupStyle.borderTopLeftRadius);
+            if (Number.isFinite(radius)) hero.radii.push(radius);
             await new Promise((r) => requestAnimationFrame(r));
           }
         })

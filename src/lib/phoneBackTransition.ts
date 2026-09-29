@@ -1,5 +1,6 @@
 import { runExclusiveTransition, isTransitionRunning, setHeroReverseTarget } from './heroTransition';
-import { clearHeroNames, prefersReducedMotion, supportsViewTransitions } from './viewTransition';
+import { clearHeroNames, prefersReducedMotion, productHeroName, supportsViewTransitions } from './viewTransition';
+import { prepareHeroCornerMorph } from './heroCorners';
 
 /**
  * THE switch for the phone-back reverse hero (fix/back-known-good Part 3,
@@ -39,7 +40,9 @@ export function tryPhoneBackHero(applyRoute: () => void, leavingProductId: strin
   void runExclusiveTransition(async () => {
     setHeroReverseTarget(leavingProductId);
     document.documentElement.classList.add('vt-hero');
+    const morphCorners = prepareHeroCornerMorph(productHeroName(leavingProductId));
     const transition = document.startViewTransition(applyRoute);
+    morphCorners(transition);
     transition.ready.catch(() => undefined);
     try {
       await transition.finished;

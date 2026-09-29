@@ -3,6 +3,7 @@ import type { NavigateFunction, NavigateOptions, To } from 'react-router-dom';
 import type { Product } from '../types';
 import { backAndWaitForRoute } from './appHistory';
 import { getCurrentDetailProductId, runExclusiveTransition, setHeroReverseTarget } from './heroTransition';
+import { prepareHeroCornerMorph } from './heroCorners';
 
 /** view-transition-name shared by a product card's image box and the detail
  *  page's gallery box, so the browser morphs one into the other. */
@@ -41,12 +42,14 @@ export function supportsViewTransitions(): boolean {
  * lib/heroTransition.ts's runExclusiveTransition so a second transition never
  * starts while one is still animating (that aborts the first). Without View
  * Transitions support, or with reduced motion, `update` just runs — an
- * instant change.
+ * instant change. `heroName`, for a product hero, also morphs the image's
+ * rounded corners between the two ends (lib/heroCorners.ts).
  */
 function runWithViewTransition(
   update: () => void | Promise<void>,
   htmlClass: string,
-  onDone?: () => void
+  onDone?: () => void,
+  heroName?: string
 ): void {
   if (!supportsViewTransitions() || prefersReducedMotion()) {
     void Promise.resolve(update()).finally(() => onDone?.());
@@ -54,7 +57,9 @@ function runWithViewTransition(
   }
   void runExclusiveTransition(async () => {
     document.documentElement.classList.add(htmlClass);
+    const morphCorners = heroName ? prepareHeroCornerMorph(heroName) : null;
     const transition = document.startViewTransition(update);
+    morphCorners?.(transition);
     // `ready` and `finished` are separate promises — both can reject
     // independently (a skipped/aborted transition), and each needs its own
     // rejection handler or it surfaces as an uncaught error.
@@ -82,7 +87,12 @@ export function navigateToProductWithHero(
   path: string,
   product: Product
 ): void {
-  runWithViewTransition(() => flushSync(() => navigate(path, { state: { product } })), 'vt-hero');
+  runWithViewTransition(
+    () => flushSync(() => navigate(path, { state: { product } })),
+    'vt-hero',
+    undefined,
+    productHeroName(product.id)
+  );
 }
 
 /**
@@ -122,9 +132,14 @@ export function navigateBack(navigate: NavigateFunction): void {
   }
   const heroProductId = getCurrentDetailProductId();
   if (heroProductId) setHeroReverseTarget(heroProductId);
-  runWithViewTransition(backAndWaitForRoute, heroProductId ? 'vt-hero' : 'vt-fade', () => {
-    if (!heroProductId) return;
-    setHeroReverseTarget(null);
-    clearHeroNames();
-  });
+  runWithViewTransition(
+    backAndWaitForRoute,
+    heroProductId ? 'vt-hero' : 'vt-fade',
+    () => {
+      if (!heroProductId) return;
+      setHeroReverseTarget(null);
+      clearHeroNames();
+    },
+    heroProductId ? productHeroName(heroProductId) : undefined
+  );
 }
