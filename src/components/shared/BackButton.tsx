@@ -1,28 +1,19 @@
 import { useNavigate } from 'react-router-dom';
+import { navigateBack } from '../../lib/viewTransition';
 
 /**
  * Top-left back arrow (44x44 tap target) shared by the product detail and
  * contact pages. Pops real in-app history when there is any, otherwise falls
  * back to the homepage (e.g. after a hard load straight onto the page).
  *
- * Deliberately plain react-router `useNavigate()`, not the app's wrapped
- * `useAppNavigate` — `navigate(-1)` is a real browser traversal (same as a
- * phone back button), and lib/navigationTransitions.ts is what animates
- * every traversal now, including this one. It also reads which product
- * detail page is currently mounted itself (heroTransition.ts) to know
- * whether to reverse-hero-morph, so this button doesn't need to know or
- * pass that along any more.
+ * Goes through lib/viewTransition.ts's navigateBack, which starts the View
+ * Transition from this click itself (the Batch 21 approach) — leaving a
+ * product page morphs its image back into the card it came from.
  */
 export function BackButton() {
   const navigate = useNavigate();
 
-  const goBack = () => {
-    if (window.history.length > 2) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
-  };
+  const goBack = () => navigateBack(navigate);
 
   return (
     <button

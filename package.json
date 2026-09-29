@@ -12,6 +12,7 @@
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
+    "@remix-run/router": "1.23.3",
     "@supabase/supabase-js": "^2.45.4",
     "flag-icons": "^7.5.0",
     "fuse.js": "^7.5.0",

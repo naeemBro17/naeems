@@ -11,11 +11,9 @@ import { navigateWithTransition } from '../lib/viewTransition';
  * very first frame of the new page ever paints (see reports/batch-21.txt
  * Part 1) instead of a frame after.
  *
- * Deliberately does NOT accept a numeric delta (`navigate(-1)`) — a real
- * "go back" is a browser traversal, handled everywhere by
- * lib/navigationTransitions.ts instead (see that file's doc comment). A
- * component that needs to go back should call plain react-router
- * `useNavigate()` directly.
+ * Deliberately does NOT accept a numeric delta (`navigate(-1)`) — an in-app
+ * "go back" button calls lib/viewTransition.ts's navigateBack instead, which
+ * starts its own transition before stepping back (see that function).
  */
 export function useAppNavigate() {
   const navigate = useRouterNavigate();

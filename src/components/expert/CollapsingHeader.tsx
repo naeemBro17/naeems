@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../hooks/useToast';
+import { navigateBack } from '../../lib/viewTransition';
 
 interface CollapsingHeaderProps {
   expertName: string;
@@ -18,20 +19,17 @@ export function CollapsingHeader({
   const { showToast } = useToast();
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
+  // Layout effect: decided before the first frame paints, from the scroll
+  // position PageTransition has already set (the top, on a fresh open), so
+  // the header never starts in the wrong state and flips a frame later.
+  useLayoutEffect(() => {
     const handleScroll = () => setCollapsed(window.scrollY > COLLAPSE_AT_PX);
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const goBack = () => {
-    if (window.history.length > 2) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
-  };
+  const goBack = () => navigateBack(navigate);
 
   const handleShare = async () => {
     const url = `${window.location.origin}/contact`;

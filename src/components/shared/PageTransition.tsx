@@ -1,22 +1,83 @@
-import { useLocation } from 'react-router-dom';
+import { useLayoutEffect } from 'react';
+import { NavigationType, useLocation, useNavigationType } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { recallScroll } from '../../lib/scrollMemory';
+
+/** How long a restore keeps re-applying itself while a returned-to page is
+ *  still growing (images reserving height, a list fetching) before giving up
+ *  and leaving the scroll wherever the page's real height allows. */
+const RESTORE_WINDOW_MS = 3000;
 
 /**
- * Every actual page-transition ANIMATION now lives in exactly one place: the
- * native View Transitions API, driven either by lib/viewTransition.ts (a
- * forward/lateral in-app tap) or lib/navigationTransitions.ts (any real
- * back/forward traversal — phone back, browser Back/Forward, and the in-app
- * "<-" button, which is just a traversal too). This component no longer
- * animates anything itself — see fix-one-transition-system's task doc for
- * why a second, manual CSS-class mechanism layered on top of the native one
- * was the root cause of a hard-cut-then-delayed-second-animation bug.
+ * Puts the page at `target` now, synchronously, and — when the page isn't
+ * tall enough to reach it yet — re-applies it each time the page grows,
+ * until it's reached, the window above passes, or the shopper touches the
+ * screen themselves (their own scroll always wins). Returns a cleanup.
+ */
+function restoreScroll(target: number): () => void {
+  window.scrollTo({ top: target, behavior: 'instant' });
+  if (target <= 0 || window.scrollY >= target - 1) return () => undefined;
+
+  const observer = new ResizeObserver(() => {
+    window.scrollTo({ top: target, behavior: 'instant' });
+    if (window.scrollY >= target - 1) stop();
+  });
+  const timer = window.setTimeout(() => stop(), RESTORE_WINDOW_MS);
+  const userEvents = ['touchstart', 'wheel', 'keydown'] as const;
+  function stop() {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    for (const name of userEvents) window.removeEventListener(name, stop);
+  }
+  observer.observe(document.body);
+  for (const name of userEvents) window.addEventListener(name, stop, { passive: true });
+  return stop;
+}
+
+/**
+ * The one place a page's starting scroll position is decided, for every
+ * route. A Back (phone or in-app) lands exactly where that entry was left —
+ * saved by lib/appHistory.ts as it was left; any other arrival starts at the
+ * top (this is what makes the Expert page always open at its very top
+ * instead of wherever Home had been scrolled to).
  *
- * What's left: `key={location.pathname}` forces a real unmount+remount on
- * every route change (not just a re-render) — several pages (ViewerPage's
- * scroll restoration, ProductDetailPage's per-slug state) depend on mounting
- * fresh rather than updating in place.
+ * Rendered as the FIRST child inside PageTransition's keyed wrapper, so its
+ * layout effect runs after the whole new page is in the DOM but before any
+ * of the page's own layout effects (React runs them child-first, in sibling
+ * order) — e.g. Home's pinned-chip check already reads the restored
+ * position — and before the browser paints the first frame.
+ */
+function ScrollRestorer() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+
+  useLayoutEffect(() => {
+    const saved = navigationType === NavigationType.Pop ? recallScroll(location.key) : null;
+    return restoreScroll(saved ?? 0);
+    // Mount-only: the wrapper this lives in remounts on every page change,
+    // and a same-page URL update (a filter chip) must never move the scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
+
+/**
+ * Every page-transition ANIMATION lives in the native View Transitions API
+ * (lib/viewTransition.ts for in-app taps and the in-app "<-",
+ * lib/phoneBackTransition.ts for the optional phone-back hero); this
+ * component animates nothing itself.
+ *
+ * `key={location.pathname}` forces a real unmount+remount on every route
+ * change (not just a re-render) — several pages (ProductDetailPage's
+ * per-slug state, BentoGrid's restore-on-return) depend on mounting fresh.
  */
 export function PageTransition({ children }: { children: ReactNode }) {
   const location = useLocation();
-  return <div key={location.pathname}>{children}</div>;
+  return (
+    <div key={location.pathname}>
+      <ScrollRestorer />
+      {children}
+    </div>
+  );
 }

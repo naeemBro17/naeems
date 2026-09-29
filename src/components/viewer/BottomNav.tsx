@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { useCart } from '../../contexts/CartContext';
 import { CartIcon } from './CartButton';
@@ -102,6 +103,13 @@ export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
     },
   ];
 
+  // The icon's little bounce is feedback for SWITCHING tabs — never for the
+  // bar simply appearing. This nav remounts every time Home does (e.g. on
+  // Back), so a bounce keyed to "is active" alone played on every return: one
+  // of the "something still moves after the page settled" effects.
+  const tabAtMount = useRef(activeTab).current;
+  const tabChanged = activeTab !== tabAtMount;
+
   return (
     <nav className="bottom-nav" aria-label="Main">
       {tabs.map((tab) => (
@@ -110,7 +118,7 @@ export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
           type="button"
           className={`bottom-nav__tab${
             activeTab === tab.id ? ' bottom-nav__tab--active' : ''
-          }`}
+          }${activeTab === tab.id && tabChanged ? ' bottom-nav__tab--changed' : ''}`}
           onClick={tab.onClick}
           aria-current={activeTab === tab.id ? 'page' : undefined}
         >
