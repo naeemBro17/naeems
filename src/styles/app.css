@@ -6850,11 +6850,6 @@ html.vt-fade::view-transition-new(root) {
   color: var(--color-text-primary);
 }
 
-.picker-sheet__row-sub {
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
 .picker-sheet__check {
   width: 16px;
   height: 16px;

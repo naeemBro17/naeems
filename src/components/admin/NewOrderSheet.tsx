@@ -1,7 +1,7 @@
-// "নতুন অর্ডার" (new order) — Admin -> Orders (Batch 22). Most of Naeem's real
+// "New order" — Admin -> Orders (Batch 22). Most of Naeem's real
 // orders arrive over Facebook/WhatsApp, not the website, so he types them in
 // here himself: pick where it came from, find or type the customer, add
-// items (with an optional cut price or "ফ্রি" and a reason), set delivery and
+// items (with an optional cut price or "Free" and a reason), set delivery and
 // payment, and save. Saved through admin_create_order() (migration-028) —
 // every price/stock check happens in the database, never trusted from this
 // form; this component only shapes the input and shows a live preview.
@@ -373,7 +373,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     : '';
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="নতুন অর্ডার">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="New order">
       <form
         className="form manual-order-form"
         onSubmit={(e) => {
@@ -407,11 +407,11 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
             {matches.fromProfile && (
               <>
                 <p className="admin-panel__description">
-                  একটি অ্যাকাউন্ট পাওয়া গেছে: {matches.fromProfile.fullName || address.phone}
+                  Account found: {matches.fromProfile.fullName || address.phone}
                 </p>
                 <div className="admin-section-header__actions">
                   <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('profile')}>
-                    তথ্য পূরণ করুন
+                    Fill in details
                   </button>
                   {linkedCustomerId ? (
                     <>
@@ -431,7 +431,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
                     </>
                   ) : (
                     <button type="button" className="button button--secondary button--small" onClick={handleLinkAccount}>
-                      এই অ্যাকাউন্টের সাথে যুক্ত করুন
+                      Link to this account
                     </button>
                   )}
                 </div>
@@ -440,10 +440,10 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
             {matches.fromOrder && !matches.fromProfile && (
               <>
                 <p className="admin-panel__description">
-                  আগের অর্ডার পাওয়া গেছে: {matches.fromOrder.fullName}, {matches.fromOrder.addressLine}
+                  Previous order found: {matches.fromOrder.fullName}, {matches.fromOrder.addressLine}
                 </p>
                 <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('order')}>
-                  তথ্য পূরণ করুন
+                  Fill in details
                 </button>
               </>
             )}
@@ -512,7 +512,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
                       onChange={(e) => setLineSoldPrice(line.key, e.target.value)}
                     />
                     <button type="button" className="account-card__edit" onClick={() => setLineFree(line.key)}>
-                      ফ্রি
+                      Free
                     </button>
                   </div>
                   {lineNeedsReason(line.listPrice, line.soldPrice) && (
@@ -602,7 +602,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
               Outside Dhaka
             </button>
             <button type="button" className={`chip-select${zone === 'hand_delivered' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('hand_delivered')}>
-              ডেলিভারি নেই (হাতে দেওয়া)
+              No delivery (hand delivered)
             </button>
           </div>
           {zone !== 'hand_delivered' && (
@@ -717,8 +717,8 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
 
       <ConfirmDialog
         isOpen={pendingWarnings !== null}
-        title="স্টক কম আছে"
-        message={`${warningMessage} — তবুও এগিয়ে যেতে চান? স্টক নেগেটিভ হয়ে যেতে পারে।`}
+        title="Low stock"
+        message={`${warningMessage} — continue anyway? Stock may go negative.`}
         confirmLabel="Continue anyway"
         cancelLabel="Go back"
         danger={false}

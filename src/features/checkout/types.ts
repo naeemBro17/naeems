@@ -34,7 +34,7 @@ export interface CartItem {
 }
 
 // 'hand_delivered' (Batch 22) only ever appears on a manual order Naeem
-// typed in himself ("ডেলিভারি নেই — হাতে দেওয়া") — website checkout only
+// typed in himself ("No delivery (hand delivered)") — website checkout only
 // ever uses the other two; included here so a saved Order's real
 // delivery_zone (including a manual one) can round-trip through
 // OrderSnapshot/DeliveryZoneOption (see OrderDetailSheet's toOrderSnapshot)

@@ -5,59 +5,59 @@ const EMAIL = 'naeemonlinemail@gmail.com';
 
 export function PrivacyPolicyPage() {
   return (
-    <PolicyLayout title="প্রাইভেসি পলিসি">
+    <PolicyLayout title="Privacy policy">
       <p>
-        আপনার তথ্য আমরা শুধু অর্ডার পৌঁছানো আর আপনাকে সেবা দেওয়ার জন্য ব্যবহার করি, কাউকে বিক্রি
-        করি না।
+        We use your information only to deliver your orders and to serve you. We never sell it to
+        anyone.
       </p>
 
-      <h2>আমরা যে তথ্য রাখি</h2>
+      <h2>What we keep</h2>
       <ul>
-        <li>Google login থেকে: আপনার নাম, email আর প্রোফাইল ছবি</li>
-        <li>আপনি নিজে যা দেন: ফোন নম্বর ও ডেলিভারির ঠিকানা</li>
-        <li>অর্ডারের তথ্য: কী কিনেছেন, কত টাকা, পেমেন্টের ধরন (bKash Transaction ID সহ)</li>
-        <li>সাইট ব্যবহারের তথ্য: কোন পেজ দেখেছেন, কোন প্রোডাক্ট cart-এ দিয়েছেন</li>
+        <li>From Google login: your name, email and profile photo</li>
+        <li>What you give us: your phone number and delivery address</li>
+        <li>Order details: what you bought, how much, and how you paid (including the bKash Transaction ID)</li>
+        <li>Site usage: which pages you viewed and which products you added to your cart</li>
       </ul>
 
-      <h2>কেন ব্যবহার করি</h2>
+      <h2>Why we use it</h2>
       <ul>
-        <li>অর্ডার প্রক্রিয়া করতে ও ডেলিভারি দিতে</li>
-        <li>অর্ডার নিয়ে আপনার সাথে যোগাযোগ করতে</li>
-        <li>পরের অর্ডারে আপনার ঠিকানা আগে থেকে ভরে দিতে</li>
+        <li>To process and deliver your orders</li>
+        <li>To contact you about your orders</li>
+        <li>To fill in your address for your next order</li>
       </ul>
 
-      <h2>কার সাথে শেয়ার করি</h2>
+      <h2>Who we share it with</h2>
       <ul>
-        <li>Steadfast Courier: শুধু নাম, ফোন, ঠিকানা আর COD-এর টাকার অঙ্ক, ডেলিভারির জন্য</li>
-        <li>Facebook ও Google: সাইট ব্যবহারের তথ্য (cookie-এর মাধ্যমে), বিজ্ঞাপনের কাজে</li>
-        <li>আইনত বাধ্য হলে সংশ্লিষ্ট কর্তৃপক্ষকে</li>
-        <li>এর বাইরে কাউকে দেওয়া হয় না</li>
+        <li>Steadfast Courier: only your name, phone, address and the COD amount, for delivery</li>
+        <li>Facebook and Google: site usage information (through cookies), for advertising</li>
+        <li>The relevant authorities, if the law requires it</li>
+        <li>No one else</li>
       </ul>
 
-      <h2>তথ্যের নিরাপত্তা</h2>
+      <h2>Keeping your information safe</h2>
       <p>
-        আপনার তথ্য নিরাপদ সার্ভারে রাখা হয়। আপনি শুধু নিজের তথ্য ও অর্ডার দেখতে পারেন, অন্য
-        কাস্টমারেরটা নয়।
+        Your information is stored on secure servers. You can see only your own information and
+        orders, never another customer's.
       </p>
 
-      <h2>আপনার অধিকার</h2>
+      <h2>Your rights</h2>
       <ul>
-        <li>Account পেজ থেকে নিজের ফোন ও ঠিকানা যেকোনো সময় বদলাতে পারবেন।</li>
+        <li>You can change your phone number and address at any time from the Account page.</li>
         <li>
-          আপনার account ও তথ্য মুছে ফেলতে চাইলে WhatsApp বা email-এ জানান, আমরা ৭ দিনের মধ্যে
-          মুছে দেব। হিসাবের প্রয়োজনে সম্পন্ন অর্ডারের রেকর্ড রাখা হতে পারে।
+          To delete your account and information, tell us on WhatsApp or by email and we will delete
+          it within 7 days. Records of completed orders may be kept for accounting.
         </li>
       </ul>
 
       <p>
-        <strong>যোগাযোগ:</strong>{' '}
+        <strong>Contact:</strong>{' '}
         <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
           WhatsApp 01560040012
         </a>{' '}
         · <a href={`mailto:${EMAIL}`}>Email {EMAIL}</a>
       </p>
 
-      <p>এই পলিসি বদলালে এই পেজে তারিখসহ জানিয়ে দেওয়া হবে।</p>
+      <p>If this policy changes, we will announce it on this page with the date.</p>
     </PolicyLayout>
   );
 }

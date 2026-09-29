@@ -5,8 +5,10 @@ export interface PickerOption {
   id: string;
   /** Primary label (e.g. English name). */
   label: string;
-  /** Secondary label shown alongside it (e.g. Bangla name). */
-  subLabel?: string;
+  /** Extra text a search also matches but that is never shown (e.g. the
+   *  Bangla place name — the site UI is English, Batch 23 Part 6, but a
+   *  shopper typing their thana in Bangla still finds it). */
+  searchAlias?: string;
 }
 
 interface PickerSheetProps {
@@ -23,7 +25,7 @@ interface PickerSheetProps {
  * Searchable single-select list in a bottom sheet — a plain <select> with
  * 490+ entries (e.g. every Bangladeshi thana) is unusable on mobile, so this
  * is the shared picker for any long option list. Filters case-insensitively
- * across both label and subLabel, so typing either the English or Bangla
+ * across both label and searchAlias, so typing either the English or Bangla
  * name finds the right row.
  */
 export function PickerSheet({
@@ -41,7 +43,7 @@ export function PickerSheet({
     const q = query.trim().toLowerCase();
     if (q === '') return options;
     return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || o.subLabel?.toLowerCase().includes(q)
+      (o) => o.label.toLowerCase().includes(q) || o.searchAlias?.toLowerCase().includes(q)
     );
   }, [options, query]);
 
@@ -97,9 +99,6 @@ export function PickerSheet({
                 >
                   <span className="picker-sheet__row-label">
                     {option.label}
-                    {option.subLabel && (
-                      <span className="picker-sheet__row-sub">{option.subLabel}</span>
-                    )}
                   </span>
                   {option.id === selectedId && (
                     <svg

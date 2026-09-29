@@ -6,11 +6,11 @@ import { Link } from 'react-router-dom';
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <Link to="/about">আমাদের সম্পর্কে</Link>
-      <Link to="/delivery">ডেলিভারি তথ্য</Link>
-      <Link to="/return-policy">রিটার্ন পলিসি</Link>
-      <Link to="/terms">শর্তাবলি</Link>
-      <Link to="/privacy">প্রাইভেসি পলিসি</Link>
+      <Link to="/about">About us</Link>
+      <Link to="/delivery">Delivery</Link>
+      <Link to="/return-policy">Return policy</Link>
+      <Link to="/terms">Terms</Link>
+      <Link to="/privacy">Privacy policy</Link>
     </footer>
   );
 }

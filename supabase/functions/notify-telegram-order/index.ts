@@ -95,7 +95,7 @@ async function sendTelegramMessage(token: string, chatId: string, text: string):
 
 function buildNewOrderMessage(order: OrderRow, items: OrderItemRow[]): string {
   const lines: string[] = [];
-  lines.push(`🆕 <b>নতুন অর্ডার ${order.order_number}</b>`);
+  lines.push(`🆕 <b>New order ${order.order_number}</b>`);
   lines.push('');
   lines.push(`👤 ${order.customer_name}`);
   lines.push(`📞 ${order.customer_phone}`);
@@ -123,7 +123,7 @@ function buildNewOrderMessage(order: OrderRow, items: OrderItemRow[]): string {
 
 function buildCancelMessage(order: OrderRow): string {
   return [
-    `❌ <b>অর্ডার বাতিল হয়েছে</b>`,
+    `❌ <b>Order cancelled</b>`,
     '',
     `Order: ${order.order_number}`,
     `👤 ${order.customer_name} · 📞 ${order.customer_phone}`,
@@ -140,7 +140,7 @@ function buildCancelMessage(order: OrderRow): string {
  *  Naeem instead of sitting quietly in a field nobody's looking at. */
 function buildSteadfastAttentionMessage(order: OrderRow): string {
   return [
-    `⚠️ <b>Steadfast: এই অর্ডারে নজর দিন</b>`,
+    `⚠️ <b>Steadfast: this order needs attention</b>`,
     '',
     `Order: ${order.order_number}`,
     `👤 ${order.customer_name} · 📞 ${order.customer_phone}`,

@@ -84,8 +84,7 @@ export function OrderSuccessPage() {
         </div>
 
         <div className="checkout-success__instructions">
-          আমরা শীঘ্রই আপনার অর্ডার confirm করব। কোনো প্রশ্ন থাকলে "সাহায্য দরকার?" থেকে
-          যোগাযোগ করুন।
+          We will confirm your order soon. Any questions? Tap "Need help?" to contact us.
         </div>
 
         <div className="checkout-success__actions">
@@ -97,7 +96,7 @@ export function OrderSuccessPage() {
             className="button button--primary"
             onClick={() => navigate(`/orders/${lastOrder.orderId}`)}
           >
-            আমার অর্ডার দেখুন
+            View my order
           </button>
         </div>
 

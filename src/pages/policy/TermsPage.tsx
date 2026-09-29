@@ -2,34 +2,34 @@ import { PolicyLayout } from '../../components/shared/PolicyLayout';
 
 export function TermsPage() {
   return (
-    <PolicyLayout title="অর্ডার বাতিল ও শর্তাবলি">
-      <p>অর্ডার কুরিয়ারে পাঠানোর আগে পর্যন্ত বাতিল করা যায়।</p>
+    <PolicyLayout title="Cancellation & terms">
+      <p>You can cancel an order until it is handed to the courier.</p>
 
-      <h2>অর্ডার বাতিল</h2>
+      <h2>Cancelling an order</h2>
       <ul>
-        <li>অর্ডারের অবস্থা "Pending" থাকলে আপনি নিজেই "আমার অর্ডার" পেজ থেকে বাতিল করতে পারবেন।</li>
-        <li>Confirm হওয়ার পর কিন্তু পাঠানোর আগে বাতিল করতে চাইলে WhatsApp-এ আমাদের জানান।</li>
-        <li>কুরিয়ারে পাঠানোর পর আর বাতিল করা যাবে না।</li>
+        <li>While your order is "Pending", you can cancel it yourself from your "My Orders" page.</li>
+        <li>After it is confirmed but before it is sent, message us on WhatsApp to cancel.</li>
+        <li>Once it has been handed to the courier, it can no longer be cancelled.</li>
         <li>
-          bKash-এ আগাম দেওয়া অর্ডার পাঠানোর আগে বাতিল হলে পুরো টাকা ৩ কর্মদিবসের মধ্যে ফেরত দেওয়া
-          হবে।
+          If an order paid in advance with bKash is cancelled before it is sent, the full amount will
+          be refunded within 3 working days.
         </li>
       </ul>
 
-      <h2>সাধারণ শর্ত</h2>
+      <h2>General terms</h2>
       <ul>
-        <li>সাইটের দাম ও স্টক পরিবর্তনশীল। অর্ডার করার সময়ের দামই আপনার অর্ডারে কার্যকর থাকবে।</li>
+        <li>Prices and stock on the site can change. The price at the time you order is the price you pay.</li>
         <li>
-          ভুল দাম বা স্টকের তথ্যে ভুল হলে আমরা আপনাকে জানিয়ে অর্ডার বাতিল করার অধিকার রাখি। আগাম
-          দিলে পুরো টাকা ফেরত দেওয়া হবে।
+          If a price or stock detail was wrong, we may cancel the order after letting you know. If you
+          paid in advance, the full amount will be refunded.
         </li>
         <li>
-          প্রোডাক্টের বিবরণ সাধারণ তথ্যের জন্য। নতুন প্রোডাক্ট ব্যবহারের আগে patch test করুন।
-          ত্বকের গুরুতর সমস্যায় ডাক্তারের পরামর্শ নিন।
+          Product descriptions are general information. Do a patch test before using a new product.
+          For serious skin problems, see a doctor.
         </li>
         <li>
-          কুরিয়ারের কারণে দেরি হলে আমরা সর্বোচ্চ চেষ্টা করব দ্রুত সমাধান করতে, তবে এর জন্য কোনো
-          ক্ষতিপূরণ দেওয়া সম্ভব না।
+          If the courier causes a delay, we will do our best to sort it out quickly, but we can't
+          offer compensation for it.
         </li>
       </ul>
     </PolicyLayout>

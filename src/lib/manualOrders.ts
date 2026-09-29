@@ -1,4 +1,4 @@
-// Shared constants + pure calculation logic for the admin "নতুন অর্ডার" (new
+// Shared constants + pure calculation logic for the admin "New order" (new
 // order) form (Batch 22) — used by NewOrderSheet.tsx for the live on-screen
 // summary, and covered by manualOrders.test.ts. The database function
 // admin_create_order() (migration-028) is the actual source of truth for a
@@ -68,7 +68,7 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentOption[] = [
   { id: 'cod', label: 'Cash on Delivery' },
   { id: 'bkash', label: 'bKash' },
   { id: 'cash', label: 'Cash paid' },
-  { id: 'due', label: 'বাকি (due)' },
+  { id: 'due', label: 'Due (pay later)' },
 ];
 
 /** One priced line as the form tracks it, before it becomes a real
@@ -84,7 +84,7 @@ export interface ManualOrderTotals {
   subtotal: number;
   /** Sum of listPrice × quantity — what the same items would cost at full price. */
   listValue: number;
-  /** Sum of listPrice × quantity for lines priced at exactly 0 (marked ফ্রি). */
+  /** Sum of listPrice × quantity for lines priced at exactly 0 (marked Free). */
   freeValue: number;
   /** Value given up on lines that are reduced but not free (listValue - subtotal - freeValue). */
   lineDiscount: number;
@@ -137,7 +137,7 @@ export function computeManualOrderTotals(
 
 /** True when a line's own price counts as a discount worth asking a reason
  *  for — used by the form to show the reason chips inline the moment a
- *  price is edited down (or marked ফ্রি). */
+ *  price is edited down (or marked Free). */
 export function lineNeedsReason(listPrice: number, soldPrice: number): boolean {
   return soldPrice < listPrice;
 }
@@ -185,7 +185,7 @@ function emptySourceCounts(): Record<OrderSource, number> {
   return { web: 0, facebook: 0, whatsapp: 0, phone: 0, shop: 0, family: 0, other: 0 };
 }
 
-/** This calendar month's order activity, for the Orders tab's "এই মাসে" card
+/** This calendar month's order activity, for the Orders tab's "This month" card
  *  — computed entirely from the order list the tab already has loaded (every
  *  number it needs — subtotal/discount/list_value/free_value — is stored on
  *  the order row itself, see migration-028), no extra fetch needed.

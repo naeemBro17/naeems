@@ -393,7 +393,7 @@ export async function adminUpdateOrder(
 }
 
 /* ============================================================
-   Manual orders (Batch 22) — "নতুন অর্ডার" in Admin -> Orders
+   Manual orders (Batch 22) — "New order" in Admin -> Orders
    ============================================================ */
 
 export interface ManualOrderItemInput {

@@ -3,49 +3,50 @@ import { PolicyLayout } from '../../components/shared/PolicyLayout';
 
 export function AboutPage() {
   return (
-    <PolicyLayout title="আমাদের সম্পর্কে">
+    <PolicyLayout title="About us">
       <p>
-        Naeem's অস্ট্রেলিয়া, কানাডা, জাপান, যুক্তরাষ্ট্র, যুক্তরাজ্য ও ভারত থেকে সরাসরি আনা
-        অরিজিনাল skincare-এর একটা বিশ্বস্ত জায়গা।
+        Naeem's is a trusted place for original skincare, brought directly from Australia, Canada,
+        Japan, the USA, the UK and India.
       </p>
       <p>
-        বাংলাদেশের বাজারে নকল skincare এখন বড় সমস্যা। ভুল প্রোডাক্ট ত্বকের ক্ষতি করতে পারে। তাই
-        আমরা ২০২৪ সাল থেকে এসব দেশের বিশ্বস্ত উৎস থেকে প্রোডাক্ট এনে সরাসরি আপনার কাছে পৌঁছে দিই।
+        Fake skincare is now a big problem in Bangladesh, and the wrong product can harm your skin.
+        That is why, since 2024, we have been bringing products from trusted sources in these
+        countries and delivering them straight to you.
       </p>
 
-      <h2>কেন আমাদের বিশ্বাস করবেন</h2>
+      <h2>Why you can trust us</h2>
       <ul>
-        <li>প্রতিটা প্রোডাক্ট বিভিন্ন দেশের স্বনামধন্য সুপারশপ থেকে কেনা (যেমন Amazon, Boots, Target ইত্যাদি)</li>
-        <li>মেয়াদ দেখে আনা হয়, মেয়াদোত্তীর্ণ প্রোডাক্ট কখনো বিক্রি করা হয় না</li>
-        <li>আপনার ত্বকের ধরন অনুযায়ী প্রোডাক্ট বাছাইয়ে বিনামূল্যে পরামর্শ (আপাতত)</li>
-        <li>দেশ-বিদেশের ৫০০+ ক্লায়েন্ট আর ২০০০+ কাস্টমারের আস্থা</li>
+        <li>Every product is bought from well-known stores abroad (such as Amazon, Boots and Target)</li>
+        <li>Expiry dates are checked before import, and expired products are never sold</li>
+        <li>Free advice on choosing products for your skin type (for now)</li>
+        <li>Trusted by 500+ clients and 2,000+ customers at home and abroad</li>
       </ul>
 
-      <h2>প্রতিষ্ঠাতার কথা</h2>
+      <h2>A word from the founder</h2>
       <p>
-        আমি নাঈম, একজন নন-মেডিক্যাল skincare consultant। নিজের ত্বকের সমস্যা আর নকল প্রোডাক্টের
-        ঝামেলায় পড়ে বুঝেছিলাম, এই দেশে অরিজিনাল skincare পাওয়া কত কঠিন। তাই ২০২৪ সালে শুরু করি
-        Naeem's।
+        I'm Naeem, a non-medical skincare consultant. After struggling with my own skin problems and
+        with fake products, I realised how hard it is to find original skincare in this country. So
+        in 2024 I started Naeem's.
       </p>
       <p>
-        আমি যা বিক্রি করি, তা আগে যাচাই করি। অকার্যকর প্রোডাক্ট বা মার্কেটিং গিমিক আমি পরামর্শ দিই
-        না। আর যা পরামর্শ দিই, তা আপনার সমস্যা বুঝেই দিই।
+        I check what I sell before I sell it. I don't recommend products that don't work or that are
+        just marketing gimmicks, and any advice I give is based on understanding your problem.
       </p>
       <p>
-        তবে ত্বকের ফল শুধু প্রোডাক্টের উপর নির্ভর করে না। খাবার, ঘুম, মানসিক চাপ, কতটা নিয়মিত
-        ব্যবহার করছেন, আর আপনার ত্বক প্রোডাক্টটিতে কেমন সাড়া দিচ্ছে, এসবের উপরও নির্ভর করে।
+        But skin results don't depend on the product alone. They also depend on your diet, sleep,
+        stress, how regularly you use the product, and how your skin responds to it.
       </p>
       <p>
-        সব ঠিক থাকার পরেও ফল আসতে সময় লাগতে পারে, কারণ ফল সবার ক্ষেত্রে একরকম হয় না। তাই ধৈর্য
-        রাখতে হবে।
+        Even when everything is right, results can take time, because they are not the same for
+        everyone. So please be patient.
       </p>
       <p>
-        আমি ডাক্তার নই, ডাক্তারের বিকল্পও নই। ত্বকের গুরুতর সমস্যায় একজন চর্মরোগ বিশেষজ্ঞের
-        পরামর্শ নিন।
+        I am not a doctor, and I am not a replacement for one. For serious skin problems, please see
+        a dermatologist.
       </p>
       <p>
-        কোন প্রোডাক্ট আপনার জন্য ঠিক, বুঝতে পারছেন না?{' '}
-        <Link to="/contact">"Talk with Naeem"</Link> থেকে সরাসরি আমার সাথে কথা বলুন।
+        Not sure which product is right for you? Talk to me directly through{' '}
+        <Link to="/contact">"Talk with Naeem"</Link>.
       </p>
     </PolicyLayout>
   );

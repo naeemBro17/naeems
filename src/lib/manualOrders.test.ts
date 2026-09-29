@@ -69,7 +69,7 @@ describe('computeManualOrderTotals', () => {
     expect(totals.total).toBe(770);
   });
 
-  it('tracks a free (ফ্রি) line as free value, not as subtotal or line discount', () => {
+  it('tracks a free line as free value, not as subtotal or line discount', () => {
     const totals = computeManualOrderTotals(
       [{ listPrice: 300, soldPrice: 0, quantity: 1 }],
       0,

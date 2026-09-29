@@ -7,7 +7,7 @@ export type AddressFieldErrors = Partial<Record<keyof DeliveryAddress, string>>;
 type OpenPicker = 'division' | 'district' | 'thana' | null;
 
 function toOptions(rows: { id: string; name: string; bnName: string }[]): PickerOption[] {
-  return rows.map((r) => ({ id: r.id, label: r.name, subLabel: r.bnName }));
+  return rows.map((r) => ({ id: r.id, label: r.name, searchAlias: r.bnName }));
 }
 
 /** Bangladeshi mobile numbers: 01[3-9]XXXXXXXX (11 digits), optionally with

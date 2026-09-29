@@ -161,7 +161,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           className="button button--primary button--small"
           onClick={() => setIsNewOrderOpen(true)}
         >
-          নতুন অর্ডার
+          New order
         </button>
         {selectedForDelete.size > 0 && (
           <button
@@ -189,7 +189,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       </header>
 
       <div className="admin-panel order-monthly-summary">
-        <span className="admin-panel__title">এই মাসে</span>
+        <span className="admin-panel__title">This month</span>
         <div className="checkout-summary-card__row">
           <span>Orders</span>
           <span>{monthlySummary.orderCount}</span>
@@ -326,11 +326,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
 
       <ConfirmDialog
         isOpen={isConfirmingDelete}
-        title="এগুলো চিরতরে মুছে যাবে"
+        title="Delete permanently?"
         message={
           selectedHaveSteadfast
-            ? `${selectedForDelete.size}টি অর্ডার স্থায়ীভাবে মুছে ফেলা হবে — এটি ফেরানো যাবে না। এর মধ্যে অন্তত একটি অর্ডার Steadfast-এ বুক করা আছে — আগে সেটি Steadfast-এর নিজস্ব প্যানেলে বাতিল করুন, তারপর এখান থেকে মুছুন।`
-            : `${selectedForDelete.size}টি অর্ডার স্থায়ীভাবে মুছে ফেলা হবে — এটি ফেরানো যাবে না।`
+            ? `${selectedForDelete.size} order(s) will be deleted permanently. This cannot be undone. At least one of them is booked with Steadfast: cancel it in Steadfast's own panel first, then delete it here.`
+            : `${selectedForDelete.size} order(s) will be deleted permanently. This cannot be undone.`
         }
         confirmLabel="Delete permanently"
         cancelLabel="Cancel"

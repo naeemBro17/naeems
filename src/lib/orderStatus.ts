@@ -7,7 +7,7 @@ export const PAYMENT_METHOD_LABELS: Record<OrderPaymentMethod, string> = {
   cod: 'COD',
   bkash: 'bKash',
   cash: 'Cash paid',
-  due: 'বাকি (due)',
+  due: 'Due (pay later)',
 };
 
 /** Plain-language labels — shared by the customer "My Orders" pages and the
