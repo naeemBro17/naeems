@@ -83,9 +83,12 @@ export async function collectStrayAnimations(
 export interface ViewTransitionRecord {
   /** Every ::view-transition-* pseudo animation seen, by pseudo-element. */
   pseudos: string[];
-  /** For a product hero group: its keyframed start/end width in px, and a
-   *  width sampled mid-flight from the live pseudo-element. */
-  hero: { name: string; fromWidth: number; toWidth: number; midWidth: number | null } | null;
+  /** window.scrollY the moment the transition's page update finished — the
+   *  state the browser's "after" picture (the first new frame) is taken from. */
+  scrollYAfterUpdate: number | null;
+  /** For a product hero group: its keyframed start/end width in px, and
+   *  its live width sampled on every frame while it animated. */
+  hero: { name: string; fromWidth: number; toWidth: number; samples: number[] } | null;
 }
 
 /**
@@ -106,9 +109,15 @@ export async function recordViewTransitions(page: Page): Promise<void> {
       const transition = original(update);
       const record: {
         pseudos: string[];
-        hero: { name: string; fromWidth: number; toWidth: number; midWidth: number | null } | null;
-      } = { pseudos: [], hero: null };
+        scrollYAfterUpdate: number | null;
+        hero: { name: string; fromWidth: number; toWidth: number; samples: number[] } | null;
+      } = { pseudos: [], scrollYAfterUpdate: null, hero: null };
       w.__vtRecords.push(record);
+      transition.updateCallbackDone
+        .then(() => {
+          record.scrollYAfterUpdate = window.scrollY;
+        })
+        .catch(() => undefined);
       transition.ready
         .then(async () => {
           const animations = document.getAnimations();
@@ -131,12 +140,21 @@ export async function recordViewTransitions(page: Page): Promise<void> {
             name: pseudo,
             fromWidth: px(frames[0]?.width),
             toWidth: px(frames[frames.length - 1]?.width),
-            midWidth: null,
+            samples: [],
           };
-          const duration = Number(effect.getTiming().duration) || 0;
-          await new Promise((r) => setTimeout(r, duration / 2));
-          const mid = px(getComputedStyle(document.documentElement, pseudo).width);
-          if (record.hero) record.hero.midWidth = Number.isFinite(mid) ? mid : null;
+          // Sampled on the page's own frames until the transition ends — a
+          // single fixed-time sample could land before the first animated
+          // frame when the machine is busy.
+          let done = false;
+          transition.finished.then(
+            () => (done = true),
+            () => (done = true)
+          );
+          while (!done) {
+            const width = px(getComputedStyle(document.documentElement, pseudo).width);
+            if (Number.isFinite(width)) record.hero.samples.push(width);
+            await new Promise((r) => requestAnimationFrame(r));
+          }
         })
         .catch(() => undefined);
       return transition;
