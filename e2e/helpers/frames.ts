@@ -117,40 +117,46 @@ function pixelDiffFraction(a: PNG, b: PNG): number {
   return changed / total;
 }
 
-/** Checks the real, standard Web Animations API for any animation still
- *  targeting the document or one of its pseudo-elements — which is exactly
- *  where `document.startViewTransition`'s ::view-transition-group/old/new
- *  tree lives for as long as a transition is genuinely in flight. Far more
- *  reliable than trying to catch a specific visual "mid-transition" frame
- *  through Playwright's own (CDP round-trip, tens-of-ms-per-call)
- *  screenshot timing — the transition's pseudo-element animations exist for
- *  its ENTIRE duration, not just one instant, so even one check shortly
- *  after the trigger reliably catches a real one and never a hard cut. */
-async function hasActiveDocumentAnimation(page: Page): Promise<boolean> {
-  // Only ::view-transition-* pseudo animations count (fix/back-known-good):
-  // Home's bento flip tile animates forever, so "any animation at all" was
-  // always true there and let a hard cut pass as a real transition.
-  return page.evaluate(() =>
-    document
-      .getAnimations()
-      .some((a) => ((a.effect as KeyframeEffect | null)?.pseudoElement ?? '').startsWith('::view-transition'))
-  );
+/**
+ * Watches for a real View Transition from INSIDE the page — a
+ * requestAnimationFrame loop started just before the trigger, checking every
+ * rendered frame for a running ::view-transition-* animation. Polling from
+ * the test runner instead (the old approach) could miss a whole ~320ms
+ * transition when the same page was also being screenshotted every 30ms on
+ * a busy machine. Only ::view-transition-* animations count: Home's bento
+ * flip tile animates forever, so "any animation at all" was always true
+ * there and let a hard cut pass as a real transition (fix/back-known-good).
+ */
+async function startViewTransitionWatch(page: Page, windowMs: number): Promise<void> {
+  await page.evaluate((span) => {
+    const w = window as unknown as { __e2eSawViewTransition?: boolean };
+    w.__e2eSawViewTransition = false;
+    const end = performance.now() + span;
+    const tick = () => {
+      const running = document
+        .getAnimations()
+        .some((a) => ((a.effect as KeyframeEffect | null)?.pseudoElement ?? '').startsWith('::view-transition'));
+      if (running) {
+        w.__e2eSawViewTransition = true;
+        return;
+      }
+      if (performance.now() < end) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, windowMs);
 }
 
-/** Polls quickly (no screenshots — those alone can take 100ms+ per call over
- *  CDP, easily longer than a ~150-350ms transition) for up to `windowMs` for
- *  any active document animation. Runs CONCURRENTLY with captureFrameSeries
- *  below (both started right after the same `trigger()`), not interleaved
- *  with it — interleaving a screenshot into every check was, in practice,
- *  slow enough on its own to occasionally miss a real but short-lived
- *  transition's entire animation window. */
-async function pollForAnimation(page: Page, windowMs: number): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < windowMs) {
-    if (await hasActiveDocumentAnimation(page)) return true;
-    await page.waitForTimeout(10);
-  }
-  return false;
+/** Resolves true as soon as the watch above has seen a transition, false if
+ *  its window passes without one. */
+async function sawViewTransition(page: Page, windowMs: number): Promise<boolean> {
+  return page
+    .waitForFunction(
+      () => (window as unknown as { __e2eSawViewTransition?: boolean }).__e2eSawViewTransition === true,
+      undefined,
+      { timeout: windowMs + 500 }
+    )
+    .then(() => true)
+    .catch(() => false);
 }
 
 async function captureFrameSeries(page: Page, totalMs: number, intervalMs: number): Promise<FrameCapture[]> {
@@ -280,10 +286,12 @@ export async function assertSingleCleanTransition(
     w.__e2eCLSObserver = observer;
   });
 
+  const watchMs = Math.min(1500, totalMs);
+  if (options.expectGradual) await startViewTransitionWatch(page, watchMs);
   await trigger();
   const [frames, sawAnimation] = await Promise.all([
     captureFrameSeries(page, totalMs, intervalMs),
-    options.expectGradual ? pollForAnimation(page, Math.min(800, totalMs)) : Promise.resolve(true),
+    options.expectGradual ? sawViewTransition(page, watchMs) : Promise.resolve(true),
   ]);
 
   const blackFrames = frames.filter((f) => meanLuminance(f.png) < 12);

@@ -172,10 +172,11 @@ test.describe('Phone back — clean switch, nothing plays afterwards', () => {
 
     await page.goBack();
     await expect(page).toHaveURL('/');
-    // The very first frame is already correct: right scroll, grid present.
-    expect(Math.abs((await scrollY(page)) - before)).toBeLessThan(5);
 
     if (!PHONE_BACK_HERO) {
+      // Instant switch: already committed by the time the URL has changed,
+      // so the very first frame has the right scroll.
+      expect(Math.abs((await scrollY(page)) - before)).toBeLessThan(5);
       const stray = await collectStrayAnimations(page, { delayMs: 50, windowMs: 1500 });
       expect(stray).toEqual([]);
       expect((await readViewTransitions(page)).length).toBe(transitionsBefore);
@@ -189,12 +190,16 @@ test.describe('Phone back — clean switch, nothing plays afterwards', () => {
     const records = await readViewTransitions(page);
     const hero = records[records.length - 1]?.hero;
     expect(records.length).toBe(transitionsBefore + 1);
+    // The first new frame (the browser's "after" picture) already has the
+    // right scroll — read at the moment the page update finished, not
+    // whenever the test runner happens to look.
+    expect(Math.abs((records[records.length - 1].scrollYAfterUpdate ?? -1000) - before)).toBeLessThan(5);
+    expect(Math.abs((await scrollY(page)) - before)).toBeLessThan(5);
     expect(hero).not.toBeNull();
     if (hero) {
       expect(hero.fromWidth).toBeGreaterThan(hero.toWidth * 1.5);
-      expect(hero.midWidth).not.toBeNull();
-      expect(hero.midWidth ?? 0).toBeLessThan(hero.fromWidth - 1);
-      expect(hero.midWidth ?? 0).toBeGreaterThan(hero.toWidth + 1);
+      const midFlight = hero.samples.filter((w) => w < hero.fromWidth - 1 && w > hero.toWidth + 1);
+      expect(midFlight.length).toBeGreaterThan(0);
     }
     // ...and nothing at all plays once it has settled.
     expect(await collectStrayAnimations(page, { delayMs: 0, windowMs: 1500 })).toEqual([]);

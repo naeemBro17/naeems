@@ -189,6 +189,12 @@ None needed. No database changes.
   same CPU. It's slower (about 4 minutes per run) but deterministic. The
   timing tests also now wait for real signals (the animation actually
   finishing) instead of fixed pauses.
+- After merging, one more full run failed 2 tests on unchanged code: three
+  measurements were still timed from outside the page and could miss the
+  moment on a busy machine. They now measure inside the page, on every
+  frame: whether a transition ran, the image's width mid-flight, and the
+  scroll at the exact moment the new page is drawn. Both affected spec files
+  then passed 5 times each (135/135), before the 3 full runs below.
 - The old tests' "did it animate?" check counted ANY animation on the page
   (the bento flip tile animates forever), so on Home it was always true.
   That is how they passed while your phone was broken. It now counts only
