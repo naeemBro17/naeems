@@ -24,6 +24,7 @@ import {
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../lib/manualOrders';
 import type { OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
+import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 
 interface OrderDetailSheetProps {
   orderId: string | null;
@@ -461,16 +462,17 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       )}
                     </p>
                   )}
-                  {order.steadfast_tracking_link && (
-                    <a
-                      href={order.steadfast_tracking_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="order-detail__tracking-link"
-                    >
-                      Track on Steadfast →
-                    </a>
-                  )}
+                  {/* The same link the customer's "Track parcel" opens. */}
+                  <a
+                    href={steadfastTrackingUrl(order.steadfast_tracking_link)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="order-detail__tracking-link"
+                  >
+                    {hasOwnTrackingLink(order.steadfast_tracking_link)
+                      ? 'Track parcel on Steadfast →'
+                      : 'Track on Steadfast (generic page, enter the tracking code) →'}
+                  </a>
                   {order.status === 'shipped' && (
                     <button
                       type="button"
