@@ -988,20 +988,39 @@ textarea {
 }
 
 .video-review__thumb {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+}
+
+.video-review__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-review__play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
-  height: 44px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #FFFFFF;
 }
 
-.video-review__thumb svg {
-  width: 20px;
-  height: 20px;
+.video-review__play svg {
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
 }
 
 .video-review__text {
@@ -1022,23 +1041,101 @@ textarea {
   color: var(--color-text-muted);
 }
 
-/* Inline YouTube player, opened from the video review card's modal — a
-   fixed 16:9 box so the iframe never has to be manually sized. */
-.video-embed {
+/* Batch 23 Part 7 — inline review player. The iframe itself never gets a
+   tap (pointer-events: none, and the transparent surface button covers it
+   anyway), so nothing can reach YouTube's title/logo links. */
+.video-player__frame {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: #000;
+  background: #000000;
 }
 
-.video-embed iframe {
+.video-player__frame iframe {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
+  pointer-events: none;
+}
+
+.video-player__poster {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+}
+
+.video-player__poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-player__big-play,
+.video-player__spinner {
+  position: relative;
+}
+
+.video-player__big-play {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #FFFFFF;
+}
+
+.video-player__big-play svg {
+  width: 24px;
+  height: 24px;
+  margin-left: 3px;
+}
+
+.video-player__surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.video-player__sound {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #FFFFFF;
+}
+
+.video-player__sound svg {
+  width: 20px;
+  height: 20px;
+}
+
+.video-player__label {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 /* ---------- Skeleton loading ---------- */

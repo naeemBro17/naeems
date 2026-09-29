@@ -20,16 +20,16 @@ import {
 } from '../lib/variants';
 import { productHeroName } from '../lib/viewTransition';
 import { setCurrentDetailProductId } from '../lib/heroTransition';
-import { extractYouTubeId, youtubeEmbedUrl } from '../lib/youtube';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
-import { Modal } from '../components/shared/Modal';
 import { ShareButton } from '../components/viewer/ShareButton';
 import { CartIcon } from '../components/viewer/CartButton';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { VariantSelector } from '../components/viewer/VariantSelector';
+import { VideoReview } from '../components/viewer/VideoReview';
+import { extractYouTubeId } from '../lib/youtube';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
 import type { Product, ProductVariant, VariantOption } from '../types';
 
@@ -114,54 +114,6 @@ function PlaceholderIcon() {
       <path d="M3 8l9 5 9-5" />
       <path d="M12 13v8" />
     </svg>
-  );
-}
-
-/**
- * A recognisable YouTube link plays inline in a modal on tap — the customer
- * never leaves the site. A link we can't parse as YouTube (mistyped, or a
- * different host entirely) falls back to opening it in a new tab instead of
- * breaking the page or silently doing nothing.
- */
-function VideoReviewCard({ url }: { url: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const videoId = useMemo(() => extractYouTubeId(url), [url]);
-
-  return (
-    <>
-      <button
-        type="button"
-        className="video-review"
-        onClick={() =>
-          videoId ? setIsOpen(true) : window.open(url, '_blank', 'noopener,noreferrer')
-        }
-      >
-        <span className="video-review__thumb" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5.5v13l11-6.5-11-6.5z" />
-          </svg>
-        </span>
-        <span className="video-review__text">
-          <span className="video-review__title">Watch Review</span>
-          <span className="video-review__sub">
-            {videoId ? 'Tap to play' : 'Tap to watch on YouTube'}
-          </span>
-        </span>
-      </button>
-
-      {videoId && (
-        <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Watch Review">
-          <div className="video-embed">
-            <iframe
-              src={youtubeEmbedUrl(videoId)}
-              title="Product video review"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        </Modal>
-      )}
-    </>
   );
 }
 
@@ -250,7 +202,9 @@ function DetailContent({
   const noteText = (selectedOption.note ?? product.note ?? '').trim();
   const howToUse = product.how_to_use?.trim() ?? '';
   const keyIngredients = product.key_ingredients?.trim() ?? '';
-  const youtubeUrl = product.youtube_url?.trim() ?? '';
+  // Only a real YouTube video gets a Video Review section (see VideoReview).
+  const rawYoutubeUrl = product.youtube_url?.trim() ?? '';
+  const youtubeUrl = extractYouTubeId(rawYoutubeUrl) !== null ? rawYoutubeUrl : '';
   const hasAccordion = howToUse !== '' || keyIngredients !== '' || youtubeUrl !== '';
   // No real variants, but the product itself carries a Region/Size label —
   // shown as plain text since there's nothing to select between (state 2).
@@ -442,7 +396,7 @@ function DetailContent({
             )}
             {youtubeUrl !== '' && (
               <AccordionItem title="Video Review">
-                <VideoReviewCard url={youtubeUrl} />
+                <VideoReview url={youtubeUrl} />
               </AccordionItem>
             )}
           </Accordion>

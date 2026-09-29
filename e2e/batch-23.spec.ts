@@ -315,3 +315,71 @@ test.describe('Part 4 — every card cart button works', () => {
     await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
   });
 });
+
+test.describe('Part 7 — video review plays inline and never leaves the page', () => {
+  test('row shows the YouTube thumbnail; taps anywhere on the playing video stay on the page', async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(60_000);
+    const opened: string[] = [];
+    context.on('page', (p) => opened.push(p.url()));
+
+    await page.goto('/product/cerave-hydrating-cleanser');
+    const header = page.getByRole('button', { name: 'Video Review', exact: true });
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    const row = page.locator('.video-review');
+    await row.scrollIntoViewIfNeeded();
+    await expect(row.locator('img')).toHaveAttribute('src', /^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/hqdefault\.jpg$/);
+    await expect(row).toContainText('Reviewed on YouTube');
+    await expect(row.locator('a')).toHaveCount(0);
+
+    await row.tap();
+    const frame = page.locator('.video-player__frame');
+    await expect(frame).toBeVisible();
+    const iframeSrc = (await frame.locator('iframe').getAttribute('src')) ?? '';
+    expect(iframeSrc).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\//);
+    for (const param of ['controls=0', 'rel=0', 'modestbranding=1', 'playsinline=1', 'disablekb=1', 'fs=0', 'iv_load_policy=3']) {
+      expect(iframeSrc).toContain(param);
+    }
+
+    // Inline at full card width, 16:9, and it genuinely starts playing.
+    await frame.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    const box = await frame.boundingBox();
+    expect(box).not.toBeNull();
+    const { x, y, width, height } = box as { x: number; y: number; width: number; height: number };
+    expect(Math.abs(width / height - 16 / 9)).toBeLessThan(0.05);
+    await expect(page.getByRole('button', { name: 'Pause video' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /Add .* to cart/ })).toBeAttached();
+
+    const url = page.url();
+    // Corners (YouTube's title, channel and logo live there), edges, centre.
+    const points: Array<[number, number]> = [
+      [0.05, 0.08], [0.5, 0.08], [0.95, 0.08], [0.05, 0.5], [0.5, 0.5],
+      [0.05, 0.92], [0.5, 0.92], [0.8, 0.92], [0.3, 0.3], [0.7, 0.7],
+    ];
+    for (const [fx, fy] of points) {
+      const px = x + width * fx;
+      const py = y + height * fy;
+      // Whatever is under the finger is our own layer, never YouTube's frame.
+      const hit = await page.evaluate(
+        ([hx, hy]) => document.elementFromPoint(hx, hy)?.className ?? '',
+        [px, py]
+      );
+      expect(hit, `tap at ${fx},${fy} lands on`).toMatch(/video-player__(surface|sound)/);
+      await page.touchscreen.tap(px, py);
+      await page.waitForTimeout(250);
+      expect(page.url()).toBe(url);
+    }
+    // Play/pause toggles from our own layer.
+    const surface = page.locator('.video-player__surface');
+    const before = await surface.getAttribute('aria-label');
+    await surface.tap();
+    await expect(surface).not.toHaveAttribute('aria-label', before ?? '', { timeout: 5000 });
+
+    expect(opened).toEqual([]);
+    expect(page.url()).toBe(url);
+  });
+});
