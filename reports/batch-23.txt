@@ -1,0 +1,292 @@
+BATCH 23 — Bug fixes + polish (from Naeem's real-phone testing)
+================================================================
+Branch: feature/batch-23-bugs (from latest origin/main). Pushed. NOT merged,
+nothing pushed to main. One commit per Part, plus this report.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Hero morph: rounded corners now animate
+Cause: on a grid card the photo box itself has square corners. The rounding
+comes from the card around it (18px corners that clip the photo). The
+browser's "flying picture" copies only the photo box, so it flew as a sharp
+rectangle, and the real round corners snapped in when it landed.
+Change: a small new module (src/lib/heroCorners.ts) measures the corners you
+actually SEE at both ends: card 17px (18px minus the 1px border), product
+photo 0px, bento tile 18px. It clips the flying picture to those corners and
+animates them from one end to the other. It uses the same 320ms and the same
+easing as the morph. Works for grid, bento and search cards, for the in-app
+arrow and the phone back button, and for opening.
+Proof (numbers read from the browser on every frame, grid card):
+  open:        17,17,13,10,7,5,4,3,2,1,1,0,0 ... (starts at 17, ends at 0)
+  in-app back: 0,0,0,4,7,12,13,14,16,16,17 ... (starts at 0, ends at 17)
+  phone back:  0,0,0,4,10,13,14,16,16,16,17 ...
+The first frame equals the page you left, and the last frame equals the page
+you land on. The size morph itself is unchanged, and so is everything else
+about open/back.
+
+PART 2 — Refresh starts at the top
+Cause: on a fresh page load the router labels the first page a "Pop", the
+same label a Back gets. The saved scroll position also survives a reload
+(browser session storage). So a refresh was treated exactly like a Back and
+jumped down.
+Change (src/components/shared/PageTransition.tsx, src/lib/scrollMemory.ts):
+  - Scroll is restored ONLY on a real Back/Forward. A reload or a fresh open
+    always starts at the top. (The browser itself says how the page was
+    loaded — "reload" vs "back_forward" — and that is now checked.)
+  - While you scroll, the saved position is kept up to date (at most every
+    150ms), so a later Back returns to where you really were.
+  - Tapping the Home tab scrolls to the top and forgets the old spot.
+Proof: the new tests fail on the old code exactly as you saw (reload landed
+at 601px / 300px / 1202px) and pass on the new code (0px). Home and /search
+both covered.
+
+PART 3 — Variants: sizes, and the image follows the choice
+Cause, from the live data for CeraVe Hydrating Cleanser:
+  - Australia has only size "236" and Korea only "473". The Size row was
+    hidden whenever a region had just one size.
+  - The gallery always put EVERY variant photo first, ahead of the
+    product's own photos. So the page opened on Korea's refill pouch, while
+    the card showed the product's own photo (the green bottle). Picking
+    Korea then showed the same pouch, so nothing changed. The hero morph
+    flew the bottle into a pouch — the "pouch, bottle, pouch" you saw.
+The ONE rule now used everywhere:
+  - A card (grid, bento, search) shows the product's own first photo, which
+    is the default option.
+  - The product page opens on that same default option, so its first photo
+    is the same photo. The morph lands on it and nothing changes by itself
+    afterwards (loading variants later only adds photos at the END).
+  - Picking another region/size shows that option's own photo first,
+    falling back to the product's photos if it has none.
+  - The cart and checkout thumbnails already followed this rule (the chosen
+    variant's photo, else the product's).
+  - With 2+ regions, the Size row always shows, even when that region has
+    only one size (it is pre-selected, so you always see what size you're
+    buying).
+Proof: e2e test on CeraVe — the page opens on the card's photo and stays
+there for 4 seconds; picking Korea shows the Size row, a new price and a new
+photo; picking Australia brings both back. Unit tests cover the photo rule.
+
+PART 4 — Cart buttons
+Cause for "Beauty of Joseon Revive Eye Serum": it has a second size (10ml),
+so its cart button did not add anything. It silently opened the product
+page instead, which reads as "doesn't work". CeraVe Hydrating Cleanser and
+La Roche-Posay Cicaplast Baume B5+ behaved the same way.
+Change: for a product with options, the card's cart button now opens a small
+"Choose options" sheet over Home. It shows the photo, name, price, stock and
+the Region/Size chips (the same picker as the product page), plus Add to
+Cart. You never leave the page. A short "Added to cart" toast confirms it.
+Proof: a new e2e test taps the cart button on EVERY card on Home:
+  104 cards — 94 added directly, 3 through the option sheet, 7 out of stock
+  (their buttons are disabled on purpose). 0 failures.
+
+PART 5 — "Track parcel on Steadfast" link
+(a) New bookings: checked the whole path. Steadfast's booking reply contains
+    tracking_link (https://steadfast.com.bd/tl/...). The Edge Function passes
+    it on, the database function saves it, and the customer's order page
+    uses it. The steadfast_tracking_link column exists in the live database
+    (checked). No real booking was placed, so this is proven by reading the
+    code and checking the database, not by a live parcel.
+(b) Older orders: Steadfast's status endpoints return only the delivery
+    status, never the link. The link only exists in the booking reply, so
+    it cannot be fetched later. Those orders keep the generic tracking page.
+    (The PDF is no longer in Downloads. This relies on what
+    fix/steadfast-auto recorded from it.)
+Change: one shared helper (src/lib/steadfastLink.ts) picks the link for both
+screens. It only trusts https links on steadfast.com.bd. The admin order
+screen now always shows the link: "Track parcel on Steadfast" when the
+parcel has its own link, or "Track on Steadfast (generic page, enter the
+tracking code)" when it doesn't.
+
+PART 6 — Whole site in English
+Everything below is now short, natural English. User-typed data (names,
+addresses) is untouched. The ৳ sign stays — it's the currency.
+  Customer pages:
+    - Footer links: About us, Delivery, Return policy, Terms, Privacy policy
+    - Account and My Orders: "Need help?" (both places)
+    - Order success: "We will confirm your order soon. Any questions? Tap
+      'Need help?' to contact us." and "View my order"
+    - Checkout summary: "Pay in advance with bKash", the bKash Send Money
+      instructions, "By placing this order you agree to our Terms and
+      Return policy."
+    - Checkout sign-in sheet: "Almost done!", "Before we send your skincare,
+      we just need to know who you are.", "Continue with Google", "Cancel"
+      (the two emoji were removed — site rule: no emoji in UI)
+    - Address picker: the Bangla place names are no longer shown under the
+      English ones, but typing a place in Bangla still finds it
+  Policy pages (translated faithfully, same meaning and structure):
+    About us, Delivery, Return & refund policy, Cancellation & terms,
+    Privacy policy
+  Admin:
+    - Orders: "New order" button and sheet title, "This month" card, the
+      delete-permanently confirmation (both versions)
+    - New order sheet: "Account found", "Previous order found", "Fill in
+      details", "Link to this account", "Free", "No delivery (hand
+      delivered)", "Low stock" warning ("continue anyway? Stock may go
+      negative.")
+    - Order screen: "Hand delivered", "Free", "Check delivery status",
+      "Send to Steadfast"
+    - Payment label "Due (pay later)" (list + status)
+    - Order history notes written by the database ("Sent to Steadfast",
+      "Steadfast: delivered", "Steadfast (auto): delivered") — shown in
+      English straight away, including old rows. The optional SQL below
+      also changes the stored text.
+  Telegram messages: "New order NM-...", "Order cancelled", "Steadfast: this
+    order needs attention". Needs a redeploy of notify-telegram-order — see
+    below.
+  Invoice PDF: it already had no Bengali labels (only the ৳ sign, handled as
+    before).
+  Code comments that quoted the old Bengali button names were updated to
+    match.
+
+PART 7 — Video Review player
+  - The "Watch Review" row shows the video's real YouTube thumbnail, with a
+    small plain-text "Reviewed on YouTube" label (not a link).
+  - Tapping plays it inline, right there, full width, 16:9. No sheet, no
+    fullscreen, no page change. Add to Cart stays on the page.
+  - Embed: youtube-nocookie.com with controls=0, rel=0, modestbranding=1,
+    playsinline=1, disablekb=1, fs=0, iv_load_policy=3.
+  - A transparent layer covers the whole video, so taps never reach
+    YouTube. Tap anywhere to play or pause, plus our own sound on/off
+    button.
+  - Until it actually plays, and whenever it's paused, our thumbnail covers
+    the player. That hides YouTube's own start and pause screens (title bar,
+    "more videos"). When it ends, it goes back to the thumbnail row.
+  - Sound: it tries to start WITH sound (your tap allows it). If a browser
+    refuses, it starts muted after 2.5 seconds and the sound button shows
+    "off".
+  - A product whose video link isn't a real YouTube link now shows no Video
+    Review section (it used to open the link in a new tab — an exit).
+Proof: e2e test on a phone-sized screen — the thumbnail is from i.ytimg.com,
+the video really starts playing (within 15s, usually ~1.5s), and 10 taps
+spread over the video (including all four corners, where YouTube's title
+and logo sit) all land on our own layer. The page URL never changes and no
+new tab opens.
+Honest limits — what YouTube may still show:
+  - While it plays, YouTube can briefly show its own title/channel strip or
+    logo watermark along the top or corner, and occasionally a paid-promotion
+    or age notice. They cannot be switched off, but they cannot be tapped
+    either (our layer is on top).
+  - On iPhone Safari, turning sound on with our button may be refused by the
+    browser after a muted start. Android Chrome is fine in testing.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+OPTIONAL — nothing breaks without it. The admin screen already shows these
+notes in English. Running it just makes the stored history text English too.
+File: supabase/migration-029-english-history-notes.sql — copy the whole file
+into the SQL Editor and Run. Safe to run more than once.
+It re-creates the three Steadfast functions exactly as migrations 025/026
+left them, with only the history-note text changed to English, and
+translates the notes already saved.
+
+ALSO (not SQL): redeploy the Telegram notifier so its messages are in
+English:  supabase functions deploy notify-telegram-order
+Until then, Telegram messages stay in Bengali. Nothing else is affected.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+- Deleting test orders: each full e2e run places one real order as the test
+  customer and cancels it (by design since Batch 21). Deleting needs admin,
+  which this environment doesn't have. The test customer's orders are all
+  CANCELLED: NM-1033, NM-1034, NM-1035, NM-1036 (all four from this
+  session's test runs). Please delete them with Admin -> Orders -> bulk
+  delete.
+- Could not place a real Steadfast booking to watch a new link being saved
+  live (no real confirmed order to book; I must not create one on your
+  merchant account). Proven by code path + live column check.
+- Could not deploy the Telegram function myself (live deploys are for you to
+  approve — see section 2).
+
+What only your phone can confirm:
+  - The rounded-corner morph's smoothness on your GPU (the numbers prove it
+    is gradual; the look on your screen is yours to judge). Try: Home ->
+    open a card -> phone back, and the same from a bento tile.
+  - Refresh on Home and on Search after scrolling (should start at the top).
+  - The video: tap Watch Review on CeraVe Hydrating Cleanser — it should
+    play with sound in place. Tap the top-left and bottom-right corners —
+    nothing should open.
+  - The Choose-options sheet on Beauty of Joseon Revive Eye Serum.
+
+
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+-----------------------------------------
+Products with odd variant data (only 3 products have variants at all):
+  - CeraVe Hydrating Cleanser: sizes are "236" and "473" with no unit
+    (probably "236 ml" / "473 ml"). The Korea option has no note of its own,
+    so it shows the product note "Original Australian stock" — misleading
+    for Korean stock. Fix in admin: give the Korea variant its own note.
+  - Beauty of Joseon Revive Eye Serum: sizes written as "30 ml" and "10ml"
+    (different spacing). The 10ml option has no photo of its own (it shows
+    the product photos — fine, but a 10ml photo would be clearer).
+  - La Roche-Posay Cicaplast Baume B5+: the 100 ml option has no photo of
+    its own.
+  - Regions are written differently across products: "AU" vs "AUSTRALIA",
+    all capitals. They display exactly as typed.
+Missing images (broken, the card shows the placeholder box):
+  - Cancer Council SPF 50+ Active 200ml Pump — its small card image is
+    missing from storage.
+  - Cancer Council 150mL Daily Sunscreen SPF50 Sun Block - Face & Body —
+    same.
+  Fix: open each in admin and run "Generate small images", or re-upload.
+Other:
+  - public/sitemap.xml is regenerated on every build, so it always shows as
+    changed. I left it out of the commits. Your uncommitted copy from main
+    is saved in a git stash ("sitemap-autogen") — nothing lost.
+  - Two pre-existing e2e tests are skipped because the bento tiles
+    currently hold fewer than 2 products each (a data condition, not a bug).
+
+
+5. DESIGN DECISIONS
+-------------------
+- Card cart button for products with options: a quick "Choose options"
+  sheet instead of opening the product page. It's the standard shop pattern
+  (quick-add), and it keeps the shopper on the grid. Add to Cart is the only
+  orange thing in it; prices are near-black.
+- One photo rule (see Part 3), so the card, the product page, the morph and
+  the cart always agree.
+- Size row shown even with one size once there are regions — so the size
+  being bought is always visible.
+- Video starts with sound (the tap is a clear "I want to watch"), falling
+  back to muted only if the browser refuses. Our thumbnail covers YouTube's
+  pause screen, so pausing never exposes YouTube's "more videos" panel.
+- Invalid video links: section hidden rather than opening a new tab.
+- Bangla place names: hidden but still searchable, so a customer typing in
+  Bangla isn't stuck.
+- History notes: translated when displayed (works with no SQL) plus an
+  optional migration, so nothing depends on SQL being run.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Clean up variant data (small, high impact on trust): units on every size
+   ("473 ml"), one spelling per region, a photo and note per variant. Wrong
+   or vague size labels are a common reason for returns and disputes.
+2. Fix the two missing Cancer Council card images (small). A blank box on a
+   product card costs clicks.
+3. Admin warning for an unrecognised video link (small): the section now
+   silently disappears if the link isn't a YouTube video. A red hint in the
+   product editor would catch typos.
+4. Real-device check routine before merging animation work (medium, process)
+   — still the only way to judge smoothness on your actual phone.
+5. Steadfast webhooks instead of the 3-hour poll (medium) — needs the
+   Webhooks page exported from the Steadfast dashboard.
+
+
+BUILD & TEST RESULTS
+--------------------
+Final code, three full runs in a row:
+  Run 1: npm run build PASSED (0 errors) | npx vitest run 52/52 passed |
+         npm run test:e2e 59 passed, 0 failed, 2 skipped
+  Run 2: build PASSED | vitest 52/52 | e2e 59 passed, 0 failed, 2 skipped
+  Run 3: build PASSED | vitest 52/52 | e2e 59 passed, 0 failed, 2 skipped
+The 2 skipped tests are pre-existing and skip themselves when the bento tiles
+hold fewer than 2 products (today's live data). No test was deleted or
+weakened. One check was tightened: checkout's cancelled-order text must now
+be English. The test recorder was also fixed to tell the corner animation
+apart from the size animation.
+New tests: e2e/batch-23.spec.ts (11 tests covering Parts 1, 2, 3, 4 and 7),
+src/lib/variants.test.ts, src/lib/steadfastLink.test.ts.
