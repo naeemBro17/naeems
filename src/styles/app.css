@@ -8369,3 +8369,325 @@ html.vt-fade::view-transition-new(root) {
 .variant-picker .variant-selector {
   margin-top: 0;
 }
+
+/* ============================================================
+   Batch 24 — admin team, activity log, safety lock, order tools
+   Neutral scale throughout; red only for the delete / safety-lock warnings.
+   ============================================================ */
+
+.admin-header__user {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.safety-lock-bar {
+  position: sticky;
+  top: 0;
+  z-index: 101;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.safety-lock-bar__button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field__input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.password-field__eye {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.password-field__eye svg {
+  width: 20px;
+  height: 20px;
+}
+
+.team-intro {
+  margin-bottom: var(--space-4);
+}
+
+.team-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.team-form__heading {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: var(--space-3);
+}
+
+.team-permissions {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.team-permissions__row {
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.team-permissions__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toggle--danger {
+  background: var(--color-danger);
+}
+
+.toggle--danger .toggle__thumb {
+  transform: translateX(20px);
+}
+
+.activity-filters__date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.activity-filters__date .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-row {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.activity-row__top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+
+.activity-row__who {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.activity-row__when {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.activity-row__summary {
+  font-size: 13.5px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.activity-row__detail {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.activity-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.profile-row {
+  width: 100%;
+}
+
+.profile-permissions {
+  padding-left: var(--space-5);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.delete-orders__warning {
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.delete-orders__type {
+  margin-bottom: var(--space-3);
+}
+
+.order-admin-detail .checkout-summary-card__item {
+  flex-wrap: wrap;
+}
+
+.order-item-price__edit {
+  display: block;
+  margin-top: 2px;
+  margin-left: auto;
+  font-family: var(--font-body, inherit);
+}
+
+.order-item-price {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-1) 56px;
+}
+
+.order-item-price__label {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.order-item-price__input {
+  width: 100px;
+  height: 36px;
+}
+
+.order-admin-detail__history-by {
+  color: var(--color-text-secondary);
+}
+
+.order-admin-detail__delete {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.order-admin-detail__locked {
+  font-size: 12.5px;
+}
+
+.order-number-form {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.order-number-preview {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.order-number-preview strong {
+  color: var(--color-text-primary);
+}
+
+.safety-lock-row {
+  width: 100%;
+  gap: var(--space-3);
+}
+
+.safety-lock-row__timer {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.texts-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.texts-group__title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.texts-group__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-product-row__edited {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.delivery-progress {
+  margin-bottom: var(--space-4);
+}
+
+.delivery-progress__now {
+  font-size: 15px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.delivery-progress__time {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.delivery-progress__note {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle--danger .toggle__thumb {
+    transition: none;
+  }
+}

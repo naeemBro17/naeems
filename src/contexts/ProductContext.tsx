@@ -95,6 +95,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   fb_pixel_id: '',
   ga_measurement_id: '',
+  text_checkout_signin_title: '',
+  text_checkout_signin_message: '',
 };
 
 /**
@@ -136,6 +138,8 @@ const TEXT_SETTING_KEYS = [
   'shop_bkash_number',
   'fb_pixel_id',
   'ga_measurement_id',
+  'text_checkout_signin_title',
+  'text_checkout_signin_message',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];
@@ -172,7 +176,10 @@ export function sortFeaturedFirst(products: Product[]): Product[] {
 }
 
 export function ProductProvider({ children }: { children: ReactNode }) {
-  const { session, isAdmin, isLoading: authLoading } = useAuth();
+  const { session, can, isLoading: authLoading } = useAuth();
+  // The Super Admin, and moderators with "Edit products and stock" (Batch
+  // 24), manage inactive products too.
+  const isAdmin = can('edit_products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);

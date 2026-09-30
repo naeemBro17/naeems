@@ -9,7 +9,8 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { Profile } from '../types';
+import type { Profile, StaffMember, StaffPermission } from '../types';
+import { fetchOwnStaffMember, logStaffEvent, staffEmail } from '../lib/staff';
 
 /** Result of a sign-in / sign-up attempt: an error message, or the profile. */
 export interface AuthResult {
@@ -27,6 +28,21 @@ interface AuthContextValue {
   isWholesalerOrAdmin: boolean;
   /** True only for a plain customer (Google sign-in, not admin/wholesaler). */
   isCustomer: boolean;
+  /** The signed-in admin-panel user's own staff row (username, permissions)
+   *  — the Super Admin or a moderator; null for everyone else (Batch 24). */
+  staff: StaffMember | null;
+  /** An approved moderator whose account is not disabled. */
+  isModerator: boolean;
+  /** Super Admin or active moderator — may open /admin. */
+  isStaff: boolean;
+  /** Whether the signed-in user may do this. Always true for the Super
+   *  Admin. Only decides what the admin panel SHOWS — the database checks
+   *  the same permission again on every action (staff_can()). */
+  can: (perm: StaffPermission) => boolean;
+  /** "Staff login": username + password. */
+  signInStaff: (username: string, password: string) => Promise<AuthResult>;
+  /** Re-read the staff row (e.g. after the Super Admin changed permissions). */
+  refreshStaff: () => Promise<void>;
   /** True until the initial session AND profile check completes. */
   isLoading: boolean;
   /** Sign in, then resolve the profile. Returns the profile for routing. */
@@ -136,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [staff, setStaff] = useState<StaffMember | null>(null);
   // Which user the current profile answer belongs to. Between a session
   // arriving and its profile fetch starting there is one render where
   // profileChecked is still true from the signed-out state; without this,
@@ -171,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId || !session) {
       profileForUserRef.current = null;
       setProfile(null);
+      setStaff(null);
       setProfileChecked(true);
       return;
     }
@@ -185,9 +203,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await ensureCustomerProfile(session);
         p = await fetchProfile(userId);
       }
+      const s = p && (p.role === 'admin' || p.role === 'moderator') ? await fetchOwnStaffMember(userId) : null;
       if (!active) return;
       profileForUserRef.current = userId;
       setProfile(p);
+      setStaff(s);
       setProfileChecked(true);
     })();
     return () => {
@@ -209,6 +229,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(p);
   }, [userId]);
 
+  const refreshStaff = useCallback(async () => {
+    if (!userId) {
+      setStaff(null);
+      return;
+    }
+    const [p, s] = await Promise.all([fetchProfile(userId), fetchOwnStaffMember(userId)]);
+    setProfile(p);
+    setStaff(s);
+  }, [userId]);
+
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -219,9 +249,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: 'Incorrect email or password', profile: null };
       }
       const p = await fetchProfile(data.user.id);
+      const s = p && (p.role === 'admin' || p.role === 'moderator') ? await fetchOwnStaffMember(data.user.id) : null;
       profileForUserRef.current = data.user.id;
       setProfile(p);
+      setStaff(s);
       setProfileChecked(true);
+      if (p?.role === 'admin' && p.status === 'approved') void logStaffEvent('staff.login');
+      return { error: null, profile: p };
+    },
+    []
+  );
+
+  const signInStaff = useCallback(
+    async (username: string, password: string): Promise<AuthResult> => {
+      // One message for every failure (wrong username, wrong password,
+      // switched-off account), so nobody can probe which usernames exist.
+      const failed: AuthResult = { error: 'Username or password is incorrect', profile: null };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: staffEmail(username),
+        password,
+      });
+      if (error || !data.user) return failed;
+      const p = await fetchProfile(data.user.id);
+      const s = await fetchOwnStaffMember(data.user.id);
+      if (!p || p.role !== 'moderator' || p.status !== 'approved' || !s || s.is_disabled) {
+        await supabase.auth.signOut();
+        setProfile(null);
+        setStaff(null);
+        return failed;
+      }
+      profileForUserRef.current = data.user.id;
+      setProfile(p);
+      setStaff(s);
+      setProfileChecked(true);
+      void logStaffEvent('staff.login');
       return { error: null, profile: p };
     },
     []
@@ -294,9 +355,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (profile?.role === 'admin' || profile?.role === 'moderator') {
+      // Batch 24: logging out always switches the Safety Lock back on.
+      if (profile.role === 'admin') {
+        const { error } = await supabase.rpc('admin_close_delete_lock');
+        if (error) console.warn('Could not close the safety lock:', error.message);
+      }
+      await logStaffEvent('staff.logout');
+    }
     await supabase.auth.signOut();
     setProfile(null);
-  }, []);
+    setStaff(null);
+  }, [profile]);
 
   const updateOwnProfile = useCallback(
     async (patch: {
@@ -323,6 +393,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isWholesalerOrAdmin =
     (profile?.role === 'wholesaler' || profile?.role === 'admin') && profile?.status === 'approved';
   const isCustomer = profile?.role === 'customer';
+  const isModerator =
+    profile?.role === 'moderator' && profile.status === 'approved' && staff !== null && !staff.is_disabled;
+  const isStaff = isAdmin === true || isModerator;
+  const can = useCallback(
+    (perm: StaffPermission) => isAdmin === true || (isModerator && staff !== null && staff.permissions.includes(perm)),
+    [isAdmin, isModerator, staff]
+  );
   // Loading until the session is known AND the profile answer is for this
   // very user — a stale "no profile" from the signed-out state doesn't count.
   const isLoading =
@@ -338,6 +415,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin: isAdmin === true,
         isWholesalerOrAdmin: isWholesalerOrAdmin === true,
         isCustomer,
+        staff,
+        isModerator,
+        isStaff,
+        can,
+        signInStaff,
+        refreshStaff,
         isLoading,
         signIn,
         signUpWholesaler,

@@ -213,14 +213,15 @@ function CustomerAccountView() {
 }
 
 function StaffAccountView() {
-  const { session, profile, isAdmin, signOut } = useAuth();
+  const { session, profile, isAdmin, isStaff, staff, signOut } = useAuth();
   const { showToast } = useToast();
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const label = isAdmin ? 'Admin' : 'Wholesaler account';
-  const panelPath = isAdmin ? '/admin' : '/wholesaler-access';
-  const panelLabel = isAdmin ? 'Open admin panel' : 'Open wholesaler account';
+  // Batch 24: moderators (staff) open the admin panel too.
+  const label = isAdmin ? 'Admin' : isStaff ? `Staff: ${staff?.username ?? ''}` : 'Wholesaler account';
+  const panelPath = isStaff ? '/admin' : '/wholesaler-access';
+  const panelLabel = isStaff ? 'Open admin panel' : 'Open wholesaler account';
 
   const handleLogout = async () => {
     setIsSigningOut(true);
@@ -286,7 +287,7 @@ export function AccountPage() {
   // Role alone, not approval status — a wholesaler awaiting approval is
   // still a wholesaler, not a customer, and belongs on their own account
   // screen (which shows their pending status), not the customer view.
-  const isStaff = profile?.role === 'wholesaler' || profile?.role === 'admin';
+  const isStaff = profile?.role === 'wholesaler' || profile?.role === 'admin' || profile?.role === 'moderator';
 
   return (
     <div className="viewer-shell detail-shell">

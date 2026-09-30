@@ -273,8 +273,27 @@ Deno.serve(async (req: Request) => {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: isAdmin, error: adminErr } = await userClient.rpc('is_admin');
-  if (adminErr || !isAdmin) {
+  // Batch 24: the Super Admin always passes; a moderator needs "Book on
+  // Steadfast" to book, and that or "Change order status" to check the
+  // delivery status. The database functions below check the same thing
+  // again themselves (migration-030).
+  const permissionNeeded = requestBody.action === 'create' ? ['book_steadfast'] : ['book_steadfast', 'change_order_status'];
+  let allowed = false;
+  for (const perm of permissionNeeded) {
+    const { data: can, error: permErr } = await userClient.rpc('staff_can', { p_perm: perm });
+    if (!permErr && can === true) {
+      allowed = true;
+      break;
+    }
+    if (permErr) {
+      // staff_can doesn't exist until migration-030 runs — keep the old
+      // admin-only rule working until then.
+      const { data: isAdmin } = await userClient.rpc('is_admin');
+      allowed = isAdmin === true;
+      break;
+    }
+  }
+  if (!allowed) {
     return json({ ok: false, error: 'Not authorized.' });
   }
 
