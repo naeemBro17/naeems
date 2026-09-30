@@ -16,7 +16,6 @@ import { formatTaka } from '../lib/format';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
 import {
   ORDER_STATUS_LABELS,
-  ORDER_STATUS_SEQUENCE,
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
@@ -24,6 +23,68 @@ import {
 } from '../lib/orderStatus';
 import type { OrderWithDetails } from '../types';
 import { steadfastTrackingUrl } from '../lib/steadfastLink';
+import { DELIVERY_STEPS, deliveryProgress, type DeliveryStepId } from '../lib/deliveryProgress';
+
+/** Which order-history status marks each step's time, where there is one. */
+const STEP_HISTORY_STATUS: Partial<Record<DeliveryStepId, OrderWithDetails['status']>> = {
+  placed: 'pending',
+  confirmed: 'confirmed',
+  handed: 'shipped',
+  delivered: 'delivered',
+};
+
+function shortTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Batch 24 Part 6: the delivery progress in plain words, from the status
+ *  already saved on the order (never a live call to Steadfast). */
+function DeliveryProgressSection({ order }: { order: OrderWithDetails }) {
+  const progress = deliveryProgress(order, order.history);
+  return (
+    <section className="delivery-progress" aria-label="Delivery progress">
+      <p className="delivery-progress__now">
+        <strong data-testid="delivery-status">{progress.label}</strong>
+        {progress.updatedAt && (
+          <span className="delivery-progress__time"> · Last update {shortTime(progress.updatedAt)}</span>
+        )}
+      </p>
+      {progress.exception !== 'cancelled' && (
+        <ol className="order-timeline">
+          {DELIVERY_STEPS.map((step, index) => {
+            const historyStatus = STEP_HISTORY_STATUS[step.id];
+            const historyRow = historyStatus ? order.history.find((h) => h.new_status === historyStatus) : undefined;
+            const reached = index <= progress.stepIndex;
+            return (
+              <li
+                key={step.id}
+                className={`order-timeline__step${reached ? ' order-timeline__step--reached' : ''}`}
+              >
+                <span className="order-timeline__dot" aria-hidden="true" />
+                <span className="order-timeline__label">{step.label}</span>
+                {reached && historyRow && (
+                  <span className="order-timeline__time">{shortTime(historyRow.changed_at)}</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {progress.exception === 'returned' && (
+        <p className="delivery-progress__note">The parcel is coming back to us. We will contact you.</p>
+      )}
+      {progress.exception === 'on_hold' && (
+        <p className="delivery-progress__note">The courier has paused this delivery for now. We will contact you.</p>
+      )}
+    </section>
+  );
+}
 
 function DetailSkeleton() {
   return (
@@ -126,35 +187,7 @@ export function OrderDetailPage() {
               </span>
             </div>
 
-            {order.status !== 'cancelled' && (
-              <ol className="order-timeline">
-                {ORDER_STATUS_SEQUENCE.map((step) => {
-                  const historyRow = order.history.find((h) => h.new_status === step);
-                  const stepIndex = ORDER_STATUS_SEQUENCE.indexOf(step);
-                  const currentIndex = ORDER_STATUS_SEQUENCE.indexOf(order.status);
-                  const reached = stepIndex <= currentIndex;
-                  return (
-                    <li
-                      key={step}
-                      className={`order-timeline__step${reached ? ' order-timeline__step--reached' : ''}`}
-                    >
-                      <span className="order-timeline__dot" aria-hidden="true" />
-                      <span className="order-timeline__label">{ORDER_STATUS_LABELS[step]}</span>
-                      {historyRow && (
-                        <span className="order-timeline__time">
-                          {new Date(historyRow.changed_at).toLocaleString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
+            <DeliveryProgressSection order={order} />
 
             {order.tracking_number && (
               <>

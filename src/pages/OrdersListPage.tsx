@@ -10,7 +10,8 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchMyOrders } from '../lib/orders';
 import { formatTaka } from '../lib/format';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../lib/orderStatus';
+import { ORDER_STATUS_TONE } from '../lib/orderStatus';
+import { deliveryProgress } from '../lib/deliveryProgress';
 import type { Order } from '../types';
 
 function OrdersSkeleton() {
@@ -91,7 +92,7 @@ export function OrdersListPage() {
                   <div className="orders-list__row-end">
                     <span className="orders-list__total">{formatTaka(order.total)}</span>
                     <span className={`status-badge status-badge--${ORDER_STATUS_TONE[order.status]}`}>
-                      {ORDER_STATUS_LABELS[order.status]}
+                      {deliveryProgress(order).label}
                     </span>
                   </div>
                 </Link>
