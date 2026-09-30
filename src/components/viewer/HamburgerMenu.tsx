@@ -54,7 +54,7 @@ function ComingSoon({ onBack }: { onBack: () => void }) {
  */
 export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const { theme, toggleTheme } = useTheme();
-  const { isAdmin, profile } = useAuth();
+  const { isStaff: isAdmin, profile } = useAuth();
   const navigate = useNavigate();
   const [screen, setScreen] = useState<MenuScreen>('root');
   const isApprovedWholesaler = profile?.role === 'wholesaler' && profile?.status === 'approved';

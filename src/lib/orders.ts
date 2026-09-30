@@ -12,6 +12,12 @@ import type {
 import { parseStockWarning } from './manualOrders';
 import type { StockWarning } from './manualOrders';
 
+// Batch 24 (migration-030) adds steadfast_status_updated_at. Tried first;
+// if that column isn't there yet, the Batch 22 select below, then the
+// legacy one — the same "never break a screen over a missing column" rule.
+const ORDER_SELECT_030 =
+  'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, created_at, updated_at';
+
 const ORDER_SELECT =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
 
@@ -34,12 +40,16 @@ const ORDER_SELECT_LEGACY =
 const ORDER_ITEM_SELECT_LEGACY =
   'id, order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total';
 
-const ORDER_HISTORY_SELECT = 'id, order_id, old_status, new_status, changed_by, changed_at, note';
+const ORDER_HISTORY_SELECT = 'id, order_id, old_status, new_status, changed_by, changed_by_username, changed_at, note';
+const ORDER_HISTORY_SELECT_LEGACY = 'id, order_id, old_status, new_status, changed_by, changed_at, note';
 
 /** Postgrest's "column does not exist" code — see the ORDER_SELECT_LEGACY
  *  comment above for why this triggers a same-shape retry instead of an
  *  error screen. */
 const UNDEFINED_COLUMN = '42703';
+
+/** PostgREST's "no such function" code (a migration not run yet). */
+const FUNCTION_NOT_FOUND = 'PGRST202';
 
 function normalizeOrderRow(row: Record<string, unknown>): Order {
   const subtotal = row.subtotal as number;
@@ -50,6 +60,7 @@ function normalizeOrderRow(row: Record<string, unknown>): Order {
     discount_note: (row.discount_note as string | null | undefined) ?? null,
     list_value: (row.list_value as number | undefined) ?? subtotal,
     free_value: (row.free_value as number | undefined) ?? 0,
+    steadfast_status_updated_at: (row.steadfast_status_updated_at as string | null | undefined) ?? null,
   };
 }
 
@@ -66,6 +77,8 @@ function normalizeOrderItemRow(row: Record<string, unknown>): OrderItem {
 type OrdersQueryResult = { data: Record<string, unknown>[] | null; error: { code?: string; message: string } | null };
 
 async function selectOrdersList(): Promise<OrdersQueryResult> {
+  const latest = await supabase.from('orders').select(ORDER_SELECT_030).order('created_at', { ascending: false });
+  if (latest.error?.code !== UNDEFINED_COLUMN) return latest;
   const res = await supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
   if (res.error?.code === UNDEFINED_COLUMN) {
     return supabase.from('orders').select(ORDER_SELECT_LEGACY).order('created_at', { ascending: false });
@@ -79,6 +92,8 @@ type OrderQueryResult = {
 };
 
 async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const latest = await supabase.from('orders').select(ORDER_SELECT_030).eq('id', orderId).maybeSingle();
+  if (latest.error?.code !== UNDEFINED_COLUMN) return latest;
   const res = await supabase.from('orders').select(ORDER_SELECT).eq('id', orderId).maybeSingle();
   if (res.error?.code === UNDEFINED_COLUMN) {
     return supabase.from('orders').select(ORDER_SELECT_LEGACY).eq('id', orderId).maybeSingle();
@@ -186,11 +201,7 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderWithDetail
   const [orderRes, itemsRes, historyRes] = await Promise.all([
     selectOrderById(orderId),
     selectOrderItems(orderId),
-    supabase
-      .from('order_status_history')
-      .select(ORDER_HISTORY_SELECT)
-      .eq('order_id', orderId)
-      .order('changed_at', { ascending: true }),
+    selectOrderHistory(orderId),
   ]);
 
   if (orderRes.error || !orderRes.data) return null;
@@ -198,8 +209,27 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderWithDetail
   return {
     ...normalizeOrderRow(orderRes.data),
     items: (itemsRes.data ?? []).map(normalizeOrderItemRow),
-    history: (historyRes.data ?? []) as OrderStatusHistoryRow[],
+    history: ((historyRes.data ?? []) as Record<string, unknown>[]).map((row) => ({
+      ...(row as unknown as OrderStatusHistoryRow),
+      changed_by_username: (row.changed_by_username as string | null | undefined) ?? null,
+    })),
   };
+}
+
+async function selectOrderHistory(orderId: string): Promise<OrdersQueryResult> {
+  const res = await supabase
+    .from('order_status_history')
+    .select(ORDER_HISTORY_SELECT)
+    .eq('order_id', orderId)
+    .order('changed_at', { ascending: true });
+  if (res.error?.code === UNDEFINED_COLUMN) {
+    return supabase
+      .from('order_status_history')
+      .select(ORDER_HISTORY_SELECT_LEGACY)
+      .eq('order_id', orderId)
+      .order('changed_at', { ascending: true });
+  }
+  return res;
 }
 
 /** Admin Orders tab: every order, newest first (RLS: admin only). */
@@ -385,6 +415,12 @@ export async function adminUpdateOrder(
   orderId: string,
   patch: Partial<Pick<Order, 'payment_status' | 'tracking_number' | 'admin_note'>>
 ): Promise<{ error: string | null }> {
+  // Batch 24: through admin_update_order_fields() (migration-030), which a
+  // moderator with "Change order status" may also use — the plain UPDATE
+  // below stays only as the fallback until that migration is run.
+  const rpc = await supabase.rpc('admin_update_order_fields', { p_order_id: orderId, p_fields: patch });
+  if (!rpc.error) return { error: null };
+  if (rpc.error.code !== FUNCTION_NOT_FOUND) return { error: rpc.error.message };
   const { error } = await supabase
     .from('orders')
     .update({ ...patch, updated_at: new Date().toISOString() })
@@ -568,4 +604,86 @@ export async function findCustomerMatches(phone: string): Promise<{
     : null;
 
   return { fromProfile, fromOrder };
+}
+
+/* ============================================================
+   Batch 24 — deleting orders, price edits, order number format
+   ============================================================ */
+
+/** An order anyone allowed to delete orders may delete: Pending, or
+ *  Cancelled and never booked on Steadfast. Mirrors admin_delete_orders()
+ *  (migration-030), which is what actually decides. */
+export function isEarlyStageOrder(order: Pick<Order, 'status' | 'steadfast_consignment_id'>): boolean {
+  return order.status === 'pending' || (order.status === 'cancelled' && !order.steadfast_consignment_id);
+}
+
+/** Deletes orders — see admin_delete_orders(): early-stage orders for the
+ *  Super Admin or a moderator with "Delete early orders"; any stage only
+ *  for the Super Admin while his Safety Lock is off. Each order is decided
+ *  on its own; refused ones come back with a reason. Stock is restored in
+ *  the database. */
+export async function adminDeleteOrders(orderIds: string[]): Promise<{
+  results: DeleteOrdersResult[];
+  error: string | null;
+}> {
+  const { data, error } = await supabase.rpc('admin_delete_orders', { p_order_ids: orderIds });
+  if (error) {
+    return { results: [], error: error.message || 'Could not delete these orders.' };
+  }
+  const rows = (data ?? []) as {
+    order_id: string;
+    order_number: string | null;
+    deleted: boolean;
+    reason: string | null;
+  }[];
+  return {
+    results: rows.map((r) => ({
+      orderId: r.order_id,
+      orderNumber: r.order_number,
+      deleted: r.deleted,
+      reason: r.reason,
+    })),
+    error: null,
+  };
+}
+
+/** Super Admin: change one item's unit price (0 = free). The database
+ *  recalculates the order's subtotal, discount and total itself. */
+export async function adminUpdateOrderItemPrice(
+  itemId: string,
+  newUnitPrice: number
+): Promise<{ error: string | null; newTotal: number | null }> {
+  const { data, error } = await supabase.rpc('admin_update_order_item_price', {
+    p_item_id: itemId,
+    p_new_unit_price: newUnitPrice,
+  });
+  if (error) return { error: error.message || 'Could not change the price.', newTotal: null };
+  const row = (data as { new_total: number }[] | null)?.[0];
+  return { error: null, newTotal: row ? Number(row.new_total) : null };
+}
+
+export interface OrderNumberFormat {
+  prefix: string;
+  nextNumber: number;
+  suffix: string;
+}
+
+export function previewOrderNumber(format: OrderNumberFormat): string {
+  return `${format.prefix}${format.nextNumber}${format.suffix}`;
+}
+
+export async function fetchOrderNumberFormat(): Promise<OrderNumberFormat | null> {
+  const { data, error } = await supabase.rpc('admin_order_number_info');
+  const row = (data as { prefix: string; next_number: number; suffix: string }[] | null)?.[0];
+  if (error || !row) return null;
+  return { prefix: row.prefix, nextNumber: Number(row.next_number), suffix: row.suffix };
+}
+
+export async function saveOrderNumberFormat(format: OrderNumberFormat): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_set_order_number_format', {
+    p_prefix: format.prefix,
+    p_next_number: format.nextNumber,
+    p_suffix: format.suffix,
+  });
+  return { error: error?.message ?? null };
 }

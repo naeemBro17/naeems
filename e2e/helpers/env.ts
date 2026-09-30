@@ -35,6 +35,11 @@ export const SUPABASE_URL = base.VITE_SUPABASE_URL ?? '';
 export const SUPABASE_ANON_KEY = base.VITE_SUPABASE_ANON_KEY ?? '';
 export const E2E_EMAIL = e2e.E2E_TEST_EMAIL ?? '';
 export const E2E_PASSWORD = e2e.E2E_TEST_PASSWORD ?? '';
+/** Batch 24: a dedicated test Super Admin account (never Naeem's own) and
+ *  the password the tests give the throwaway test moderator. */
+export const E2E_ADMIN_EMAIL = e2e.E2E_ADMIN_EMAIL ?? '';
+export const E2E_ADMIN_PASSWORD = e2e.E2E_ADMIN_PASSWORD ?? '';
+export const E2E_MOD_PASSWORD = e2e.E2E_MOD_PASSWORD ?? '';
 
 export function supabaseProjectRef(): string {
   const match = /^https:\/\/([a-z0-9]+)\.supabase\.co/.exec(SUPABASE_URL);

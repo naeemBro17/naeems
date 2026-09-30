@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
@@ -10,6 +10,8 @@ import { CombineProductsSheet } from './CombineProductsSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { VARIANTS_VIEW } from '../../lib/variants';
+import { useAuth } from '../../contexts/AuthContext';
+import { fetchProductEditInfo, formatDhakaTime, type ProductEditInfo } from '../../lib/staff';
 import type { Product } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -31,6 +33,22 @@ function stockText(product: Product): string {
 export function ProductList() {
   const { products, categories, refetch, patchProductLocal } = useProducts();
   const { showToast } = useToast();
+  // Batch 24: deleting a product stays with the Super Admin; moderators
+  // with "Edit products and stock" can add and edit only.
+  const { isAdmin } = useAuth();
+  const [editInfo, setEditInfo] = useState<Map<string, ProductEditInfo>>(() => new Map());
+
+  // "Last updated by <username> · <time>" — re-read whenever the product
+  // list reloads (after any save).
+  useEffect(() => {
+    let active = true;
+    void fetchProductEditInfo().then((info) => {
+      if (active) setEditInfo(info);
+    });
+    return () => {
+      active = false;
+    };
+  }, [products]);
 
   // Filters live in the URL so they survive leaving the admin panel and
   // coming Back (hooks/useUrlParams.ts).
@@ -410,6 +428,12 @@ export function ProductList() {
                   />
                   <span className="stock-row__text">{stockText(product)}</span>
                 </p>
+                {editInfo.has(product.id) && (
+                  <p className="admin-product-row__edited">
+                    Last updated by {editInfo.get(product.id)!.lastEditedBy} ·{' '}
+                    {formatDhakaTime(editInfo.get(product.id)!.lastEditedAt)}
+                  </p>
+                )}
               </div>
 
               <div className="admin-product-row__actions">
@@ -458,14 +482,16 @@ export function ProductList() {
                 >
                   Edit
                 </button>
-                <button
-                  type="button"
-                  className="button button--danger-outline button--small"
-                  onClick={() => setDeletingProduct(product)}
-                  aria-label={`Delete ${product.name}`}
-                >
-                  Delete
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="button button--danger-outline button--small"
+                    onClick={() => setDeletingProduct(product)}
+                    aria-label={`Delete ${product.name}`}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </li>
           ))}

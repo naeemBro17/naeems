@@ -3,6 +3,8 @@ import { BottomSheet } from '../shared/BottomSheet';
 import { GoogleSignInButton } from '../shared/GoogleSignInButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { CHECKOUT_LOGIN_COPY } from '../../lib/checkoutCopy';
+import { useProducts } from '../../contexts/ProductContext';
+import { siteText } from '../../lib/editableTexts';
 
 interface CheckoutLoginSheetProps {
   isOpen: boolean;
@@ -20,6 +22,10 @@ interface CheckoutLoginSheetProps {
  */
 export function CheckoutLoginSheet({ isOpen, onClose, redirectTo }: CheckoutLoginSheetProps) {
   const { signInWithGoogle } = useAuth();
+  // Title and message are editable in Admin → Settings → Texts (Batch 24).
+  const { settings } = useProducts();
+  const title = siteText(settings, 'text_checkout_signin_title');
+  const message = siteText(settings, 'text_checkout_signin_message');
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +41,9 @@ export function CheckoutLoginSheet({ isOpen, onClose, redirectTo }: CheckoutLogi
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={CHECKOUT_LOGIN_COPY.title}>
+    <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="login-sheet">
-        <p className="login-sheet__message">{CHECKOUT_LOGIN_COPY.message}</p>
+        <p className="login-sheet__message">{message}</p>
 
         {error && (
           <p className="login-sheet__error" role="alert">

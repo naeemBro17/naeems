@@ -17,6 +17,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [['list']],
+  // Batch 24: removes the test customer's leftover orders after every run.
+  globalTeardown: './e2e/global-teardown.ts',
   use: {
     baseURL: 'http://localhost:4174',
     trace: 'retain-on-failure',

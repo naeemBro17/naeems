@@ -9,6 +9,9 @@ interface WholesalerListProps {
   accounts: WholesalerAccount[];
   /** Re-fetch the list after a status change. */
   onReload: () => Promise<void> | void;
+  /** Batch 24: a moderator with "View customers" sees the list but cannot
+   *  approve, reject or revoke (the database refuses it too). */
+  readOnly?: boolean;
 }
 
 type StatusFilter = 'pending' | 'approved' | 'all';
@@ -27,7 +30,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function WholesalerList({ accounts, onReload }: WholesalerListProps) {
+export function WholesalerList({ accounts, onReload, readOnly = false }: WholesalerListProps) {
   const { showToast } = useToast();
   // In the URL so it survives leaving the admin panel and coming Back.
   const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('wstatus', 'pending', STATUS_FILTERS);
@@ -124,7 +127,7 @@ export function WholesalerList({ accounts, onReload }: WholesalerListProps) {
                 </div>
 
                 <div className="admin-wholesaler-row__actions">
-                  {account.status === 'pending' && (
+                  {!readOnly && account.status === 'pending' && (
                     <>
                       <button
                         type="button"
@@ -144,7 +147,7 @@ export function WholesalerList({ accounts, onReload }: WholesalerListProps) {
                       </button>
                     </>
                   )}
-                  {account.status === 'approved' && (
+                  {!readOnly && account.status === 'approved' && (
                     <button
                       type="button"
                       className="button button--danger-outline button--small"

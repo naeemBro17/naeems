@@ -115,7 +115,7 @@ export interface ProductFormData {
   skin_conditions: string[];
 }
 
-export type UserRole = 'customer' | 'wholesaler' | 'admin';
+export type UserRole = 'customer' | 'wholesaler' | 'admin' | 'moderator';
 export type ProfileStatus = 'pending' | 'approved' | 'rejected' | 'revoked';
 
 /** The current user's profile row (role + approval status). Customer-only
@@ -237,6 +237,10 @@ export interface AppSettings {
   fb_pixel_id: string;
   /** Google Analytics 4 Measurement ID (G-XXXXXXX). Blank = GA never loads. */
   ga_measurement_id: string;
+
+  /* --- Editable texts (Batch 24 Part 7) — blank means "use the default" --- */
+  text_checkout_signin_title: string;
+  text_checkout_signin_message: string;
 }
 
 /**
@@ -517,6 +521,10 @@ export interface Order {
   /** Steadfast's own raw status text (e.g. "in_review", "delivered") — shown
    *  as-is to admin, never used to drive UI logic beyond that. */
   steadfast_status: string | null;
+  /** When steadfast_status last changed (Batch 24, migration-030) — shown
+   *  to the customer as "last update". Null before the first courier update
+   *  or before migration-030 is run. */
+  steadfast_status_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -551,6 +559,10 @@ export interface OrderStatusHistoryRow {
   old_status: OrderStatus | null;
   new_status: OrderStatus;
   changed_by: string | null;
+  /** Who made the change, by username (Batch 24): a staff username,
+   *  'naeem' for the Super Admin, 'customer', or 'system' for the
+   *  automatic Steadfast refresh. Null only before migration-030. */
+  changed_by_username: string | null;
   changed_at: string;
   note: string | null;
 }
@@ -559,4 +571,49 @@ export interface OrderStatusHistoryRow {
 export interface OrderWithDetails extends Order {
   items: OrderItem[];
   history: OrderStatusHistoryRow[];
+}
+
+/* ============================================================
+   Admin team (Batch 24)
+   ============================================================ */
+
+/** Everything a moderator can be allowed to do. The Super Admin can always
+ *  do all of it and more; the database enforces these (staff_can()). */
+export type StaffPermission =
+  | 'view_orders'
+  | 'change_order_status'
+  | 'create_orders'
+  | 'book_steadfast'
+  | 'edit_products'
+  | 'edit_categories'
+  | 'view_customers'
+  | 'delete_early_orders';
+
+/** The signed-in staff member's own row (Super Admin or moderator). */
+export interface StaffMember {
+  id: string;
+  username: string;
+  full_name: string;
+  phone: string;
+  permissions: StaffPermission[];
+  is_disabled: boolean;
+}
+
+/** One moderator on the Team page. */
+export interface TeamMember extends StaffMember {
+  created_at: string;
+  last_login: string | null;
+}
+
+/** One Activity Log row. */
+export interface ActivityLogEntry {
+  id: number;
+  created_at: string;
+  actor_username: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  entity_label: string | null;
+  summary: string;
+  details: Record<string, unknown>;
 }

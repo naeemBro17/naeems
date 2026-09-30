@@ -11,10 +11,20 @@ export type AdminTab =
   | 'reviews'
   | 'bento'
   | 'promo-codes'
-  | 'settings';
+  | 'settings'
+  | 'team'
+  | 'activity'
+  | 'profile';
 
 interface AdminLayoutProps {
   activeTab: AdminTab;
+  /** The sections this person may open (Batch 24) — a moderator only sees
+   *  the ones their permissions allow. */
+  visibleTabs: readonly AdminTab[];
+  /** Who is signed in, shown in the header. */
+  username: string | null;
+  /** Shown above the page (the Safety Lock warning bar). */
+  banner?: ReactNode;
   onTabChange: (tab: AdminTab) => void;
   /** Number of pending wholesaler requests, shown as a badge on that tab. */
   pendingWholesalers: number;
@@ -23,7 +33,7 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
-const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
+export const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
   {
     id: 'products',
     label: 'Products',
@@ -121,10 +131,49 @@ const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
       </>
     ),
   },
+  {
+    id: 'team',
+    label: 'Team',
+    iconPath: (
+      <>
+        <circle cx="9" cy="8" r="3.5" />
+        <path d="M2.5 20a6.5 6.5 0 0113 0" />
+        <path d="M16 11.5a3 3 0 100-6" />
+        <path d="M18 20h3.5a5 5 0 00-4.5-5" />
+      </>
+    ),
+  },
+  {
+    id: 'activity',
+    label: 'Activity Log',
+    iconPath: (
+      <>
+        <path d="M8 6h13" />
+        <path d="M8 12h13" />
+        <path d="M8 18h13" />
+        <circle cx="4" cy="6" r="1" />
+        <circle cx="4" cy="12" r="1" />
+        <circle cx="4" cy="18" r="1" />
+      </>
+    ),
+  },
+  {
+    id: 'profile',
+    label: 'My Profile',
+    iconPath: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0116 0" />
+      </>
+    ),
+  },
 ];
 
 export function AdminLayout({
   activeTab,
+  visibleTabs,
+  username,
+  banner,
   onTabChange,
   pendingWholesalers,
   pendingOrders,
@@ -140,6 +189,7 @@ export function AdminLayout({
       <header className="admin-header">
         <h1 className="admin-header__title">Naeem's — Admin</h1>
         <div className="admin-header__actions">
+          {username && <span className="admin-header__user">{username}</span>}
           <ThemeToggle />
           <Link to="/" className="admin-header__view-link" aria-label="Open the public price list">
             View Site
@@ -147,9 +197,10 @@ export function AdminLayout({
         </div>
       </header>
 
+      {banner}
       <div className="admin-body">
         <nav className="admin-nav" aria-label="Admin sections">
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => visibleTabs.includes(tab.id)).map((tab) => (
             <button
               key={tab.id}
               type="button"

@@ -16,6 +16,7 @@ import { formatTaka, normalizeText } from '../../lib/format';
 import { cardImage } from '../../lib/productImages';
 import { zoneForAddress } from '../../lib/deliveryZones';
 import { adminCreateOrder, findCustomerMatches, type ManualOrderItemInput } from '../../lib/orders';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   MANUAL_ORDER_SOURCES,
   DISCOUNT_REASONS,
@@ -76,6 +77,10 @@ function emptyForm(): DeliveryAddress {
 const emptyErrors: AddressFieldErrors = {};
 
 export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps) {
+  // Batch 24: custom prices, "Free" and order discounts are money changes —
+  // Super Admin only. A moderator's manual order is always at the real
+  // price (admin_create_order() refuses anything else from them).
+  const { isAdmin } = useAuth();
   const { products, variantsFor, settings } = useProducts();
   const { showToast } = useToast();
 
@@ -500,6 +505,9 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
                       Only {line.stockQuantity} in stock
                     </span>
                   )}
+                  {!isAdmin ? (
+                    <span className="checkout-cart__variant">{formatTaka(line.listPrice)} each</span>
+                  ) : (
                   <div className="manual-order-line__price-row">
                     {line.soldPrice !== line.listPrice && (
                       <span className="manual-order-line__list-price">{formatTaka(line.listPrice)}</span>
@@ -515,7 +523,8 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
                       Free
                     </button>
                   </div>
-                  {lineNeedsReason(line.listPrice, line.soldPrice) && (
+                  )}
+                  {isAdmin && lineNeedsReason(line.listPrice, line.soldPrice) && (
                     <div className="chip-group" role="group" aria-label="Reason for discount">
                       {DISCOUNT_REASONS.map((r) => (
                         <button
@@ -550,6 +559,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
           </ul>
         )}
 
+        {isAdmin && (
         <div className="form-row">
           <div className="form-field">
             <label className="form-label" htmlFor="manual-order-discount">Order discount (৳)</label>
@@ -563,7 +573,8 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
             />
           </div>
         </div>
-        {orderDiscount > 0 && (
+        )}
+        {isAdmin && orderDiscount > 0 && (
           <>
             <div className="form-field">
               <span className="form-label">Reason for order discount</span>

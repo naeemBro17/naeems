@@ -9,10 +9,12 @@ import {
   PAYMENT_STATUS_TONE,
 } from '../../lib/orderStatus';
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
-import { adminDeleteCancelledOrders, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
+import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
 import { NewOrderSheet } from './NewOrderSheet';
 import { useToast } from '../../hooks/useToast';
-import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { DeleteOrdersDialog } from './DeleteOrdersDialog';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSafetyLock } from '../../contexts/SafetyLockContext';
 import { OrderDetailSheet } from './OrderDetailSheet';
 import type { Order, OrderStatus } from '../../types';
 
@@ -52,6 +54,14 @@ interface OrdersTabProps {
 
 export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) {
   const { showToast } = useToast();
+  const { isAdmin, can } = useAuth();
+  const { openUntil } = useSafetyLock();
+  const canDeleteEarly = can('delete_early_orders');
+  // Batch 24: a checkbox only on orders this person may delete right now —
+  // early-stage orders, or any order for the Super Admin while his Safety
+  // Lock is off. The database checks the same rule again.
+  const canDeleteNow = (order: Order): boolean =>
+    (isAdmin && openUntil !== null) || (canDeleteEarly && isEarlyStageOrder(order));
   // Filters live in the URL so leaving the admin panel and coming Back keeps
   // them (hooks/useUrlParams.ts); prefixed so they can't clash with the
   // Products tab's own.
@@ -128,11 +138,10 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     });
   };
 
-  const selectedOrders = orders.filter((o) => selectedForDelete.has(o.id));
-  const selectedHaveSteadfast = selectedOrders.some((o) => Boolean(o.steadfast_consignment_id));
+  const selectedOrders = orders.filter((o) => selectedForDelete.has(o.id) && canDeleteNow(o));
 
   const handleDeleteSelected = async () => {
-    const { results, error } = await adminDeleteCancelledOrders([...selectedForDelete]);
+    const { results, error } = await adminDeleteOrders(selectedOrders.map((o) => o.id));
     setIsConfirmingDelete(false);
     if (error) {
       showToast(error, 'error');
@@ -156,23 +165,25 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     <section aria-label="Orders">
       <header className="admin-section-header">
         <h2 className="admin-section-title">Orders</h2>
-        <button
-          type="button"
-          className="button button--primary button--small"
-          onClick={() => setIsNewOrderOpen(true)}
-        >
-          New order
-        </button>
-        {selectedForDelete.size > 0 && (
+        {can('create_orders') && (
+          <button
+            type="button"
+            className="button button--primary button--small"
+            onClick={() => setIsNewOrderOpen(true)}
+          >
+            New order
+          </button>
+        )}
+        {selectedOrders.length > 0 && (
           <button
             type="button"
             className="button button--danger button--small"
             onClick={() => setIsConfirmingDelete(true)}
           >
-            Delete permanently ({selectedForDelete.size})
+            Delete selected ({selectedOrders.length})
           </button>
         )}
-        {shippedWithSteadfast.length > 0 && (
+        {shippedWithSteadfast.length > 0 && (can('book_steadfast') || can('change_order_status')) && (
           <button
             type="button"
             className="button button--secondary button--small"
@@ -259,8 +270,8 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       ) : (
         <ul className="admin-list">
           {filtered.map((order) => (
-            <li key={order.id} className={order.status === 'cancelled' ? 'admin-order-row-wrap' : undefined}>
-              {order.status === 'cancelled' && (
+            <li key={order.id} className={canDeleteNow(order) ? 'admin-order-row-wrap' : undefined}>
+              {canDeleteNow(order) && (
                 <input
                   type="checkbox"
                   className="admin-order-row__select"
@@ -324,17 +335,9 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         }}
       />
 
-      <ConfirmDialog
+      <DeleteOrdersDialog
         isOpen={isConfirmingDelete}
-        title="Delete permanently?"
-        message={
-          selectedHaveSteadfast
-            ? `${selectedForDelete.size} order(s) will be deleted permanently. This cannot be undone. At least one of them is booked with Steadfast: cancel it in Steadfast's own panel first, then delete it here.`
-            : `${selectedForDelete.size} order(s) will be deleted permanently. This cannot be undone.`
-        }
-        confirmLabel="Delete permanently"
-        cancelLabel="Cancel"
-        danger
+        orders={selectedOrders}
         onConfirm={handleDeleteSelected}
         onClose={() => setIsConfirmingDelete(false)}
       />

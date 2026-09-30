@@ -36,6 +36,7 @@ function makeOrder(overrides: Partial<Order>): Order {
     steadfast_tracking_code: null,
     steadfast_tracking_link: null,
     steadfast_status: null,
+    steadfast_status_updated_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...overrides,

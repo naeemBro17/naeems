@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { select } from './helpers/api';
 import { test, expect } from './fixtures';
 import {
   readViewTransitions,
@@ -222,6 +223,19 @@ test.describe('Part 3 — variants: sizes appear, the image follows the choice',
       expect(await shownSrc()).toBe(openedOn);
       await page.waitForTimeout(500);
     }
+
+    // The region part needs this product to really have 2+ regions in the
+    // live catalogue. Asked of the database, not the page, so a page that
+    // fails to show existing regions still fails this test. (Batch 24: on
+    // 30 Sep the product's Australia/Korea options were split into separate
+    // products, so no product has two regions today.)
+    const product = await select<{ id: string }[]>(null, 'products_view?select=id&slug=eq.cerave-hydrating-cleanser');
+    const variants = await select<{ region: string }[]>(
+      null,
+      `product_variants_view?select=region&product_id=eq.${product.data?.[0]?.id ?? ''}`
+    );
+    const regions = new Set((variants.data ?? []).map((v) => v.region.trim().toLowerCase()));
+    test.skip(regions.size < 2, 'CeraVe Hydrating Cleanser has fewer than 2 regions in the live catalogue today.');
 
     const regionRow = page.getByRole('group', { name: 'Region' });
     const sizeRow = page.getByRole('group', { name: 'Size' });

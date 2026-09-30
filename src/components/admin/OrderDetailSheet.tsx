@@ -10,7 +10,13 @@ import {
   bookSteadfastShipment,
   refreshSteadfastStatus,
   steadfastNeedsAttention,
+  adminDeleteOrders,
+  adminUpdateOrderItemPrice,
+  isEarlyStageOrder,
 } from '../../lib/orders';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSafetyLock } from '../../contexts/SafetyLockContext';
+import { DeleteOrdersDialog } from './DeleteOrdersDialog';
 import { formatTaka } from '../../lib/format';
 import { buildOrderPdf } from '../../lib/orderExport';
 import { copyToClipboard } from '../../lib/clipboard';
@@ -22,7 +28,7 @@ import {
   PAYMENT_STATUS_TONE,
 } from '../../lib/orderStatus';
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../lib/manualOrders';
-import type { OrderStatus, OrderWithDetails } from '../../types';
+import type { OrderItem, OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 import { orderHistoryNote } from '../../lib/orderHistoryNotes';
@@ -107,6 +113,18 @@ function toOrderSnapshot(order: OrderWithDetails) {
 
 export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailSheetProps) {
   const { showToast } = useToast();
+  // Batch 24: what this person may do here. Only decides which buttons
+  // show — every action is checked again by the database.
+  const { isAdmin, can } = useAuth();
+  const { openUntil } = useSafetyLock();
+  const canChangeStatus = can('change_order_status');
+  const canBook = can('book_steadfast');
+  const canDeleteEarly = can('delete_early_orders');
+  const [priceEditItemId, setPriceEditItemId] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState('');
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [priceSteadfastConfirm, setPriceSteadfastConfirm] = useState<number | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [order, setOrder] = useState<OrderWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [trackingInput, setTrackingInput] = useState('');
@@ -258,6 +276,58 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     await reload();
   };
 
+  const startPriceEdit = (item: OrderItem) => {
+    setPriceEditItemId(item.id);
+    setPriceInput(String(item.unit_price));
+  };
+
+  const savePrice = async (price: number) => {
+    if (!order || !priceEditItemId) return;
+    setIsSavingPrice(true);
+    const { error } = await adminUpdateOrderItemPrice(priceEditItemId, price);
+    setIsSavingPrice(false);
+    setPriceSteadfastConfirm(null);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    setPriceEditItemId(null);
+    showToast(
+      order.steadfast_consignment_id
+        ? 'Price saved. Change the COD amount on the Steadfast portal too.'
+        : 'Price saved, total updated'
+    );
+    await reload();
+  };
+
+  // A booked parcel's COD amount can't be changed through Steadfast's API
+  // (it has no "edit parcel" call), so warn before saving.
+  const requestSavePrice = (price: number) => {
+    if (!Number.isFinite(price) || price < 0) {
+      showToast('Price must be 0 or more.', 'error');
+      return;
+    }
+    if (order?.steadfast_consignment_id) {
+      setPriceSteadfastConfirm(price);
+      return;
+    }
+    void savePrice(price);
+  };
+
+  const handleDelete = async () => {
+    if (!order) return;
+    const { results, error } = await adminDeleteOrders([order.id]);
+    setDeleteOpen(false);
+    const result = results[0];
+    if (error || !result?.deleted) {
+      showToast(error ?? result?.reason ?? 'Could not delete this order.', 'error');
+      return;
+    }
+    showToast(`Order ${order.order_number} deleted`);
+    onChanged();
+    onClose();
+  };
+
   const handleCopyAddress = async () => {
     if (!order) return;
     const ok = await copyToClipboard(addressText(order));
@@ -348,7 +418,59 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       </span>
                     )}
                   </span>
-                  <span className="checkout-summary-card__item-price">{formatTaka(item.line_total)}</span>
+                  <span className="checkout-summary-card__item-price">
+                    {formatTaka(item.line_total)}
+                    {isAdmin && priceEditItemId !== item.id && (
+                      <button
+                        type="button"
+                        className="account-card__edit order-item-price__edit"
+                        onClick={() => startPriceEdit(item)}
+                        aria-label={`Edit price of ${item.product_name}`}
+                      >
+                        Edit price
+                      </button>
+                    )}
+                  </span>
+                  {isAdmin && priceEditItemId === item.id && (
+                    <span className="order-item-price">
+                      <label className="order-item-price__label" htmlFor={`price-${item.id}`}>
+                        Unit price (৳)
+                      </label>
+                      <input
+                        id={`price-${item.id}`}
+                        type="number"
+                        min="0"
+                        inputMode="decimal"
+                        className="form-input order-item-price__input"
+                        value={priceInput}
+                        onChange={(e) => setPriceInput(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="button button--secondary button--small"
+                        onClick={() => requestSavePrice(0)}
+                        disabled={isSavingPrice}
+                      >
+                        Free
+                      </button>
+                      <button
+                        type="button"
+                        className="button button--secondary button--small"
+                        onClick={() => requestSavePrice(Number(priceInput))}
+                        disabled={isSavingPrice || priceInput.trim() === ''}
+                      >
+                        {isSavingPrice ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="account-card__edit"
+                        onClick={() => setPriceEditItemId(null)}
+                        disabled={isSavingPrice}
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -379,7 +501,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               ) : (
                 <span>
                   {formatTaka(order.delivery_fee)}
-                  {(order.status === 'pending' || order.status === 'confirmed') && (
+                  {isAdmin && (order.status === 'pending' || order.status === 'confirmed') && (
                     <button
                       type="button"
                       className="account-card__edit"
@@ -429,7 +551,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               <>
                 {order.bkash_trx_id && <p className="order-detail__trx">TrxID: {order.bkash_trx_id}</p>}
                 {order.bkash_sender && <p className="order-detail__trx">Sender: {order.bkash_sender}</p>}
-                {order.payment_status !== 'paid' && (
+                {canChangeStatus && order.payment_status !== 'paid' && (
                   <button
                     type="button"
                     className="button button--secondary button--small"
@@ -474,7 +596,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       ? 'Track parcel on Steadfast →'
                       : 'Track on Steadfast (generic page, enter the tracking code) →'}
                   </a>
-                  {order.status === 'shipped' && (
+                  {order.status === 'shipped' && (canBook || canChangeStatus) && (
                     <button
                       type="button"
                       className="button button--secondary button--small"
@@ -490,6 +612,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                     </button>
                   )}
                 </>
+              ) : !canBook ? (
+                <p className="admin-panel__description">Not booked on Steadfast yet.</p>
               ) : steadfastCodAmount === null ? (
                 <p className="admin-panel__description">
                   This bKash payment has not been verified yet — mark it as paid above before booking
@@ -515,6 +639,17 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             </section>
           )}
 
+          {!canChangeStatus ? (
+            <section className="order-detail__section">
+              <h2 className="order-detail__section-title">Tracking number and note</h2>
+              <p className="order-detail__address">
+                Tracking: {order.tracking_number ?? '—'}
+                <br />
+                Note: {order.admin_note ?? '—'}
+              </p>
+            </section>
+          ) : (
+          <>
           <section className="order-detail__section">
             <h2 className="order-detail__section-title">Tracking number</h2>
             <div className="order-admin-detail__field-row">
@@ -556,6 +691,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               </button>
             </div>
           </section>
+          </>
+          )}
 
           {order.history.length > 0 && (
             <section className="order-detail__section">
@@ -573,6 +710,9 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
+                    {row.changed_by_username && (
+                      <span className="order-admin-detail__history-by"> · by {row.changed_by_username}</span>
+                    )}
                     {row.note && <span className="order-admin-detail__history-note">{orderHistoryNote(row.note)}</span>}
                   </li>
                 ))}
@@ -580,7 +720,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             </section>
           )}
 
-          {order.status !== 'cancelled' && order.status !== 'delivered' && (
+          {canChangeStatus && order.status !== 'cancelled' && order.status !== 'delivered' && (
             <div className="order-admin-detail__status-actions">
               {nextStatus && (
                 <button
@@ -602,8 +742,44 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               </button>
             </div>
           )}
+
+          {(isAdmin || canDeleteEarly) && (
+            <section className="order-detail__section order-admin-detail__delete">
+              {(isAdmin && openUntil !== null) || (canDeleteEarly && isEarlyStageOrder(order)) ? (
+                <button type="button" className="button button--danger-outline" onClick={() => setDeleteOpen(true)}>
+                  Delete order
+                </button>
+              ) : (
+                <p className="admin-panel__description order-admin-detail__locked">
+                  {isAdmin
+                    ? "Locked: turn on 'Allow deleting orders at any stage' in Safety Locks."
+                    : 'Only Pending orders, or Cancelled orders never booked on Steadfast, can be deleted.'}
+                </p>
+              )}
+            </section>
+          )}
         </div>
       )}
+
+      {order && (
+        <DeleteOrdersDialog
+          isOpen={deleteOpen}
+          orders={[order]}
+          onConfirm={handleDelete}
+          onClose={() => setDeleteOpen(false)}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={priceSteadfastConfirm !== null}
+        title="Booked on Steadfast"
+        message={`This order is booked on Steadfast (consignment ${order?.steadfast_consignment_id ?? ''}). The COD amount there will not change automatically. After saving, change the COD amount on the Steadfast portal too.`}
+        confirmLabel="Save price"
+        cancelLabel="Cancel"
+        danger={false}
+        onConfirm={() => savePrice(priceSteadfastConfirm ?? 0)}
+        onClose={() => setPriceSteadfastConfirm(null)}
+      />
 
       <ConfirmDialog
         isOpen={cancelOpen}
