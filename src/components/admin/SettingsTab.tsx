@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProducts, type TextSettingKey } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
+import { OrderNumberPanel, SafetyLocksPanel, TextsPanel } from './SettingsExtraPanels';
 
 const PASSWORD_MIN_LENGTH = 8;
 const EXPERT_PHOTO_PATH = 'settings/expert-photo.webp';
@@ -913,6 +914,12 @@ export function SettingsTab() {
       <ShopWhatsAppPanel />
 
       <OrderPaymentSettingsPanel />
+
+      <OrderNumberPanel />
+
+      <SafetyLocksPanel />
+
+      <TextsPanel />
 
       <AdTrackingSettingsPanel />
 
