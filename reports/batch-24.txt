@@ -1,0 +1,349 @@
+BATCH 24 — Orders + Admin team (moderators, activity log, editable texts)
+========================================================================
+Branch: feature/batch-24-orders-admin (from the latest origin/main).
+Pushed. NOT merged, nothing pushed to main.
+Database migration and server functions are ALREADY LIVE (you approved
+the deploy). The live site (main) was checked afterwards and still works.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Admin team: Super Admin + Moderators
+You are the Super Admin (username "naeem"). Your login is unchanged.
+New: Admin → Team (only you see it).
+  - "Add moderator": Username, Full name, Phone, Password (8+ characters,
+    with a show/hide eye). The username is their login ID (lowercase
+    letters, numbers, "." and "_", must be unique). Behind the scenes their
+    login email is <username>@staff.naeems.internal. They never see it.
+  - Tap a moderator to: switch permissions on/off, edit name/phone, reset
+    their password, switch them off ("Disabled": they can't sign in, history
+    kept), or delete them (asks twice). Past activity stays in the log with
+    their username.
+  - All permissions start OFF.
+Login page (/admin-access) now has two tabs: "Admin" (your email login, as
+before) and "Staff login" (username + password). A wrong username or
+password always shows the same message: "Username or password is incorrect".
+A moderator sees only the sections they are allowed, plus "My Profile"
+(their username/name/phone, what they can do, change own password, sign
+out).
+Security: every permission is checked INSIDE THE DATABASE (a function
+called staff_can) on every action, not just by hiding buttons. The tests
+call the database directly as a moderator and confirm they are refused.
+A disabled or deleted moderator loses access on their very next click,
+even if their browser is still logged in.
+Proof: e2e tests 1, 2, 3 and 12 (see Tests).
+
+PART 2 — Activity Log (who did what, when)
+The database itself records every admin action: order status / payment /
+tracking / note changes, manual orders, Steadfast bookings and courier
+status changes, price edits, order deletes, product / stock / option /
+category edits, settings changes (including texts and order number
+format), team changes, Safety Lock on/off, staff logins/logouts, promo
+codes, reviews, bento tiles and wholesaler approvals. Where it makes sense
+it shows before → after.
+Nobody can edit or delete a log entry — not even through the database
+tools (a lock inside the database refuses it).
+Admin → Activity Log (only you): newest first, filters for person, type of
+action, date range (Bangladesh time), search by order number or product
+name, pages of 30. Filters are kept in the web address, so Back returns to
+the same view.
+Products: each product in Admin → Products now shows "Last updated by
+<username> · <date time>" once someone edits it.
+Orders: the order history on the admin order screen shows "by <username>"
+on every line ("customer" for the shopper, "system" for the automatic
+Steadfast refresh).
+Proof: e2e test 4.
+
+PART 3 — Order number format
+Admin → Settings → "Orders: order number": Prefix, Next number, Suffix, and
+a live line "Next order will be: NM-1047".
+  - It starts exactly as before (prefix "NM-", no suffix).
+  - The next number can only go up (the database refuses a lower one).
+  - The number is made inside the database for both website orders and
+    manual orders, from a counter that never gives the same number twice,
+    even for two orders at the same moment.
+  - Existing orders keep their numbers.
+Note: the tests placed some orders, so the next real order will be
+NM-1047 (numbers are never reused, by design).
+Proof: e2e test 5.
+
+PART 4 — Delete orders, with a Safety Lock + clean-out of test orders
+  - Normal rule (everyone): only Pending orders, or Cancelled orders that
+    were never booked on Steadfast, can be deleted. Moderators need the
+    "Delete early orders" permission for this.
+  - Any later stage (Confirmed, Shipped, Delivered, booked on Steadfast):
+    blocked for everyone, including you, while the lock is on.
+  - "Delete order" button on the order screen, and checkboxes + "Delete
+    selected" on the Orders list. Checkboxes only appear on orders you may
+    delete right now. On a blocked order the screen says: "Locked: turn on
+    'Allow deleting orders at any stage' in Safety Locks."
+  - The confirmation is plain English; for more than one order you must
+    type DELETE. If a parcel is booked on Steadfast it warns: "This parcel
+    is booked on Steadfast (consignment …). Deleting here does NOT cancel
+    it on Steadfast. Cancel it on the Steadfast portal too."
+  - Stock is put back exactly once (an already-cancelled order already
+    had its stock put back, so it is not added again).
+  - The order, its items and history are removed; the Activity Log keeps
+    the order number, customer name, total and who deleted it.
+  - The old delete function the live site still uses now follows the same
+    rule, so it can't be used to get around the lock.
+Proof: e2e tests 6, 7 and 8.
+
+HOW THE SAFETY LOCK WORKS (3 lines):
+  1. Settings → Safety Locks → switch on "Allow deleting orders at any
+     stage"; type your password again.
+  2. For 15 minutes you can delete any order; a red bar at the top shows
+     the countdown and a "Turn back on now" button.
+  3. It turns itself back on after 15 minutes or when you log out. The
+     database checks it on every delete.
+
+TEST ORDERS DELETED (backed up first to
+backups/orders-before-batch-24-2026-10-01.json — on this PC only, never
+uploaded to GitHub). The live database had only these two:
+  NM-1006  Shipped  Ashrafull Alam  ৳7,659   BOOKED ON STEADFAST
+           consignment 301056851, tracking SFR260926ST0F216BFBD
+           (courier status: in_review)
+  NM-1007  Shipped  MRobc           ৳13,027  BOOKED ON STEADFAST
+           consignment 301120267, tracking SFR260926STEF57C1EBD
+           (courier status: in_review)
+  >>> PLEASE CANCEL BOTH PARCELS ON THE STEADFAST PORTAL. <<<
+  Stock was put back for their tracked items (Avène Thermal Spring Water
+  300 ml 249 → 250, Aveeno Baby Lotion 227g 44 → 45, Aveeno Oat Milk
+  Conditioner 0 → 1; the other items don't track stock). If those parcels
+  were ever physically handed over, correct these counts by hand.
+  (NM-1033…1036 from the Batch 23 report were already gone.)
+
+PART 5 — Edit item prices on an order (only you)
+On the admin order screen each item has "Edit price" (any order status):
+type a new unit price, or tap "Free" (৳0). The database recalculates the
+line, subtotal, discount (never more than the subtotal), and the total /
+COD amount; nothing is taken from the browser's maths. Each change goes
+into the order history ("Price of X changed ৳a → ৳b (total ৳c → ৳d)") and
+the Activity Log. Moderators never see it; the database refuses it for
+them. The customer's My Orders page and the invoice show the new prices.
+Proof: e2e test 9.
+
+STEADFAST COD — MUST BE CHANGED ON THE PORTAL. Steadfast's API has no way
+to edit a booked parcel or its COD amount (their official package only
+offers create order, bulk create, status checks and balance). So before
+saving a price on a booked order the screen warns: "This order is booked on
+Steadfast. The COD amount there will not change automatically. After
+saving, change the COD amount on the Steadfast portal too." After saving it
+reminds you again.
+
+PART 6 — Customer sees the delivery status in My Orders
+The order page shows the progress in plain words: Order placed →
+Confirmed → Handed to courier → On the way → Delivered, with "Last update
+<date time>" (Bangladesh time). When it happens: Cancelled, Returned (the
+courier sends the parcel back) or On hold ("We will contact you"). The My
+Orders list shows the same one-word status. It uses only the status
+already saved by the Steadfast functions; the customer's browser never
+contacts Steadfast. Courier notes and internal fields are not shown. The
+"Track parcel on Steadfast →" link is unchanged. A customer can only ever
+see their own orders (checked in the test).
+Proof: e2e test 10, plus unit tests for every Steadfast status.
+
+PART 7 — Editable texts
+Admin → Settings → Texts → "Checkout sign-in note": Title and Message,
+with Save and "Reset to default". Empty = the default text ("Almost done!"
+/ "Before we send your skincare, we just need to know who you are."), so
+the page never shows a blank. Changes show on the site straight away.
+Adding more editable texts later is a two-line change (explained at the
+top of src/lib/editableTexts.ts).
+Proof: e2e test 11 (changes the title, sees it at checkout, resets it,
+sees "Almost done!" again).
+
+PART 8 — Sizes that were a bare number
+I checked every product size and option size in the live catalogue.
+Changed (1):
+  - "CeraVe Foaming Cleanser 236ml" (the active one): size "236" →
+    "236 ml". Prices and stock untouched.
+Not found anymore: CeraVe Hydrating Cleanser no longer has size options
+(its "236"/"473" options from the Batch 23 report are gone; the product
+now has none). Nothing else had a bare number. Left as they are (they
+already have a unit): "30 ml", "10ml", "40 ml", "100 ml".
+
+
+WHAT EACH PERMISSION ALLOWS
+  View orders ............ see the Orders list and each order (read only)
+  Change order status .... confirm / ship / deliver / cancel; mark paid;
+                           tracking number and admin note; "Check delivery
+                           status"
+  Create manual orders ... type in Facebook/WhatsApp/phone orders, at the
+                           normal price only (no custom price, no Free, no
+                           order discount)
+  Book on Steadfast ...... "Send to Steadfast" (and check its status)
+  Edit products and stock  add and edit products, options, photos, stock,
+                           Region/Size lists. Cannot delete products.
+  Edit categories ........ add, rename, remove categories
+  View customers ......... see the Wholesalers list (no approve/reject) and
+                           the phone look-up in "New order"
+  Delete early orders .... delete Pending orders, or Cancelled orders never
+                           booked on Steadfast
+Turning on any order permission also turns on "View orders" (they need it).
+Only you, never a moderator: Team, Settings (incl. Safety Locks, order
+number, texts), Activity Log, deleting orders past the early stage, item
+price edits, delivery-fee edits, discounts, Import/Export, Reviews, Bento
+Tiles, Promo Codes, approving wholesalers, deleting products, and the
+"edit on the live site" mode.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed — already run on the live database with your approval:
+supabase/migration-030-admin-team-orders.sql (additive only; safe to run
+again). Server functions deployed: admin-team (new), steadfast (updated;
+works the same for you, now also lets moderators with the right
+permission book/check). Optional, as before: migration-029 (English text
+for OLD Steadfast history notes) was never run; not needed any more
+because all old orders are deleted and new notes are written in English.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was done. Things only you can confirm:
+  - Cancel the two Steadfast parcels above on the Steadfast portal.
+  - Try the Safety Lock with your own password on your phone.
+  - Commits: one commit per Part as asked. The Parts share files (for
+    example the admin page links all the new sections), so only the final
+    commit is guaranteed to build on its own. The final state was built and
+    fully tested.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - FIXED (was a real bug): since Batch 22, website orders saved each
+    item's "list price" as ৳0, so the admin order screen showed "List ৳0"
+    under normal items. Fixed in the new place_order, and old rows
+    corrected.
+  - The customer's own order data (through the database, not the page)
+    includes the admin note field and order history notes. The page never
+    shows them, but someone reading the raw data could. Worth moving admin
+    notes to an admin-only table later (small/medium).
+  - A second full-access account now exists for the automatic tests:
+    e2e.admin@staff.naeems.internal (username e2e.admin). Its password is
+    only in .env.e2e on this PC. Its actions appear in the Activity Log as
+    "e2e.admin" (filter by person to hide them). If you would rather not
+    keep it: delete it in Supabase → Authentication → Users; the Batch 24
+    tests then skip themselves.
+  - Supabase's own sign-in protection limits login attempts per IP
+    address (their default is around 30 sign-ins per 5 minutes; see
+    Supabase → Authentication → Rate Limits). On top of that, the staff
+    login makes a device wait 60 seconds after 5 wrong passwords in a row.
+  - public/sitemap.xml is regenerated on every build; left out of commits
+    as before.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - One source of truth for roles: moderators are role "moderator" in the
+    existing profiles table; a new staff_members table only holds username,
+    permissions and the disabled switch.
+  - The Safety Lock's password check is a real re-login: the login token
+    records when the password was last typed, and the database only
+    accepts it if that was under 5 minutes ago.
+  - Moderators can't change prices anywhere (manual orders are always at
+    the normal price; delivery-fee edits stay yours). Money changes are
+    Super Admin only.
+  - "View customers" maps to the existing Wholesalers list (read only) and
+    the phone look-up. There is no separate customers page yet.
+  - Deleting a delivered order (lock off) also puts its stock back, as
+    asked ("restore stock for every item whose stock had been taken").
+  - Orange stays on one main action per screen (e.g. "Add moderator",
+    "Save"); the Safety Lock bar and delete warnings are red; everything
+    else is neutral.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Two-step login (a code on your phone) for the Super Admin account
+   (medium). Your account can now delete anything and manage staff; a
+   stolen password is the biggest remaining risk.
+2. Move admin notes / internal order history to admin-only storage
+   (small/medium) — see section 4.
+3. A real Customers page (list, order count, total spent) for the "View
+   customers" permission (medium).
+4. Steadfast webhooks instead of the 3-hour refresh (medium), so
+   "On the way / Delivered" updates for customers in minutes.
+5. Weekly automatic database backups exported somewhere you control
+   (small) — deletes are now possible and permanent.
+
+
+TESTS
+-----
+New e2e file e2e/batch-24.spec.ts (12 tests, all on a phone-sized screen):
+   1 Super Admin adds a moderator with only "View orders" (all switches
+     start OFF)
+   2 Staff login (wrong password message, then success); the moderator
+     sees only Orders + My Profile
+   3 Direct database calls by the moderator are refused: change status,
+     edit product, read Activity Log, price edit, delete, Team list,
+     Safety Lock, and the Team function
+   4 Activity Log entries with the right usernames (and the filter
+     survives Back)
+   5 Order number preview; a lower number is refused; the next order uses
+     the new format
+   6 Deleting an order restores its stock (and is logged)
+   7 Safety Lock: shipped order refused for the Super Admin, also via the
+     API; allowed after turning the lock off; refused again after the lock
+     turns itself back on (6-second test window instead of 15 minutes)
+   8 Moderator with "Delete early orders": Pending deleted, Confirmed
+     refused
+   9 Price edit recalculates the total; moderator refused
+  10 Customer sees "On the way" with the progress steps; cannot see
+     someone else's order
+  11 Checkout sign-in text edited, shown, reset to default
+  12 Disabling the moderator blocks them immediately and they can't sign
+     in again
+The test moderator and every test order are deleted at the end of every
+run, and the settings the tests touch are put back. A new clean-up step
+after the whole suite also deletes the test customer's leftover orders
+(e.g. the one checkout.spec cancels). New unit tests:
+src/lib/deliveryProgress.test.ts, src/lib/staff.test.ts.
+
+One existing test was changed (not weakened): the Batch 23 test
+"CeraVe Hydrating Cleanser … Korea shows its size" failed because the live
+catalogue changed on 30 Sep at 13:24 (Bangladesh time) — after Batch 23 and
+before this session — when that product's Australia/Korea options were
+split into separate products. No product has two regions today. The test
+now asks the database first: if the product has 2+ regions, every original
+check runs exactly as before (a real bug still fails it); if not, the
+region part is skipped with that reason. The first half of the test
+(opens on the card photo, never changes by itself) still runs and passes.
+If you add regions back to a product, point that test at it.
+
+BUILD & TEST RESULTS
+--------------------
+Final code, one full clean run (as this batch allows):
+  npm run build    PASSED (0 errors)
+  npx vitest run   62/62 passed (9 files; 6 new tests + 4 new status tests)
+  npm run test:e2e 70 passed, 0 failed, 3 skipped
+    (the 3 skips are data conditions: 2 bento tests from before, and the
+    CeraVe region part explained above)
+  The 12 new Batch 24 tests also passed on their own first run.
+Live checks after deploy (live site = main, new database):
+  - Every query the live site makes still works (home products, settings,
+    admin orders list, the old delete button, customer orders, wholesale
+    price still hidden from customers).
+  - In a real phone-sized browser on naeems-all.vercel.app: home, a
+    product page, the checkout sign-in sheet, and Admin → Orders all load
+    with no errors.
+  - The new admin-team function refuses anyone who is not the Super Admin.
+
+
+WHAT NAEEM MUST DO (step by step)
+---------------------------------
+1. Steadfast portal: cancel parcels 301056851 (NM-1006) and 301120267
+   (NM-1007) — they were test orders and are deleted here.
+2. Merge the branch on GitHub when you're happy (Pull request from
+   feature/batch-24-orders-admin into main). The database is already
+   ready for it.
+3. Create your first moderator: Admin → Team → Add moderator → fill in
+   username, name, phone, password → Add moderator. Then tap them and
+   switch on only what they need → Save. Give them the username and
+   password; they sign in at /admin-access → "Staff login".
+4. Optional: change the order number look in Admin → Settings → "Orders:
+   order number".
+5. Optional: if you don't want the test Super Admin account, delete
+   e2e.admin@staff.naeems.internal in Supabase → Authentication → Users.
