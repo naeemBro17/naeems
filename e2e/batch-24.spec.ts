@@ -24,6 +24,8 @@ import {
 // and the settings it touches are put back exactly as they were.
 
 const MOD_USERNAME = 'e2e.mod';
+// Batch 25: a staff member gets their permissions from a role.
+const ROLE_NAME = 'E2E Orders only';
 const TEXT_TITLE = 'E2E title check';
 
 test.describe.configure({ mode: 'serial' });
@@ -83,6 +85,13 @@ async function deleteAsAdmin(ids: string[]): Promise<{ order_id: string; deleted
   return res.data ?? [];
 }
 
+async function deleteTestRole(): Promise<void> {
+  const roles = await rpc<{ id: string; name: string }[]>(admin.accessToken, 'admin_role_list');
+  for (const role of roles.data ?? []) {
+    if (role.name === ROLE_NAME) await rpc(admin.accessToken, 'admin_role_delete', { p_id: role.id });
+  }
+}
+
 test.beforeAll(async () => {
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
@@ -95,6 +104,8 @@ test.beforeAll(async () => {
       await callFunction(admin.accessToken, 'admin-team', { action: 'delete', userId: member.id });
     }
   }
+
+  await deleteTestRole();
 
   const format = await rpc<{ prefix: string; next_number: number; suffix: string }[]>(
     admin.accessToken,
@@ -121,6 +132,7 @@ test.afterAll(async () => {
   if (moderatorId) {
     await callFunction(admin.accessToken, 'admin-team', { action: 'delete', userId: moderatorId });
   }
+  await deleteTestRole();
   if (originalFormat) {
     const now = await rpc<{ next_number: number }[]>(admin.accessToken, 'admin_order_number_info');
     await rpc(admin.accessToken, 'admin_set_order_number_format', {
@@ -139,26 +151,35 @@ test.afterAll(async () => {
 test('Super Admin adds a moderator with only "View orders"', async ({ page }) => {
   test.setTimeout(60_000);
   await useSessionInPage(page, admin);
-  await page.goto('/admin?tab=team');
-  await page.getByRole('button', { name: 'Add moderator' }).first().click();
+  // Batch 25: the switches live on a role (Team → Roles); all start OFF.
+  await page.goto('/admin?tab=team&tview=roles');
+  await page.getByRole('button', { name: 'Create role' }).first().click();
+  const roleSheet = page.getByRole('dialog', { name: 'Create role' });
+  await roleSheet.getByLabel('Role name').fill(ROLE_NAME);
+  for (const sw of await roleSheet.getByRole('switch').all()) {
+    await expect(sw).toHaveAttribute('aria-checked', 'false');
+  }
+  await roleSheet.getByRole('switch', { name: 'View orders' }).click();
+  await roleSheet.getByRole('button', { name: 'Create role' }).click();
+  await expect(page.getByText(`Role "${ROLE_NAME}" created`)).toBeVisible({ timeout: 15_000 });
 
-  const sheet = page.getByRole('dialog', { name: 'Add moderator' });
+  await page.getByRole('tab', { name: /Staff/ }).click();
+  await page.getByRole('button', { name: 'Add staff member' }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Add staff member' });
   await sheet.getByLabel('Username').fill(MOD_USERNAME);
   await sheet.getByLabel('Full name').fill('E2E Moderator');
   await sheet.getByLabel('Phone').fill('01700000000');
   await sheet.getByLabel('Password', { exact: true }).fill(E2E_MOD_PASSWORD);
-  await sheet.getByRole('button', { name: 'Add moderator' }).click();
-  await expect(page.getByText(`Moderator "${MOD_USERNAME}" added`)).toBeVisible({ timeout: 15_000 });
+  await sheet.getByLabel('Role', { exact: true }).selectOption({ label: ROLE_NAME });
+  await sheet.getByRole('button', { name: 'Add staff member' }).click();
+  await expect(page.getByText(`"${MOD_USERNAME}" added as ${ROLE_NAME}`)).toBeVisible({ timeout: 15_000 });
 
-  await page.locator('.admin-order-row', { hasText: MOD_USERNAME }).click();
-  const edit = page.getByRole('dialog', { name: `Moderator: ${MOD_USERNAME}` });
-  // All permissions start OFF.
-  for (const sw of await edit.getByRole('switch').all()) {
-    await expect(sw).toHaveAttribute('aria-checked', 'false');
-  }
-  await edit.getByRole('switch', { name: 'View orders' }).click();
-  await edit.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 });
+  // The member row shows the role, and their sheet lists only View orders.
+  const row = page.locator('.admin-order-row', { hasText: MOD_USERNAME });
+  await expect(row.getByTestId('member-role')).toHaveText(ROLE_NAME);
+  await row.click();
+  const edit = page.getByRole('dialog', { name: `Staff: ${MOD_USERNAME}` });
+  await expect(edit.getByRole('list', { name: 'Permissions from their role' })).toHaveText('View orders');
 
   const team = await rpc<{ id: string; username: string; permissions: string[] }[]>(admin.accessToken, 'admin_team_list');
   const member = team.data?.find((m) => m.username === MOD_USERNAME);
@@ -178,12 +199,13 @@ test('Staff login works, and the moderator sees only Orders', async ({ page }) =
   await page.getByLabel('Password', { exact: true }).fill(E2E_MOD_PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();
   await expect(page).toHaveURL(/\/admin/, { timeout: 15_000 });
-  await expect(page.locator('.admin-nav__item').first()).toBeVisible();
-  const labels = (await page.locator('.admin-nav__item .admin-nav__label').allInnerTexts()).map((t) =>
-    t.replace(/\d+$/, '').trim()
-  );
-  expect(labels).toEqual(['Orders', 'My Profile']);
-  await expect(page.locator('.admin-header__user')).toHaveText(MOD_USERNAME);
+  // Batch 25: Home (everyone) + what the role allows, and nothing else.
+  await expect(page.locator('.adm-tabbar__tab').first()).toBeVisible();
+  const labels = await page.locator('.adm-tabbar__tab .adm-tabbar__label').allInnerTexts();
+  expect(labels.map((t) => t.trim())).toEqual(['Home', 'Orders', 'My Profile']);
+  await expect(page.locator('.adm-page-header__eyebrow')).toHaveText(`NAEEM'S ${ROLE_NAME.toUpperCase()}`);
+  await page.locator('.adm-tabbar__tab', { hasText: 'My Profile' }).click();
+  await expect(page.getByRole('main')).toContainText(MOD_USERNAME);
 });
 
 test('Direct API calls outside the moderator\'s permissions are refused', async () => {
@@ -259,7 +281,7 @@ test('Activity Log shows who did what, by username', async ({ page }) => {
 test('Order number preview, and the next order uses it', async ({ page }) => {
   test.setTimeout(60_000);
   await useSessionInPage(page, admin);
-  await page.goto('/admin?tab=settings');
+  await page.goto('/admin?tab=settings&sset=order-number');
   const preview = page.getByTestId('order-number-preview');
   await expect(preview).toContainText('Next order will be:', { timeout: 15_000 });
   const before = await rpc<{ prefix: string; next_number: number; suffix: string }[]>(admin.accessToken, 'admin_order_number_info');
@@ -406,9 +428,10 @@ test('Price edit recalculates the total; a moderator cannot do it', async ({ pag
   expect(Number(after.subtotal)).toBe(200);
   expect(Number(after.total)).toBe(200 + Number(row.delivery_fee));
 
+  // Batch 25: internal history notes live in the staff-only table.
   const history = await select<{ note: string; changed_by_username: string }[]>(
     admin.accessToken,
-    `order_status_history?select=note,changed_by_username&order_id=eq.${order.id}&note=like.Price*`
+    `order_history_private?select=note,changed_by_username&order_id=eq.${order.id}&note=like.Price*`
   );
   expect(history.data?.[0]?.note).toContain('→ ৳100');
 
@@ -467,7 +490,7 @@ test('The customer sees a friendly delivery status, for their own orders only', 
 test('The checkout sign-in note can be edited, and reset to default', async ({ page, browser }) => {
   test.setTimeout(90_000);
   await useSessionInPage(page, admin);
-  await page.goto('/admin?tab=settings');
+  await page.goto('/admin?tab=design&dset=texts');
   const texts = page.locator('.admin-panel', { hasText: 'Checkout sign-in note' });
   await texts.getByLabel('Title').fill(TEXT_TITLE);
   await texts.getByRole('button', { name: 'Save' }).click();
@@ -504,7 +527,7 @@ test('Disabling the moderator blocks them straight away', async ({ page }) => {
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=team');
   await page.locator('.admin-order-row', { hasText: MOD_USERNAME }).click();
-  const edit = page.getByRole('dialog', { name: `Moderator: ${MOD_USERNAME}` });
+  const edit = page.getByRole('dialog', { name: `Staff: ${MOD_USERNAME}` });
   await edit.getByRole('switch', { name: 'Disabled' }).click();
   await edit.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 });
