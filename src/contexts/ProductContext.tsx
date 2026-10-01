@@ -13,12 +13,16 @@ import { saveCache, loadCache } from '../lib/cache';
 import { useAuth } from './AuthContext';
 import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
 import { sortVariants, VARIANT_SELECT, VARIANTS_VIEW } from '../lib/variants';
-import type { Product, Category, AppSettings, ProductVariant } from '../types';
+import { BRANDS_TABLE, BRAND_SELECT } from '../lib/brands';
+import type { Product, Category, AppSettings, ProductVariant, Brand } from '../types';
 
 interface ProductContextValue {
   /** All fetched products. Admin sessions include inactive products. */
   products: Product[];
   categories: Category[];
+  /** Every brand (Batch 26), in no particular order — see lib/brands.ts for
+   *  the Home row and brand pages. Empty until migration-032 is run. */
+  brands: Brand[];
   /** Single-value app settings (expert contact info). Never null — falls back to defaults. */
   settings: AppSettings;
   isLoading: boolean;
@@ -184,6 +188,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const isAdmin = can('edit_products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [variantsByProduct, setVariantsByProduct] = useState<Map<string, ProductVariant[]>>(
     () => new Map()
@@ -211,10 +216,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         productQuery = productQuery.eq('is_active', true);
       }
 
-      const [productRes, categoryRes, settingsRes] = await Promise.all([
+      const [productRes, categoryRes, settingsRes, brandRes] = await Promise.all([
         productQuery,
         supabase.from('categories').select('*').order('name', { ascending: true }),
         supabase.from('app_settings').select('key, value'),
+        supabase.from(BRANDS_TABLE).select(BRAND_SELECT),
       ]);
 
       if (productRes.error) throw productRes.error;
@@ -227,15 +233,19 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       const fetchedSettings = settingsRes.error
         ? DEFAULT_SETTINGS
         : rowsToSettings(settingsRes.data ?? []);
+      // Brands are non-critical too (no brands table before migration-032).
+      const fetchedBrands = brandRes.error ? [] : ((brandRes.data ?? []) as Brand[]);
 
       setProducts(fetchedProducts);
       setCategories(fetchedCategories);
       setSettings(fetchedSettings);
+      setBrands(fetchedBrands);
       setIsOffline(false);
       saveCache({
         products: fetchedProducts,
         categories: fetchedCategories,
         settings: fetchedSettings,
+        brands: fetchedBrands,
       });
     } catch {
       const cached = loadCache();
@@ -243,6 +253,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         setProducts(cached.products);
         setCategories(cached.categories);
         setSettings({ ...DEFAULT_SETTINGS, ...(cached.settings ?? {}) });
+        setBrands(cached.brands ?? []);
         setIsOffline(true);
       } else {
         setLoadFailed(true);
@@ -316,6 +327,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       value={{
         products,
         categories,
+        brands,
         settings,
         isLoading,
         isOffline,

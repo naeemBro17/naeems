@@ -163,7 +163,8 @@ function validate(form: ProductFormData): FieldErrors {
  * points automatically instead of needing to be copied by hand.
  */
 export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }: ProductEditorFormProps) {
-  const { categories, products, allVariants, refetch } = useProducts();
+  const { categories, products, allVariants, brands, refetch } = useProducts();
+  const brandNames = useMemo(() => brands.map((b) => b.name).sort((a, b) => a.localeCompare(b)), [brands]);
   const { showToast } = useToast();
   const knownRegions = useMemo(() => distinctRegions(products, allVariants), [products, allVariants]);
 
@@ -472,7 +473,17 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
           placeholder="e.g. CeraVe — shown above the product name"
           value={form.brand}
           onChange={(e) => setField('brand', e.target.value)}
+          list="pf-brand-options"
+          autoComplete="off"
         />
+        <datalist id="pf-brand-options">
+          {brandNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <p className="form-helper">
+          Pick a brand from the list. A new name makes a new brand (set its logo in Brands).
+        </p>
       </div>
 
       <div className="form-field">

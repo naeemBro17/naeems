@@ -1,4 +1,4 @@
-import type { Product, Category, AppSettings } from '../types';
+import type { Product, Category, AppSettings, Brand } from '../types';
 
 const CACHE_KEY = 'price_hub_v1';
 
@@ -7,6 +7,8 @@ export interface CachedData {
   categories: Category[];
   /** Optional for backward compatibility with caches written before Group 1. */
   settings?: AppSettings;
+  /** Optional: absent in caches written before Batch 26. */
+  brands?: Brand[];
 }
 
 export function saveCache(data: CachedData): void {
