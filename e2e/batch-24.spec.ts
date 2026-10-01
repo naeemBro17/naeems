@@ -491,7 +491,9 @@ test('The checkout sign-in note can be edited, and reset to default', async ({ p
   test.setTimeout(90_000);
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=design&dset=texts');
-  const texts = page.locator('.admin-panel', { hasText: 'Checkout sign-in note' });
+  // Batch 27: the Texts panel now has a second group (product page trust
+  // boxes), so this scopes to the checkout note's own group.
+  const texts = page.locator('.texts-group', { hasText: 'Checkout sign-in note' });
   await texts.getByLabel('Title').fill(TEXT_TITLE);
   await texts.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Text saved')).toBeVisible({ timeout: 15_000 });
