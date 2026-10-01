@@ -16,6 +16,8 @@ import { ViewerPage } from './pages/ViewerPage';
 import { SearchPage } from './pages/SearchPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ContactExpertPage } from './pages/ContactExpertPage';
+import { BrandsPage } from './pages/BrandsPage';
+import { BrandPage } from './pages/BrandPage';
 import { CartPage } from './features/checkout/CartPage';
 import { DeliveryDetailsPage } from './features/checkout/DeliveryDetailsPage';
 import { OrderSummaryPage } from './features/checkout/OrderSummaryPage';
@@ -97,6 +99,9 @@ export default function App() {
                       {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
                       <Route path="/product/:slug" element={<ProductDetailPage />} />
                       <Route path="/contact" element={<ContactExpertPage />} />
+                      {/* Brands — Batch 26. */}
+                      <Route path="/brands" element={<BrandsPage />} />
+                      <Route path="/brand/:slug" element={<BrandPage />} />
                       {/* Policy/trust pages — Batch 19 Part 4. /privacy is
                           already registered with Google for login, must stay
                           exactly this path. */}
