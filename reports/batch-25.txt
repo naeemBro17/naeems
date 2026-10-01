@@ -1,0 +1,376 @@
+BATCH 25 — Admin redesign (Super Admin panel, phone + computer)
+================================================================
+Branch: feature/batch-25-admin-redesign (from the latest origin/main, which
+already has Batch 24). Pushed. NOT merged, nothing pushed to main.
+The database update and the Telegram function are ALREADY LIVE (you
+approved the deploy). The live site and today's admin were checked
+afterwards and still work.
+The mockup is saved in the repo: docs/admin-redesign-mockup.png and .html.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — New shell: title, menu, groups
+  - Computer (1024px and wider): a left sidebar exactly like the mockup,
+    titled "NAEEM'S SUPER ADMIN", grouped:
+      Home · Orders (orange count = orders waiting to confirm) · Customers
+      CATALOG: Products · Categories · Import / Export
+               (Brands has its place reserved in the code, hidden until
+               Batch 26 builds it)
+      SALES: Promo Codes · Wholesalers · Reviews
+      STORE DESIGN: Bento Tiles · Banner & Texts
+      ADMIN: Team · Activity Log · Settings
+    "Signed in as <username>" sits at the foot of the sidebar.
+  - Every page header: big title on the left; on the right the light/dark
+    switch, "View site" (opens the shop in a new tab) and the page's one
+    orange main button ("+ Add product", "+ New order", ...).
+  - Phone and tablet (under 1024px): a bottom bar with exactly 5 tabs:
+    Home · Orders (badge) · Products · Customers · More. "More" lists
+    everything else in grouped rounded lists, with the small orange
+    "Super Admin" pill on Team and Activity Log, exactly as in the mockup.
+  - Everyone only sees what they are allowed. An empty group is hidden. If
+    someone can't open Customers, the next item they may open takes its
+    place in the bottom bar (so a 5-tab bar stays 5 tabs).
+  - The open page and every filter are in the web address, so phone Back
+    and refresh keep your place. Opening a menu item is a real step in
+    history: Back takes you to the page before.
+  - Staff see "NAEEM'S <ROLE NAME>" (e.g. NAEEM'S MANAGER) instead.
+
+PART 2 — Home (the dashboard)
+  - "Good morning / Good afternoon / Good evening, <name>" in Bangladesh
+    time, under the small orange "NAEEM'S SUPER ADMIN".
+  - 4 cards: Today's orders (count + ৳, the orange-tinted card), To confirm,
+    On the way (booked on Steadfast, not yet delivered), This month (৳ +
+    order count). Cancelled orders never count. Tapping a card opens the
+    Orders list already filtered.
+  - NEEDS ATTENTION: orders waiting to confirm, products low on stock,
+    reviews waiting for approval, wholesalers waiting for approval. Each row
+    shows its count and opens that list filtered. Rows with 0 are hidden;
+    when everything is 0 it says "All caught up. Nothing is waiting for you."
+  - All numbers come from the database in ONE call (admin_dashboard). The
+    database itself decides what each person gets: money only for you or
+    for staff with the new "See sales figures" switch (off by default);
+    each count only if they may open that section.
+  - Money uses Bangladeshi grouping: ৳1,24,300.
+  - Low-stock threshold: Settings → Orders → Low-stock alert (default 5).
+
+PART 3 — Products
+  - Phone (mockup screen 1): photo, full name (2 lines, then …), price,
+    stock dot with count (green "45 pcs" / "In stock", red "2 left" at or
+    below the threshold, red "Out of stock"), the Live switch, and ⋮.
+  - Computer (mockup screen 4): a table with checkbox · photo · PRODUCT
+    (name + grey line "SKU · 2 variants · updated by naeem · 2h ago") ·
+    CATEGORY tag · PRICE · STOCK · LIVE · ⋮. About 10 rows on a laptop.
+  - Tapping a row opens the same product editor as before (restyled; on a
+    computer it is a wide dialog with two columns of fields).
+    "Last updated by <username> · <time>" now shows at the top of the
+    editor, so you still see it on a phone.
+  - ⋮ menu: Edit · Feature on home (or "Remove from home") · View on site ·
+    Delete (red, last, with the same confirmation as before; Super Admin
+    only, as before). The big Edit/Delete buttons are gone from the rows.
+  - Filters: search by name or SKU; phone chips "All 107 · Low stock 11 ·
+    Hidden 2 · <each category>"; computer dropdowns for category, brand,
+    stock and Live. On a phone the slider icon in the search box opens the
+    same dropdowns plus "Select products".
+  - Select (bulk): checkboxes + a bar at the bottom with "Show", "Hide"
+    (the mockup's "tick several to turn them on/off") and the existing
+    "Combine into variants" (2 or more).
+
+PART 4 — Every other page, same design
+  Same header, same search/filter row, rows on a phone and tables on a
+  computer, ⋮ menus for Edit/Delete, grouped rounded lists for settings-type
+  pages, the same colours, corners and sizes everywhere.
+  - Orders: status chips (All · To confirm · Confirmed · Shipped · Delivered
+    · Cancelled, each with its count; "To confirm" = the orange badge), plus
+    search and source filter. Each row: order number, time, source,
+    customer, items, total, a coloured status pill, Steadfast status ("Needs
+    attention" in red). "Update all shipped" is in the header (in the ⋮ on a
+    phone). "Delete selected" appears in the bottom bar when you tick
+    orders. The "This month" box is now under the list; its money lines
+    follow "See sales figures".
+  - Order screen: every field and button as before, restyled.
+  - Customers (NEW, read only): name · email · phone · orders · total spent
+    · last order · joined; search and sort (last order, most orders, most
+    spent, newest, A–Z). Tap a customer to see their details and every
+    order; tap an order to open it (if you may view orders). Needs "View
+    customers"; the money column only with "See sales figures".
+  - Settings: a grouped list, each row opens its own page:
+      ORDERS: Order number format · Delivery fees and bKash · Low-stock
+              alert (new) · Checkout WhatsApp number
+      COURIER: Steadfast (explains where each Steadfast action lives; its
+               keys are server secrets, nothing to type)
+      TRACKING: Facebook Pixel and Google Analytics
+      SAFETY LOCKS: Safety Locks
+      OTHER: Password, saved data, sign out
+  - Categories (with Regions and Sizes below), Import / Export, Promo
+    Codes, Wholesalers, Reviews, Bento Tiles, Team, Activity Log, My Profile:
+    restyled; their Edit / Delete / Hide / Reject / Revoke buttons moved into
+    ⋮ menus (red Delete always last).
+
+PART 5 — Polish
+  - Empty states, loading placeholders and toasts in the new style. No
+    emoji anywhere in the admin (the CSV import's tick/cross marks are now
+    icons; the banner form's flag in the example text is gone).
+  - Destructive actions: red, inside ⋮ or at the bottom of an editor, and
+    always confirmed. "Reject" a wholesaler had no confirmation before; it
+    has one now.
+  - Every tap target is at least 44px on a phone (small-looking buttons get
+    an invisible 44px touch area).
+  - One size standard (src/styles/admin.css, top of the file). Only these
+    are used on admin pages:
+      Font sizes: page title 22 · section title 15 · body 13.5 · label 12.5
+                  · small 11.5 · micro 10.5 (group headings, tab labels)
+      Buttons: small 28 · normal 34 · large 44 (full-width Save)
+      Input height: 44 on a phone, 40 on a computer
+      Tap target: 44
+      Spacing: 4 · 8 · 12 · 16 · 24 · 32
+      Corners: 6 (tags) · 10 (photos, inputs) · 12 (search) · 14 (cards,
+               lists, tables) · 20 (sheets) · round (buttons, chips)
+      Colours (dark, from the mockup): background #0e0e10, card #1b1b1e,
+      line #2c2c31, text #f2f2f4, grey #8b8b93, orange #F2592A, green
+      #34c759, red #ff453a. The light theme uses the same tokens with light
+      values.
+
+PART 6 — Roles
+  - Team now has two tabs: Staff and Roles.
+  - Roles: "Create role" (a name and the same switches as Batch 24, plus
+    "View wholesalers" and "See sales figures"). Tap a role to rename it or
+    change its switches. "Delete role" only works when nobody has the role
+    (the database refuses otherwise).
+  - Adding or editing a staff member: pick their role. Their permissions
+    come from the role. Changing a role's switches changes everyone with
+    that role at once — the database reads the role on every single action
+    (staff_can()), even for someone already signed in.
+  - Existing moderators: you had none on the live site, so no role was
+    needed. (The migration would have made one role per distinct set of
+    switches, the first named "Moderator", keeping everyone's exact
+    permissions.)
+  - Role created / changed / deleted and "role given to X" are in the
+    Activity Log.
+  - Proof nothing got looser: the e2e tests sign in as a limited-role
+    staff member and call the database directly: customers, wholesalers,
+    roles, role changes, status changes, Activity Log, and money on Home are
+    all refused or empty. A role change switches Customers on and off
+    straight away, without signing in again.
+
+PART 7 — Fixes from the Batch 24 report
+  1. Admin notes are private. The admin note and the internal history notes
+     (and which team member did each step) moved to two staff-only tables.
+     A customer's own order rows no longer contain them, by any route.
+     Everything that writes a note works exactly as before (the database
+     moves it automatically). The customer still sees only the friendly
+     delivery status. Proof: an e2e test reads the database as the customer
+     (orders, order history, the new tables) and gets nothing; the admin
+     order screen still shows the note, the step note and "by e2e.admin".
+  2. "View customers" now opens the new Customers page. Wholesalers has its
+     own "View wholesalers" switch, off by default.
+  3. No test orders in Telegram. The notifier now skips any order from the
+     test customer, any order made by a test staff login (every test login
+     starts with "e2e.", e.g. e2e.admin, e2e.mod), and any order whose
+     customer name starts with "E2E". Real orders notify exactly as before.
+     Proof: unit tests for real and test orders; an e2e test sends the live
+     function a test order and it answers "skipped".
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed — already run on the live database with your approval:
+supabase/migration-031-roles-dashboard-private-notes.sql (additive only,
+safe to run again). It was tried first inside a transaction that was then
+cancelled, checked, and then run for real.
+Also redeployed: the notify-telegram-order function.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was built. Things to know:
+  - Brands: only its place in the menu (Batch 26 builds the page).
+  - Commits are one per Part, as asked. Parts share files (the admin page
+    wires every section), so only the final commit is guaranteed to build
+    on its own. The final state was built and fully tested.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - Until you merge this branch, the live admin (old code) can't show
+    order notes or "by <username>" in order history, because they moved to
+    the private tables. You have 0 orders right now, so nothing is visible.
+    After merging, everything shows again (nothing was lost).
+  - The Telegram function can be called by anyone who has the site's public
+    key (that's how the database webhook calls it). Someone could send it
+    a fake order and you'd get a fake Telegram message. It can't change any
+    data. Worth adding a shared secret header (small).
+  - Order item "reason" notes and the order discount note (manual orders)
+    are still readable by that customer through the database, like the
+    admin note was. They are short labels ("Gift", "Friend price"), not
+    private comments, so I left them. Say if they should be private too.
+  - public/sitemap.xml is regenerated on every build; left out of commits.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Mockup followed exactly for the 4 screens (phone Products, More, Home;
+    computer Products). Small differences, and why:
+      * The phone search box has a magnifier on the left (the mockup has
+        none) and a slider icon on the right instead of the gear: it opens
+        the filters + Select.
+      * Computer Products has a 4th dropdown "Live: All / Live / Hidden",
+        so the old Active/Inactive filter isn't lost.
+      * More has an extra row "View site" and "Signed in as ..." at the
+        bottom (the phone had no other way back to the shop).
+      * Search boxes are 44px tall on a phone (the mockup's are ~38px),
+        for the 44px tap rule.
+      * The Wholesalers badge is no longer in the menu (the mockup shows
+        only the Orders badge); pending wholesalers show on Home instead.
+  - Orange: the mockup itself uses it for the title label, Today's card,
+    the To-confirm number, attention counts and the active tab. Other pages
+    use it once (the main button). Approve buttons on reviews are grey now.
+  - Staff with no role yet (only possible from before roles) keep their
+    own switches until you pick a role for them.
+  - Sign out (Settings → Other) is a grey button, not red: it isn't
+    destructive.
+  - Settings and Banner & Texts open each setting as its own page, so a
+    phone never has to scroll through 8 forms.
+
+DESIGN IDEAS (NOT BUILT) — pick any for a later batch
+  - Order detail as a full page on a computer (two columns: items left,
+    customer/courier right) instead of a dialog. Easier to read long orders.
+  - Swipe left on an order row to confirm it. Fastest way to clear "To
+    confirm" on a phone.
+  - A small 7-day sales chart on Home. See the trend at a glance.
+  - "Restock" quick action in the product ⋮ menu (type the new count).
+    Faster than opening the full editor.
+  - Customer notes and tags (VIP, wholesale lead). Remember who is who.
+  - Search across everything (orders, products, customers) from one box
+    at the top. One place to look.
+  - Keyboard shortcuts on a computer (N = new order, / = search).
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Two-step login for the Super Admin (medium). Your account can do
+   everything; a stolen password is the biggest risk.
+2. Shared secret on the Telegram function (small) — see section 4.
+3. Order notes to the customer (a "message from the shop" field that IS
+   shown) separate from private notes (small). Fewer WhatsApp messages.
+4. Export customers / orders to CSV for accounts (small).
+5. Daily database backup you control (small).
+
+
+WHERE EVERYTHING MOVED (old place → new place)
+---------------------------------------------
+  Products tab ............................ CATALOG → Products
+  Categories tab (and Regions / Sizes) .... CATALOG → Categories
+  Import/Export tab ....................... CATALOG → Import / Export
+  Orders tab .............................. Orders (top of the menu)
+  Wholesalers tab ......................... SALES → Wholesalers
+  Reviews tab ............................. SALES → Reviews
+  Promo Codes tab ......................... SALES → Promo Codes
+  Bento Tiles tab ......................... STORE DESIGN → Bento Tiles
+  Team tab ................................ ADMIN → Team (Staff / Roles)
+  Activity Log tab ........................ ADMIN → Activity Log
+  My Profile (staff) ...................... ADMIN → My Profile
+  Settings → Banner Slides ................ STORE DESIGN → Banner & Texts → Banner slides
+  Settings → Talk to an Expert ............ STORE DESIGN → Banner & Texts → Expert page
+  Settings → Texts (checkout note) ........ STORE DESIGN → Banner & Texts → Site texts
+  Settings → Orders: order number ......... Settings → Orders → Order number format
+  Settings → Orders: Payment & Delivery ... Settings → Orders → Delivery fees and bKash
+  Settings → Checkout WhatsApp Number ..... Settings → Orders → Checkout WhatsApp number
+  (new) ................................... Settings → Orders → Low-stock alert
+  (new) ................................... Settings → Courier → Steadfast
+  Settings → Facebook Pixel & GA .......... Settings → Tracking
+  Settings → Safety Locks ................. Settings → Safety Locks
+  Settings → Change Password .............. Settings → Other → Password, saved data, sign out
+  Settings → Clear Saved Data ............. (same page)
+  Settings → Sign Out ..................... (same page)
+  Product Edit / Delete buttons ........... the product's ⋮ menu (or tap the row to edit)
+  Product star (feature on home) .......... ⋮ → Feature on home
+  Product Select ........................... computer: checkboxes; phone: slider icon → Select products
+  Orders "Update all shipped" ............. Orders header (phone: ⋮ at the top)
+  Orders "Delete selected" ................ tick orders → bar at the bottom
+  Category / Region / Size Edit, Delete ... the row's ⋮ menu
+  Review / Promo / Bento Edit, Delete, Hide  the row's ⋮ menu
+  Wholesaler Reject / Revoke .............. the row's ⋮ menu (Approve stays on the row)
+  On a phone, everything not in the bottom bar is under More.
+
+
+HOW TO CREATE A ROLE AND ADD A STAFF MEMBER
+------------------------------------------
+1. Admin → Team (phone: More → Team) → "Roles" tab → "Create role".
+2. Type a name (e.g. "Manager"), switch on what they may do → "Create role".
+3. "Staff" tab → "Add staff member" → username, full name, phone,
+   password, pick the role → "Add staff member".
+4. Give them the username and password. They sign in at /admin-access →
+   "Staff login". To change what all Managers can do later, edit the role.
+
+
+SCREENSHOTS
+-----------
+reports/batch-25-screens/ — every admin page at 390px and 1280px, dark
+and light (<page>-<width>-<theme>.png), plus orders-390-sample.png and
+orders-1280-sample.png showing the Orders list with an order in it. To take them again:
+  SCREENS=1 npx playwright test e2e/batch-25-screens.spec.ts
+Compared side by side with the mockup: phone Products, More, Home and
+computer Products match it (differences listed in section 5).
+
+
+TESTS
+-----
+New: e2e/batch-25.spec.ts (9 tests)
+  1 At 360px: exactly 5 bottom tabs; More shows the 4 groups and the Super
+    Admin pills; every More item opens (and Back returns); all 27 admin
+    pages and sub-pages show their title with no sideways scrolling
+  2 At 1280px: sidebar groups and items in the mockup order; View site
+    opens a new tab; at least 6 product rows on screen
+  3 A limited role sees only Home, Orders, Products, Categories, My
+    Profile; the database refuses everything else (see Part 6)
+  4 Changing the role's switches changes access at once (and is logged)
+  5 Home numbers equal the database (today, to confirm, on the way, this
+    month, low stock) and the page shows them; staff without "See sales
+    figures" see no ৳; with it, they do
+  6 Products: tapping a row opens Edit; no Edit/Delete buttons on rows;
+    the ⋮ menu has Edit first and Delete last, which asks to confirm; the
+    Low stock chip shows and filters exactly the right products
+  7 No emoji in the rendered admin on any page
+  8 Admin notes are private from the customer (see Part 7)
+  9 The live Telegram function skips an "E2E ..." order
+New unit tests: src/lib/adminNav.test.ts (menus, 5 tabs, role title,
+greeting in Bangladesh time, ৳1,24,300) and src/lib/testOrders.test.ts
+(real orders notify, test orders don't).
+Changed (not weakened) in e2e/batch-24.spec.ts, because things moved:
+  - Test 1 now creates a role with only "View orders" (all switches start
+    OFF), then adds the staff member with that role; it checks the role on
+    the row and that only "View orders" is listed.
+  - Test 2 checks the bottom bar (Home, Orders, My Profile — Home is new
+    for everyone), the "NAEEM'S <ROLE>" title, and the username on My
+    Profile (the old header no longer exists).
+  - Settings and Texts tests open the new addresses (Settings → Order
+    number format; Banner & Texts → Site texts).
+  - The price-edit test reads the history note from the new private table.
+  - Dialog name "Moderator: x" → "Staff: x".
+
+BUILD & TEST RESULTS
+--------------------
+Final code, one full clean run (as this batch allows):
+  npm run build    PASSED (0 errors)
+  npx vitest run   79/79 passed (11 files; 17 new tests in adminNav.test.ts
+                   and testOrders.test.ts)
+  npm run test:e2e 79 passed, 0 failed, 7 skipped
+    The 7 skips: the 4 screenshot runs (they only run when asked, see
+    SCREENSHOTS), the 2 bento tests and the CeraVe region part from before
+    (data conditions, explained in reports/batch-24.txt).
+    The 9 new Batch 25 tests and all 12 Batch 24 tests passed.
+  Clean-up: after the run the live database has 0 orders, 0 test roles and
+  0 test staff (checked). One problem I found and fixed on the way: an
+  earlier run of my own tests left 3 confirmed test orders behind (the
+  clean-up couldn't delete confirmed orders without the Safety Lock). I
+  deleted them (stock was put back) and the tests now open the lock for a
+  minute to clean up, like the Batch 24 tests do.
+Live checks after the deploy (live site = main, new database):
+  - Home (97 products), a product page, and the live admin's Orders,
+    Products, Team, Settings, Wholesalers and Activity Log pages all load
+    with no database errors.
+  - Two product photos return "not found" from storage on the live home
+    page (products/4981ffc9-....webp and products/dc870eff-....webp). That
+    was already the case, not caused by this batch: re-upload those photos.

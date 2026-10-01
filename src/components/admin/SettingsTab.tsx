@@ -19,7 +19,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProducts, type TextSettingKey } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
-import { OrderNumberPanel, SafetyLocksPanel, TextsPanel } from './SettingsExtraPanels';
+import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
+import { SubPages, type SubPage } from './ui/SubPages';
 
 const PASSWORD_MIN_LENGTH = 8;
 const EXPERT_PHOTO_PATH = 'settings/expert-photo.webp';
@@ -72,7 +73,7 @@ function readProfileFields(settings: AppSettings): Record<ProfileFieldKey, strin
 }
 
 /** Expert contact settings — powers the /contact page and the floating button. */
-function ExpertSettingsPanel() {
+export function ExpertSettingsPanel() {
   const { settings, refetch } = useProducts();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -557,7 +558,7 @@ function AdTrackingSettingsPanel() {
 }
 
 /** Hero banner slides — the swipeable card at the top of the homepage. */
-function BannerSlidesPanel() {
+export function BannerSlidesPanel() {
   const { settings, refetch } = useProducts();
   const { showToast } = useToast();
 
@@ -743,7 +744,7 @@ function BannerSlidesPanel() {
               id="banner-eyebrow"
               type="text"
               className="form-input"
-              placeholder="🇦🇺 Direct from Australia"
+              placeholder="Direct from Australia"
               value={draft.eyebrow_text}
               onChange={(e) => updateDraft({ eyebrow_text: e.target.value })}
             />
@@ -903,28 +904,8 @@ export function SettingsTab() {
     await signOut();
   };
 
-  return (
-    <section aria-label="Settings">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Settings</h2>
-      </header>
-
-      <ExpertSettingsPanel />
-
-      <ShopWhatsAppPanel />
-
-      <OrderPaymentSettingsPanel />
-
-      <OrderNumberPanel />
-
-      <SafetyLocksPanel />
-
-      <TextsPanel />
-
-      <AdTrackingSettingsPanel />
-
-      <BannerSlidesPanel />
-
+  const otherPanels = (
+    <>
       <div className="admin-panel">
         <h3 className="admin-panel__title">Change Password</h3>
         <form onSubmit={handleChangePassword} className="form" noValidate>
@@ -985,13 +966,33 @@ export function SettingsTab() {
         <h3 className="admin-panel__title">Sign Out</h3>
         <button
           type="button"
-          className="button button--danger-outline"
+          className="button button--secondary"
           onClick={handleSignOut}
           disabled={isSigningOut}
         >
           {isSigningOut ? <span className="spinner" aria-hidden="true" /> : 'Sign Out'}
         </button>
       </div>
+    </>
+  );
+
+  // Batch 25 Part 4: a grouped list; each setting opens as its own page
+  // (?sset=...). Every panel is the same one as before, only moved. The
+  // banner, expert page and texts moved to Store design → Banner & Texts.
+  const pages: SubPage[] = [
+    { id: 'order-number', group: 'ORDERS', label: 'Order number format', icon: 'receipt', render: () => <OrderNumberPanel /> },
+    { id: 'payment', group: 'ORDERS', label: 'Delivery fees and bKash', icon: 'orders', render: () => <OrderPaymentSettingsPanel /> },
+    { id: 'low-stock', group: 'ORDERS', label: 'Low-stock alert', icon: 'low-stock', render: () => <LowStockPanel /> },
+    { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
+    { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
+    { id: 'tracking', group: 'TRACKING', label: 'Facebook Pixel and Google Analytics', icon: 'chart', render: () => <AdTrackingSettingsPanel /> },
+    { id: 'safety', group: 'SAFETY LOCKS', label: 'Safety Locks', icon: 'lock', render: () => <SafetyLocksPanel /> },
+    { id: 'account', group: 'OTHER', label: 'Password, saved data, sign out', icon: 'profile', render: () => otherPanels },
+  ];
+
+  return (
+    <section aria-label="Settings">
+      <SubPages title="Settings" param="sset" pages={pages} />
     </section>
   );
 }

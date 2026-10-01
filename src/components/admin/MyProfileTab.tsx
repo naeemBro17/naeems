@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
 import { PasswordField } from './PasswordField';
 import { STAFF_PASSWORD_MIN_LENGTH, STAFF_PERMISSIONS, logStaffEvent } from '../../lib/staff';
+import { AdminPageHeader } from './ui/AdminUi';
 
 /** A moderator's own page (Batch 24): who they are, what they may do,
  *  change their own password, sign out. */
@@ -54,9 +55,7 @@ export function MyProfileTab() {
 
   return (
     <section aria-label="My Profile">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">My Profile</h2>
-      </header>
+      <AdminPageHeader title="My Profile" />
 
       <div className="admin-panel">
         <div className="checkout-summary-card__row profile-row">

@@ -332,3 +332,98 @@ export function TextsPanel() {
     </div>
   );
 }
+
+/**
+ * Admin → Settings → Orders → Low-stock alert (Batch 25 Part 2). At or
+ * below this many pieces a product shows a red "N left", counts in the
+ * Low stock filter, and appears on Home under Needs attention.
+ */
+export function LowStockPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+  const [value, setValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(settings.low_stock_threshold);
+  }, [settings.low_stock_threshold]);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    const n = Number(value.trim());
+    if (!Number.isInteger(n) || n < 0 || n > 100000) {
+      setError('Enter a whole number, 0 or more.');
+      return;
+    }
+    setError(null);
+    setIsSaving(true);
+    const { error: saveError } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'low_stock_threshold', value: String(n) }], { onConflict: 'key' });
+    setIsSaving(false);
+    if (saveError) {
+      showToast('Could not save. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast('Low-stock alert saved');
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Low-stock alert</h3>
+      <p className="admin-panel__description">
+        A product with this many pieces or fewer shows a red stock dot, appears under "Low stock" in Products, and
+        on Home under Needs attention. Products that don't track an exact number are never counted.
+      </p>
+      <form className="form" onSubmit={handleSave} noValidate>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-low-stock">
+            Warn at (pieces)
+          </label>
+          <input
+            id="settings-low-stock"
+            className="form-input"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="button button--primary" disabled={isSaving}>
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Admin → Settings → Courier (Batch 25 Part 4). Steadfast has nothing to
+ * type in here: its API keys are server secrets and never reach a browser.
+ * This page says how it works and where each Steadfast action lives.
+ */
+export function CourierPanel() {
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Steadfast Courier</h3>
+      <p className="admin-panel__description">
+        Steadfast is connected on the server. Its API keys are kept as server secrets and are never shown in the
+        browser, so there is nothing to type in here.
+      </p>
+      <ul className="adm-info-list">
+        <li>Book a parcel: open a confirmed order, then "Send to Steadfast".</li>
+        <li>Delivery status refreshes by itself every 3 hours.</li>
+        <li>Refresh now: Orders, "Update all shipped" (in the menu on a phone).</li>
+        <li>A price change on a booked order must also be changed on the Steadfast portal (their API cannot edit a booked parcel).</li>
+      </ul>
+    </div>
+  );
+}

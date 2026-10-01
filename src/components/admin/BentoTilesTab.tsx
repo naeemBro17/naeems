@@ -5,6 +5,8 @@ import { useToast } from '../../hooks/useToast';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { BentoTileForm } from './BentoTileForm';
 import type { BentoTile, BentoTileFormData } from '../../types';
+import { AdminPageHeader, KebabMenu } from './ui/AdminUi';
+import { AdminIcon } from './ui/AdminIcon';
 
 export function BentoTilesTab() {
   const { showToast } = useToast();
@@ -126,14 +128,17 @@ export function BentoTilesTab() {
 
   return (
     <section aria-label="Bento tiles">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Bento Tiles</h2>
-        {form === null && (
-          <button type="button" className="button button--primary" onClick={startCreate}>
-            Add Tile
-          </button>
-        )}
-      </header>
+      <AdminPageHeader
+        title="Bento Tiles"
+        primary={
+          form === null ? (
+            <button type="button" className="adm-btn adm-btn--primary" onClick={startCreate}>
+              <AdminIcon name="plus" />
+              Add Tile
+            </button>
+          ) : undefined
+        }
+      />
 
       {form !== null && (
         <div className="admin-panel">
@@ -212,30 +217,25 @@ export function BentoTilesTab() {
                 </div>
 
                 <div className="review-admin__actions">
-                  <button
-                    type="button"
-                    className="button button--secondary button--small"
-                    onClick={() => void patchRow(tile.id, { is_active: !tile.is_active })}
-                  >
-                    {tile.is_active ? 'Hide' : 'Show'}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--secondary button--small"
-                    onClick={() => {
-                      setForm(bentoTileToForm(tile));
-                      setEditingId(tile.id);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--danger-outline button--small"
-                    onClick={() => setPendingDelete(tile)}
-                  >
-                    Delete
-                  </button>
+                  <KebabMenu
+                    label={`Actions for ${tile.title}`}
+                    items={[
+                      {
+                        label: tile.is_active ? 'Hide' : 'Show',
+                        icon: tile.is_active ? 'eye-off' : 'eye',
+                        onSelect: () => void patchRow(tile.id, { is_active: !tile.is_active }),
+                      },
+                      {
+                        label: 'Edit',
+                        icon: 'edit',
+                        onSelect: () => {
+                          setForm(bentoTileToForm(tile));
+                          setEditingId(tile.id);
+                        },
+                      },
+                      { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setPendingDelete(tile) },
+                    ]}
+                  />
                 </div>
               </li>
             ))}

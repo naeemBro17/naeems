@@ -14,6 +14,8 @@ import {
 } from '../../lib/csvUtils';
 import { Modal } from '../shared/Modal';
 import type { CSVRow, CSVRowValidation, ImportSummary } from '../../types';
+import { AdminPageHeader } from './ui/AdminUi';
+import { AdminIcon } from './ui/AdminIcon';
 
 const PREVIEW_VISIBLE_ROWS = 10;
 
@@ -221,9 +223,7 @@ export function CSVImport() {
 
   return (
     <section aria-label="Import and export">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Import / Export</h2>
-      </header>
+      <AdminPageHeader title="Import / Export" />
 
       <div className="admin-panel">
         <h3 className="admin-panel__title">CSV Import</h3>
@@ -311,7 +311,7 @@ export function CSVImport() {
                       <td>{row.category_name || '—'}</td>
                       <td>{row.retail_price || '—'}</td>
                       <td>{row.stock_status || 'in_stock'}</td>
-                      <td>{errors.length > 0 ? errors.join('; ') : '✓'}</td>
+                      <td>{errors.length > 0 ? errors.join('; ') : <AdminIcon name="check" className="adm-icon--sm adm-ok" />}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -334,7 +334,7 @@ export function CSVImport() {
         <p className="admin-panel__description">
           Downloads all products (active and inactive) as a CSV file.
         </p>
-        <button type="button" className="button button--primary" onClick={handleExport}>
+        <button type="button" className="button button--secondary" onClick={handleExport}>
           Export All Products
         </button>
       </div>
@@ -347,13 +347,13 @@ export function CSVImport() {
         {summary && (
           <div className="import-summary">
             <p className="import-summary__line import-summary__line--success">
-              ✓ {summary.added} added
+              <AdminIcon name="check" className="adm-icon--sm" /> {summary.added} added
             </p>
             <p className="import-summary__line import-summary__line--success">
-              ✓ {summary.updated} updated
+              <AdminIcon name="check" className="adm-icon--sm" /> {summary.updated} updated
             </p>
             <p className="import-summary__line import-summary__line--failed">
-              ✗ {summary.failed.length} failed
+              <AdminIcon name="close" className="adm-icon--sm" /> {summary.failed.length} failed
             </p>
             {summary.failed.length > 0 && (
               <div className="csv-preview-wrap">

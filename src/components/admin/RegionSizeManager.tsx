@@ -5,6 +5,7 @@ import { useToast } from '../../hooks/useToast';
 import { distinctRegions, distinctSizes } from '../../lib/variants';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import type { Product, ProductVariant } from '../../types';
+import { KebabMenu } from './ui/AdminUi';
 
 type Field = 'region' | 'size';
 
@@ -155,22 +156,13 @@ function AttributeSection({ field, label }: { field: Field; label: string }) {
                       {count.products + count.variants === 1 ? 'use' : 'uses'}
                     </span>
                     <div className="admin-category-row__actions">
-                      <button
-                        type="button"
-                        className="button button--secondary button--small"
-                        onClick={() => startEdit(value)}
-                        aria-label={`Edit ${value}`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--danger-outline button--small"
-                        onClick={() => setDeletingValue(value)}
-                        aria-label={`Delete ${value}`}
-                      >
-                        Delete
-                      </button>
+                      <KebabMenu
+                        label={`Actions for ${value}`}
+                        items={[
+                          { label: 'Edit', icon: 'edit', onSelect: () => startEdit(value) },
+                          { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setDeletingValue(value) },
+                        ]}
+                      />
                     </div>
                   </>
                 )}

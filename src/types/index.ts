@@ -238,6 +238,11 @@ export interface AppSettings {
   /** Google Analytics 4 Measurement ID (G-XXXXXXX). Blank = GA never loads. */
   ga_measurement_id: string;
 
+  /* --- Admin (Batch 25) --- */
+  /** At or below this many pieces a product counts as "low stock" in the
+   *  admin (red stock dot, Low stock filter, Home). Default 5. */
+  low_stock_threshold: string;
+
   /* --- Editable texts (Batch 24 Part 7) — blank means "use the default" --- */
   text_checkout_signin_title: string;
   text_checkout_signin_message: string;
@@ -587,7 +592,9 @@ export type StaffPermission =
   | 'edit_products'
   | 'edit_categories'
   | 'view_customers'
-  | 'delete_early_orders';
+  | 'delete_early_orders'
+  | 'view_wholesalers'
+  | 'see_sales';
 
 /** The signed-in staff member's own row (Super Admin or moderator). */
 export interface StaffMember {
@@ -603,6 +610,19 @@ export interface StaffMember {
 export interface TeamMember extends StaffMember {
   created_at: string;
   last_login: string | null;
+  /** Batch 25: the role their permissions come from (null = their own
+   *  Batch 24 switches). */
+  role_id: string | null;
+  role_name: string | null;
+}
+
+/** A staff role on Team → Roles (Batch 25 Part 6). */
+export interface StaffRole {
+  id: string;
+  name: string;
+  permissions: StaffPermission[];
+  member_count: number;
+  created_at: string;
 }
 
 /** One Activity Log row. */

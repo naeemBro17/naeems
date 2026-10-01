@@ -5,6 +5,8 @@ import { useToast } from '../../hooks/useToast';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { PromoCodeForm } from './PromoCodeForm';
 import type { PromoCode, PromoCodeFormData } from '../../types';
+import { AdminPageHeader, KebabMenu } from './ui/AdminUi';
+import { AdminIcon } from './ui/AdminIcon';
 
 function formatExpiry(expiresAt: string | null): string | null {
   if (!expiresAt) return null;
@@ -111,14 +113,17 @@ export function PromoCodesTab() {
 
   return (
     <section aria-label="Promo codes">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Promo Codes</h2>
-        {form === null && (
-          <button type="button" className="button button--primary" onClick={startCreate}>
-            Add code
-          </button>
-        )}
-      </header>
+      <AdminPageHeader
+        title="Promo Codes"
+        primary={
+          form === null ? (
+            <button type="button" className="adm-btn adm-btn--primary" onClick={startCreate}>
+              <AdminIcon name="plus" />
+              Add code
+            </button>
+          ) : undefined
+        }
+      />
 
       {form !== null && (
         <div className="admin-panel">
@@ -179,30 +184,25 @@ export function PromoCodesTab() {
                   </div>
 
                   <div className="review-admin__actions">
-                    <button
-                      type="button"
-                      className="button button--secondary button--small"
-                      onClick={() => void handleToggleActive(code)}
-                    >
-                      {code.active ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button--secondary button--small"
-                      onClick={() => {
-                        setForm(promoCodeToForm(code));
-                        setEditingId(code.id);
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="button button--danger-outline button--small"
-                      onClick={() => setPendingDelete(code)}
-                    >
-                      Delete
-                    </button>
+                    <KebabMenu
+                      label={`Actions for ${code.code}`}
+                      items={[
+                        {
+                          label: code.active ? 'Deactivate' : 'Activate',
+                          icon: code.active ? 'eye-off' : 'eye',
+                          onSelect: () => void handleToggleActive(code),
+                        },
+                        {
+                          label: 'Edit',
+                          icon: 'edit',
+                          onSelect: () => {
+                            setForm(promoCodeToForm(code));
+                            setEditingId(code.id);
+                          },
+                        },
+                        { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setPendingDelete(code) },
+                      ]}
+                    />
                   </div>
                 </li>
               );

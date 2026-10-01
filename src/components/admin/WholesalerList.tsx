@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useToast } from '../../hooks/useToast';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import type { WholesalerAccount, ProfileStatus } from '../../types';
+import { AdminPageHeader, KebabMenu } from './ui/AdminUi';
 
 interface WholesalerListProps {
   accounts: WholesalerAccount[];
@@ -36,6 +37,7 @@ export function WholesalerList({ accounts, onReload, readOnly = false }: Wholesa
   const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('wstatus', 'pending', STATUS_FILTERS);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<WholesalerAccount | null>(null);
+  const [rejecting, setRejecting] = useState<WholesalerAccount | null>(null);
 
   // Only wholesaler accounts appear here (admins are managed via Supabase).
   const wholesalers = useMemo(
@@ -83,10 +85,10 @@ export function WholesalerList({ accounts, onReload, readOnly = false }: Wholesa
 
   return (
     <section aria-label="Wholesalers">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Wholesalers</h2>
+      <AdminPageHeader title="Wholesalers" />
+      <div className="adm-filter-row adm-filter-row--end">
         <select
-          className="form-input form-select admin-status-filter"
+          className="adm-select admin-status-filter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           aria-label="Filter wholesalers by status"
@@ -95,7 +97,7 @@ export function WholesalerList({ accounts, onReload, readOnly = false }: Wholesa
           <option value="approved">Approved</option>
           <option value="all">All</option>
         </select>
-      </header>
+      </div>
 
       {filtered.length === 0 ? (
         <div className="empty-state">
@@ -137,25 +139,21 @@ export function WholesalerList({ accounts, onReload, readOnly = false }: Wholesa
                       >
                         {isBusy ? <span className="spinner" aria-hidden="true" /> : 'Approve'}
                       </button>
-                      <button
-                        type="button"
-                        className="button button--danger-outline button--small"
-                        onClick={() => handleReject(account)}
-                        disabled={isBusy}
-                      >
-                        Reject
-                      </button>
+                      <KebabMenu
+                        label={`More actions for ${account.business_name || 'this account'}`}
+                        items={[
+                          { label: 'Reject', icon: 'close', danger: true, disabled: isBusy, onSelect: () => setRejecting(account) },
+                        ]}
+                      />
                     </>
                   )}
                   {!readOnly && account.status === 'approved' && (
-                    <button
-                      type="button"
-                      className="button button--danger-outline button--small"
-                      onClick={() => setRevoking(account)}
-                      disabled={isBusy}
-                    >
-                      Revoke Access
-                    </button>
+                    <KebabMenu
+                      label={`More actions for ${account.business_name || 'this account'}`}
+                      items={[
+                        { label: 'Revoke Access', icon: 'close', danger: true, disabled: isBusy, onSelect: () => setRevoking(account) },
+                      ]}
+                    />
                   )}
                 </div>
               </li>
@@ -175,6 +173,22 @@ export function WholesalerList({ accounts, onReload, readOnly = false }: Wholesa
         }
         onConfirm={confirmRevoke}
         onClose={() => setRevoking(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={rejecting !== null}
+        title="Reject this request?"
+        confirmLabel="Reject"
+        message={
+          rejecting
+            ? `Reject the wholesale request from ${rejecting.business_name || 'this account'}? They will not see wholesale prices.`
+            : ''
+        }
+        onConfirm={async () => {
+          if (rejecting) await handleReject(rejecting);
+          setRejecting(null);
+        }}
+        onClose={() => setRejecting(null)}
       />
     </section>
   );

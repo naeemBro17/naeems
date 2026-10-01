@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { ActivityLogEntry, StaffMember, StaffPermission, TeamMember } from '../types';
+import type { ActivityLogEntry, StaffMember, StaffPermission, StaffRole, TeamMember } from '../types';
 
 /**
  * Admin team (Batch 24 Part 1). The permission list, in the order the Team
@@ -14,8 +14,10 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'book_steadfast', label: 'Book on Steadfast', hint: 'Send confirmed orders to Steadfast Courier.' },
   { id: 'edit_products', label: 'Edit products and stock', hint: 'Add and edit products, options, photos and stock. Cannot delete products.' },
   { id: 'edit_categories', label: 'Edit categories', hint: 'Add, rename and remove categories.' },
-  { id: 'view_customers', label: 'View customers', hint: 'See the wholesaler list and look up customers by phone. Read only.' },
+  { id: 'view_customers', label: 'View customers', hint: 'See the Customers page and look up customers by phone. Read only.' },
   { id: 'delete_early_orders', label: 'Delete early orders', hint: 'Delete Pending orders, or Cancelled orders never booked on Steadfast.' },
+  { id: 'view_wholesalers', label: 'View wholesalers', hint: 'See the Wholesalers list. Read only: approving stays with you.' },
+  { id: 'see_sales', label: 'See sales figures', hint: 'See money totals: today, this month, and what each customer has spent.' },
 ];
 
 /** Order permissions that are useless without "View orders" — switching
@@ -90,12 +92,67 @@ async function callTeamFunction(body: Record<string, unknown>): Promise<TeamFunc
 }
 
 export async function fetchTeam(): Promise<TeamMember[]> {
+  // Batch 25: the list with each member's role. Falls back to the Batch 24
+  // list (no roles) until migration-031 is run.
+  const withRoles = await supabase.rpc('admin_team_members');
+  if (!withRoles.error) return (withRoles.data ?? []) as TeamMember[];
   const { data, error } = await supabase.rpc('admin_team_list');
   if (error) {
     console.error('admin_team_list failed:', error.message);
     return [];
   }
-  return (data ?? []) as TeamMember[];
+  return ((data ?? []) as Omit<TeamMember, 'role_id' | 'role_name'>[]).map((m) => ({
+    ...m,
+    role_id: null,
+    role_name: null,
+  }));
+}
+
+/* ---------- Roles (Batch 25 Part 6, Super Admin) ---------- */
+
+export async function fetchRoles(): Promise<StaffRole[]> {
+  const { data, error } = await supabase.rpc('admin_role_list');
+  if (error) {
+    console.error('admin_role_list failed:', error.message);
+    return [];
+  }
+  return ((data ?? []) as (Omit<StaffRole, 'member_count'> & { member_count: number | string })[]).map((r) => ({
+    ...r,
+    member_count: Number(r.member_count),
+  }));
+}
+
+/** Creates (id null) or updates a role. Returns its id. */
+export async function saveRole(input: {
+  id: string | null;
+  name: string;
+  permissions: StaffPermission[];
+}): Promise<{ id: string | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_role_save', {
+    p_id: input.id,
+    p_name: input.name.trim(),
+    p_permissions: input.permissions,
+  });
+  if (error) return { id: null, error: error.message };
+  return { id: data as string, error: null };
+}
+
+export async function deleteRole(id: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_role_delete', { p_id: id });
+  return { error: error?.message ?? null };
+}
+
+export async function setMemberRole(userId: string, roleId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_team_set_role', { p_user_id: userId, p_role_id: roleId });
+  return { error: error?.message ?? null };
+}
+
+/** The signed-in staff member's role name, or null (Super Admin, no role,
+ *  or migration-031 not run yet). */
+export async function fetchOwnRoleName(): Promise<string | null> {
+  const { data, error } = await supabase.rpc('staff_my_role');
+  if (error) return null;
+  return typeof data === 'string' && data.trim() !== '' ? data : null;
 }
 
 export async function createModerator(input: {
@@ -103,9 +160,12 @@ export async function createModerator(input: {
   fullName: string;
   phone: string;
   password: string;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; userId: string | null }> {
   const res = await callTeamFunction({ action: 'create', ...input });
-  return { error: res.ok ? null : (res.error ?? 'Could not add the moderator.') };
+  return {
+    error: res.ok ? null : (res.error ?? 'Could not add the staff member.'),
+    userId: res.ok ? (res.userId ?? null) : null,
+  };
 }
 
 export async function updateModerator(input: {

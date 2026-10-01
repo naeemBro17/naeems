@@ -1,0 +1,149 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e0e10;--card:#1b1b1e;--card2:#232327;--line:#2c2c31;--mut:#8b8b93;--tx:#f2f2f4;--or:#F2592A;--gr:#34c759}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#e8e6e2;font-family:'Plus Jakarta Sans',sans-serif;color:var(--tx);padding:30px}
+.lab{font-family:'Hind Siliguri';color:#222;font-weight:600;font-size:17px;margin-bottom:10px;text-align:center}
+.note{font-family:'Hind Siliguri';color:#333;font-size:14px;line-height:1.55;background:#fff;border-radius:12px;padding:10px 12px;max-width:330px;margin-top:10px}
+.row{display:flex;gap:30px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;align-items:center}
+.ph{width:330px;height:700px;background:var(--bg);border:8px solid #111;border-radius:36px;overflow:hidden;position:relative}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px}
+.hd h1{font-size:22px;font-weight:800}
+.btn{background:var(--or);color:#fff;font-weight:700;font-size:13px;padding:8px 13px;border-radius:20px}
+.ic{width:34px;height:34px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:15px}
+.srch{margin:0 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--mut);font-size:13px;display:flex;justify-content:space-between}
+.chips{display:flex;gap:6px;padding:10px 16px;overflow:hidden}
+.chip{white-space:nowrap;font-size:12px;padding:6px 11px;border-radius:16px;border:1px solid var(--line);color:var(--mut)}
+.chip.on{background:#fff;color:#111;border-color:#fff;font-weight:600}
+.it{display:flex;gap:11px;align-items:center;padding:11px 16px;border-bottom:1px solid #1d1d21}
+.th{width:48px;height:48px;border-radius:10px;background:linear-gradient(160deg,#fff,#dde6ef);flex:none}
+.th.b{background:linear-gradient(160deg,#eef7ee,#9fd0a8)}.th.c{background:linear-gradient(160deg,#fbeee8,#e7b39c)}.th.d{background:linear-gradient(160deg,#eef0fb,#aab7e4)}
+.nm{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mt{font-size:11.5px;color:var(--mut);margin-top:3px;display:flex;gap:8px;align-items:center}
+.pr{font-family:'Hind Siliguri';color:var(--tx);font-weight:600;font-size:13px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gr);display:inline-block}
+.dot.r{background:#ff453a}
+.sw{width:36px;height:21px;border-radius:12px;background:var(--gr);position:relative;flex:none}
+.sw:after{content:'';position:absolute;right:2px;top:2px;width:17px;height:17px;border-radius:50%;background:#fff}
+.sw.off{background:#3a3a40}.sw.off:after{left:2px;right:auto}
+.more{color:var(--mut);font-size:18px;padding:0 2px;flex:none}
+.nav{position:absolute;left:0;right:0;bottom:0;height:62px;background:rgba(22,22,25,.96);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;color:var(--mut)}
+.nav div b{font-size:17px;font-weight:400}
+.nav .on{color:var(--or)}
+.badge{position:relative}.badge:after{content:'3';position:absolute;top:-4px;right:-9px;background:var(--or);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px}
+.grp{margin:12px 16px 0}
+.gt{font-size:11px;letter-spacing:1.2px;color:var(--mut);font-weight:700;margin:0 4px 6px}
+.box{background:var(--card);border-radius:14px;overflow:hidden}
+.li{display:flex;align-items:center;gap:12px;padding:11px 14px;font-size:13.5px;border-bottom:1px solid #26262a}
+.li:last-child{border:0}.li span{margin-left:auto;color:var(--mut)}
+.li i{font-style:normal;width:22px;text-align:center;color:var(--mut)}
+.lock{font-size:10px;color:var(--or);border:1px solid rgba(242,89,42,.5);border-radius:8px;padding:1px 6px;margin-left:6px}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:4px 16px}
+.k{background:var(--card);border-radius:14px;padding:12px}
+.k .v{font-size:22px;font-weight:800;margin-top:3px}.k .s{font-size:11.5px;color:var(--mut)}
+.k.o{background:linear-gradient(135deg,#3a1c10,#1b1b1e);border:1px solid rgba(242,89,42,.35)}
+.todo{margin:12px 16px 0;background:var(--card);border-radius:14px}
+.todo .li b{color:var(--or);font-weight:700}
+/* desktop */
+.dk{width:1100px;height:640px;background:var(--bg);border-radius:14px;border:1px solid #333;overflow:hidden;display:flex;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.sb{width:220px;background:#151517;border-right:1px solid var(--line);padding:18px 12px;flex:none}
+.sb .brand{font-weight:800;font-size:16px;padding:0 8px 16px}
+.sb .gt{margin:14px 8px 5px;font-size:10px}
+.sb .a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:9px;font-size:13px;color:#b9b9c0}
+.sb .a i{font-style:normal;width:18px;text-align:center}
+.sb .a.on{background:#26262b;color:#fff;font-weight:600}
+.sb .a em{font-style:normal;margin-left:auto;background:var(--or);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:1px 6px}
+.mn{flex:1;padding:22px 26px;overflow:hidden}
+.bar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.bar h1{font-size:22px;font-weight:800;margin-right:auto}
+.ghost{border:1px solid var(--line);border-radius:18px;padding:7px 13px;font-size:13px;color:#ddd}
+.flt{display:flex;gap:10px;margin-bottom:12px}
+.flt div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--mut)}
+.tb{background:var(--card);border-radius:14px;overflow:hidden}
+.tr{display:grid;grid-template-columns:34px 56px 1fr 120px 110px 130px 70px 40px;align-items:center;padding:9px 16px;border-bottom:1px solid #26262a;font-size:13px}
+.tr.h{font-size:11px;color:var(--mut);letter-spacing:.8px;font-weight:700;background:#18181b}
+.cb{width:15px;height:15px;border:1.5px solid #555;border-radius:4px}
+.tr .th{width:38px;height:38px;border-radius:8px}
+.tag{font-size:10.5px;color:#bbb;background:#26262b;border-radius:6px;padding:2px 7px;font-weight:600;letter-spacing:.5px}
+.sm{font-size:11px;color:var(--mut)}
+</style></head><body>
+
+<div class="row">
+ <div class="col"><div class="lab">১ · মোবাইল: Products</div>
+ <div class="ph">
+  <div class="hd"><h1>Products</h1><div style="display:flex;gap:8px;align-items:center"><div class="ic">☼</div><div class="btn">+ Add</div></div></div>
+  <div class="srch"><span>Search name or SKU</span><span>⚙︎</span></div>
+  <div class="chips"><div class="chip on">All 142</div><div class="chip">Low stock 4</div><div class="chip">Hidden 6</div><div class="chip">Baby Care</div></div>
+  <div class="it"><div class="th"></div><div style="flex:1;min-width:0"><div class="nm">Aveeno Baby Daily Moisture Fragrance Free Lotion 227g</div><div class="mt"><span class="pr">৳2,249</span><span><span class="dot"></span> 45 pcs</span></div></div><div class="sw"></div><div class="more">⋮</div></div>
+  <div class="it"><div class="th d"></div><div style="flex:1;min-width:0"><div class="nm">Aveeno Baby Daily Moisture Lightly Scented Wash &amp; Shampoo 236mL</div><div class="mt"><span class="pr">৳2,200</span><span><span class="dot"></span> In stock</span></div></div><div class="sw"></div><div class="more">⋮</div></div>
+  <div class="it"><div class="th b"></div><div style="flex:1;min-width:0"><div class="nm">CeraVe Hydrating Cleanser 473 ml</div><div class="mt"><span class="pr">৳2,299</span><span><span class="dot r"></span> 2 left</span></div></div><div class="sw"></div><div class="more">⋮</div></div>
+  <div class="it"><div class="th c"></div><div style="flex:1;min-width:0"><div class="nm">Avène Thermal Spring Water 300 ml</div><div class="mt"><span class="pr">৳2,440</span><span><span class="dot"></span> 18 pcs</span></div></div><div class="sw off"></div><div class="more">⋮</div></div>
+  <div class="it"><div class="th"></div><div style="flex:1;min-width:0"><div class="nm">Cetaphil Gentle Skin Cleanser 500ml</div><div class="mt"><span class="pr">৳1,850</span><span><span class="dot"></span> 30 pcs</span></div></div><div class="sw"></div><div class="more">⋮</div></div>
+  <div class="nav"><div><b>⌂</b>Home</div><div><b class="badge">▤</b>Orders</div><div class="on"><b>▢</b>Products</div><div><b>☺</b>Customers</div><div><b>☰</b>More</div></div>
+ </div>
+ <div class="note">পুরো নাম দেখা যায়। সারিতে চাপলে Edit খোলে। Delete লুকানো আছে <b>⋮</b> মেনুতে। উপরে ছোট ফিল্টার: স্টক কম, লুকানো।</div></div>
+
+ <div class="col"><div class="lab">২ · মোবাইল: More (সব কিছু ভাগ করে)</div>
+ <div class="ph">
+  <div class="hd"><h1>More</h1><div class="ic">☼</div></div>
+  <div class="grp"><div class="gt">CATALOG</div><div class="box">
+   <div class="li"><i>▦</i>Categories<span>›</span></div><div class="li"><i>◈</i>Brands<span>›</span></div><div class="li"><i>⇅</i>Import / Export<span>›</span></div></div></div>
+  <div class="grp"><div class="gt">SALES</div><div class="box">
+   <div class="li"><i>%</i>Promo Codes<span>›</span></div><div class="li"><i>◎</i>Wholesalers<span>›</span></div><div class="li"><i>☆</i>Reviews<span>›</span></div></div></div>
+  <div class="grp"><div class="gt">STORE DESIGN</div><div class="box">
+   <div class="li"><i>▥</i>Bento Tiles<span>›</span></div><div class="li"><i>✎</i>Banner, Expert page, Texts<span>›</span></div></div></div>
+  <div class="grp"><div class="gt">TEAM &amp; SETTINGS</div><div class="box">
+   <div class="li"><i>☻</i>Team<span class="lock">Super Admin</span><span>›</span></div><div class="li"><i>≡</i>Activity Log<span class="lock">Super Admin</span><span>›</span></div><div class="li"><i>⚙</i>Settings<span>›</span></div></div></div>
+  <div class="nav"><div><b>⌂</b>Home</div><div><b class="badge">▤</b>Orders</div><div><b>▢</b>Products</div><div><b>☺</b>Customers</div><div class="on"><b>☰</b>More</div></div>
+ </div>
+ <div class="note">নিচে সবসময় মাত্র ৫টা ট্যাব। বাকি সব এখানে গুছিয়ে রাখা। মডারেটর শুধু নিজের অনুমতির জিনিসগুলোই দেখবে।</div></div>
+
+ <div class="col"><div class="lab">৩ · মোবাইল: Home (আজকের অবস্থা)</div>
+ <div class="ph">
+  <div class="hd"><div><div style="font-size:10.5px;letter-spacing:1.5px;color:var(--or);font-weight:700;margin-bottom:4px">NAEEM'S SUPER ADMIN</div><div style="font-size:12px;color:var(--mut)">Good morning,</div><h1>Naeem</h1></div><div class="ic">☼</div></div>
+  <div class="kp">
+   <div class="k o"><div class="s">Today's orders</div><div class="v">7</div><div class="s">৳18,450</div></div>
+   <div class="k"><div class="s">To confirm</div><div class="v" style="color:var(--or)">3</div><div class="s">waiting</div></div>
+   <div class="k"><div class="s">On the way</div><div class="v">5</div><div class="s">Steadfast</div></div>
+   <div class="k"><div class="s">This month</div><div class="v" style="font-size:19px">৳1,24,300</div><div class="s">42 orders</div></div>
+  </div>
+  <div class="grp"><div class="gt">NEEDS ATTENTION</div></div>
+  <div class="todo" style="margin-top:0">
+   <div class="li"><i>●</i><b>3</b>&nbsp;orders waiting to confirm<span>›</span></div>
+   <div class="li"><i>▾</i><b>4</b>&nbsp;products low on stock<span>›</span></div>
+   <div class="li"><i>☆</i><b>2</b>&nbsp;new reviews to approve<span>›</span></div>
+   <div class="li"><i>◎</i><b>1</b>&nbsp;wholesaler to approve<span>›</span></div>
+  </div>
+  <div class="nav"><div class="on"><b>⌂</b>Home</div><div><b class="badge">▤</b>Orders</div><div><b>▢</b>Products</div><div><b>☺</b>Customers</div><div><b>☰</b>More</div></div>
+ </div>
+ <div class="note">Admin খুললেই প্রথমে এটা: আজ কী হলো আর কী কাজ বাকি। চাপলেই সরাসরি সেই কাজে চলে যাবে। (সংখ্যাগুলো উদাহরণ)</div></div>
+</div>
+
+<div class="lab" style="margin-top:34px">৪ · পিসি: বাম পাশে ভাগ করা মেনু + টেবিলের মতো পরিষ্কার লিস্ট</div>
+<div class="row"><div class="dk">
+ <div class="sb"><div class="brand" style="letter-spacing:1.5px;font-size:14px">NAEEM'S SUPER ADMIN</div>
+  <div class="a"><i>⌂</i>Home</div><div class="a"><i>▤</i>Orders<em>3</em></div><div class="a"><i>☺</i>Customers</div>
+  <div class="gt">CATALOG</div><div class="a on"><i>▢</i>Products</div><div class="a"><i>▦</i>Categories</div><div class="a"><i>◈</i>Brands</div><div class="a"><i>⇅</i>Import / Export</div>
+  <div class="gt">SALES</div><div class="a"><i>%</i>Promo Codes</div><div class="a"><i>◎</i>Wholesalers</div><div class="a"><i>☆</i>Reviews</div>
+  <div class="gt">STORE DESIGN</div><div class="a"><i>▥</i>Bento Tiles</div><div class="a"><i>✎</i>Banner &amp; Texts</div>
+  <div class="gt">ADMIN</div><div class="a"><i>☻</i>Team</div><div class="a"><i>≡</i>Activity Log</div><div class="a"><i>⚙</i>Settings</div>
+ </div>
+ <div class="mn">
+  <div class="bar"><h1>Products</h1><div class="ghost">☼</div><div class="ghost">View site ↗</div><div class="btn" style="font-size:13px;padding:9px 16px">+ Add product</div></div>
+  <div class="flt"><div style="flex:1">Search name or SKU…</div><div>All categories ▾</div><div>All brands ▾</div><div>Stock: All ▾</div></div>
+  <div class="tb">
+   <div class="tr h"><div class="cb"></div><div></div><div>PRODUCT</div><div>CATEGORY</div><div>PRICE</div><div>STOCK</div><div>LIVE</div><div></div></div>
+   <div class="tr"><div class="cb"></div><div class="th"></div><div><div style="font-weight:600">Aveeno Baby Daily Moisture Fragrance Free Lotion 227g</div><div class="sm">FC-014 · updated by naeem · 2h ago</div></div><div><span class="tag">BABY CARE</span></div><div class="pr">৳2,249</div><div><span class="dot"></span> 45 pcs</div><div><div class="sw"></div></div><div class="more">⋮</div></div>
+   <div class="tr"><div class="cb"></div><div class="th d"></div><div><div style="font-weight:600">Aveeno Baby Daily Moisture Lightly Scented Wash &amp; Shampoo 236mL</div><div class="sm">HC-015 · updated by rafi · yesterday</div></div><div><span class="tag">BABY CARE</span></div><div class="pr">৳2,200</div><div><span class="dot"></span> In stock</div><div><div class="sw"></div></div><div class="more">⋮</div></div>
+   <div class="tr"><div class="cb"></div><div class="th b"></div><div><div style="font-weight:600">CeraVe Hydrating Cleanser 473 ml</div><div class="sm">FC-003 · 2 variants</div></div><div><span class="tag">FACE CARE</span></div><div class="pr">৳2,299</div><div style="color:#ff6b61"><span class="dot r"></span> 2 left</div><div><div class="sw"></div></div><div class="more">⋮</div></div>
+   <div class="tr"><div class="cb"></div><div class="th c"></div><div><div style="font-weight:600">Avène Thermal Spring Water 300 ml</div><div class="sm">BC-021</div></div><div><span class="tag">BODY CARE</span></div><div class="pr">৳2,440</div><div><span class="dot"></span> 18 pcs</div><div><div class="sw off"></div></div><div class="more">⋮</div></div>
+   <div class="tr"><div class="cb"></div><div class="th"></div><div><div style="font-weight:600">Cetaphil Gentle Skin Cleanser 500ml</div><div class="sm">FC-008</div></div><div><span class="tag">FACE CARE</span></div><div class="pr">৳1,850</div><div><span class="dot"></span> 30 pcs</div><div><div class="sw"></div></div><div class="more">⋮</div></div>
+   <div class="tr"><div class="cb"></div><div class="th d"></div><div><div style="font-weight:600">La Roche-Posay Cicaplast Baume B5+ 100ml</div><div class="sm">FC-011</div></div><div><span class="tag">FACE CARE</span></div><div class="pr">৳2,890</div><div><span class="dot"></span> 12 pcs</div><div><div class="sw"></div></div><div class="more">⋮</div></div>
+  </div>
+ </div>
+</div></div>
+<div class="row"><div class="note" style="max-width:1100px">এখন এক পর্দায় ২টা প্রোডাক্ট দেখা যায়, নতুন ডিজাইনে ১০-১২টা। মেনু ভাগ করা, তাই নতুন ট্যাব এলেও গাদাগাদি হবে না। কে শেষবার বদলেছে সেটাও দেখা যায়। টিক দিয়ে একসাথে অনেকগুলো চালু/বন্ধ করা যায়।</div></div>
+</body></html>

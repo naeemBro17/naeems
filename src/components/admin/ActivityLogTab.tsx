@@ -8,6 +8,7 @@ import {
   formatDhakaTime,
 } from '../../lib/staff';
 import type { ActivityLogEntry } from '../../types';
+import { AdminPageHeader } from './ui/AdminUi';
 
 /** "from → to" lines for an entry's details, shortest first. */
 function detailLines(details: Record<string, unknown>): string[] {
@@ -86,9 +87,7 @@ export function ActivityLogTab() {
 
   return (
     <section aria-label="Activity Log">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Activity Log</h2>
-      </header>
+      <AdminPageHeader title="Activity Log" />
 
       <div className="admin-filter-bar activity-filters">
         <input

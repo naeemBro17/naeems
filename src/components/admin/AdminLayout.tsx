@@ -1,239 +1,104 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { ThemeToggle } from '../shared/ThemeToggle';
-
-export type AdminTab =
-  | 'products'
-  | 'categories'
-  | 'import-export'
-  | 'wholesalers'
-  | 'orders'
-  | 'reviews'
-  | 'bento'
-  | 'promo-codes'
-  | 'settings'
-  | 'team'
-  | 'activity'
-  | 'profile';
+import { AdminIcon } from './ui/AdminIcon';
+import { groupNavItems, type AdminSection, type NavItem } from '../../lib/adminNav';
 
 interface AdminLayoutProps {
-  activeTab: AdminTab;
-  /** The sections this person may open (Batch 24) — a moderator only sees
-   *  the ones their permissions allow. */
-  visibleTabs: readonly AdminTab[];
-  /** Who is signed in, shown in the header. */
+  active: AdminSection;
+  /** Sidebar items this person may open (menu order). */
+  items: readonly NavItem[];
+  /** The phone's bottom bar (5 tabs when there is enough to show). */
+  tabs: readonly NavItem[];
+  /** "NAEEM'S SUPER ADMIN" / "NAEEM'S MODERATOR". */
+  title: string;
+  /** Who is signed in (shown at the foot of the sidebar). */
   username: string | null;
   /** Shown above the page (the Safety Lock warning bar). */
   banner?: ReactNode;
-  onTabChange: (tab: AdminTab) => void;
-  /** Number of pending wholesaler requests, shown as a badge on that tab. */
-  pendingWholesalers: number;
-  /** Number of orders still 'pending', shown as a badge on the Orders tab. */
+  onNavigate: (section: AdminSection) => void;
+  /** Orders waiting to be confirmed — the orange badge on Orders. */
   pendingOrders: number;
   children: ReactNode;
 }
 
-export const TABS: { id: AdminTab; label: string; iconPath: ReactNode }[] = [
-  {
-    id: 'products',
-    label: 'Products',
-    iconPath: (
-      <>
-        <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
-        <path d="M3 8l9 5 9-5" />
-        <path d="M12 13v8" />
-      </>
-    ),
-  },
-  {
-    id: 'categories',
-    label: 'Categories',
-    iconPath: (
-      <>
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </>
-    ),
-  },
-  {
-    id: 'import-export',
-    label: 'Import/Export',
-    iconPath: (
-      <>
-        <path d="M12 3v12" />
-        <path d="M8 7l4-4 4 4" />
-        <path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4" />
-      </>
-    ),
-  },
-  {
-    id: 'wholesalers',
-    label: 'Wholesalers',
-    iconPath: (
-      <>
-        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 00-3-3.87" />
-        <path d="M16 3.13a4 4 0 010 7.75" />
-      </>
-    ),
-  },
-  {
-    id: 'orders',
-    label: 'Orders',
-    iconPath: (
-      <>
-        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-        <path d="M3 6h18" />
-        <path d="M16 10a4 4 0 01-8 0" />
-      </>
-    ),
-  },
-  {
-    id: 'reviews',
-    label: 'Reviews',
-    iconPath: (
-      <>
-        <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.78L12 16.77l-5.2 2.73.99-5.78-4.21-4.1 5.82-.85L12 3.5z" />
-      </>
-    ),
-  },
-  {
-    id: 'bento',
-    label: 'Bento Tiles',
-    iconPath: (
-      <>
-        <rect x="3" y="3" width="8" height="18" rx="1.5" />
-        <rect x="13" y="3" width="8" height="8" rx="1.5" />
-        <rect x="13" y="13" width="8" height="8" rx="1.5" />
-      </>
-    ),
-  },
-  {
-    id: 'promo-codes',
-    label: 'Promo Codes',
-    iconPath: (
-      <>
-        <path d="M20.59 13.41L11 3.83A2 2 0 009.59 3H4a1 1 0 00-1 1v5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.59-4.59a2 2 0 000-2.83z" />
-        <circle cx="7.5" cy="7.5" r="1.5" />
-      </>
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    iconPath: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
-      </>
-    ),
-  },
-  {
-    id: 'team',
-    label: 'Team',
-    iconPath: (
-      <>
-        <circle cx="9" cy="8" r="3.5" />
-        <path d="M2.5 20a6.5 6.5 0 0113 0" />
-        <path d="M16 11.5a3 3 0 100-6" />
-        <path d="M18 20h3.5a5 5 0 00-4.5-5" />
-      </>
-    ),
-  },
-  {
-    id: 'activity',
-    label: 'Activity Log',
-    iconPath: (
-      <>
-        <path d="M8 6h13" />
-        <path d="M8 12h13" />
-        <path d="M8 18h13" />
-        <circle cx="4" cy="6" r="1" />
-        <circle cx="4" cy="12" r="1" />
-        <circle cx="4" cy="18" r="1" />
-      </>
-    ),
-  },
-  {
-    id: 'profile',
-    label: 'My Profile',
-    iconPath: (
-      <>
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21a8 8 0 0116 0" />
-      </>
-    ),
-  },
-];
-
+/**
+ * The admin shell (Batch 25 Part 1, mockup screens 1–4): a grouped left
+ * sidebar from 1024px up, a 5-tab bottom bar below that. Which items show
+ * comes from lib/adminNav.ts.
+ */
 export function AdminLayout({
-  activeTab,
-  visibleTabs,
+  active,
+  items,
+  tabs,
+  title,
   username,
   banner,
-  onTabChange,
-  pendingWholesalers,
+  onNavigate,
   pendingOrders,
   children,
 }: AdminLayoutProps) {
-  const badgeFor = (tabId: AdminTab): number => {
-    if (tabId === 'wholesalers') return pendingWholesalers;
-    if (tabId === 'orders') return pendingOrders;
-    return 0;
-  };
-  return (
-    <div className="admin-shell">
-      <header className="admin-header">
-        <h1 className="admin-header__title">Naeem's — Admin</h1>
-        <div className="admin-header__actions">
-          {username && <span className="admin-header__user">{username}</span>}
-          <ThemeToggle />
-          <Link to="/" className="admin-header__view-link" aria-label="Open the public price list">
-            View Site
-          </Link>
-        </div>
-      </header>
+  const groups = groupNavItems(items);
+  const activeTab = tabs.some((t) => t.id === active) ? active : 'more';
 
-      {banner}
-      <div className="admin-body">
-        <nav className="admin-nav" aria-label="Admin sections">
-          {TABS.filter((tab) => visibleTabs.includes(tab.id)).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`admin-nav__item${activeTab === tab.id ? ' admin-nav__item--active' : ''}`}
-              onClick={() => onTabChange(tab.id)}
-              aria-current={activeTab === tab.id ? 'page' : undefined}
-            >
-              <svg
-                className="admin-nav__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                {tab.iconPath}
-              </svg>
-              <span className="admin-nav__label">
-                {tab.label}
-                {badgeFor(tab.id) > 0 && (
-                  <span className="admin-nav__badge" aria-label={`${badgeFor(tab.id)} pending`}>
-                    {badgeFor(tab.id)}
-                  </span>
-                )}
-              </span>
-            </button>
+  const badge = (item: NavItem) =>
+    item.id === 'orders' && pendingOrders > 0 ? (
+      <span className="adm-badge" aria-label={`${pendingOrders} to confirm`}>
+        {pendingOrders}
+      </span>
+    ) : null;
+
+  return (
+    <div className="adm">
+      <aside className="adm-sidebar" aria-label="Admin menu">
+        <p className="adm-sidebar__brand">{title}</p>
+        <nav aria-label="Admin sections">
+          {groups.map(({ group, items: groupItems }) => (
+            <div key={group.id} className="adm-sidebar__group">
+              {group.label && <p className="adm-sidebar__heading">{group.label}</p>}
+              {groupItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`adm-sidebar__item${active === item.id ? ' adm-sidebar__item--on' : ''}`}
+                  aria-current={active === item.id ? 'page' : undefined}
+                  onClick={() => onNavigate(item.id)}
+                >
+                  <AdminIcon name={item.icon} />
+                  <span className="adm-sidebar__label">{item.label}</span>
+                  {badge(item)}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
+        {username && (
+          <p className="adm-sidebar__user">
+            Signed in as <span className="adm-signed-in">{username}</span>
+          </p>
+        )}
+      </aside>
 
-        <main className="admin-content">{children}</main>
+      <div className="adm-main">
+        {banner}
+        <main className="adm-content">{children}</main>
       </div>
+
+      <nav className="adm-tabbar" aria-label="Admin sections">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`adm-tabbar__tab${activeTab === tab.id ? ' adm-tabbar__tab--on' : ''}`}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            onClick={() => onNavigate(tab.id)}
+          >
+            <span className="adm-tabbar__icon">
+              <AdminIcon name={tab.icon} />
+              {badge(tab)}
+            </span>
+            <span className="adm-tabbar__label">{tab.tabLabel ?? tab.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
