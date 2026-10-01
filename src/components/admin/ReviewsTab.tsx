@@ -11,6 +11,8 @@ import { useToast } from '../../hooks/useToast';
 import { StarRating } from '../expert/StarRating';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import type { Review, ReviewFormData } from '../../types';
+import { AdminPageHeader, KebabMenu } from './ui/AdminUi';
+import { AdminIcon } from './ui/AdminIcon';
 
 const STAR_VALUES = [1, 2, 3, 4, 5];
 
@@ -337,49 +339,45 @@ export function ReviewsTab() {
         {!review.is_approved && (
           <button
             type="button"
-            className="button button--primary button--small"
+            className="button button--secondary button--small"
             onClick={() => void patchRow(review.id, { is_approved: true })}
           >
             Approve
           </button>
         )}
-        {review.is_approved && (
-          <button
-            type="button"
-            className="button button--secondary button--small"
-            onClick={() => void patchRow(review.id, { is_visible: !review.is_visible })}
-          >
-            {review.is_visible ? 'Hide' : 'Show'}
-          </button>
-        )}
-        <button
-          type="button"
-          className="button button--secondary button--small"
-          onClick={() => startEdit(review)}
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          className="button button--danger-outline button--small"
-          onClick={() => setPendingDelete(review)}
-        >
-          Delete
-        </button>
+        <KebabMenu
+          label={`Actions for the review by ${review.name}`}
+          items={[
+            ...(review.is_approved
+              ? [
+                  {
+                    label: review.is_visible ? 'Hide' : 'Show',
+                    icon: review.is_visible ? ('eye-off' as const) : ('eye' as const),
+                    onSelect: () => void patchRow(review.id, { is_visible: !review.is_visible }),
+                  },
+                ]
+              : []),
+            { label: 'Edit', icon: 'edit', onSelect: () => startEdit(review) },
+            { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setPendingDelete(review) },
+          ]}
+        />
       </div>
     </li>
   );
 
   return (
     <section aria-label="Reviews">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Reviews</h2>
-        {form === null && (
-          <button type="button" className="button button--primary" onClick={startCreate}>
-            Add Review
-          </button>
-        )}
-      </header>
+      <AdminPageHeader
+        title="Reviews"
+        primary={
+          form === null ? (
+            <button type="button" className="adm-btn adm-btn--primary" onClick={startCreate}>
+              <AdminIcon name="plus" />
+              Add Review
+            </button>
+          ) : undefined
+        }
+      />
 
       {form !== null && (
         <div className="admin-panel">

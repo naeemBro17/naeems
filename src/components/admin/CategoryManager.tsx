@@ -6,6 +6,7 @@ import { slugify } from '../../lib/format';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { AdminImagePicker } from './AdminImagePicker';
 import type { Category } from '../../types';
+import { KebabMenu } from './ui/AdminUi';
 
 function CategoryIconGlyph() {
   return (
@@ -102,7 +103,7 @@ export function CategoryManager() {
   return (
     <section aria-label="Categories">
       <header className="admin-section-header">
-        <h2 className="admin-section-title">Categories</h2>
+        <h2 className="admin-section-title">Your categories</h2>
       </header>
 
       <div className="category-add-form">
@@ -194,22 +195,13 @@ export function CategoryManager() {
                       {count} {count === 1 ? 'product' : 'products'}
                     </span>
                     <div className="admin-category-row__actions">
-                      <button
-                        type="button"
-                        className="button button--secondary button--small"
-                        onClick={() => startEdit(category)}
-                        aria-label={`Edit ${category.name}`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--danger-outline button--small"
-                        onClick={() => setDeletingCategory(category)}
-                        aria-label={`Delete ${category.name}`}
-                      >
-                        Delete
-                      </button>
+                      <KebabMenu
+                        label={`Actions for ${category.name}`}
+                        items={[
+                          { label: 'Edit', icon: 'edit', onSelect: () => startEdit(category) },
+                          { label: 'Delete', icon: 'trash', danger: true, onSelect: () => setDeletingCategory(category) },
+                        ]}
+                      />
                     </div>
                   </>
                 )}
