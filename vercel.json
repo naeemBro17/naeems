@@ -11,6 +11,17 @@
       ],
       "destination": "/api/product-og?slug=:slug"
     },
+    {
+      "source": "/brand/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|TelegramBot|Slackbot|LinkedInBot|Discordbot).*"
+        }
+      ],
+      "destination": "/api/brand-og?slug=:slug"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

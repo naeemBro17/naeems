@@ -60,6 +60,30 @@ export function youtubeEmbedUrl(id: string, pageOrigin: string): string {
   return `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?${params.toString()}`;
 }
 
+/**
+ * A YouTube clip as a silent looping background: muted, looping, no
+ * controls, no keyboard, no fullscreen, no suggestions — and a cover over
+ * it that takes every tap, so nothing inside YouTube's frame can be pressed
+ * (the Batch 23 "no exits to YouTube" rule). An uploaded MP4 is still the
+ * better choice: YouTube shows its own title for a moment as it starts.
+ */
+export function youtubeBannerUrl(id: string): string {
+  const params = new URLSearchParams({
+    autoplay: '1',
+    mute: '1',
+    loop: '1',
+    playlist: id,
+    controls: '0',
+    rel: '0',
+    modestbranding: '1',
+    playsinline: '1',
+    disablekb: '1',
+    fs: '0',
+    iv_load_policy: '3',
+  });
+  return `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?${params.toString()}`;
+}
+
 /** YouTube's own still for a video — shown before it plays, while paused
  *  and after it ends. */
 export function youtubeThumbnailUrl(id: string): string {
