@@ -106,6 +106,25 @@
   --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
   --glass-fg:             #1C1C1E;
 
+  /* Batch 28: product page sheet + crystal glass buttons + glass buy bar. */
+  --pdp-bg:               #FAF8F5;   /* warm off-white page + sheet */
+  --pdp-bar-bg:           rgba(250, 248, 245, 0.9);
+  --pdp-sheet-overlap:    24px;
+  --pdp-save-bg:          rgba(232, 67, 46, 0.1);
+  --pdp-save-fg:          #D9381F;
+  --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
+  --crystal-border:       rgba(255, 255, 255, 0.5);
+  --crystal-highlight:    rgba(255, 255, 255, 0.35);
+  --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.16);
+  --crystal-bar-bg:       rgba(120, 120, 128, 0.1);
+  --crystal-bar-border:   rgba(0, 0, 0, 0.06);
+  --crystal-surface-bg:   rgba(255, 255, 255, 0.3);
+  --crystal-surface-shadow: 0 6px 20px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  --buybar-bg:            rgba(255, 255, 255, 0.6);
+  --buybar-border:        rgba(255, 255, 255, 0.75);
+  --buybar-highlight:     rgba(255, 255, 255, 0.9);
+  --buybar-shadow:        0 14px 34px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
+
   /* Height of the fixed bottom nav, so pages can pad clear of it. */
   --bottom-nav-height: calc(58px + max(18px, env(safe-area-inset-bottom)));
 }
@@ -164,6 +183,23 @@
   --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   --glass-fg:             #FFFFFF;
 
+  --pdp-bg:               #000000;
+  --pdp-bar-bg:           rgba(10, 10, 12, 0.86);
+  --pdp-save-bg:          rgba(255, 105, 80, 0.14);
+  --pdp-save-fg:          #FF7461;
+  --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
+  --crystal-border:       rgba(255, 255, 255, 0.24);
+  --crystal-highlight:    rgba(255, 255, 255, 0.14);
+  --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.4);
+  --crystal-bar-bg:       rgba(255, 255, 255, 0.1);
+  --crystal-bar-border:   rgba(255, 255, 255, 0.14);
+  --crystal-surface-bg:   rgba(30, 30, 34, 0.42);
+  --crystal-surface-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --buybar-bg:            rgba(30, 30, 34, 0.45);
+  --buybar-border:        rgba(255, 255, 255, 0.12);
+  --buybar-highlight:     rgba(255, 255, 255, 0.08);
+  --buybar-shadow:        0 14px 34px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+
   --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
 }
 
@@ -218,6 +254,23 @@
     --glass-edge:           rgba(255, 255, 255, 0.06);
     --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
     --glass-fg:             #FFFFFF;
+
+    --pdp-bg:               #000000;
+    --pdp-bar-bg:           rgba(10, 10, 12, 0.86);
+    --pdp-save-bg:          rgba(255, 105, 80, 0.14);
+    --pdp-save-fg:          #FF7461;
+    --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
+    --crystal-border:       rgba(255, 255, 255, 0.24);
+    --crystal-highlight:    rgba(255, 255, 255, 0.14);
+    --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.4);
+    --crystal-bar-bg:       rgba(255, 255, 255, 0.1);
+    --crystal-bar-border:   rgba(255, 255, 255, 0.14);
+    --crystal-surface-bg:   rgba(30, 30, 34, 0.42);
+    --crystal-surface-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+    --buybar-bg:            rgba(30, 30, 34, 0.45);
+    --buybar-border:        rgba(255, 255, 255, 0.12);
+    --buybar-highlight:     rgba(255, 255, 255, 0.08);
+    --buybar-shadow:        0 14px 34px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
 
     --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
   }
