@@ -3,22 +3,30 @@ import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { CartIcon } from './CartButton';
 import { CartCountBadge, useCartBump } from './CartBadgeButton';
 
-/** The pages that show the floating cart (Batch 27 Part 2). Not the product
- *  page (it has its own header cart), the cart, checkout, account or admin. */
+/** The product page — where the floating cart is a little smaller. */
+function isProductPage(pathname: string): boolean {
+  return pathname.startsWith('/product/');
+}
+
+/** The shop pages that show the floating cart (Batch 27 Part 2; the product
+ *  page joined in Batch 28, where it is the only cart button). Never the
+ *  cart, checkout, account, orders or admin. */
 export function showsGlassCart(pathname: string): boolean {
   return (
     pathname === '/' ||
     pathname === '/search' ||
     pathname === '/brands' ||
-    pathname.startsWith('/brand/')
+    pathname.startsWith('/brand/') ||
+    isProductPage(pathname)
   );
 }
 
 /**
- * Round glass cart button at the middle of the right edge (Batch 27 Part 2),
- * for shoppers who don't think of the Cart tab after adding. Shown while the
- * cart has something in it: it jumps in the first time an item is added,
- * gives a small pulse on every later add, and opens the cart when tapped.
+ * Round crystal-glass cart button at the middle of the right edge — the one
+ * cart entry point on the shop pages (Batch 28 Part 5). Shown while the cart
+ * has something in it: it jumps in the first time an item is added, gives a
+ * small pulse on every later add (on the product page also on every remove),
+ * and opens the cart when tapped.
  *
  * Rendered next to the bottom nav, outside the page's animated subtree, so
  * its fixed position is never thrown off by a transform (see App.tsx). It
@@ -28,14 +36,15 @@ export function GlassCartButton() {
   const location = useLocation();
   const navigate = useAppNavigate();
   const onThisPage = showsGlassCart(location.pathname);
-  const { itemCount, bump, key } = useCartBump(onThisPage);
+  const onProductPage = isProductPage(location.pathname);
+  const { itemCount, bump, key } = useCartBump(onThisPage, onProductPage);
 
   if (itemCount <= 0 || !onThisPage) return null;
 
   return (
     <button
       type="button"
-      className="glass-cart"
+      className={`glass-cart${onProductPage ? ' glass-cart--pdp' : ''}`}
       onClick={() => navigate('/cart')}
       aria-label={`Open cart, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
       data-testid="glass-cart"
