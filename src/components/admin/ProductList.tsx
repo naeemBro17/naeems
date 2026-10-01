@@ -3,43 +3,64 @@ import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
-import { formatTaka, normalizeText } from '../../lib/format';
+import { normalizeText } from '../../lib/format';
 import { productImages, coverImage, generateCardThumb } from '../../lib/productImages';
 import { ProductForm } from './ProductForm';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { BottomSheet } from '../shared/BottomSheet';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { VARIANTS_VIEW } from '../../lib/variants';
 import { useAuth } from '../../contexts/AuthContext';
-import { fetchProductEditInfo, formatDhakaTime, type ProductEditInfo } from '../../lib/staff';
+import { fetchProductEditInfo, type ProductEditInfo } from '../../lib/staff';
+import { isLowStockCount, isLowStockProduct, parseLowStockThreshold, timeAgo } from '../../lib/adminData';
+import { formatTakaBd } from '../../lib/adminNav';
+import {
+  AdminPageHeader,
+  AdminSearch,
+  BulkBar,
+  ChipRow,
+  EmptyState,
+  KebabMenu,
+  SkeletonRows,
+  StockDot,
+  type MenuItem,
+} from './ui/AdminUi';
+import { AdminIcon } from './ui/AdminIcon';
 import type { Product } from '../../types';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 const STATUS_FILTERS: readonly StatusFilter[] = ['all', 'active', 'inactive'];
+type StockFilter = 'all' | 'in' | 'low' | 'out';
+const STOCK_FILTERS: readonly StockFilter[] = ['all', 'in', 'low', 'out'];
 
-/**
- * Availability comes from isOutOfStock(), which derives it from
- * stock_quantity — so a row with 0 in stock can never read "In Stock" here
- * either. The exact count stays visible: this is the admin's own inventory view.
- */
-function stockText(product: Product): string {
-  const label = isOutOfStock(product) ? 'Out of Stock' : 'In Stock';
-  if (product.stock_quantity === null || product.stock_quantity === undefined) {
-    return label;
-  }
-  return `${label} · ${product.stock_quantity} pcs`;
+/** Stock line: "45 pcs" / "In stock" (green), "2 left" / "Out of stock"
+ *  (red) — red at or below the low-stock threshold. Availability comes from
+ *  isOutOfStock(), so a product with 0 pieces can never read "In stock". */
+function stockLabel(product: Product, threshold: number): { tone: 'ok' | 'low'; text: string } {
+  if (isOutOfStock(product)) return { tone: 'low', text: 'Out of stock' };
+  if (product.stock_quantity === null || product.stock_quantity === undefined) return { tone: 'ok', text: 'In stock' };
+  if (isLowStockCount(product, threshold)) return { tone: 'low', text: `${product.stock_quantity} left` };
+  return { tone: 'ok', text: `${product.stock_quantity} pcs` };
 }
 
+/**
+ * Admin → Products (Batch 25 Part 3, mockup screens 1 and 4). Phone: rows
+ * with photo, full name, price, stock, Live switch and ⋮. Computer: the same
+ * rows as a table. Tapping a row opens the product editor; Edit, Feature on
+ * home, View on site and Delete live in the ⋮ menu.
+ */
 export function ProductList() {
-  const { products, categories, refetch, patchProductLocal } = useProducts();
+  const { products, categories, settings, isLoading, refetch, patchProductLocal, variantsFor } = useProducts();
   const { showToast } = useToast();
   // Batch 24: deleting a product stays with the Super Admin; moderators
   // with "Edit products and stock" can add and edit only.
   const { isAdmin } = useAuth();
   const [editInfo, setEditInfo] = useState<Map<string, ProductEditInfo>>(() => new Map());
+  const threshold = parseLowStockThreshold(settings.low_stock_threshold);
 
-  // "Last updated by <username> · <time>" — re-read whenever the product
-  // list reloads (after any save).
+  // "updated by <username> · <time>" — re-read whenever the product list
+  // reloads (after any save).
   useEffect(() => {
     let active = true;
     void fetchProductEditInfo().then((info) => {
@@ -54,15 +75,19 @@ export function ProductList() {
   // coming Back (hooks/useUrlParams.ts).
   const [search, setSearch] = useUrlParam<string>('pq', '');
   const [categoryFilter, setCategoryFilter] = useUrlParam<string>('pcat', '');
+  const [brandFilter, setBrandFilter] = useUrlParam<string>('pbrand', '');
   const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('pstatus', 'all', STATUS_FILTERS);
+  const [stockFilter, setStockFilter] = useUrlParam<StockFilter>('pstock', 'all', STOCK_FILTERS);
   const [formOpen, setFormOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
-  /** Bulk multi-select for "Combine into variants" — off by default so the
-   *  list behaves exactly as before unless the admin opts in. */
+  /** Phone: checkboxes appear only after "Select products". On a computer
+   *  the checkbox column is always there. */
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [combineOpen, setCombineOpen] = useState(false);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   // One-time (self-healing) backfill for products saved before Batch 19's
   // small "card" image column existed — see generateCardThumb.
   const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false);
@@ -85,22 +110,58 @@ export function ProductList() {
     .map((id) => products.find((p) => p.id === id))
     .filter((p): p is Product => p !== undefined);
 
+  const brands = useMemo(
+    () =>
+      Array.from(new Set(products.map((p) => (p.brand ?? '').trim()).filter((b) => b !== ''))).sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [products]
+  );
+
   const filtered = useMemo(() => {
     let result = products;
     if (categoryFilter !== '') {
       result = result.filter((p) => p.category_id === categoryFilter);
     }
+    if (brandFilter !== '') {
+      result = result.filter((p) => (p.brand ?? '').trim() === brandFilter);
+    }
     if (statusFilter !== 'all') {
       result = result.filter((p) => p.is_active === (statusFilter === 'active'));
     }
+    if (stockFilter === 'low') result = result.filter((p) => isLowStockProduct(p, threshold));
+    if (stockFilter === 'out') result = result.filter((p) => isOutOfStock(p));
+    if (stockFilter === 'in') result = result.filter((p) => !isOutOfStock(p));
     const q = normalizeText(search.trim());
     if (q !== '') {
-      result = result.filter(
-        (p) => normalizeText(p.name).includes(q) || normalizeText(p.sku).includes(q)
-      );
+      result = result.filter((p) => normalizeText(p.name).includes(q) || normalizeText(p.sku).includes(q));
     }
     return result;
-  }, [products, search, categoryFilter, statusFilter]);
+  }, [products, search, categoryFilter, brandFilter, statusFilter, stockFilter, threshold]);
+
+  const lowCount = useMemo(() => products.filter((p) => isLowStockProduct(p, threshold)).length, [products, threshold]);
+  const hiddenCount = useMemo(() => products.filter((p) => !p.is_active).length, [products]);
+
+  // The phone's quick chips are shortcuts onto the same URL filters.
+  const activeChip =
+    stockFilter === 'low'
+      ? 'low'
+      : statusFilter === 'inactive'
+        ? 'hidden'
+        : categoryFilter !== ''
+          ? `cat:${categoryFilter}`
+          : 'all';
+  const chips = [
+    { id: 'all', label: 'All', count: products.length },
+    { id: 'low', label: 'Low stock', count: lowCount },
+    { id: 'hidden', label: 'Hidden', count: hiddenCount },
+    ...categories.map((c) => ({ id: `cat:${c.id}`, label: c.name })),
+  ];
+  const selectChip = (id: string) => {
+    setStockFilter(id === 'low' ? 'low' : 'all');
+    setStatusFilter(id === 'hidden' ? 'inactive' : 'all');
+    setCategoryFilter(id.startsWith('cat:') ? id.slice(4) : '');
+  };
 
   // Batch 19: products saved before the small "card" image column existed
   // (or with a photo added/kept since then that never got backfilled).
@@ -128,10 +189,7 @@ export function ProductList() {
         for (let i = 0; i < full.length; i += 1) {
           thumbs.push(existing[i] ?? (await generateCardThumb(full[i])));
         }
-        const { error } = await supabase
-          .from('products')
-          .update({ image_urls_thumb: thumbs })
-          .eq('id', product.id);
+        const { error } = await supabase.from('products').update({ image_urls_thumb: thumbs }).eq('id', product.id);
         if (error) throw error;
         patchProductLocal(product.id, { image_urls_thumb: thumbs });
         done += 1;
@@ -145,8 +203,8 @@ export function ProductList() {
     setThumbBackfillProgress(null);
     showToast(
       failed === 0
-        ? `Done — generated small images for ${done} product${done === 1 ? '' : 's'}`
-        : `Done — ${done} succeeded, ${failed} failed (run it again to retry those)`,
+        ? `Done: generated small images for ${done} product${done === 1 ? '' : 's'}`
+        : `Done: ${done} succeeded, ${failed} failed (run it again to retry those)`,
       failed === 0 ? 'success' : 'error'
     );
   };
@@ -176,7 +234,27 @@ export function ProductList() {
     if (error) {
       patchProductLocal(product.id, { is_featured: product.is_featured });
       showToast('Could not update the product. Please try again.', 'error');
+      return;
     }
+    showToast(nextValue ? `${product.name} is featured on home` : `${product.name} removed from home`);
+  };
+
+  /** Bulk Live on/off for the selected products. */
+  const handleBulkLive = async (isActive: boolean) => {
+    const ids = [...selectedIds];
+    setIsBulkSaving(true);
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    setIsBulkSaving(false);
+    if (error) {
+      showToast('Could not update the products. Please try again.', 'error');
+      return;
+    }
+    for (const id of ids) patchProductLocal(id, { is_active: isActive });
+    showToast(`${ids.length} product${ids.length === 1 ? '' : 's'} ${isActive ? 'now live' : 'hidden'}`);
+    exitSelectMode();
   };
 
   const handleDelete = async () => {
@@ -203,10 +281,7 @@ export function ProductList() {
       if (row.source_product_id) toReactivate.add(row.source_product_id);
     }
 
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', deletingProduct.id);
+    const { error } = await supabase.from('products').delete().eq('id', deletingProduct.id);
     if (error) {
       showToast('Could not delete the product. Please try again.', 'error');
       return;
@@ -225,10 +300,7 @@ export function ProductList() {
         .in('id', Array.from(toReactivate));
       if (reactivateError) {
         console.error('Reactivating combined-from products failed:', reactivateError);
-        showToast(
-          'Product deleted, but its original products could not be reactivated — turn them on by hand',
-          'error'
-        );
+        showToast('Product deleted, but its original products could not be reactivated. Turn them on by hand.', 'error');
         setDeletingProduct(null);
         await refetch();
         return;
@@ -239,292 +311,316 @@ export function ProductList() {
     await refetch();
     showToast(
       toReactivate.size > 0
-        ? `Product deleted — ${toReactivate.size} original product${toReactivate.size === 1 ? '' : 's'} reactivated`
+        ? `Product deleted. ${toReactivate.size} original product${toReactivate.size === 1 ? '' : 's'} reactivated`
         : 'Product deleted'
     );
   };
 
+  const openEditor = (product: Product | null) => {
+    setEditingProduct(product);
+    setFormOpen(true);
+  };
+
+  const rowMenu = (product: Product): MenuItem[] => {
+    const items: MenuItem[] = [
+      { label: 'Edit', icon: 'edit', onSelect: () => openEditor(product) },
+      {
+        label: product.is_featured ? 'Remove from home' : 'Feature on home',
+        icon: 'star',
+        onSelect: () => void handleToggleFeatured(product),
+      },
+    ];
+    if (product.slug) {
+      items.push({
+        label: 'View on site',
+        icon: 'external',
+        onSelect: () => window.open(`/product/${product.slug}`, '_blank', 'noopener'),
+      });
+    }
+    if (isAdmin) {
+      items.push({ label: 'Delete', icon: 'trash', danger: true, onSelect: () => setDeletingProduct(product) });
+    }
+    return items;
+  };
+
+  const subLine = (product: Product): string => {
+    const parts = [product.sku];
+    const variantCount = variantsFor(product.id).length;
+    if (variantCount > 0) parts.push(`${variantCount} variant${variantCount === 1 ? '' : 's'}`);
+    const info = editInfo.get(product.id);
+    if (info) parts.push(`updated by ${info.lastEditedBy} · ${timeAgo(info.lastEditedAt)}`);
+    return parts.filter(Boolean).join(' · ');
+  };
+
+  const addButton = (
+    <button type="button" className="adm-btn adm-btn--primary" onClick={() => openEditor(null)} aria-label="Add product">
+      <AdminIcon name="plus" />
+      <span className="adm-only-mobile">Add</span>
+      <span className="adm-only-desktop">Add product</span>
+    </button>
+  );
+
+  const filterSelects = (
+    <>
+      <select
+        className="adm-select"
+        value={categoryFilter}
+        onChange={(e) => setCategoryFilter(e.target.value)}
+        aria-label="Filter by category"
+      >
+        <option value="">All categories</option>
+        {categories.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <select className="adm-select" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)} aria-label="Filter by brand">
+        <option value="">All brands</option>
+        {brands.map((b) => (
+          <option key={b} value={b}>
+            {b}
+          </option>
+        ))}
+      </select>
+      <select
+        className="adm-select"
+        value={stockFilter}
+        onChange={(e) => setStockFilter(e.target.value as StockFilter)}
+        aria-label="Filter by stock"
+      >
+        <option value="all">Stock: All</option>
+        <option value="in">In stock</option>
+        <option value="low">Low stock</option>
+        <option value="out">Out of stock</option>
+      </select>
+      <select
+        className="adm-select"
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+        aria-label="Filter by status"
+      >
+        <option value="all">Live: All</option>
+        <option value="active">Live</option>
+        <option value="inactive">Hidden</option>
+      </select>
+    </>
+  );
+
+  const showChecks = selectMode;
+  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selectedIds.includes(p.id));
+
   return (
-    <section aria-label="Products">
-      <header className="admin-section-header">
-        <h2 className="admin-section-title">Products</h2>
-        <div className="admin-section-header__actions">
-          {selectMode ? (
-            <button type="button" className="button button--secondary button--small" onClick={exitSelectMode}>
-              Cancel
-            </button>
-          ) : (
+    <section aria-label="Products" className="adm-products">
+      <AdminPageHeader title="Products" primary={addButton} />
+
+      <div className="adm-filter-row">
+        <AdminSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name or SKU"
+          label="Search products by name or SKU"
+          trailing={
             <button
               type="button"
-              className="button button--secondary button--small"
-              onClick={() => setSelectMode(true)}
+              className="adm-icon-btn adm-icon-btn--plain adm-only-mobile-flex"
+              onClick={() => setFiltersOpen(true)}
+              aria-label="Filters and select"
             >
-              Select
+              <AdminIcon name="sliders" />
             </button>
-          )}
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => {
-              setEditingProduct(null);
-              setFormOpen(true);
-            }}
-          >
-            + Add Product
-          </button>
-        </div>
-      </header>
-
-      <div className="admin-filter-bar">
-        <input
-          type="search"
-          className="form-input admin-filter-bar__search"
-          placeholder="Search name or SKU..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search products by name or SKU"
+          }
         />
-        <select
-          className="form-input form-select"
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          aria-label="Filter by category"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="form-input form-select"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          aria-label="Filter by status"
-        >
-          <option value="all">All</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+        <span className="adm-only-desktop adm-filter-row__selects">{filterSelects}</span>
+      </div>
+
+      <div className="adm-only-mobile">
+        <ChipRow chips={chips} active={activeChip} onSelect={selectChip} label="Quick filters" />
       </div>
 
       {(productsNeedingThumb.length > 0 || isBackfillingThumbs) && (
-        <div className="admin-panel" style={{ marginBottom: 16 }}>
+        <div className="admin-panel adm-notice">
           <h3 className="admin-panel__title">Speed up product photos</h3>
           <p className="admin-panel__description">
             {isBackfillingThumbs
-              ? `Generating small card images — ${thumbBackfillProgress?.done ?? 0} of ${
+              ? `Generating small card images: ${thumbBackfillProgress?.done ?? 0} of ${
                   thumbBackfillProgress?.total ?? 0
                 } done. Keep this tab open.`
               : `${productsNeedingThumb.length} product${
                   productsNeedingThumb.length === 1 ? '' : 's'
                 } still send${
                   productsNeedingThumb.length === 1 ? 's' : ''
-                } the full-size photo to the grid/search/cart instead of a small one. One-time fix, safe to run — it only adds a small extra copy of each photo, nothing is deleted.`}
+                } the full-size photo to the grid/search/cart instead of a small one. One-time fix, safe to run: it only adds a small extra copy of each photo, nothing is deleted.`}
           </p>
           {!isBackfillingThumbs && (
-            <button type="button" className="button button--primary button--small" onClick={handleGenerateThumbnails}>
+            <button type="button" className="button button--secondary button--small" onClick={handleGenerateThumbnails}>
               Generate small images
             </button>
           )}
         </div>
       )}
 
-      {products.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__icon" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
-              <path d="M3 8l9 5 9-5" />
-              <path d="M12 13v8" />
-            </svg>
-          </div>
-          <p className="empty-state__message">No products yet</p>
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={() => {
-              setEditingProduct(null);
-              setFormOpen(true);
-            }}
-          >
-            + Add your first product
-          </button>
-        </div>
+      {isLoading && products.length === 0 ? (
+        <SkeletonRows rows={8} />
+      ) : products.length === 0 ? (
+        <EmptyState
+          icon="products"
+          title="No products yet"
+          hint="Add your first product to start selling."
+          action={
+            <button type="button" className="adm-btn adm-btn--primary" onClick={() => openEditor(null)}>
+              <AdminIcon name="plus" /> Add your first product
+            </button>
+          }
+        />
       ) : filtered.length === 0 ? (
-        <div className="empty-state">
-          <p className="empty-state__message">No products match your filters</p>
-        </div>
+        <EmptyState icon="search" title="No products match your filters" hint="Try another search or tap All." />
       ) : (
-        <ul className="admin-product-list">
-          {filtered.map((product) => (
-            <li key={product.id} className="admin-product-row">
-              {selectMode && (
-                <input
-                  type="checkbox"
-                  className="admin-product-row__checkbox"
-                  checked={selectedIds.includes(product.id)}
-                  onChange={() => toggleSelected(product.id)}
-                  aria-label={`Select ${product.name}`}
-                />
-              )}
-              <div className="admin-product-row__thumb-wrap">
-                {coverImage(product) ? (
-                  <img
-                    src={coverImage(product) ?? ''}
-                    alt={product.name}
-                    className="admin-product-row__thumb"
-                    loading="lazy"
+        <div className={`adm-list adm-plist${showChecks ? ' adm-plist--selecting' : ''}`} role="list" aria-label="Products">
+          <div className="adm-thead" aria-hidden="true">
+            <span>
+              <input
+                type="checkbox"
+                className="adm-check"
+                tabIndex={-1}
+                checked={allFilteredSelected}
+                onChange={() =>
+                  setSelectedIds(allFilteredSelected ? [] : filtered.map((p) => p.id))
+                }
+              />
+            </span>
+            <span />
+            <span>PRODUCT</span>
+            <span>CATEGORY</span>
+            <span>PRICE</span>
+            <span>STOCK</span>
+            <span>LIVE</span>
+            <span />
+          </div>
+          {filtered.map((product) => {
+            const stock = stockLabel(product, threshold);
+            const cover = coverImage(product);
+            const isSelected = selectedIds.includes(product.id);
+            return (
+              <div
+                key={product.id}
+                role="listitem"
+                className={`adm-lrow adm-prow${isSelected ? ' adm-lrow--selected' : ''}`}
+                data-testid="product-row"
+                onClick={() => (selectMode ? toggleSelected(product.id) : openEditor(product))}
+              >
+                <span className="adm-prow__check" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    className="adm-check"
+                    checked={isSelected}
+                    onChange={() => toggleSelected(product.id)}
+                    aria-label={`Select ${product.name}`}
                   />
-                ) : (
-                  <div className="admin-product-row__thumb-placeholder" aria-hidden="true">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
-                      <path d="M3 8l9 5 9-5" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-
-              <div className="admin-product-row__info">
-                <p className="admin-product-row__name">{product.name}</p>
-                <p className="admin-product-row__sku">{product.sku}</p>
-                <div className="admin-product-row__meta">
-                  {product.category && (
-                    <span className="category-badge category-badge--neutral">
-                      {product.category.name}
-                    </span>
+                </span>
+                <span className="adm-lrow__thumb">
+                  {cover ? (
+                    <img src={cover} alt="" loading="lazy" />
+                  ) : (
+                    <AdminIcon name="products" />
                   )}
-                  <span
-                    className={`status-badge ${product.is_active ? 'status-badge--active' : 'status-badge--inactive'}`}
-                  >
-                    {product.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <p className="admin-product-row__price">
-                  {formatTaka(product.retail_price)}
-                </p>
-                <p className="stock-row">
-                  <span
-                    className={`stock-dot ${
-                      isOutOfStock(product) ? 'stock-dot--red' : 'stock-dot--green'
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <span className="stock-row__text">{stockText(product)}</span>
-                </p>
-                {editInfo.has(product.id) && (
-                  <p className="admin-product-row__edited">
-                    Last updated by {editInfo.get(product.id)!.lastEditedBy} ·{' '}
-                    {formatDhakaTime(editInfo.get(product.id)!.lastEditedAt)}
-                  </p>
-                )}
-              </div>
-
-              <div className="admin-product-row__actions">
-                <button
-                  type="button"
-                  aria-pressed={product.is_featured}
-                  className={`star-toggle${product.is_featured ? ' star-toggle--on' : ''}`}
-                  onClick={() => handleToggleFeatured(product)}
-                  aria-label={
-                    product.is_featured
-                      ? `Unfeature ${product.name} from the homepage`
-                      : `Feature ${product.name} on the homepage`
-                  }
-                  title={product.is_featured ? 'Featured on homepage' : 'Feature on homepage'}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill={product.is_featured ? 'currentColor' : 'none'}
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={product.is_active}
-                  aria-label={`${product.name} is ${product.is_active ? 'active' : 'inactive'}`}
-                  className={`toggle${product.is_active ? ' toggle--on' : ''}`}
-                  onClick={() => handleToggleActive(product)}
-                >
-                  <span className="toggle__thumb" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary button--small"
-                  onClick={() => {
-                    setEditingProduct(product);
-                    setFormOpen(true);
-                  }}
-                  aria-label={`Edit ${product.name}`}
-                >
-                  Edit
-                </button>
-                {isAdmin && (
+                </span>
+                <div className="adm-lrow__main">
                   <button
                     type="button"
-                    className="button button--danger-outline button--small"
-                    onClick={() => setDeletingProduct(product)}
-                    aria-label={`Delete ${product.name}`}
+                    className="adm-lrow__open"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectMode) toggleSelected(product.id);
+                      else openEditor(product);
+                    }}
+                    aria-label={`Edit ${product.name}`}
                   >
-                    Delete
+                    <span className="adm-lrow__name">{product.name}</span>
                   </button>
-                )}
+                  <p className="adm-lrow__sub adm-only-desktop-block">{subLine(product)}</p>
+                  <p className="adm-lrow__meta adm-mobile-meta">
+                    <span className="adm-price">{formatTakaBd(product.retail_price)}</span>
+                    <StockDot tone={stock.tone}>{stock.text}</StockDot>
+                  </p>
+                </div>
+                <span className="adm-cell">
+                  {product.category && <span className="adm-tag">{product.category.name}</span>}
+                </span>
+                <span className="adm-cell adm-price">{formatTakaBd(product.retail_price)}</span>
+                <span className="adm-cell">
+                  <StockDot tone={stock.tone}>{stock.text}</StockDot>
+                </span>
+                <span className="adm-prow__live" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={product.is_active}
+                    aria-label={`${product.name} is ${product.is_active ? 'live' : 'hidden'}`}
+                    className={`adm-switch${product.is_active ? ' adm-switch--on' : ''}`}
+                    onClick={() => void handleToggleActive(product)}
+                  >
+                    <span className="adm-switch__thumb" aria-hidden="true" />
+                  </button>
+                </span>
+                <span className="adm-prow__more" onClick={(e) => e.stopPropagation()}>
+                  <KebabMenu label={`Actions for ${product.name}`} items={rowMenu(product)} />
+                </span>
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {selectMode && selectedIds.length >= 2 && (
-        <div className="admin-combine-bar">
-          <span className="admin-combine-bar__count">{selectedIds.length} selected</span>
-          <button
-            type="button"
-            className="button button--primary button--small"
-            onClick={() => setCombineOpen(true)}
-          >
-            Combine into variants
-          </button>
+            );
+          })}
         </div>
       )}
+      {filtered.length > 0 && (
+        <p className="adm-list-foot">
+          {filtered.length} of {products.length} product{products.length === 1 ? '' : 's'}
+        </p>
+      )}
+
+      {selectedIds.length > 0 && (
+        <BulkBar count={selectedIds.length} onClear={exitSelectMode}>
+          <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" disabled={isBulkSaving} onClick={() => void handleBulkLive(true)}>
+            Show
+          </button>
+          <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" disabled={isBulkSaving} onClick={() => void handleBulkLive(false)}>
+            Hide
+          </button>
+          {selectedIds.length >= 2 && (
+            <button type="button" className="adm-btn adm-btn--primary adm-btn--sm" onClick={() => setCombineOpen(true)}>
+              Combine into variants
+            </button>
+          )}
+        </BulkBar>
+      )}
+
+      <BottomSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
+        <div className="adm-filter-sheet">{filterSelects}</div>
+        <button
+          type="button"
+          className="button button--secondary button--full adm-filter-sheet__select"
+          onClick={() => {
+            setFiltersOpen(false);
+            if (selectMode) exitSelectMode();
+            else setSelectMode(true);
+          }}
+        >
+          {selectMode ? 'Stop selecting' : 'Select products'}
+        </button>
+      </BottomSheet>
 
       <ProductForm
         isOpen={formOpen}
         product={editingProduct}
+        editInfo={editingProduct ? (editInfo.get(editingProduct.id) ?? null) : null}
         onClose={() => setFormOpen(false)}
       />
 
       <ConfirmDialog
         isOpen={deletingProduct !== null}
-        title="Delete Product"
-        message={
-          deletingProduct
-            ? `Delete '${deletingProduct.name}'? This cannot be undone.`
-            : ''
-        }
+        title="Delete product?"
+        message={deletingProduct ? `Delete '${deletingProduct.name}'? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+        danger
         onConfirm={handleDelete}
         onClose={() => setDeletingProduct(null)}
       />
