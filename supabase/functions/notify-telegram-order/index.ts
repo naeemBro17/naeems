@@ -22,6 +22,7 @@
 // Naeem sets himself (see the report).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { isTestOrder, parseIdList } from '../_shared/testOrders.ts';
 
 interface OrderRow {
   id: string;
@@ -174,8 +175,14 @@ Deno.serve(async (req: Request) => {
     // is the whole point, but Naeem must never get paged for it. Set once as
     // an Edge Function secret, not a real credential, so skip is a no-op
     // (undefined !== any real order's customer_id) until that's configured.
-    const e2eCustomerId = Deno.env.get('E2E_TEST_CUSTOMER_ID');
-    if (e2eCustomerId && order.customer_id === e2eCustomerId) {
+    // Batch 25: also every order made by a test staff login (e2e.admin,
+    // test moderators) and any order whose customer name starts with "E2E"
+    // — see _shared/testOrders.ts. Checked before anything is sent.
+    const testAccounts = {
+      testCustomerId: Deno.env.get('E2E_TEST_CUSTOMER_ID') ?? null,
+      testStaffIds: parseIdList(Deno.env.get('E2E_TEST_STAFF_IDS')),
+    };
+    if (isTestOrder({ customerId: order.customer_id, customerName: order.customer_name, creatorId: null, creatorUsername: null }, testAccounts)) {
       return new Response(JSON.stringify({ skipped: 'e2e test order' }), { status: 200 });
     }
 
@@ -206,10 +213,30 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ skipped: 'not a notifiable change' }), { status: 200 });
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    // Who created the order: the first history row's login, and that
+    // login's staff username if it has one (test logins start with "e2e.").
+    const { data: firstStep } = await supabase
+      .from('order_status_history')
+      .select('changed_by')
+      .eq('order_id', order.id)
+      .order('changed_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const creatorId = (firstStep as { changed_by: string | null } | null)?.changed_by ?? null;
+    let creatorUsername: string | null = null;
+    if (creatorId) {
+      const { data: staffRow } = await supabase.from('staff_members').select('username').eq('id', creatorId).maybeSingle();
+      creatorUsername = (staffRow as { username: string } | null)?.username ?? null;
+    }
+    if (isTestOrder({ customerId: order.customer_id, customerName: order.customer_name, creatorId, creatorUsername }, testAccounts)) {
+      return new Response(JSON.stringify({ skipped: 'e2e test order' }), { status: 200 });
+    }
+
     if (isNewOrder) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, serviceKey);
       const { data: items, error } = await supabase
         .from('order_items')
         .select('product_name, variant_label, quantity, line_total')

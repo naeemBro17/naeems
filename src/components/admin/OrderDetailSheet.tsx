@@ -3,7 +3,6 @@ import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useToast } from '../../hooks/useToast';
 import {
-  fetchOrderDetail,
   adminSetOrderStatus,
   adminUpdateOrder,
   adminUpdateOrderDeliveryFee,
@@ -32,6 +31,7 @@ import type { OrderItem, OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 import { orderHistoryNote } from '../../lib/orderHistoryNotes';
+import { fetchAdminOrderDetail } from '../../lib/adminData';
 
 interface OrderDetailSheetProps {
   orderId: string | null;
@@ -147,7 +147,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     }
     let cancelled = false;
     setIsLoading(true);
-    void fetchOrderDetail(orderId).then((data) => {
+    void fetchAdminOrderDetail(orderId).then((data) => {
       if (cancelled) return;
       setOrder(data);
       setTrackingInput(data?.tracking_number ?? '');
@@ -163,7 +163,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
 
   const reload = async () => {
     if (!orderId) return;
-    const data = await fetchOrderDetail(orderId);
+    const data = await fetchAdminOrderDetail(orderId);
     setOrder(data);
     onChanged();
   };
