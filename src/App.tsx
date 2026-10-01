@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAppNavigate } from './hooks/useAppNavigate';
 import { BottomNav } from './components/viewer/BottomNav';
+import { GlassCartButton } from './components/viewer/GlassCartButton';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProductProvider } from './contexts/ProductContext';
@@ -135,6 +136,7 @@ export default function App() {
                     </Routes>
                   </PageTransition>
                   <GlobalBottomNav />
+                  <GlassCartButton />
                 </AdminEditProvider>
               </CheckoutStateProvider>
             </CartProvider>
