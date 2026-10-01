@@ -1,10 +1,13 @@
-import { useState, type MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { useCart } from '../../contexts/CartContext';
+import { useCartLine } from '../../hooks/useCartLine';
 import { trackAddToCart } from '../../lib/analytics';
+import type { Product, VariantOption } from '../../types';
 
 interface CartButtonProps {
-  productId: string;
-  productName: string;
+  product: Product;
+  /** variantOptionsFor(product, its variants) — length 1 means no options. */
+  options: VariantOption[];
   price: number;
   outOfStock: boolean;
   /** True when the product has Region/Size variants — the card only shows
@@ -34,50 +37,95 @@ export function CartIcon({ className }: { className?: string }) {
   );
 }
 
-function CheckIcon({ className }: { className?: string }) {
+function MinusIcon() {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6L9 17l-5-5" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 12h12" />
     </svg>
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 6v12M6 12h12" />
+    </svg>
+  );
+}
+
+/** A short tap buzz where the phone supports it (never on iOS Safari). */
+export function tapHaptic(): void {
+  if (typeof navigator.vibrate !== 'function') return;
+  try {
+    navigator.vibrate(15);
+  } catch {
+    // Some embedded webviews advertise vibrate but reject the call.
+  }
+}
+
+/** Keeps a tap or key press on the control from also opening the card. */
+function stop(e: MouseEvent | KeyboardEvent) {
+  e.stopPropagation();
+}
+
 /**
- * Circular add-to-cart button anchored in the card's reserved button column.
- * Wired to CartContext (Session 9 groundwork) — the checkout flow that reads
- * from it is a separate session.
- *
- * The checkmark reflects real cart membership (items.some(...)), not a
- * timer — a local "just added" flag used to revert to the plain icon after
- * ~500ms even though the item was still genuinely in the cart, which read as
- * "the tap didn't work." It now only ever shows the plain icon when this
- * product truly isn't in the cart.
+ * The card's cart control (Batch 27 Part 3). A neutral round cart button
+ * until the product is in the cart; then a compact "− 1 +" stepper showing
+ * the real cart quantity — read from the cart itself, so it always agrees
+ * with the cart page, the product page and any other card of the product.
+ * − at 1 takes it out of the cart and the button comes back. + stops at the
+ * tracked stock count with a gentle message. A product with options opens
+ * its option picker first; after that the stepper follows the option added.
  */
 export function CartButton({
-  productId,
-  productName,
+  product,
+  options,
   price,
   outOfStock,
   hasVariants = false,
   onRequiresVariant,
 }: CartButtonProps) {
-  const { items, addItem } = useCart();
-  // A product with variants is added through its picker (see
-  // onRequiresVariant), so "in cart" here means any line for this product,
-  // regardless of which variant it ended up as.
-  const inCart = items.some((item) => item.productId === productId);
-  // Bumped on every tap so the pulse ring span remounts and its CSS
-  // animation restarts, even on rapid repeat taps.
-  const [pulseId, setPulseId] = useState(0);
+  const { addItem } = useCart();
+  const line = useCartLine(product, options);
+
+  if (line.quantity > 0) {
+    return (
+      <div
+        className="cart-stepper"
+        role="group"
+        aria-label={`${product.name} in cart`}
+        data-testid="card-stepper"
+        onClick={stop}
+        onKeyDown={stop}
+      >
+        <button
+          type="button"
+          className="cart-stepper__step"
+          onClick={() => {
+            line.decrement();
+            tapHaptic();
+          }}
+          aria-label={line.quantity === 1 ? `Remove ${product.name} from cart` : `One less ${product.name}`}
+        >
+          <MinusIcon />
+        </button>
+        <span className="cart-stepper__qty" aria-live="polite" data-testid="card-stepper-qty">
+          {line.quantity}
+        </span>
+        <button
+          type="button"
+          className={`cart-stepper__step${line.quantity >= line.limit ? ' cart-stepper__step--max' : ''}`}
+          onClick={() => {
+            line.increment();
+            tapHaptic();
+          }}
+          aria-label={`One more ${product.name}`}
+        >
+          <PlusIcon />
+        </button>
+      </div>
+    );
+  }
 
   const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -88,41 +136,27 @@ export function CartButton({
       return;
     }
 
-    addItem(productId, price);
-    trackAddToCart({ id: productId, name: productName, price }, 1);
-
-    // navigator.vibrate is undefined on iOS Safari — guard so it never throws.
-    if (typeof navigator.vibrate === 'function') {
-      try {
-        navigator.vibrate(15);
-      } catch {
-        // Some embedded webviews advertise vibrate but reject the call.
-      }
-    }
-
-    setPulseId((id) => id + 1);
+    addItem(product.id, price);
+    trackAddToCart({ id: product.id, name: product.name, price }, 1);
+    tapHaptic();
   };
 
   return (
     <button
       type="button"
-      className={`cart-button${inCart ? ' cart-button--added' : ''}`}
+      className="cart-button"
       onClick={handleClick}
+      onKeyDown={stop}
       disabled={outOfStock}
       aria-label={
         outOfStock
-          ? `${productName} is out of stock`
+          ? `${product.name} is out of stock`
           : hasVariants
-            ? `Choose options for ${productName}`
-            : `Add ${productName} to cart`
+            ? `Choose options for ${product.name}`
+            : `Add ${product.name} to cart`
       }
     >
-      {pulseId > 0 && <span key={pulseId} className="cart-button__pulse" aria-hidden="true" />}
-      {inCart ? (
-        <CheckIcon className="cart-button__icon" />
-      ) : (
-        <CartIcon className="cart-button__icon" />
-      )}
+      <CartIcon className="cart-button__icon" />
     </button>
   );
 }

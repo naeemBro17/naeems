@@ -7,6 +7,7 @@ import { isOutOfStock } from '../../lib/stockStatus';
 import { productPath } from '../../lib/slugify';
 import { cardImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
+import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
 import { heroReverseTargetFor, rememberHeroOrigin } from '../../lib/heroTransition';
@@ -16,26 +17,37 @@ import { VariantPickerSheet } from './VariantPickerSheet';
 
 interface ProductCardProps {
   product: Product;
+  /** 'grid' (Home, Search, brand pages) opens the product with the picture
+   *  morph. 'related' (the product page's "You may also like" row) is a
+   *  smaller card that opens the product with a plain page switch, so it
+   *  can never claim the morph that belongs to the main grid. */
+  variant?: 'grid' | 'related';
 }
 
 /**
- * Product name, wrapped by the browser's own line-breaking — see Naeems.txt
- * "Batch 7" for why a separate JS measurement (the old src/lib/textWrap.ts)
- * was removed. Kept as its own component (no hooks, no props beyond the
- * name) so it can be unit-tested without pulling in router/Supabase context.
+ * The card title (Batch 27 Part 5): plain CSS only — a block as wide as the
+ * card's text area, the browser's normal word wrapping, two lines tall
+ * always (so prices line up across a row), "…" only past two lines. Nothing
+ * measures or splits the name; the text node is the name exactly.
  */
 export function ProductCardName({ name }: { name: string }) {
   return <h3 className="product-card__name">{name}</h3>;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
   const navigate = useNavigate();
+  const appNavigate = useAppNavigate();
   const { variantsFor } = useProducts();
   const [imageFailed, setImageFailed] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const imageWrapRef = useRef<HTMLDivElement>(null);
+  const isGrid = variant === 'grid';
 
   const openDetail = () => {
+    if (!isGrid) {
+      appNavigate(productPath(product), { state: { product } });
+      return;
+    }
     // Where the grid was is saved by lib/appHistory.ts as this page is left,
     // so Back restores it (see PageTransition's ScrollRestorer).
     // Tag only THIS card's image box for the shared-element transition, set
@@ -54,8 +66,8 @@ export function ProductCard({ product }: ProductCardProps) {
   // real variant rows (even one carrying just a Region/Size label) behaves
   // exactly as before — its own plain price, no "from".
   const realVariants = variantsFor(product.id);
-  const fromPrice =
-    realVariants.length > 0 ? lowestVariantPrice(variantOptionsFor(product, realVariants)) : null;
+  const options = variantOptionsFor(product, realVariants);
+  const fromPrice = realVariants.length > 0 ? lowestVariantPrice(options) : null;
 
   const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.target !== e.currentTarget) return;
@@ -69,11 +81,12 @@ export function ProductCard({ product }: ProductCardProps) {
   const showImage = cover !== null && !imageFailed;
   const outOfStock = isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
+  const priceClass = `product-card__price${outOfStock ? ' product-card__price--out' : ''}`;
 
   return (
     <>
       <article
-        className="product-card"
+        className={`product-card${isGrid ? '' : ' product-card--related'}`}
         role="button"
         tabIndex={0}
         onClick={openDetail}
@@ -91,7 +104,7 @@ export function ProductCard({ product }: ProductCardProps) {
           // remounted the grid, so it has to be baked into the very first
           // render instead.
           style={
-            heroReverseTargetFor('grid') === product.id
+            isGrid && heroReverseTargetFor('grid') === product.id
               ? ({ viewTransitionName: productHeroName(product.id) } as CSSProperties)
               : undefined
           }
@@ -122,74 +135,55 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
 
           {/* The menu stays functional on out-of-stock cards. */}
-          <CardMenu product={product} copyPrice={fromPrice ?? mainPrice} outOfStock={outOfStock} />
+          {isGrid && (
+            <CardMenu product={product} copyPrice={fromPrice ?? mainPrice} outOfStock={outOfStock} />
+          )}
         </div>
 
         <div className="product-card__body">
-          {/* Reserving a dedicated column (not absolute positioning) for the cart
-              button means text here physically cannot flow under it. */}
-          <div className="product-card__info">
-            <ProductCardName name={product.name} />
+          <ProductCardName name={product.name} />
 
+          <div className="product-card__prices">
             {fromPrice !== null ? (
-              <div className="product-card__prices">
-                <span
-                  className={`product-card__price${
-                    outOfStock ? ' product-card__price--out' : ''
-                  }`}
-                >
-                  <span className="product-card__from">from</span>
-                  {formatTaka(fromPrice)}
-                </span>
-              </div>
-            ) : strikePrice !== null ? (
-              <div className="product-card__prices">
-                <span
-                  className={`product-card__price${
-                    outOfStock ? ' product-card__price--out' : ''
-                  }`}
-                >
-                  {formatTaka(mainPrice)}
-                </span>
-                <span className="product-card__price-sub">
-                  <span className="product-card__strike">{formatTaka(strikePrice)}</span>
-                  {savePercent !== null && !outOfStock && (
-                    <span className="product-card__save">Save {savePercent}%</span>
-                  )}
-                </span>
-              </div>
+              <span className={priceClass}>
+                <span className="product-card__from">from</span>
+                {formatTaka(fromPrice)}
+              </span>
             ) : (
-              <div className="product-card__prices">
-                <span
-                  className={`product-card__price${
-                    outOfStock ? ' product-card__price--out' : ''
-                  }`}
-                >
-                  {formatTaka(mainPrice)}
-                </span>
-              </div>
+              <>
+                <span className={priceClass}>{formatTaka(mainPrice)}</span>
+                {strikePrice !== null && (
+                  <span className="product-card__price-sub">
+                    <span className="product-card__strike">{formatTaka(strikePrice)}</span>
+                    {savePercent !== null && !outOfStock && (
+                      <span className="product-card__save">Save {savePercent}%</span>
+                    )}
+                  </span>
+                )}
+              </>
             )}
+          </div>
 
+          {/* Stock on the left, the cart control in its own reserved slot on
+              the right — a grid, never positioned over the text. */}
+          <div className="product-card__foot">
             <p className="product-card__stock">
               <span
-                className={`product-card__dot product-card__dot--${
-                  outOfStock ? 'out' : 'in'
-                }`}
+                className={`product-card__dot product-card__dot--${outOfStock ? 'out' : 'in'}`}
                 aria-hidden="true"
               />
               {outOfStock ? 'Out of Stock' : 'In Stock'}
             </p>
-          </div>
-
-          <div className="product-card__cart-slot">
-            <CartButton
-              productId={product.id}
-              productName={product.name}
-              price={fromPrice ?? mainPrice}
-              outOfStock={outOfStock}
-              hasVariants={fromPrice !== null}
-              onRequiresVariant={() => setPickerOpen(true)}
-            />
+            <div className="product-card__cart-slot">
+              <CartButton
+                product={product}
+                options={options}
+                price={fromPrice ?? mainPrice}
+                outOfStock={outOfStock}
+                hasVariants={fromPrice !== null}
+                onRequiresVariant={() => setPickerOpen(true)}
+              />
+            </div>
           </div>
         </div>
       </article>

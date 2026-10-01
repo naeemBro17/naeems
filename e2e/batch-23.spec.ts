@@ -135,10 +135,16 @@ test.describe('Part 2 — reload starts at the top; Back restores', () => {
       }
       await expect(page.locator('.product-card').nth(6)).toBeVisible();
       await scrollToAndSettle(page, 900);
+      // Batch 27: cards are taller now, so at a fixed spot no card may be
+      // fully on screen and the tap itself would scroll first. Bring the
+      // card in view, THEN note the spot being left.
+      const firstCard = await fullyVisibleCard(page);
+      await firstCard.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(200);
       const before = await page.evaluate(() => window.scrollY);
       const url = page.url();
 
-      await (await fullyVisibleCard(page)).click();
+      await firstCard.click();
       await expect(page).toHaveURL(/\/product\//);
       await waitForViewTransitionsToFinish(page);
       await page.goBack();
@@ -149,8 +155,11 @@ test.describe('Part 2 — reload starts at the top; Back restores', () => {
       // Scroll somewhere else, then Back again from a product: the NEW spot.
       await scrollToAndSettle(page, 300);
       await page.waitForTimeout(400);
+      const secondCard = await fullyVisibleCard(page);
+      await secondCard.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(200);
       const newSpot = await page.evaluate(() => window.scrollY);
-      await (await fullyVisibleCard(page)).click();
+      await secondCard.click();
       await expect(page).toHaveURL(/\/product\//);
       await waitForViewTransitionsToFinish(page);
       await page.goBack();
@@ -282,7 +291,12 @@ test.describe('Part 4 — every card cart button works', () => {
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
       const button = card.locator('.cart-button');
-      await button.scrollIntoViewIfNeeded();
+      // Batch 27: keep the button away from the floating glass cart, which
+      // sits at the middle of the right edge.
+      await button.evaluate((el) => {
+        const top = el.getBoundingClientRect().top;
+        window.scrollBy({ top: top - 160, behavior: 'instant' });
+      });
       const label = (await button.getAttribute('aria-label')) ?? '';
       const name = (await card.locator('.product-card__name').textContent())?.trim() ?? `card ${i}`;
       if (await button.isDisabled()) {
@@ -317,9 +331,11 @@ test.describe('Part 4 — every card cart button works', () => {
         .poll(cartLines, { timeout: 2000 })
         .toBeGreaterThan(linesBefore)
         .catch(() => failures.push(`${name}: nothing was added to the cart`));
-      await expect(button)
-        .toHaveClass(/cart-button--added/, { timeout: 2000 })
-        .catch(() => failures.push(`${name}: button does not show it is in the cart`));
+      // Batch 27: the button turns into the "− 1 +" stepper showing the real
+      // quantity (it used to turn into a tick).
+      await expect(card.getByTestId('card-stepper-qty'))
+        .toHaveText(/^[1-9]\d*$/, { timeout: 2000 })
+        .catch(() => failures.push(`${name}: the stepper does not show it is in the cart`));
     }
 
     console.log(
@@ -340,7 +356,7 @@ test.describe('Part 7 — video review plays inline and never leaves the page', 
     context.on('page', (p) => opened.push(p.url()));
 
     await page.goto('/product/cerave-hydrating-cleanser');
-    const header = page.getByRole('button', { name: 'Video Review', exact: true });
+    const header = page.getByRole('button', { name: 'Video review', exact: true });
     await header.click();
     await expect(header).toHaveAttribute('aria-expanded', 'true');
 
@@ -366,7 +382,9 @@ test.describe('Part 7 — video review plays inline and never leaves the page', 
     const { x, y, width, height } = box as { x: number; y: number; width: number; height: number };
     expect(Math.abs(width / height - 16 / 9)).toBeLessThan(0.05);
     await expect(page.getByRole('button', { name: 'Pause video' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /Add .* to cart/ })).toBeAttached();
+    // Batch 27: "You may also like" cards have their own add buttons, so
+    // this names the product page's own Add to Cart.
+    await expect(page.getByTestId('add-to-cart')).toBeAttached();
 
     const url = page.url();
     // Corners (YouTube's title, channel and logo live there), edges, centre.

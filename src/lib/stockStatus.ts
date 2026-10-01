@@ -42,3 +42,13 @@ export function statusFromQuantity(
   if (count <= 0) return 'out_of_stock';
   return fallback === 'out_of_stock' ? 'in_stock' : fallback;
 }
+
+/**
+ * The most units of one cart line a shopper may have (Batch 27): the tracked
+ * stock count when the product (or option) tracks one, otherwise no limit.
+ * A blank count means "not tracking exact quantity", never zero.
+ */
+export function stockLimit(stockQuantity: number | null | undefined): number {
+  if (stockQuantity === null || stockQuantity === undefined) return Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.floor(stockQuantity));
+}

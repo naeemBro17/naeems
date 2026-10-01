@@ -15,6 +15,10 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* No blue/grey flash box on tap anywhere (Batch 27). Inherited, so this
+     covers every button, link and card; pressed states are drawn by each
+     control itself (:active) instead. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -910,14 +914,23 @@ textarea {
   color: var(--color-text-muted);
 }
 
-/* ---------- Accordion (detail page) ---------- */
+/* ---------- Product page sections (Batch 27) ---------- */
 
+/* Clean rows with thin dividers and a + / − on the right. Opening keeps the
+   tapped header where it is (components/viewer/Accordion.tsx pins it) and
+   the content fades and slides in below it — only opacity and transform
+   animate; closing is the exact reverse. */
 .accordion {
+  margin-top: var(--space-2);
   padding: 0 var(--space-4);
 }
 
-.accordion__item + .accordion__item {
+.accordion__item {
   border-top: 1px solid var(--color-border);
+}
+
+.accordion__item:last-child {
+  border-bottom: 1px solid var(--color-border);
 }
 
 .accordion__header {
@@ -925,134 +938,158 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-4) 0;
+  width: calc(100% + 2 * var(--space-2));
+  margin: 0 calc(-1 * var(--space-2));
+  padding: 15px var(--space-2);
+  border-radius: 10px;
   text-align: left;
+  transition: background-color 150ms ease;
+}
+
+/* The subtle pressed state that replaces the browser's tap flash. */
+.accordion__header:active {
+  background: var(--color-bg-secondary);
 }
 
 .accordion__title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
-.accordion__chevron {
+.accordion__icon {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: transform 250ms ease;
+  color: var(--color-text-secondary);
 }
 
-.accordion__item--open .accordion__chevron {
-  transform: rotate(180deg);
+.accordion__icon-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease;
 }
 
-/* max-height (not display) so both directions animate. visibility keeps the
-   collapsed content out of the tab order and the accessibility tree. */
-.accordion__body {
-  max-height: 0;
-  overflow: hidden;
-  visibility: hidden;
-  transition: max-height 300ms ease, visibility 0s linear 300ms;
-}
-
-.accordion__item--open .accordion__body {
-  max-height: 400px;
-  visibility: visible;
-  transition: max-height 300ms ease, visibility 0s;
+.accordion__item--open .accordion__icon-bar,
+.accordion__item--opening .accordion__icon-bar {
+  transform: rotate(90deg);
+  opacity: 0;
 }
 
 .accordion__content {
   padding-bottom: var(--space-4);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 280ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.accordion__item--opening .accordion__content,
+.accordion__item--closing .accordion__content {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accordion__content,
+  .accordion__icon-bar {
+    transition: none;
+  }
 }
 
 .accordion__text {
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.7;
   color: var(--color-text-secondary);
   white-space: pre-wrap;
 }
 
-/* ---------- Video review card ---------- */
+/* ---------- Video review (Batch 27 cover) ---------- */
+
+/* Before play, while paused and after the end the shopper only ever sees
+   our own cover: the YouTube thumbnail, our round Play button and a small
+   "Reviewed on YouTube" label. */
+.video-review,
+.video-player__frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000000;
+}
 
 .video-review {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-3);
-  border-radius: 12px;
-  background: var(--color-bg-secondary);
-  text-align: left;
+  padding: 0;
 }
 
-.video-review__thumb {
-  position: relative;
-  width: 96px;
-  aspect-ratio: 16 / 9;
-  flex-shrink: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--color-bg-tertiary);
+.video-review:active .video-cover__play {
+  transform: scale(0.94);
 }
 
-.video-review__thumb img {
+.video-cover__img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.video-review__play {
+.video-cover__shade {
   position: absolute;
   inset: 0;
-  margin: auto;
-  width: 28px;
-  height: 28px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.38) 0%, rgba(0, 0, 0, 0) 45%);
+}
+
+.video-cover__play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: 58px;
+  margin: -29px 0 0 -29px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.94);
+  color: #111111;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  transition: transform 120ms ease-out;
+}
+
+.video-cover__play svg {
+  width: 24px;
+  height: 24px;
+  margin-left: 3px;
+}
+
+.video-cover__spinner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -18px 0 0 -18px;
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+}
+
+.video-cover__label {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.58);
   color: #FFFFFF;
-}
-
-.video-review__play svg {
-  width: 14px;
-  height: 14px;
-  margin-left: 2px;
-}
-
-.video-review__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.video-review__title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.video-review__sub {
   font-size: 11px;
-  color: var(--color-text-muted);
+  font-weight: 600;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 /* Batch 23 Part 7 — inline review player. The iframe itself never gets a
    tap (pointer-events: none, and the transparent surface button covers it
    anyway), so nothing can reach YouTube's title/logo links. */
-.video-player__frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: #000000;
-}
-
 .video-player__frame iframe {
   position: absolute;
   inset: 0;
@@ -1065,40 +1102,7 @@ textarea {
 .video-player__poster {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: #000000;
-}
-
-.video-player__poster img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.video-player__big-play,
-.video-player__spinner {
-  position: relative;
-}
-
-.video-player__big-play {
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-  color: #FFFFFF;
-}
-
-.video-player__big-play svg {
-  width: 24px;
-  height: 24px;
-  margin-left: 3px;
 }
 
 .video-player__surface {
@@ -1110,7 +1114,6 @@ textarea {
   border: 0;
   padding: 0;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .video-player__sound {
@@ -1130,12 +1133,6 @@ textarea {
 .video-player__sound svg {
   width: 20px;
   height: 20px;
-}
-
-.video-player__label {
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--color-text-muted);
 }
 
 /* ---------- Skeleton loading ---------- */
@@ -3984,54 +3981,40 @@ textarea {
   height: 40%;
 }
 
-/* Two-zone layout: a text column plus a fixed-width cart-button column, so
-   the button has its own reserved space and text can never flow under it. */
+/* Card body (Batch 27): the title spans the card's whole text area; the
+   price block sits under it; the bottom row is the stock line on the left
+   and the cart control in its own reserved slot on the right (a grid
+   column, never positioned over the text). margin-top:auto on that row
+   pins it to the card's bottom, so rows line up across the grid. */
 .product-card__body {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 8px;
-  flex: 1;
-  padding: 9px 10px 10px;
-}
-
-.product-card__info {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  padding: 9px 10px 10px;
 }
 
-.product-card__cart-slot {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  width: 34px;
-  flex-shrink: 0;
-}
-
+/* Title — rebuilt from scratch in Batch 27 (Part 5). Plain CSS only:
+   100% of the text area, normal word wrapping, two lines tall always,
+   "…" only past two lines. */
 .product-card__name {
-  margin-top: 3px;
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1.35;
-  color: var(--color-text-primary);
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: normal;
-  hyphens: none;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* Reserve both lines so cards in a row line their prices up, even for a
-     one-line name. */
-  min-height: calc(2 * 1.35em);
+  overflow-wrap: break-word;
+  width: 100%;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  height: calc(2 * 1.35em);
+  color: var(--color-text-primary);
 }
 
 .product-card__prices {
-  margin-top: 7px;
+  margin-top: 6px;
+  min-width: 0;
 }
 
 .product-card__price {
@@ -4040,8 +4023,9 @@ textarea {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
-  /* Prices are near-black and bold, not orange — see CLAUDE.md. */
-  color: var(--color-text-primary);
+  /* Batch 27: on a card the price is the one orange thing — the cart
+     control beside it is neutral (Naeem's call, see reports/batch-27.txt). */
+  color: var(--color-accent);
   line-height: 1.15;
   /* A price must never break — see CLAUDE.md's card spec. */
   white-space: nowrap;
@@ -4072,30 +4056,38 @@ textarea {
 
 .product-card__save {
   /* "Save X%" (the full word, not "-X%") is the wording — see CLAUDE.md's
-     card spec. Sized down from a generic badge so it still fits beside the
-     retail price at the narrowest real phone width without wrapping. */
-  font-size: 7px;
+     card spec. Neutral, not orange. */
+  font-size: 8px;
   font-weight: 800;
-  letter-spacing: -0.15px;
-  /* Neutral, not orange — see CLAUDE.md's colour rule; the card's one
-     orange element is its cart button. */
+  letter-spacing: -0.1px;
   color: var(--color-text-primary);
   background: var(--save-pill-bg);
   border: 1px solid var(--save-pill-border);
   border-radius: 20px;
-  padding: 1px 3.5px;
+  padding: 1px 4px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.product-card__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 6px;
+  margin-top: auto;
+  padding-top: 7px;
 }
 
 .product-card__stock {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 7px;
+  min-width: 0;
   font-size: 9px;
   font-weight: 500;
   color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .product-card__dot {
@@ -4108,23 +4100,27 @@ textarea {
 .product-card__dot--in  { background: var(--color-stock-in); }
 .product-card__dot--out { background: var(--color-stock-out); }
 
-/* Cart button, own column — see .product-card__cart-slot. Sized as close to
-   its original ~34-36px tap target as fits without colliding with the save
-   badge — see Naeems.txt "PART 2, cart button" for the narrow-width check. */
+.product-card__cart-slot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 32px;
+}
+
+/* Cart button — neutral since Batch 27 (light grey circle, dark icon; a
+   matching neutral in dark mode). */
 .cart-button {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--color-accent);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(255, 122, 69, 0.35);
-  transition: transform var(--transition-fast), background-color var(--transition-base),
-    box-shadow var(--transition-base);
+  background: var(--cart-btn-bg);
+  border: 1px solid var(--cart-btn-border);
+  color: var(--color-text-primary);
 }
 
 .cart-button__icon {
@@ -4132,32 +4128,64 @@ textarea {
   height: 15px;
 }
 
-.cart-button--added {
-  background: var(--color-success);
-  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.35);
-}
-
 .cart-button:disabled {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-secondary);
   color: var(--color-text-muted);
-  box-shadow: none;
   cursor: not-allowed;
 }
 
-/* One-shot ring: a fresh span is mounted per tap (keyed) so the keyframe
-   animation restarts even on rapid repeat taps, then it fades out for good. */
-.cart-button__pulse {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid var(--color-success);
-  pointer-events: none;
-  animation: cartPulseRing 550ms ease-out forwards;
+/* "− 1 +" — a dark pill in light mode, inverted in dark mode. Same height
+   as the cart button, so swapping one for the other never moves the row. */
+.cart-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--stepper-bg);
+  color: var(--stepper-fg);
+  animation: stepperIn 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@keyframes cartPulseRing {
-  0%   { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.8); opacity: 0; }
+@keyframes stepperIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.cart-stepper__step {
+  width: 26px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  border-radius: var(--radius-pill);
+}
+
+.cart-stepper__step svg {
+  width: 12px;
+  height: 12px;
+}
+
+.cart-stepper__step:active {
+  transform: scale(0.88);
+}
+
+.cart-stepper__step--max {
+  opacity: 0.45;
+}
+
+.cart-stepper__qty {
+  min-width: 14px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-stepper {
+    animation: none;
+  }
 }
 
 /* Detail page's full-size Copy Price button (unchanged by the card redesign);
@@ -8970,4 +8998,609 @@ html.vt-fade::view-transition-new(root) {
   text-decoration: underline;
   text-decoration-color: var(--color-border-strong);
   text-underline-offset: 3px;
+}
+
+/* ============================================================
+   Batch 27 — product page redesign, glass cart, "You may also like"
+   Orange on the product page is ONLY the two Add to Cart buttons (and the
+   small cart count badge); everything else is black, white, grey or glass.
+   ============================================================ */
+
+/* ---------- Shared glass round button ---------- */
+
+.glass-icon-button,
+.pdp-header .detail-header__back,
+.pdp-header .share-button--header {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  color: var(--glass-fg);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
+}
+
+.pdp-header .detail-header__back:hover {
+  background: var(--glass-bg);
+  color: var(--glass-fg);
+}
+
+.pdp-header .detail-header__back svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pdp-header .share-button--header .share-button__icon,
+.glass-icon-button__svg {
+  width: 18px;
+  height: 18px;
+}
+
+.glass-icon-button:active,
+.pdp-header .detail-header__back:active,
+.pdp-header .share-button--header:active {
+  transform: scale(0.94);
+}
+
+.header-cart__icon {
+  display: inline-flex;
+}
+
+/* Small count badge — the one place orange may sit beside the buttons. */
+.cart-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One small pulse per add; the floating cart's first appearance "jumps
+   in" with a short bounce. Transform and opacity only. */
+.cart-bump--pulse {
+  animation: cartBumpPulse 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cart-bump--enter {
+  animation: cartBumpEnter 460ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes cartBumpPulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+@keyframes cartBumpEnter {
+  0%   { transform: scale(0.3); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- Product page header ---------- */
+
+/* Floats over the picture (sticky, pulled up over it by its own height).
+   Once the picture has scrolled away, a glass bar fades in behind the
+   buttons and the product name appears. */
+.pdp-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  margin-bottom: -56px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.pdp-header > :not(.pdp-header__glass) {
+  position: relative;
+  z-index: 1;
+}
+
+.pdp-header__glass {
+  position: absolute;
+  inset: 0;
+  background: var(--glass-bg-strong);
+  border-bottom: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+
+.pdp-header--solid .pdp-header__glass,
+.pdp-header--plain .pdp-header__glass {
+  opacity: 1;
+}
+
+.pdp-header__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 260ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pdp-header--solid .pdp-header__title {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pdp-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pdp-header__share {
+  display: inline-flex;
+  transition: opacity 200ms ease;
+}
+
+.pdp-header--solid .pdp-header__share {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdp-header__title {
+    transform: none;
+    transition: opacity 150ms linear;
+  }
+}
+
+/* ---------- Product page body ---------- */
+
+/* The picture starts at the very top, under the floating header. */
+.pdp-main {
+  padding-top: 0;
+  /* Room for the sticky bottom bar, so it never covers the last content. */
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.pdp-main > .empty-state {
+  padding-top: 72px;
+}
+
+.product-detail__counter {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.55);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.pdp-main .product-detail__dots {
+  bottom: 18px;
+  z-index: 2;
+}
+
+.pdp-main .product-detail__dot {
+  width: 6px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.pdp-main .product-detail__dot--active {
+  width: 16px;
+  border-radius: var(--radius-pill);
+  background: #1C1C1E;
+}
+
+.pdp-main .product-detail__info {
+  padding: 18px 4px 4px;
+}
+
+.pdp-main .product-detail__brand {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.product-detail__brand-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.product-detail__brand-chevron {
+  width: 13px;
+  height: 13px;
+  color: var(--color-text-muted);
+}
+
+.pdp-main .product-detail__name {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+  overflow-wrap: break-word;
+}
+
+.pdp-main .price-block {
+  align-items: center;
+  margin-top: 10px;
+  gap: 4px 10px;
+}
+
+.pdp-main .product-detail__price {
+  font-size: 28px;
+  /* Black, never orange — see the colour rule at the top of this block. */
+  color: var(--color-text-primary);
+}
+
+.pdp-main .price-block__strike {
+  font-family: var(--font-price);
+  font-size: 15px;
+}
+
+.pdp-main .save-badge {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.pdp-main .variant-selector {
+  margin-top: 16px;
+}
+
+.pdp-main .chip-select {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.pdp-main .chip-select--on {
+  background: var(--color-surface);
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+}
+
+.pdp-main .stock-row {
+  margin-top: 16px;
+  align-items: flex-start;
+}
+
+.pdp-main .stock-row .stock-dot {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.pdp-main .stock-row__text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+}
+
+.stock-row__note {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.trust-boxes {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.trust-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 66px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.trust-box__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-primary);
+}
+
+.trust-box__text {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+.buy-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.buy-row > .copy-button--disabled:only-child {
+  grid-column: 1 / -1;
+}
+
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 50px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.qty-stepper__step {
+  width: 38px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-primary);
+}
+
+.qty-stepper__step svg {
+  width: 16px;
+  height: 16px;
+}
+
+.qty-stepper__step:active:not(:disabled) {
+  transform: scale(0.88);
+  background: var(--color-bg-secondary);
+}
+
+.qty-stepper__step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.qty-stepper__step--max {
+  opacity: 0.4;
+}
+
+.qty-stepper__value {
+  min-width: 26px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.product-detail .buy-row .copy-button {
+  margin-top: 0;
+  min-height: 50px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pdp-main .wholesale-row {
+  margin-top: 12px;
+}
+
+/* ---------- Sticky bottom bar (glass) ---------- */
+
+/* Appears once the main Add to Cart row has scrolled up out of view, hides
+   again when it is back. Slide + fade (transform and opacity), the same
+   curve both ways; reduced motion gets a plain fade. */
+.pdp-sticky {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 150;
+  width: 100%;
+  max-width: 480px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--glass-bg-strong);
+  border-top: 1px solid var(--glass-edge);
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  transform: translate(-50%, 110%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
+}
+
+.pdp-sticky--shown {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdp-sticky {
+    transform: translate(-50%, 0);
+    transition: opacity 150ms linear;
+  }
+}
+
+.pdp-sticky__price {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pdp-sticky__amount {
+  font-family: var(--font-price);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.pdp-sticky__size {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdp-sticky .pdp-sticky__add {
+  margin-top: 0;
+  min-height: 48px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* ---------- "You may also like" ---------- */
+
+.related {
+  margin-top: 26px;
+}
+
+.related__title {
+  padding: 0 4px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+/* The browser's own sideways scrolling — no touch code, so vertical page
+   scrolling with a finger on the row stays native. */
+.related__row {
+  display: flex;
+  gap: 10px;
+  margin: 0 calc(-1 * var(--space-4));
+  padding: 2px 20px 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 20px;
+  scrollbar-width: none;
+}
+
+.related__row::-webkit-scrollbar {
+  display: none;
+}
+
+.related__item {
+  display: flex;
+  flex: 0 0 44%;
+  max-width: 190px;
+  scroll-snap-align: start;
+}
+
+.related__item .product-card {
+  width: 100%;
+}
+
+/* ---------- Floating glass cart (Home, Search, brand pages) ---------- */
+
+/* Middle of the right edge, inside the 480px app column on wide screens.
+   Above the page, below the bottom nav (200), sheets and dialogs. The
+   button itself never animates (its fixed position stays put); only the
+   inner span bounces / pulses. */
+.glass-cart {
+  position: fixed;
+  top: 50%;
+  right: max(12px, calc((100vw - 480px) / 2 + 12px));
+  z-index: 150;
+  width: 60px;
+  height: 60px;
+  margin-top: -30px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  color: var(--glass-fg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+}
+
+.glass-cart__inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.glass-cart:active .glass-cart__inner {
+  transform: scale(0.92);
+}
+
+.glass-cart__icon {
+  width: 25px;
+  height: 25px;
+}
+
+.glass-cart .cart-count-badge {
+  top: 5px;
+  right: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-bump--pulse,
+  .cart-bump--enter {
+    animation: none;
+  }
+}
+
+/* On the product page, orange belongs to Add to Cart alone, so the "You may
+   also like" cards keep their price black (the Home/Search/brand cards'
+   orange price does not carry over here). */
+.product-card--related .product-card__price {
+  color: var(--color-text-primary);
+}
+
+.product-card--related .product-card__price--out {
+  color: var(--color-text-muted);
 }

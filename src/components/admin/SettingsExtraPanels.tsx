@@ -242,14 +242,27 @@ export function TextsPanel() {
   const { showToast } = useToast();
   const [values, setValues] = useState<Record<string, string>>({});
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
+  // Fields typed in since the last save. A reload of the shop's data (which
+  // can land a moment after the page opens) refreshes only the other
+  // fields — it must never wipe what is being typed (Batch 27).
+  const [edited, setEdited] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const group of EDITABLE_TEXT_GROUPS) {
-      for (const field of group.fields) next[field.key] = settings[field.key] ?? '';
-    }
-    setValues(next);
-  }, [settings]);
+    setValues((current) => {
+      const next: Record<string, string> = {};
+      for (const group of EDITABLE_TEXT_GROUPS) {
+        for (const field of group.fields) {
+          next[field.key] = edited.has(field.key) ? current[field.key] ?? '' : settings[field.key] ?? '';
+        }
+      }
+      return next;
+    });
+  }, [settings, edited]);
+
+  const change = (key: string, value: string) => {
+    setValues((v) => ({ ...v, [key]: value }));
+    setEdited((e) => (e.has(key) ? e : new Set(e).add(key)));
+  };
 
   const save = async (groupId: string, keys: EditableTextKey[], blank: boolean) => {
     setSavingGroup(groupId);
@@ -262,6 +275,11 @@ export function TextsPanel() {
       showToast('Could not save. Please try again.', 'error');
       return;
     }
+    setEdited((e) => {
+      const next = new Set(e);
+      for (const key of keys) next.delete(key);
+      return next;
+    });
     await refetch();
     showToast(blank ? 'Back to the default text' : 'Text saved');
   };
@@ -299,7 +317,7 @@ export function TextsPanel() {
                     rows={3}
                     placeholder={field.defaultText}
                     value={values[field.key] ?? ''}
-                    onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                    onChange={(e) => change(field.key, e.target.value)}
                   />
                 ) : (
                   <input
@@ -307,7 +325,7 @@ export function TextsPanel() {
                     className="form-input"
                     placeholder={field.defaultText}
                     value={values[field.key] ?? ''}
-                    onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                    onChange={(e) => change(field.key, e.target.value)}
                   />
                 )}
                 <p className="form-hint">Shown now: “{siteText(settings, field.key)}”</p>

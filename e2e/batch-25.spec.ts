@@ -39,7 +39,7 @@ const ADMIN_PAGES: { name: string; query: string }[] = [
   { name: 'Banner & Texts', query: '?tab=design' },
   { name: 'Banner slides', query: '?tab=design&dset=banner' },
   { name: 'Expert page (Talk to an Expert)', query: '?tab=design&dset=expert' },
-  { name: 'Site texts (checkout sign-in note)', query: '?tab=design&dset=texts' },
+  { name: 'Site texts (checkout note, trust boxes)', query: '?tab=design&dset=texts' },
   { name: 'Team', query: '?tab=team' },
   { name: 'Team', query: '?tab=team&tview=roles' },
   { name: 'Activity Log', query: '?tab=activity' },
