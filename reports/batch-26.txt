@@ -1,0 +1,323 @@
+BATCH 26 — Brands (Home row, brand pages, admin Brands) + 3 admin extras
+=========================================================================
+Branch: feature/batch-26-brands (from the latest origin/main, which has
+Batch 25). Pushed. NOT merged, nothing pushed to main.
+The database update is ALREADY LIVE (you approved it). The live site was
+checked afterwards and still works (see "Live checks" at the end).
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Brands in the database
+  Before: a product's brand was plain text, and only 3 of 107 products had
+  one filled in (Aveeno, Kirkland, "La Roche Posay").
+  Now: a real brands table. Each product points to its brand by id.
+  - The brand at the start of every product name was matched (capitals,
+    spaces, dashes and accents ignored, so "CERAVE" = "CeraVe" and
+    "La Roche Posay" = "La Roche-Posay"). Result: 44 brands, and ALL 107
+    products matched. None left over.
+  - Brand fields: name, link (e.g. la-roche-posay, unique, editable),
+    logo, dark-mode logo, banner image, banner video (upload or YouTube),
+    Show on home, display order, last updated by/at.
+  - The old text column is kept and always kept in step, so nothing that
+    reads it breaks (search, filters, CSV export, the live site).
+  - Rename a brand and every product shows the new name straight away
+    (proof: e2e test renames a brand and checks the products and the
+    product page).
+  - Typing a NEW brand name on a product (or in a CSV import) makes that
+    brand automatically, with Show on home OFF. The product editor now
+    suggests the existing brands as you type.
+
+  BRANDS FOUND (products each) — all start with Show on home OFF:
+    Aveeno 5 · Avène 1 · Beauty of Joseon 4 · Bio-Oil 1 · Blackmores 2 ·
+    Blistex 1 · Cancer Council 4 · CeraVe 16 · Cetaphil 3 · Colgate 2 ·
+    COSRX 2 · David Beckham 1 · Dove 1 · Dr.Althea 1 · Gaia 1 · Garnier 3 ·
+    Geek & Gorgeous 1 · Gillette 1 · Goat 1 · Hamilton 1 · ILLIYOON 1 ·
+    Invisible Zinc 1 · Kirkland 2 · L'Oréal 8 · La Roche-Posay 5 ·
+    Laneige 1 · Lenor 1 · Listerine 1 · MCoBeauty 1 · Nad's 1 ·
+    Neutrogena 2 · Nivea 3 · Olay 1 · OMI Brotherhood 1 · Oral-B 2 ·
+    Paula's Choice 1 · Plunketts 1 · Purito 1 · Sensodyne 1 · SKIN1004 5 ·
+    Sukin 1 · The Ordinary 12 · Vaseline 1 · ZGTS 1
+  UNMATCHED PRODUCTS: none.
+  Spellings I chose (rename in Admin → Brands if you prefer another):
+    "Vasline Lip Therapy" → Vaseline · "Bio Oil" → Bio-Oil ·
+    "Oral B" → Oral-B · "L'Oreal ..." (incl. L'Oreal Paris) → L'Oréal ·
+    "La Roche Posay" → La Roche-Posay · "Cosrx" → COSRX.
+
+PART 2 — Admin → Brands
+  In the CATALOG group, where Batch 25 reserved its place (phone: More →
+  Brands). Same design as the other pages: rows on a phone, a table on a
+  computer, ⋮ menus, line icons, no emoji.
+  - Each brand: logo, name, number of products, link, "Show on home"
+    switch, ⋮ (Edit · View on site · Delete).
+  - Drag the dotted handle to reorder. That order is the Home row's order.
+    A reorder is ONE Activity Log line ("Changed the order of brands").
+  - Delete only works when no product uses the brand. Otherwise: "Move
+    its products to another brand first." (the database refuses too).
+  - Edit screen, with the help text you asked for under every field:
+    Name, Link (shows the full link as you type), Logo, Logo for dark mode
+    (optional), Banner image, Banner video (optional: "Upload video
+    (recommended)" or "YouTube link"), Show on home.
+  - Logos auto-fit: on upload, in the browser, empty transparent (or white,
+    for a JPG) border is trimmed, it's resized to at most 800 px wide,
+    transparency is kept, and it's compressed (WebP). A live preview shows
+    the logo on a light card and on a dark card before you save.
+  - Banner images are compressed like product photos. Videos are checked
+    before upload: MP4/WebM only, 15 MB max, with a clear message showing
+    the video's size if it's too big.
+  - Security: only you and staff with the new "Edit brands" switch (OFF by
+    default) can change brands, upload brand pictures or reorder. This is
+    checked inside the database. Every add / change / rename / delete /
+    reorder is in the Activity Log with who did it.
+
+PART 3 — Home: "Shop by Brand"
+  - Below the bento, above the category chips. "Shop by Brand" on the
+    left, "See all →" on the right (grey, not orange — the cart buttons
+    stay the one orange action).
+  - One swipeable row, wide 2:1 cards, about 2.5 visible on a phone. Only
+    the logo, centred; no logo yet = the brand name as neat text.
+  - Light mode: white card + normal logo. Dark mode: dark card + white
+    logo; without a white logo, a light card + normal logo.
+  - Only brands with Show on home ON and at least one live product, in
+    your order.
+  - No layout jump: logo boxes have fixed sizes and logos load lazily;
+    while the catalogue loads, the row's place is held (skeleton cards) if
+    the last visit had a row.
+  - The row uses the browser's own sideways scrolling (no touch code), so
+    up/down page scrolling with a finger on the row works normally.
+
+PART 4 — All Brands (/brands)
+  "See all →" opens it: same cards, 2 per line, name and "12 products"
+  under each. Header ← + "Brands", like the other inner pages. Back
+  returns to the exact spot on Home. Brands with no live products aren't
+  listed.
+
+PART 5 — Brand page (/brand/<link>)
+  - Banner (16:9): uploaded video plays muted, looping, inline, with the
+    banner image as its poster; no sound button, controls or fullscreen.
+    Reduce-motion or data-saver on → the picture only. No video → the
+    picture. Neither → a soft grey gradient. A YouTube link plays the same
+    way (muted, looping, no controls), with a cover over it so nothing can
+    be tapped through to YouTube. YouTube still shows its title for a
+    moment when it starts, so an uploaded MP4 is better.
+  - Logo on a rounded plate over the banner (same light/dark rules).
+  - Brand name (large) + "12 products".
+  - Category chips: only the categories this brand has products in, "All"
+    first; the choice is in the address, so Back brings it back. (Hidden
+    when the brand has only one category — a single chip would do nothing.)
+  - Product grid: the same product cards as Home (cart button, price,
+    stock, options). Tap opens the product with the same picture
+    animation; Back returns to the same spot. I didn't change any
+    animation or scroll code; the brand page uses what's already there.
+  - Unknown link → "Brand not found" + "See all brands".
+  - Page title "<Brand> — Naeem's". Link previews (WhatsApp, Facebook ...)
+    show "<Brand> — Naeem's", a one-line description and the banner (or
+    logo), through a small server function like the product one.
+  - The product page's small brand name is now a link to the brand page.
+    Nothing else on the product page changed.
+  - Brand pages are added to the sitemap for Google.
+
+PART 6 — Speed
+  The banner video only exists on the brand page, never on Home. Logos
+  are lazy-loaded with fixed sizes. Brands come in the same database
+  request batch as the products (no extra wait).
+  Lighthouse, mobile, Home, on this PC (Lighthouse's simulated slow
+  phone; scores swing ±10 between runs on this PC, so 6 runs each):
+    BEFORE (main):                  30, 31, 23, 33, 20, 35 → median ≈ 30
+    AFTER, no brands on Home:       26, 27, 26, 34, 34, 34 → median ≈ 30
+    AFTER, 8 brands on Home:        21, 34, 35             → median 34
+  Layout shift was the same before and after (0.313 in some runs and 0 in
+  others, both versions — that comes from older parts of Home, not from
+  brands). Shop code: +10 KB (1.3%) for the brand pages. Admin code:
+  +31 KB (only staff download it).
+  Honest note: Home's score is low (~30) on a simulated slow phone, before
+  and after this batch. See section 6.
+
+PART 7 — Three admin extras
+  1. Restock: product ⋮ → "Restock" (right after Edit). A sheet with the
+     current stock and two ways: "Add" (e.g. +24 arrived) or "Set to" (an
+     exact count), one row per option for products with variants, and a
+     preview "21 → 45". The database does the maths and saves it, writes
+     "Restock: 21 → 45" (or "Restock (AU · 50ml): 3 → 7") to the Activity
+     Log, and updates "Last updated by". Needs "Edit products and stock";
+     the database refuses it otherwise.
+  2. 7-day sales chart on admin Home, under the 4 cards: one bar per day
+     (Bangladesh time), total ৳ of orders that aren't cancelled. Today's
+     bar orange, the others grey; day labels; tap or hover a bar to see its
+     ৳ and order count. Only for you or staff with "See sales figures" —
+     the database refuses the numbers to anyone else. An all-zero week is
+     a flat baseline. Works in dark and light.
+  3. Customer notes and tags: Customers → tap a customer → a private Note
+     and Tags (type a new tag or tap one already used; "vip" becomes "VIP"
+     if VIP already exists). Tags show as chips on the Customers list, and
+     a "tag" filter appears next to the sort. Reading needs "View
+     customers"; changing needs the new "Edit customer notes" switch (OFF
+     by default) — staff without it see the note read-only. Customers can
+     never read their own notes or tags by any route (proved by a test
+     that asks the database as the customer, and as a visitor). Every
+     change is in the Activity Log.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed — already run on the live database with your approval:
+supabase/migration-032-brands-restock-notes.sql (additive only, safe to
+run again). It was first tried inside a transaction that was cancelled,
+checked, then run for real. Two small additions after that, also in the
+same file and already live:
+  - read rights on the new products.brand_id column (staff tools needed it);
+  - reordering no longer stamps "updated by" on every brand.
+The storage folder "brand-media" (logos, banners, videos; 15 MB limit;
+public to view, only "Edit brands" can upload) was created by the same file.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was built. Things to know:
+  - Every brand starts with "Show on home" OFF, and none has a logo yet.
+    So after you merge, Home shows no brand row until you switch some on
+    (see the step-by-step below). I chose OFF so the live shop never shows
+    44 text-only cards.
+  - Part 6 has no code commit of its own (the speed work is inside Parts
+    3–5); its proof is the Lighthouse numbers above.
+  - Commits are one per Part. Parts share files (styles, admin helpers),
+    so only the final commit is guaranteed to build on its own. The final
+    state was built and fully tested.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - ALREADY VISIBLE on the live site: product pages show the small brand
+    name above the product name (that line existed before but was empty
+    for 104 products; matching the brands filled it in). After merging,
+    it becomes a link to the brand page.
+  - The test admin's drag-reorder test renumbers the brand order 1, 2, 3...
+    It keeps your relative order, so nothing visible changes.
+  - One test customer keeps an empty notes row (no note, no tags) after
+    the tests. Invisible and harmless.
+  - First visit only: the row's place is held while the catalogue loads.
+    If no brand is on Home, those placeholders disappear when it loads
+    (a small one-time jump for brand-new visitors). Once you turn brands
+    on, it's the other way round: no jump at all.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Brand row lives "with" the chips: if you ever reorder Home's sections,
+    it stays directly above the chips.
+  - "See all", the brand page and /brands use no orange: on these screens
+    the orange stays on the cart buttons.
+  - Brand page header is ← and the light/dark switch only (the big brand
+    name is right under the banner, a title in the header would repeat it).
+  - Logo plate on the banner overlaps the bottom-left corner, like an app
+    store page.
+  - Restock: one Add / Set-to switch for the whole sheet (simpler than
+    choosing per row); empty rows are left alone.
+  - Chart: a single grey/orange series, no legend (the title says what it
+    is), value shown above the bars for the tapped day (today by default),
+    plus the 7-day total in the corner.
+  - New brand pictures always get a new file name, so a replaced logo is
+    never stuck in a phone's cache.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Home speed (large). Lighthouse mobile ≈ 30 before and after this batch.
+   The main cost is one big JavaScript file (750 KB) and the bento's big
+   photos. Splitting the code per page and serving smaller hero photos
+   would make the first screen appear much sooner on a slow phone — that
+   is where most visitors decide to stay or leave.
+2. Brand logos (small, your time not code). Real logos (transparent PNG +
+   white version) make the row and brand pages look official — a strong
+   trust signal for "authentic imports".
+3. Brand SEO text (small). A short paragraph per brand ("Authentic
+   CeraVe imported from Australia...") on the brand page would help Google
+   send "CeraVe price in Bangladesh" searches straight to it.
+4. Restock history per product (small). The Activity Log has it; a
+   "Stock history" list on the product would make stock questions quick.
+5. Customer tags in Orders (small). Show a customer's tags (e.g. "Late
+   payer") on their order screen, where you decide to confirm or not.
+
+
+SHORT STEP-BY-STEP FOR NAEEM
+----------------------------
+1. Admin → Brands (phone: More → Brands).
+2. Tap a brand (e.g. CeraVe) to open it.
+3. Logo → Upload: a transparent PNG works best. It's trimmed and resized
+   for you. Look at the two preview cards (light and dark).
+4. Logo for dark mode → Upload a white version (optional).
+5. Banner image → Upload a wide picture for the top of its page.
+6. Banner video (optional) → "Upload video": a 5–20 second MP4, max 15 MB.
+7. Switch "Show on home" ON → Save.
+8. Back on the list, drag the dotted handle to put brands in the order you
+   want on Home.
+To let a staff member do this: Team → Roles → their role → "Edit brands".
+
+
+TESTS
+-----
+New: e2e/batch-26.spec.ts (12 tests)
+  1–2 Home row between the bento and the chips, light and dark mode, the
+      right logo version, ~2.5 cards across; Show-on-home OFF and
+      no-product brands hidden
+  3   dark mode with no white logo → normal logo on a light card
+  4   See all → /brands → a brand → only that brand's products; title and
+      link preview; "Brand not found"
+  5   chip filters; after opening a product and going Back (phone Back and
+      the ← button) the chip and the exact scroll position come back; the
+      product page's brand link
+  6   banner video: muted / loop / playsinline / autoplay, no controls;
+      picture only with reduce-motion
+  7   admin: add a brand and upload a logo with a transparent border — the
+      stored logo is exactly the drawing, no empty border (100×40 from a
+      200×100 picture)
+  8   rename reaches the products and the product page (link unchanged);
+      drag-reorder saves the order and logs it; delete blocked with
+      products ("Move its products to another brand first", database
+      refuses too); a brand without products can be deleted
+  9   staff without "Edit brands": no menu item, and the database refuses
+      update / insert / reorder / logo upload; with it: allowed, logged,
+      "updated by" is them
+  10  Restock: Add (5 → 29) and Set to (option 3 → 7), logged exactly,
+      "Last updated by"; staff without "Edit products and stock" refused
+      (no Products page, database refuses)
+  11  7-day chart: bars equal the database totals for seeded test orders,
+      today orange; hidden and refused without "See sales figures", shown
+      with it
+  12  customer notes/tags: save, chips, tag filter, logged; the customer
+      (and a visitor) can't read or write them through the database; staff
+      with only "View customers" see it read-only and are refused editing;
+      with "Edit customer notes" they can
+New: e2e/batch-26-screens.spec.ts — screenshots (only when SCREENS=1).
+New unit tests: src/lib/brands.test.ts, logoTrim.test.ts, brandAdmin.test.ts
+Changed (not weakened): src/lib/adminNav.test.ts and e2e/batch-25.spec.ts
+  now expect "Brands" in its place in the menu (Batch 25 tested that it
+  was hidden "until Batch 26").
+
+BUILD & TEST RESULTS
+--------------------
+  npm run build    PASSED (0 errors)
+  npx vitest run   97/97 passed (14 files)
+  npm run test:e2e 91 passed, 0 failed, 7 skipped — one full clean run (no
+                   animation or scroll code was touched, so one run is
+                   enough as this batch allows). The 7 skips are the same as
+                   Batch 25: screenshot runs (only on request), 2 bento tests
+                   and the CeraVe region part (data conditions).
+  After the small database fix (reorder stamp) the 12 Batch 26 tests were
+  run again: 12 passed.
+  Clean-up checked on the live database: 0 test brands, 0 test products,
+  0 orders, 0 test staff/roles, 0 uploaded test files, all 44 brands with
+  Show on home OFF.
+
+SCREENSHOTS
+-----------
+reports/batch-26-screens/ — Home row, /brands, a brand page (phone, light
+and dark), and admin Brands list, brand editor (with logo previews), Home
+chart, Restock sheet and customer note (phone and computer, light and
+dark). For these, 8 brands were switched on for a few minutes and then
+switched off again. Retake: SCREENS=1 npx playwright test e2e/batch-26-screens.spec.ts
+
+Live checks after the deploy (live site = main + new database)
+  Home (105 product cards), a product page, the cart, and the live admin's
+  Home, Products, Orders and Customers all load, with no database errors.
