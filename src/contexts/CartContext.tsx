@@ -32,13 +32,22 @@ export interface CartLineVariant {
 
 interface CartContextValue {
   items: CartItem[];
-  /** Adds one unit of a product (optionally a specific variant), or
-   *  increments its quantity if that exact product+variant is already present. */
-  addItem: (productId: string, price: number, variant?: CartLineVariant | null) => void;
+  /** Adds `quantity` units (default 1) of a product (optionally a specific
+   *  variant), or increases that exact product+variant line if present. */
+  addItem: (
+    productId: string,
+    price: number,
+    variant?: CartLineVariant | null,
+    quantity?: number
+  ) => void;
   removeItem: (productId: string, variantId?: string | null) => void;
   /** Removes the item when quantity drops to 0 or below. */
   updateQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
   clearCart: () => void;
+  /** The variant id of the line most recently added for a product this
+   *  session (null = the product itself), or undefined when none was — lets
+   *  a card's stepper follow the option the shopper just picked. */
+  lastVariantFor: (productId: string) => string | null | undefined;
   /** Total units across all line items. */
   itemCount: number;
   subtotal: number;
@@ -102,6 +111,7 @@ function loadCart(): CartItem[] {
  */
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadCart);
+  const [lastVariants, setLastVariants] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     try {
@@ -112,14 +122,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const addItem = useCallback(
-    (productId: string, price: number, variant?: CartLineVariant | null) => {
+    (productId: string, price: number, variant?: CartLineVariant | null, quantity = 1) => {
       const variantId = variant?.id ?? null;
+      const units = Math.max(1, Math.floor(quantity));
+      setLastVariants((prev) =>
+        prev[productId] === variantId ? prev : { ...prev, [productId]: variantId }
+      );
       setItems((prev) => {
         const existing = prev.find((item) => sameLine(item, productId, variantId));
         if (existing) {
           return prev.map((item) =>
             sameLine(item, productId, variantId)
-              ? { ...item, quantity: item.quantity + 1 }
+              ? { ...item, quantity: item.quantity + units }
               : item
           );
         }
@@ -129,7 +143,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             productId,
             variantId,
             variantLabel: variant?.label ?? null,
-            quantity: 1,
+            quantity: units,
             priceAtAdd: price,
           },
         ];
@@ -156,6 +170,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => setItems([]), []);
 
+  const lastVariantFor = useCallback(
+    (productId: string) => (productId in lastVariants ? lastVariants[productId] : undefined),
+    [lastVariants]
+  );
+
   const itemCount = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
@@ -166,8 +185,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ items, addItem, removeItem, updateQuantity, clearCart, itemCount, subtotal }),
-    [items, addItem, removeItem, updateQuantity, clearCart, itemCount, subtotal]
+    () => ({
+      items,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+      lastVariantFor,
+      itemCount,
+      subtotal,
+    }),
+    [items, addItem, removeItem, updateQuantity, clearCart, lastVariantFor, itemCount, subtotal]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
