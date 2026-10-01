@@ -15,11 +15,11 @@ const superAdmin = { isAdmin: true, can: () => true };
 const staffWith = (perms: StaffPermission[]) => ({ isAdmin: false, can: (p: StaffPermission) => perms.includes(p) });
 
 describe('admin navigation', () => {
-  it('Super Admin: sidebar groups in the mockup order, Brands hidden until Batch 26', () => {
+  it('Super Admin: sidebar groups in the mockup order, Brands in its reserved place (Batch 26)', () => {
     const groups = groupNavItems(visibleNavItems(superAdmin)).map((g) => [g.group.label, g.items.map((i) => i.label)]);
     expect(groups).toEqual([
       ['', ['Home', 'Orders', 'Customers']],
-      ['CATALOG', ['Products', 'Categories', 'Import / Export']],
+      ['CATALOG', ['Products', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Wholesalers', 'Reviews']],
       ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
       ['ADMIN', ['Team', 'Activity Log', 'Settings']],
@@ -31,7 +31,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'categories', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
+      'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
     ]);
   });
 
@@ -50,10 +50,16 @@ describe('admin navigation', () => {
     expect(bottomTabs(items).map((t) => t.id)).toEqual(['home', 'orders', 'profile']);
   });
 
+  it('Brands only with "Edit brands"', () => {
+    expect(visibleNavItems(staffWith(['edit_products', 'edit_categories'])).map((i) => i.id)).not.toContain('brands');
+    expect(visibleNavItems(staffWith(['edit_brands'])).map((i) => i.id)).toEqual(['home', 'brands', 'profile']);
+  });
+
   it('Super-Admin-only sections never show for staff, whatever they have', () => {
     const all: StaffPermission[] = [
       'view_orders', 'change_order_status', 'create_orders', 'book_steadfast', 'edit_products',
       'edit_categories', 'view_customers', 'delete_early_orders', 'view_wholesalers', 'see_sales',
+      'edit_brands', 'edit_customer_notes',
     ];
     const ids = visibleNavItems(staffWith(all)).map((i) => i.id);
     for (const id of ['team', 'activity', 'settings', 'import-export', 'promo-codes', 'reviews', 'bento', 'design']) {

@@ -19,6 +19,7 @@ import { HomeTab } from '../components/admin/HomeTab';
 import { MoreTab } from '../components/admin/MoreTab';
 import { CustomersTab } from '../components/admin/CustomersTab';
 import { BannerTextsTab } from '../components/admin/BannerTextsTab';
+import { BrandsTab } from '../components/admin/BrandsTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
 import { fetchOwnRoleName } from '../lib/staff';
@@ -145,6 +146,7 @@ export function AdminPage() {
             {can('edit_products') && <RegionSizeManager />}
           </>
         )}
+        {active === 'brands' && <BrandsTab />}
         {active === 'import-export' && <CSVImport />}
         {active === 'wholesalers' && (
           <WholesalerList accounts={wholesalers} onReload={loadWholesalers} readOnly={!isAdmin} />

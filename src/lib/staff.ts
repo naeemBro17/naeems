@@ -17,7 +17,9 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'view_customers', label: 'View customers', hint: 'See the Customers page and look up customers by phone. Read only.' },
   { id: 'delete_early_orders', label: 'Delete early orders', hint: 'Delete Pending orders, or Cancelled orders never booked on Steadfast.' },
   { id: 'view_wholesalers', label: 'View wholesalers', hint: 'See the Wholesalers list. Read only: approving stays with you.' },
-  { id: 'see_sales', label: 'See sales figures', hint: 'See money totals: today, this month, and what each customer has spent.' },
+  { id: 'see_sales', label: 'See sales figures', hint: 'See money totals: today, this month, the 7-day chart, and what each customer has spent.' },
+  { id: 'edit_brands', label: 'Edit brands', hint: 'Add, rename, reorder and delete brands; logos, banners and the Home row.' },
+  { id: 'edit_customer_notes', label: 'Edit customer notes', hint: 'Write private notes and tags on customers. Needs View customers to see them.' },
 ];
 
 /** Order permissions that are useless without "View orders" — switching
