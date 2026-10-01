@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,7 +8,10 @@ import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../contexts/ProductC
 import { coverImage, productImages } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
-import { isOutOfStock } from '../lib/stockStatus';
+import { isOutOfStock, stockLimit } from '../lib/stockStatus';
+import { siteText } from '../lib/editableTexts';
+import { useToast } from '../hooks/useToast';
+import { stockLimitMessage } from '../hooks/useCartLine';
 import {
   isVariantInStock,
   optionGalleryImages,
@@ -22,10 +26,11 @@ import { productHeroName } from '../lib/viewTransition';
 import { setCurrentDetailProductId } from '../lib/heroTransition';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
-import { CartIcon } from '../components/viewer/CartButton';
+import { tapHaptic } from '../components/viewer/CartButton';
+import { HeaderCartButton } from '../components/viewer/CartBadgeButton';
+import { RelatedProducts } from '../components/viewer/RelatedProducts';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { VariantSelector } from '../components/viewer/VariantSelector';
 import { VideoReview } from '../components/viewer/VideoReview';
@@ -36,8 +41,8 @@ import type { Product, ProductVariant, VariantOption } from '../types';
 /** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
 const VARIANT_PARAM = 'variant';
 
-/** How long the Add to Cart button holds its "Added!" success state. */
-const ADDED_RESET_MS = 600;
+/** How long the Add to Cart button holds its "Added" success state. */
+const ADDED_RESET_MS = 1200;
 
 /** App-wide og: values from index.html, restored when the detail page unmounts. */
 const DEFAULT_OG = {
@@ -117,20 +122,97 @@ function PlaceholderIcon() {
   );
 }
 
+/** Height of the product page's top bar — the part of the screen it covers. */
+const PDP_HEADER_PX = 56;
+
+/** Highest number the quantity stepper goes to when stock isn't tracked. */
+const MAX_QTY_UNTRACKED = 99;
+
+function TrustIcon({ kind }: { kind: 'authentic' | 'cod' | 'delivery' }) {
+  return (
+    <svg
+      className="trust-box__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {kind === 'authentic' && (
+        <>
+          <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" />
+          <path d="M8.8 12.2l2.2 2.2 4.3-4.6" />
+        </>
+      )}
+      {kind === 'cod' && (
+        <>
+          <rect x="2.5" y="6" width="19" height="12" rx="2" />
+          <circle cx="12" cy="12" r="2.6" />
+          <path d="M6 9.5v5M18 9.5v5" />
+        </>
+      )}
+      {kind === 'delivery' && (
+        <>
+          <path d="M2.5 6.5h11v9h-11z" />
+          <path d="M13.5 9.5h4l3 3v3h-7" />
+          <circle cx="7" cy="17.5" r="1.8" />
+          <circle cx="17" cy="17.5" r="1.8" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function StepIcon({ plus }: { plus: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 12h12" />
+      {plus && <path d="M12 6v12" />}
+    </svg>
+  );
+}
+
+function TickIcon() {
+  return (
+    <svg
+      className="copy-button__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
 function DetailContent({
   product,
   variants,
+  onHeroOffScreen,
 }: {
   product: Product;
   variants: ProductVariant[];
+  /** Told whether the main picture has scrolled away (the top bar's cue). */
+  onHeroOffScreen: (off: boolean) => void;
 }) {
-  const { addItem } = useCart();
-  const { brands } = useProducts();
+  const { addItem, items } = useCart();
+  const { brands, settings } = useProducts();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const [justAddedToCart, setJustAddedToCart] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [stickyShown, setStickyShown] = useState(false);
   const cartTimerRef = useRef<number>();
   const carouselRef = useRef<HTMLDivElement>(null);
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const buyRowRef = useRef<HTMLDivElement>(null);
 
   // Option zero is always the product's own data; real variant rows follow.
   // A product with no real variants has exactly one option and no selector
@@ -190,6 +272,39 @@ function DetailContent({
     setActiveImage(0);
   }, [selectedOption.id, firstImage]);
 
+  // The top bar turns solid (with the product name) once the picture has
+  // scrolled away under it.
+  useEffect(() => {
+    const el = galleryRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => onHeroOffScreen(!entry.isIntersecting),
+      { rootMargin: `-${PDP_HEADER_PX}px 0px 0px 0px` }
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      onHeroOffScreen(false);
+    };
+  }, [onHeroOffScreen]);
+
+  // The sticky bottom bar: shown only once the main Add to Cart row has
+  // scrolled up out of view (above the screen), hidden again whenever it is
+  // visible — never for a row still below the fold.
+  useEffect(() => {
+    const el = buyRowRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const above = entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? PDP_HEADER_PX);
+        setStickyShown(!entry.isIntersecting && above);
+      },
+      { rootMargin: `-${PDP_HEADER_PX}px 0px 0px 0px` }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const outOfStock = hasSelector ? !isVariantInStock(selectedOption) : isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = hasSelector
     ? variantDisplayPrice(selectedOption)
@@ -199,19 +314,39 @@ function DetailContent({
   const brand = product.brand?.trim() ?? '';
   // The small brand name opens that brand's page (Batch 26).
   const brandSlug = brands.find((b) => b.id === product.brand_id)?.slug ?? null;
-  // `note` is the short line under the price; `description` is the long copy.
+  // `note` is the short line beside the stock; `description` is the long copy.
   // A variant's own note (Part 5) stands in for the product's when set.
   const about = product.description?.trim() ?? '';
   const noteText = (selectedOption.note ?? product.note ?? '').trim();
   const howToUse = product.how_to_use?.trim() ?? '';
   const keyIngredients = product.key_ingredients?.trim() ?? '';
-  // Only a real YouTube video gets a Video Review section (see VideoReview).
+  // Only a real YouTube video gets a Video review section (see VideoReview).
   const rawYoutubeUrl = product.youtube_url?.trim() ?? '';
   const youtubeUrl = extractYouTubeId(rawYoutubeUrl) !== null ? rawYoutubeUrl : '';
-  const hasAccordion = howToUse !== '' || keyIngredients !== '' || youtubeUrl !== '';
+  const hasSections = about !== '' || howToUse !== '' || keyIngredients !== '' || youtubeUrl !== '';
   // No real variants, but the product itself carries a Region/Size label —
   // shown as plain text since there's nothing to select between (state 2).
   const plainLabel = !hasSelector ? variantOptionLabel(options[0], '') : '';
+  const sizeLabel = (hasSelector ? selectedOption.size : options[0].size)?.trim() ?? '';
+
+  // Quantity: at least 1, at most what's left in stock after what this
+  // cart line already holds (stock that isn't tracked: up to 99).
+  const lineVariantId = hasSelector ? selectedOption.id : null;
+  const inCart =
+    items.find((item) => item.productId === product.id && item.variantId === lineVariantId)?.quantity ?? 0;
+  const limit = stockLimit(hasSelector ? selectedOption.stock_quantity : product.stock_quantity);
+  const available = Number.isFinite(limit) ? Math.max(0, limit - inCart) : MAX_QTY_UNTRACKED;
+  const allInCart = !outOfStock && available === 0;
+  const maxQuantity = Math.max(1, available);
+
+  // A new option (or a cart change that lowers what's left) never leaves the
+  // stepper above what can actually be added.
+  useEffect(() => {
+    setQuantity(1);
+  }, [selectedOption.id]);
+  useEffect(() => {
+    setQuantity((q) => Math.min(q, maxQuantity));
+  }, [maxQuantity]);
 
   // Fires once per product shown (not on every variant swap) — see
   // trackViewContent's own doc comment for what is/isn't sent.
@@ -226,28 +361,51 @@ function DetailContent({
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
 
+  const increase = () => {
+    if (quantity >= maxQuantity) {
+      if (Number.isFinite(limit)) showToast(stockLimitMessage(limit), 'info');
+      return;
+    }
+    setQuantity(quantity + 1);
+  };
+
   const handleAddToCart = () => {
+    if (outOfStock || allInCart) return;
+    const units = Math.min(quantity, maxQuantity);
     const variant = hasSelector
       ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
       : null;
-    addItem(product.id, mainPrice, variant);
-    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
-    if (typeof navigator.vibrate === 'function') {
-      try {
-        navigator.vibrate(15);
-      } catch {
-        // Some embedded webviews advertise vibrate but reject the call.
-      }
-    }
+    addItem(product.id, mainPrice, variant, units);
+    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, units);
+    tapHaptic();
+    setQuantity(1);
     setJustAddedToCart(true);
     window.clearTimeout(cartTimerRef.current);
     cartTimerRef.current = window.setTimeout(() => setJustAddedToCart(false), ADDED_RESET_MS);
   };
 
+  const addButtonContent = justAddedToCart ? (
+    <>
+      Added
+      <TickIcon />
+    </>
+  ) : allInCart ? (
+    'All in your cart'
+  ) : (
+    'Add to Cart'
+  );
+
+  const trustTexts = [
+    { kind: 'authentic' as const, text: siteText(settings, 'text_trust_authentic') },
+    { kind: 'cod' as const, text: siteText(settings, 'text_trust_cod') },
+    { kind: 'delivery' as const, text: siteText(settings, 'text_trust_delivery') },
+  ];
+
   return (
     <div className="product-detail">
       {images.length > 0 ? (
         <div
+          ref={galleryRef}
           className={`product-detail__gallery${
             outOfStock ? ' product-media--out' : ''
           }`}
@@ -270,20 +428,26 @@ function DetailContent({
             ))}
           </div>
           {images.length > 1 && (
-            <div className="product-detail__dots" aria-hidden="true">
-              {images.map((url, index) => (
-                <span
-                  key={url}
-                  className={`product-detail__dot${
-                    index === activeImage ? ' product-detail__dot--active' : ''
-                  }`}
-                />
-              ))}
-            </div>
+            <>
+              <div className="product-detail__dots" aria-hidden="true">
+                {images.map((url, index) => (
+                  <span
+                    key={url}
+                    className={`product-detail__dot${
+                      index === activeImage ? ' product-detail__dot--active' : ''
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="product-detail__counter" aria-hidden="true" data-testid="image-counter">
+                {activeImage + 1} / {images.length}
+              </span>
+            </>
           )}
         </div>
       ) : (
         <div
+          ref={galleryRef}
           className="product-detail__gallery product-card__placeholder"
           aria-hidden="true"
           style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
@@ -299,12 +463,34 @@ function DetailContent({
               <Link to={`/brand/${brandSlug}`} className="product-detail__brand-link" data-testid="product-brand-link">
                 {brand}
               </Link>
+              <svg
+                className="product-detail__brand-chevron"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
             </p>
           ) : (
             <p className="product-detail__brand">{brand}</p>
           ))}
 
         <h1 className="product-detail__name">{product.name}</h1>
+
+        <div className={`price-block${outOfStock ? ' price-block--out' : ''}`}>
+          <span className="product-detail__price">{formatTaka(mainPrice)}</span>
+          {strikePrice !== null && (
+            <span className="price-block__strike">{formatTaka(strikePrice)}</span>
+          )}
+          {strikePrice !== null && savePercent !== null && !outOfStock && (
+            <span className="save-badge">Save {savePercent}%</span>
+          )}
+        </div>
 
         {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
 
@@ -317,18 +503,6 @@ function DetailContent({
           />
         )}
 
-        <div className={`price-block${outOfStock ? ' price-block--out' : ''}`}>
-          <span className="product-detail__price">{formatTaka(mainPrice)}</span>
-          {strikePrice !== null && (
-            <span className="price-block__sub">
-              <span className="price-block__strike">{formatTaka(strikePrice)}</span>
-              {savePercent !== null && !outOfStock && (
-                <span className="save-badge">Save {savePercent}%</span>
-              )}
-            </span>
-          )}
-        </div>
-
         <p className="stock-row">
           <span
             className={`stock-dot ${
@@ -337,82 +511,124 @@ function DetailContent({
             aria-hidden="true"
           />
           <span className="stock-row__text">
-            {outOfStock ? 'Out of Stock' : 'In Stock'}
+            {outOfStock ? 'Out of stock' : 'In stock'}
+            {noteText !== '' && <span className="stock-row__note"> · {noteText}</span>}
           </span>
         </p>
 
-        {noteText !== '' && <p className="product-detail__note">{noteText}</p>}
+        <ul className="trust-boxes" aria-label="Why buy here">
+          {trustTexts.map((t) => (
+            <li key={t.kind} className="trust-box" data-testid={`trust-${t.kind}`}>
+              <TrustIcon kind={t.kind} />
+              <span className="trust-box__text">{t.text}</span>
+            </li>
+          ))}
+        </ul>
 
-        {outOfStock ? (
-          <button
-            type="button"
-            className="button copy-button copy-button--disabled"
-            disabled
-            aria-label={`${product.name} is out of stock`}
-          >
-            Out of Stock
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={`button copy-button${justAddedToCart ? ' copy-button--copied' : ''}`}
-            onClick={handleAddToCart}
-            aria-label={`Add ${product.name} to cart`}
-          >
-            {justAddedToCart ? 'Added!' : 'Add to Cart'}
-            {justAddedToCart ? (
-              <svg
-                className="copy-button__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+        <div ref={buyRowRef} className="buy-row" data-testid="buy-row">
+          {outOfStock ? (
+            <button
+              type="button"
+              className="button copy-button copy-button--disabled"
+              disabled
+              aria-label={`${product.name} is out of stock`}
+            >
+              Out of Stock
+            </button>
+          ) : (
+            <>
+              <div className="qty-stepper" role="group" aria-label="Quantity">
+                <button
+                  type="button"
+                  className="qty-stepper__step"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                  aria-label="Decrease quantity"
+                >
+                  <StepIcon plus={false} />
+                </button>
+                <span className="qty-stepper__value" aria-live="polite" data-testid="qty-value">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  className={`qty-stepper__step${quantity >= maxQuantity ? ' qty-stepper__step--max' : ''}`}
+                  onClick={increase}
+                  aria-label="Increase quantity"
+                >
+                  <StepIcon plus />
+                </button>
+              </div>
+              <button
+                type="button"
+                className={`button copy-button buy-row__add${justAddedToCart ? ' copy-button--copied' : ''}${
+                  allInCart ? ' copy-button--disabled' : ''
+                }`}
+                onClick={handleAddToCart}
+                disabled={allInCart}
+                aria-label={`Add ${product.name} to cart`}
+                data-testid="add-to-cart"
               >
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            ) : (
-              <CartIcon className="copy-button__icon" />
-            )}
-          </button>
-        )}
+                {addButtonContent}
+              </button>
+            </>
+          )}
+        </div>
 
         <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
       </div>
 
-      {about !== '' && (
-        <>
-          <div className="section-divider" aria-hidden="true" />
-          <section className="product-detail__section">
-            <h2 className="product-detail__section-label">About this product</h2>
-            <p className="product-detail__description">{about}</p>
-          </section>
-        </>
+      {hasSections && (
+        <Accordion>
+          {about !== '' && (
+            <AccordionItem title="About this product" defaultOpen>
+              <p className="accordion__text">{about}</p>
+            </AccordionItem>
+          )}
+          {howToUse !== '' && (
+            <AccordionItem title="How to use" defaultOpen={about === ''}>
+              <p className="accordion__text">{howToUse}</p>
+            </AccordionItem>
+          )}
+          {keyIngredients !== '' && (
+            <AccordionItem title="Key ingredients">
+              <p className="accordion__text">{keyIngredients}</p>
+            </AccordionItem>
+          )}
+          {youtubeUrl !== '' && (
+            <AccordionItem title="Video review">
+              <VideoReview url={youtubeUrl} />
+            </AccordionItem>
+          )}
+        </Accordion>
       )}
 
-      {hasAccordion && (
-        <>
-          <div className="section-divider" aria-hidden="true" />
-          <Accordion>
-            {howToUse !== '' && (
-              <AccordionItem title="How to Use" defaultOpen>
-                <p className="accordion__text">{howToUse}</p>
-              </AccordionItem>
-            )}
-            {keyIngredients !== '' && (
-              <AccordionItem title="Key Ingredients">
-                <p className="accordion__text">{keyIngredients}</p>
-              </AccordionItem>
-            )}
-            {youtubeUrl !== '' && (
-              <AccordionItem title="Video Review">
-                <VideoReview url={youtubeUrl} />
-              </AccordionItem>
-            )}
-          </Accordion>
-        </>
+      <RelatedProducts product={product} />
+
+      {createPortal(
+        <div
+          className={`pdp-sticky${stickyShown ? ' pdp-sticky--shown' : ''}`}
+          aria-hidden={!stickyShown}
+          data-testid="sticky-bar"
+        >
+          <div className="pdp-sticky__price">
+            <span className="pdp-sticky__amount">{formatTaka(mainPrice)}</span>
+            {sizeLabel !== '' && <span className="pdp-sticky__size">{sizeLabel}</span>}
+          </div>
+          <button
+            type="button"
+            className={`button copy-button pdp-sticky__add${justAddedToCart ? ' copy-button--copied' : ''}${
+              outOfStock || allInCart ? ' copy-button--disabled' : ''
+            }`}
+            onClick={handleAddToCart}
+            disabled={outOfStock || allInCart}
+            tabIndex={stickyShown ? 0 : -1}
+            data-testid="sticky-add"
+          >
+            {outOfStock ? 'Out of Stock' : addButtonContent}
+          </button>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -449,6 +665,10 @@ export function ProductDetailPage() {
   const [fetchedVariants, setFetchedVariants] = useState<ProductVariant[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  // The top bar turns solid with the product name once the picture has
+  // scrolled away (reported by DetailContent).
+  const [heroOffScreen, setHeroOffScreen] = useState(false);
+  const handleHeroOffScreen = useCallback((off: boolean) => setHeroOffScreen(off), []);
 
   /** Slug is canonical; SKU still resolves so links shared before the slug
    *  migration (and cached rows that predate it) keep working. */
@@ -588,18 +808,38 @@ export function ProductDetailPage() {
   const showLoading = !product && (isLoading || isFetching);
 
   return (
-    <div className="viewer-shell detail-shell">
-      <header className="detail-header">
+    <div className="viewer-shell detail-shell pdp-shell">
+      {/* Floats over the picture (Batch 27): round glass buttons; once the
+          picture has scrolled away it becomes a glass bar with the name. */}
+      <header
+        className={`pdp-header${product && heroOffScreen ? ' pdp-header--solid' : ''}${
+          product ? '' : ' pdp-header--plain'
+        }`}
+        data-testid="pdp-header"
+      >
+        <span className="pdp-header__glass" aria-hidden="true" />
         <BackButton />
-        <div className="detail-header__actions">
-          <ThemeToggle />
-          {product && <ShareButton product={product} variant="header" />}
+        <p className="pdp-header__title" aria-hidden={!heroOffScreen}>
+          {product?.name ?? ''}
+        </p>
+        <div className="pdp-header__actions">
+          {product && (
+            <span className="pdp-header__share">
+              <ShareButton product={product} variant="header" />
+            </span>
+          )}
+          <HeaderCartButton />
         </div>
       </header>
 
-      <main className="detail-main">
+      <main className="detail-main pdp-main">
         {product ? (
-          <DetailContent key={product.id} product={product} variants={variants} />
+          <DetailContent
+            key={product.id}
+            product={product}
+            variants={variants}
+            onHeroOffScreen={handleHeroOffScreen}
+          />
         ) : showLoading ? (
           <ProductDetailSkeleton />
         ) : (

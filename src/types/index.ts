@@ -252,6 +252,10 @@ export interface AppSettings {
   /* --- Editable texts (Batch 24 Part 7) — blank means "use the default" --- */
   text_checkout_signin_title: string;
   text_checkout_signin_message: string;
+  /** Product page trust boxes (Batch 27). */
+  text_trust_authentic: string;
+  text_trust_cod: string;
+  text_trust_delivery: string;
 }
 
 /**

@@ -11,7 +11,7 @@ export function BannerTextsTab() {
   const pages: SubPage[] = [
     { id: 'banner', group: 'HOME PAGE', label: 'Banner slides', icon: 'bento', render: () => <BannerSlidesPanel /> },
     { id: 'expert', group: 'HOME PAGE', label: 'Expert page (Talk to an Expert)', icon: 'profile', render: () => <ExpertSettingsPanel /> },
-    { id: 'texts', group: 'TEXTS', label: 'Site texts (checkout sign-in note)', icon: 'design', render: () => <TextsPanel /> },
+    { id: 'texts', group: 'TEXTS', label: 'Site texts (checkout note, trust boxes)', icon: 'design', render: () => <TextsPanel /> },
   ];
   return (
     <section aria-label="Banner and texts">

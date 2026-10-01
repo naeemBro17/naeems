@@ -101,6 +101,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ga_measurement_id: '',
   text_checkout_signin_title: '',
   text_checkout_signin_message: '',
+  text_trust_authentic: '',
+  text_trust_cod: '',
+  text_trust_delivery: '',
   low_stock_threshold: '5',
 };
 
@@ -145,6 +148,9 @@ const TEXT_SETTING_KEYS = [
   'ga_measurement_id',
   'text_checkout_signin_title',
   'text_checkout_signin_message',
+  'text_trust_authentic',
+  'text_trust_cod',
+  'text_trust_delivery',
   'low_stock_threshold',
 ] as const satisfies readonly (keyof AppSettings)[];
 

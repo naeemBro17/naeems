@@ -2,7 +2,12 @@ import { CHECKOUT_LOGIN_COPY } from './checkoutCopy';
 import type { AppSettings } from '../types';
 
 /** An app_settings key that holds an editable site text. */
-export type EditableTextKey = 'text_checkout_signin_title' | 'text_checkout_signin_message';
+export type EditableTextKey =
+  | 'text_checkout_signin_title'
+  | 'text_checkout_signin_message'
+  | 'text_trust_authentic'
+  | 'text_trust_cod'
+  | 'text_trust_delivery';
 
 export interface EditableTextField {
   key: EditableTextKey;
@@ -20,7 +25,9 @@ export interface EditableTextGroup {
 }
 
 /**
- * Site texts Naeem can change in Admin → Settings → Texts (Batch 24 Part 7).
+ * Site texts Naeem can change in Admin → Banner & Texts → Site texts
+ * (Batch 24 Part 7; product page trust boxes added in Batch 27). They are
+ * plain app_settings rows, so a new text needs no database change.
  * To make another text editable: add its key to AppSettings and
  * TEXT_SETTING_KEYS (ProductContext), add a group or field here, and read it
  * with siteText() where it is shown. Nothing else is needed.
@@ -45,6 +52,16 @@ export const EDITABLE_TEXT_GROUPS: EditableTextGroup[] = [
       },
     ],
   },
+  {
+    id: 'product-trust',
+    title: 'Product page trust boxes',
+    description: 'The three small boxes under the stock line on every product page.',
+    fields: [
+      { key: 'text_trust_authentic', label: 'Box 1', defaultText: '100% authentic', multiline: false },
+      { key: 'text_trust_cod', label: 'Box 2', defaultText: 'Cash on delivery', multiline: false },
+      { key: 'text_trust_delivery', label: 'Box 3', defaultText: 'Fast delivery', multiline: false },
+    ],
+  },
 ];
 
 const DEFAULTS: Record<EditableTextKey, string> = Object.fromEntries(
@@ -53,7 +70,7 @@ const DEFAULTS: Record<EditableTextKey, string> = Object.fromEntries(
 
 /** The text to show: the saved one, or the default when it is empty — so
  *  the page never shows a blank or broken text. */
-export function siteText(settings: Pick<AppSettings, EditableTextKey>, key: EditableTextKey): string {
+export function siteText(settings: Partial<Pick<AppSettings, EditableTextKey>>, key: EditableTextKey): string {
   const saved = settings[key];
   return typeof saved === 'string' && saved.trim() !== '' ? saved.trim() : DEFAULTS[key];
 }

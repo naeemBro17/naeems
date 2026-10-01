@@ -92,6 +92,20 @@
   --space-8: 32px;
   --space-10: 40px;
 
+  /* Batch 27: neutral card cart button, the "− 1 +" stepper, and the
+     frosted glass used by the floating cart button and the product page's
+     header / sticky bar (semi-transparent, blurred, soft light border). */
+  --cart-btn-bg:          #F2F2F4;
+  --cart-btn-border:      #E5E5EA;
+  --stepper-bg:           #1C1C1E;
+  --stepper-fg:           #FFFFFF;
+  --glass-bg:             rgba(255, 255, 255, 0.62);
+  --glass-bg-strong:      rgba(255, 255, 255, 0.82);
+  --glass-border:         rgba(255, 255, 255, 0.85);
+  --glass-edge:           rgba(0, 0, 0, 0.06);
+  --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --glass-fg:             #1C1C1E;
+
   /* Height of the fixed bottom nav, so pages can pad clear of it. */
   --bottom-nav-height: calc(58px + max(18px, env(safe-area-inset-bottom)));
 }
@@ -139,6 +153,17 @@
   --nav-glass:            rgba(12, 12, 12, 0.75);
   --nav-border:           rgba(128, 128, 128, 0.1);
 
+  --cart-btn-bg:          #2C2C2E;
+  --cart-btn-border:      #3A3A3C;
+  --stepper-bg:           #F2F2F4;
+  --stepper-fg:           #1C1C1E;
+  --glass-bg:             rgba(40, 40, 42, 0.55);
+  --glass-bg-strong:      rgba(28, 28, 30, 0.8);
+  --glass-border:         rgba(255, 255, 255, 0.14);
+  --glass-edge:           rgba(255, 255, 255, 0.06);
+  --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --glass-fg:             #FFFFFF;
+
   --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
 }
 
@@ -182,6 +207,17 @@
 
     --nav-glass:            rgba(12, 12, 12, 0.75);
     --nav-border:           rgba(128, 128, 128, 0.1);
+
+    --cart-btn-bg:          #2C2C2E;
+    --cart-btn-border:      #3A3A3C;
+    --stepper-bg:           #F2F2F4;
+    --stepper-fg:           #1C1C1E;
+    --glass-bg:             rgba(40, 40, 42, 0.55);
+    --glass-bg-strong:      rgba(28, 28, 30, 0.8);
+    --glass-border:         rgba(255, 255, 255, 0.14);
+    --glass-edge:           rgba(255, 255, 255, 0.06);
+    --glass-shadow:         0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --glass-fg:             #FFFFFF;
 
     --shadow-circle: 0 2px 8px rgba(0,0,0,0.4);
   }
