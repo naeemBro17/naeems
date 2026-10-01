@@ -24,6 +24,12 @@ export interface Product {
    * absent (undefined) in cached data written before migration-007.
    */
   brand: string | null;
+  /**
+   * The brand this product belongs to (Batch 26). The database keeps
+   * `brand` (the name) in step with it. Absent (undefined) on rows cached
+   * before migration-032.
+   */
+  brand_id?: string | null;
   /** Longer free-text shown only on the detail page, under the name. */
   description: string | null;
   category_id: string | null;
@@ -594,7 +600,9 @@ export type StaffPermission =
   | 'view_customers'
   | 'delete_early_orders'
   | 'view_wholesalers'
-  | 'see_sales';
+  | 'see_sales'
+  | 'edit_brands'
+  | 'edit_customer_notes';
 
 /** The signed-in staff member's own row (Super Admin or moderator). */
 export interface StaffMember {
@@ -636,4 +644,28 @@ export interface ActivityLogEntry {
   entity_label: string | null;
   summary: string;
   details: Record<string, unknown>;
+}
+
+/* ============================================================
+   Brands (Batch 26)
+   ============================================================ */
+
+/** One brand: its page at /brand/<slug>, its logo card on Home. */
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  /** Normal logo (a trimmed, transparent WebP). Null = the name as text. */
+  logo_url: string | null;
+  /** Optional white logo for dark mode. */
+  logo_dark_url: string | null;
+  banner_image_url: string | null;
+  /** Uploaded MP4/WebM: plays muted, looping, inline on the brand page. */
+  banner_video_url: string | null;
+  /** Second choice to an uploaded video. */
+  banner_youtube_url: string | null;
+  show_on_home: boolean;
+  display_order: number;
+  updated_at: string;
+  updated_by: string | null;
 }

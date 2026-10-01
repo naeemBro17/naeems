@@ -7,6 +7,7 @@ import { normalizeText } from '../../lib/format';
 import { productImages, coverImage, generateCardThumb } from '../../lib/productImages';
 import { ProductForm } from './ProductForm';
 import { CombineProductsSheet } from './CombineProductsSheet';
+import { RestockSheet } from './RestockSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { BottomSheet } from '../shared/BottomSheet';
 import { isOutOfStock } from '../../lib/stockStatus';
@@ -82,6 +83,7 @@ export function ProductList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   /** Phone: checkboxes appear only after "Select products". On a computer
    *  the checkbox column is always there. */
   const [selectMode, setSelectMode] = useState(false);
@@ -324,6 +326,7 @@ export function ProductList() {
   const rowMenu = (product: Product): MenuItem[] => {
     const items: MenuItem[] = [
       { label: 'Edit', icon: 'edit', onSelect: () => openEditor(product) },
+      { label: 'Restock', icon: 'restock', onSelect: () => setRestockProduct(product) },
       {
         label: product.is_featured ? 'Remove from home' : 'Feature on home',
         icon: 'star',
@@ -613,6 +616,13 @@ export function ProductList() {
         product={editingProduct}
         editInfo={editingProduct ? (editInfo.get(editingProduct.id) ?? null) : null}
         onClose={() => setFormOpen(false)}
+      />
+
+      <RestockSheet
+        product={restockProduct ? (products.find((p) => p.id === restockProduct.id) ?? restockProduct) : null}
+        variants={restockProduct ? variantsFor(restockProduct.id) : []}
+        onClose={() => setRestockProduct(null)}
+        onDone={refetch}
       />
 
       <ConfirmDialog

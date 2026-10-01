@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -125,6 +125,7 @@ function DetailContent({
   variants: ProductVariant[];
 }) {
   const { addItem } = useCart();
+  const { brands } = useProducts();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const [justAddedToCart, setJustAddedToCart] = useState(false);
@@ -196,6 +197,8 @@ function DetailContent({
   const hasWholesale = hasSelector ? selectedOption.has_wholesale : product.has_wholesale;
   const wholesalePrice = hasSelector ? selectedOption.wholesale_price : product.wholesale_price;
   const brand = product.brand?.trim() ?? '';
+  // The small brand name opens that brand's page (Batch 26).
+  const brandSlug = brands.find((b) => b.id === product.brand_id)?.slug ?? null;
   // `note` is the short line under the price; `description` is the long copy.
   // A variant's own note (Part 5) stands in for the product's when set.
   const about = product.description?.trim() ?? '';
@@ -290,7 +293,16 @@ function DetailContent({
       )}
 
       <div className="product-detail__info">
-        {brand !== '' && <p className="product-detail__brand">{brand}</p>}
+        {brand !== '' &&
+          (brandSlug ? (
+            <p className="product-detail__brand">
+              <Link to={`/brand/${brandSlug}`} className="product-detail__brand-link" data-testid="product-brand-link">
+                {brand}
+              </Link>
+            </p>
+          ) : (
+            <p className="product-detail__brand">{brand}</p>
+          ))}
 
         <h1 className="product-detail__name">{product.name}</h1>
 

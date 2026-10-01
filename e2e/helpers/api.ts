@@ -174,3 +174,25 @@ export async function productStock(productId: string): Promise<number> {
   );
   return result.data?.[0]?.stock_quantity ?? Number.NaN;
 }
+
+/** Inserts rows and returns them (Batch 26: test brands and products). */
+export function insert<T>(
+  token: string,
+  table: string,
+  rows: Record<string, unknown> | Record<string, unknown>[],
+  returning = true
+): Promise<ApiResult<T>> {
+  return call<T>(token, `/rest/v1/${table}`, {
+    method: 'POST',
+    body: JSON.stringify(rows),
+    headers: { Prefer: returning ? 'return=representation' : 'return=minimal' },
+  });
+}
+
+/** Deletes the rows a filter matches (nothing is read back). */
+export function remove<T>(token: string, pathAndQuery: string): Promise<ApiResult<T>> {
+  return call<T>(token, `/rest/v1/${pathAndQuery}`, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  });
+}

@@ -30,7 +30,10 @@ export type AdminUiIconName =
   | 'courier'
   | 'chart'
   | 'shield'
-  | 'logout';
+  | 'logout'
+  | 'video'
+  | 'restock'
+  | 'tag';
 
 /* Line icons, 24×24, drawn with currentColor — the same style as the Batch
    24 admin sidebar icons they replace. */
@@ -258,6 +261,24 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
   chart: (
     <>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </>
+  ),
+  video: (
+    <>
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="M16 10.5l5-3v9l-5-3" />
+    </>
+  ),
+  restock: (
+    <>
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
+      <path d="M12 9v6M9 12h6" />
+    </>
+  ),
+  tag: (
+    <>
+      <path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z" />
+      <circle cx="7.5" cy="7.5" r="1.5" />
     </>
   ),
   logout: (

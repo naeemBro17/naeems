@@ -83,9 +83,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'customers', label: 'Customers', icon: 'customers', group: 'main' },
   { id: 'products', label: 'Products', icon: 'products', group: 'catalog' },
   { id: 'categories', label: 'Categories', icon: 'categories', group: 'catalog' },
-  // Brands: its own page arrives in Batch 26. The place in the menu is
-  // reserved here; switch comingLater off when the page exists.
-  { id: 'brands', label: 'Brands', icon: 'brands', group: 'catalog', comingLater: true },
+  { id: 'brands', label: 'Brands', icon: 'brands', group: 'catalog' },
   { id: 'import-export', label: 'Import / Export', icon: 'import', group: 'catalog' },
   { id: 'promo-codes', label: 'Promo Codes', icon: 'promo', group: 'sales' },
   { id: 'wholesalers', label: 'Wholesalers', icon: 'wholesalers', group: 'sales' },
@@ -128,7 +126,7 @@ export function canOpenSection(section: AdminSection, access: NavAccess): boolea
     case 'profile':
       return !isAdmin;
     case 'brands':
-      return false;
+      return can('edit_brands');
     default:
       return isAdmin;
   }

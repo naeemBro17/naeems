@@ -35,6 +35,7 @@ function loadEnv() {
 const STATIC_ROUTES = [
   '/',
   '/contact',
+  '/brands',
   '/about',
   '/delivery',
   '/return-policy',
@@ -74,6 +75,22 @@ async function main() {
           path: `/product/${row.slug ?? row.sku}`,
           updatedAt: row.updated_at ?? null,
         }));
+        // Brand pages (Batch 26) — every brand with a live product. Before
+        // migration-032 there is no brands table; that is simply skipped.
+        const headers = { apikey: env.anonKey, Authorization: `Bearer ${env.anonKey}` };
+        const brandRes = await fetch(`${env.url}/rest/v1/brands?select=id,slug,updated_at`, { headers });
+        const usedRes = await fetch(
+          `${env.url}/rest/v1/products_view?select=brand_id&is_active=eq.true&brand_id=not.is.null`,
+          { headers }
+        );
+        if (brandRes.ok && usedRes.ok) {
+          const used = new Set((await usedRes.json()).map((r) => r.brand_id));
+          for (const brand of await brandRes.json()) {
+            if (used.has(brand.id)) {
+              productUrls.push({ path: `/brand/${brand.slug}`, updatedAt: brand.updated_at ?? null });
+            }
+          }
+        }
       } else {
         console.warn(`generate-sitemap: products_view fetch failed (${res.status}), writing static-only sitemap`);
       }

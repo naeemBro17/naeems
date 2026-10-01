@@ -8,6 +8,8 @@ import { formatDhakaTime } from '../../lib/staff';
 import { ORDER_STATUS_LABELS } from '../../lib/orderStatus';
 import { AdminPageHeader, AdminSearch, EmptyState, SkeletonRows } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
+import { CustomerNotesEditor, CustomerTagChips } from './CustomerNotes';
+import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../lib/brandAdmin';
 import type { OrderStatus } from '../../types';
 
 type SortKey = 'recent' | 'orders' | 'spent' | 'joined' | 'name';
@@ -36,6 +38,22 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
   const [search, setSearch] = useUrlParam<string>('cq', '');
   const [sort, setSort] = useUrlParam<SortKey>('csort', 'recent', SORT_KEYS);
   const [openId, setOpenId] = useState('');
+  const [tagFilter, setTagFilter] = useUrlParam<string>('ctag', '');
+  // Private notes and tags (Batch 26): staff only, read with "View
+  // customers", changed with "Edit customer notes".
+  const [notes, setNotes] = useState<Map<string, CustomerNote>>(() => new Map());
+
+  useEffect(() => {
+    let alive = true;
+    void fetchCustomerNotes().then((map) => {
+      if (alive) setNotes(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tags = useMemo(() => knownTags(notes), [notes]);
 
   useEffect(() => {
     let alive = true;
@@ -54,14 +72,17 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const tagged = tagFilter
+      ? rows.filter((r) => (notes.get(r.id)?.tags ?? []).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+      : rows;
     const list = term
-      ? rows.filter(
+      ? tagged.filter(
           (r) =>
             r.full_name.toLowerCase().includes(term) ||
             r.email.toLowerCase().includes(term) ||
             r.phone.replace(/\s/g, '').includes(term.replace(/\s/g, ''))
         )
-      : rows;
+      : tagged;
     const sorted = [...list];
     const time = (iso: string | null) => (iso ? new Date(iso).getTime() : 0);
     sorted.sort((a, b) => {
@@ -79,7 +100,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       }
     });
     return sorted;
-  }, [rows, search, sort]);
+  }, [rows, search, sort, tagFilter, notes]);
 
   const open = rows.find((r) => r.id === openId) ?? null;
 
@@ -96,6 +117,22 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
           <option value="joined">Newest</option>
           <option value="name">Name A–Z</option>
         </select>
+        {tags.length > 0 && (
+          <select
+            className="adm-select"
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+            aria-label="Filter by tag"
+            data-testid="customer-tag-filter"
+          >
+            <option value="">All tags</option>
+            {tags.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="adm-spacer" />
@@ -107,7 +144,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       ) : rows.length === 0 ? (
         <EmptyState icon="customers" title="No customer accounts yet" hint="Shoppers appear here after they sign in at checkout." />
       ) : visible.length === 0 ? (
-        <EmptyState icon="search" title="No customer matches that search" />
+        <EmptyState icon="search" title={tagFilter ? 'No customer has that tag' : 'No customer matches that search'} />
       ) : (
         <div className={`adm-list adm-clist${showMoney ? ' adm-clist--money' : ''}`} role="list" aria-label="Customers">
           <div className="adm-thead" aria-hidden="true">
@@ -132,6 +169,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
                 >
                   <span className="adm-lrow__name">{c.full_name || c.email}</span>
                 </button>
+                <CustomerTagChips tags={notes.get(c.id)?.tags ?? []} />
                 <p className="adm-lrow__meta adm-mobile-meta">
                   <span>{c.phone || c.email}</span>
                   <span>
@@ -162,6 +200,16 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       <CustomerSheet
         customer={open}
         canOpenOrders={can('view_orders')}
+        note={open ? (notes.get(open.id) ?? null) : null}
+        knownTags={tags}
+        canEditNotes={can('edit_customer_notes')}
+        onNoteSaved={(id, saved) =>
+          setNotes((prev) => {
+            const next = new Map(prev);
+            next.set(id, saved);
+            return next;
+          })
+        }
         onClose={() => setOpenId('')}
         onOpenOrder={onOpenOrder}
       />
@@ -172,11 +220,19 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
 function CustomerSheet({
   customer,
   canOpenOrders,
+  note,
+  knownTags: allTags,
+  canEditNotes,
+  onNoteSaved,
   onClose,
   onOpenOrder,
 }: {
   customer: CustomerRow | null;
   canOpenOrders: boolean;
+  note: CustomerNote | null;
+  knownTags: string[];
+  canEditNotes: boolean;
+  onNoteSaved: (customerId: string, note: CustomerNote) => void;
   onClose: () => void;
   onOpenOrder: (orderId: string) => void;
 }) {
@@ -224,6 +280,15 @@ function CustomerSheet({
               </div>
             )}
           </div>
+
+          <CustomerNotesEditor
+            key={customer.id}
+            customerId={customer.id}
+            note={note}
+            knownTags={allTags}
+            canEdit={canEditNotes}
+            onSaved={(saved) => onNoteSaved(customer.id, saved)}
+          />
 
           <h3 className="adm-group__title adm-customer__heading">ORDERS</h3>
           {orders === null ? (

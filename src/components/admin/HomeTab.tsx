@@ -4,6 +4,7 @@ import { fetchDashboard, type DashboardData } from '../../lib/adminData';
 import { formatTakaBd, greeting, greetingName, type AdminSection } from '../../lib/adminNav';
 import { AdminPageHeader, EmptyState, ListGroup, ListRow } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
+import { SalesChart } from './SalesChart';
 
 interface HomeTabProps {
   /** "NAEEM'S SUPER ADMIN" / "NAEEM'S <ROLE>". */
@@ -148,6 +149,8 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
               </button>
             </div>
           )}
+
+          {sales && <SalesChart />}
 
           <ListGroup title="NEEDS ATTENTION">
             {attention.length === 0 ? (
