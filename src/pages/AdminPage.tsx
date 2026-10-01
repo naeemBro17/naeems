@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { AdminLayout, type AdminTab } from '../components/admin/AdminLayout';
+import { AdminLayout } from '../components/admin/AdminLayout';
 import { ProductList } from '../components/admin/ProductList';
 import { CategoryManager } from '../components/admin/CategoryManager';
 import { RegionSizeManager } from '../components/admin/RegionSizeManager';
@@ -14,58 +15,83 @@ import { OrdersTab } from '../components/admin/OrdersTab';
 import { TeamTab } from '../components/admin/TeamTab';
 import { ActivityLogTab } from '../components/admin/ActivityLogTab';
 import { MyProfileTab } from '../components/admin/MyProfileTab';
+import { HomeTab } from '../components/admin/HomeTab';
+import { MoreTab } from '../components/admin/MoreTab';
+import { CustomersTab } from '../components/admin/CustomersTab';
+import { BannerTextsTab } from '../components/admin/BannerTextsTab';
+import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
-import { useUrlParam } from '../hooks/useUrlParams';
+import { fetchOwnRoleName } from '../lib/staff';
+import {
+  ALL_SECTIONS,
+  adminTitle,
+  bottomTabs,
+  canOpenSection,
+  moreItems,
+  visibleNavItems,
+  type AdminSection,
+} from '../lib/adminNav';
 import { useAuth } from '../contexts/AuthContext';
 import { SafetyLockBar, SafetyLockProvider } from '../contexts/SafetyLockContext';
 import type { WholesalerAccount, Order } from '../types';
-
-const ADMIN_TABS: readonly AdminTab[] = [
-  'products', 'categories', 'import-export', 'wholesalers', 'orders',
-  'reviews', 'bento', 'promo-codes', 'settings', 'team', 'activity', 'profile',
-];
+import '../styles/admin.css';
 
 export function AdminPage() {
-  const { isAdmin, isModerator, can, staff, refreshStaff } = useAuth();
+  const { isAdmin, can, staff, refreshStaff } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const [roleName, setRoleName] = useState<string | null>(null);
 
-  // Batch 24: a moderator only sees the sections their permissions allow.
-  // Hiding a section is only for tidiness — the database refuses the same
-  // actions for them anyway.
-  const visibleTabs = useMemo<AdminTab[]>(() => {
-    if (isAdmin) return ADMIN_TABS.filter((t) => t !== 'profile');
-    const tabs: AdminTab[] = [];
-    if (can('view_orders')) tabs.push('orders');
-    if (can('edit_products')) tabs.push('products');
-    if (can('edit_categories') || can('edit_products')) tabs.push('categories');
-    if (can('view_customers')) tabs.push('wholesalers');
-    if (isModerator) tabs.push('profile');
-    return tabs;
-  }, [isAdmin, isModerator, can]);
+  // Batch 25: one list decides the sidebar, the bottom bar and the More
+  // page (lib/adminNav.ts). The database refuses the same actions anyway.
+  const access = useMemo(() => ({ isAdmin: isAdmin === true, can }), [isAdmin, can]);
+  const items = useMemo(() => visibleNavItems(access), [access]);
+  const tabs = useMemo(() => bottomTabs(items), [items]);
+  const more = useMemo(() => moreItems(items, tabs), [items, tabs]);
 
-  // The open tab lives in the URL (?tab=...) — which also keeps supporting a
-  // deep link like /admin?tab=orders&order=<uuid> from the Telegram order
-  // notification — so Back from a page opened out of the admin panel returns
-  // to the same tab, not always Products.
-  const defaultTab: AdminTab = visibleTabs.includes('products') ? 'products' : (visibleTabs[0] ?? 'profile');
-  const [activeTab, setActiveTab] = useUrlParam<AdminTab>('tab', defaultTab, visibleTabs);
+  // The open section lives in the URL (?tab=...) — which also keeps a deep
+  // link like /admin?tab=orders&order=<uuid> from the Telegram order
+  // notification working — so phone Back and refresh keep your place.
+  const requested = (searchParams.get('tab') ?? '') as AdminSection;
+  const active: AdminSection =
+    (ALL_SECTIONS as readonly string[]).includes(requested) && canOpenSection(requested, access) ? requested : 'home';
+  const orderParam = searchParams.get('order');
+
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const initialOrderId = useMemo(() => new URLSearchParams(window.location.search).get('order'), []);
   const canViewOrders = can('view_orders');
-  const canViewCustomers = can('view_customers');
+  const canViewWholesalers = can('view_wholesalers');
 
-  // Loaded once for the pending-count badge and reused by the Wholesalers tab.
+  // The admin's own look for toasts (they render outside the admin shell).
+  useEffect(() => {
+    document.documentElement.dataset.admin = 'true';
+    return () => {
+      delete document.documentElement.dataset.admin;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) return;
+    let alive = true;
+    void fetchOwnRoleName().then((name) => {
+      if (alive) setRoleName(name);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isAdmin, staff]);
+
   const loadWholesalers = useCallback(async () => {
-    if (!canViewCustomers) return;
+    if (!canViewWholesalers) return;
     const { data, error } = await supabase.rpc('admin_list_profiles');
     if (!error && data) {
       setWholesalers(data as WholesalerAccount[]);
     }
-  }, [canViewCustomers]);
+  }, [canViewWholesalers]);
 
-  // Same pattern as loadWholesalers: loaded once here, passed down to
-  // OrdersTab, and re-run after any change (status update, cancel) so both
-  // the tab's own list and the sidebar's pending-count badge stay in sync.
+  // Loaded once here and passed down to OrdersTab, and re-run after any
+  // change so both the list and the "to confirm" badge stay in sync.
   const loadOrders = useCallback(async () => {
     if (!canViewOrders) return;
     setOrders(await fetchAllOrders());
@@ -76,53 +102,65 @@ export function AdminPage() {
     void loadOrders();
   }, [loadWholesalers, loadOrders]);
 
-  // A moderator's permissions can change (or their account be switched off)
-  // while they are signed in — re-read them whenever they change section.
-  const handleTabChange = useCallback(
-    (tab: AdminTab) => {
-      setActiveTab(tab);
+  /** Opens a section (a new history entry, so phone Back returns here),
+   *  optionally already filtered. */
+  const goTo = useCallback(
+    (section: AdminSection, params: Record<string, string> = {}) => {
+      const next = new URLSearchParams();
+      if (section !== 'home') next.set('tab', section);
+      for (const [key, value] of Object.entries(params)) next.set(key, value);
+      const search = next.toString();
+      if (`?${search}` === location.search || (search === '' && location.search === '')) return;
+      navigate({ search: search === '' ? '' : `?${search}` });
+      window.scrollTo(0, 0);
+      // A moderator's permissions can change while they are signed in —
+      // re-read them whenever they change section.
       if (!isAdmin) void refreshStaff();
     },
-    [setActiveTab, isAdmin, refreshStaff]
+    [navigate, location.search, isAdmin, refreshStaff]
   );
 
-  const pendingWholesalers = wholesalers.filter(
-    (w) => w.role === 'wholesaler' && w.status === 'pending'
-  ).length;
   const pendingOrders = orders.filter((o) => o.status === 'pending').length;
+  const title = adminTitle(isAdmin === true, roleName);
 
   return (
     <SafetyLockProvider>
       <AdminLayout
-        activeTab={activeTab}
-        visibleTabs={visibleTabs}
+        active={active}
+        items={items}
+        tabs={tabs}
+        title={title}
         username={staff?.username ?? null}
         banner={isAdmin ? <SafetyLockBar /> : null}
-        onTabChange={handleTabChange}
-        pendingWholesalers={pendingWholesalers}
+        onNavigate={(section) => goTo(section)}
         pendingOrders={pendingOrders}
       >
-        {activeTab === 'products' && <ProductList />}
-        {activeTab === 'categories' && (
+        {active === 'home' && <HomeTab title={title} onOpen={goTo} />}
+        {active === 'more' && <MoreTab items={more} username={staff?.username ?? null} onOpen={goTo} />}
+        {active === 'products' && <ProductList />}
+        {active === 'categories' && (
           <>
+            <AdminPageHeader title="Categories" />
             {can('edit_categories') && <CategoryManager />}
             {can('edit_products') && <RegionSizeManager />}
           </>
         )}
-        {activeTab === 'import-export' && <CSVImport />}
-        {activeTab === 'wholesalers' && (
+        {active === 'import-export' && <CSVImport />}
+        {active === 'wholesalers' && (
           <WholesalerList accounts={wholesalers} onReload={loadWholesalers} readOnly={!isAdmin} />
         )}
-        {activeTab === 'orders' && (
-          <OrdersTab orders={orders} onReload={loadOrders} initialOrderId={initialOrderId} />
+        {active === 'orders' && (
+          <OrdersTab key={orderParam ?? 'list'} orders={orders} onReload={loadOrders} initialOrderId={orderParam} />
         )}
-        {activeTab === 'reviews' && <ReviewsTab />}
-        {activeTab === 'bento' && <BentoTilesTab />}
-        {activeTab === 'promo-codes' && <PromoCodesTab />}
-        {activeTab === 'settings' && <SettingsTab />}
-        {activeTab === 'team' && <TeamTab />}
-        {activeTab === 'activity' && <ActivityLogTab />}
-        {activeTab === 'profile' && <MyProfileTab />}
+        {active === 'customers' && <CustomersTab onOpenOrder={(id) => goTo('orders', { order: id })} />}
+        {active === 'reviews' && <ReviewsTab />}
+        {active === 'bento' && <BentoTilesTab />}
+        {active === 'design' && <BannerTextsTab />}
+        {active === 'promo-codes' && <PromoCodesTab />}
+        {active === 'settings' && <SettingsTab />}
+        {active === 'team' && <TeamTab />}
+        {active === 'activity' && <ActivityLogTab />}
+        {active === 'profile' && <MyProfileTab />}
       </AdminLayout>
     </SafetyLockProvider>
   );
