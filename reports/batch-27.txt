@@ -1,0 +1,356 @@
+BATCH 27 — Product page redesign, glass cart, card steppers,
+"You may also like", card titles
+==============================================================
+Branch: feature/batch-27-product-page (made from the latest origin/main,
+which already has Batch 26). Pushed. NOT merged, nothing pushed to main.
+No database changes and no Supabase deploys in this batch.
+Mockup copied to docs/pdp-redesign-mockup.png.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Product page redesign
+  Top of the page:
+  - The header now floats over the photo: ← on the left; Share and a
+    Cart button with an item-count badge on the right, all round glass
+    buttons. Tapping Cart opens the cart. The light/dark switch is gone
+    from this header only (it is still on Home, brand pages, etc.).
+  - Gallery: same swipe gallery, dots under the photo and a "1 / 3" pill
+    (only when there is more than one photo). The photo is still the
+    morph target: same element, same view-transition-name, still no
+    rounded corners of its own. I did not touch any transition or
+    scroll-memory code.
+  - Brand name (small, letter-spaced, underlined, with a ›) above the
+    title, still a link to the brand page.
+  - Title large and bold, always in full.
+  - Price large and black, struck-through old price, red "Save x%".
+  - Size/region chips: the selected one now has a black border on a
+    white chip. All Batch 23 option rules unchanged (photo follows the
+    choice, ?variant= links, etc.).
+  - Stock line: green dot + "In stock · <the product's note>".
+  - Three trust boxes with line icons: "100% authentic", "Cash on
+    delivery", "Fast delivery". Editable in Admin → Banner & Texts →
+    Site texts (new group "Product page trust boxes"). They are stored as
+    normal settings rows, so NO database change was needed. Empty =
+    default text.
+  - Quantity stepper (− 1 +) next to Add to Cart. Minimum 1. Maximum =
+    stock left (stock count minus what is already in the cart) for
+    products that track stock; up to 99 when stock isn't tracked. Tapping
+    + at the limit shows "Only N in stock". If the whole stock is already
+    in the cart the button says "All in your cart" and is disabled.
+  - Add to Cart adds the chosen quantity, shows "Added ✓" for a moment,
+    buzzes (where phones support it), and the header cart badge pulses.
+  - Wholesale row: untouched component, same rules (only approved
+    wholesalers and admins).
+  Scrolled part:
+  - Once the photo has scrolled away, a glass top bar fades in behind
+    the buttons with the product name on one line (…); Share fades out.
+  - Once the main Add to Cart has scrolled up out of view, a glass
+    sticky bar slides up from the bottom: price (+ size underneath when
+    the product has one) and an orange Add to Cart (adds the same
+    quantity). It hides again when the main button is back on screen.
+    The page has bottom padding so the bar never covers the last content.
+  - Sections: About this product · How to use · Key ingredients · Video
+    review. Clean rows, thin dividers, + / −. Several can be open. "About
+    this product" starts open (or "How to use" when there is no About).
+  - FIX — blue tap box: removed everywhere on the shop
+    (-webkit-tap-highlight-color: transparent on the whole page). Rows get
+    a soft grey pressed state instead.
+  - FIX — page jump when opening/closing a section: the tapped row's
+    header is now held at exactly the same place on screen while the
+    content changes (the browser's "scroll anchoring" was moving it). The
+    content fades and slides in under it (opacity + transform only);
+    closing is the mirror. A closed section's content is removed, so a
+    playing video stops when you close its section.
+  - Video review: before play, while starting, while paused and after it
+    ends, only OUR cover shows: YouTube's thumbnail, our round white Play
+    button and a small "Reviewed on YouTube" label. The cover goes up the
+    instant Pause is tapped (before YouTube answers) and also in the last
+    0.6 s before the end, so YouTube's pause screen and "more videos"
+    end screen never get a frame. All Batch 23 no-exit rules kept
+    (inline, no fullscreen, a full-size invisible layer takes every tap).
+  - "You may also like" at the end (Part 4).
+  Proof: e2e/batch-27.spec.ts Part 1 tests (list under TESTS), and the
+  screenshots.
+
+PART 2 — Glass cart button (Home, Search, All Brands, brand pages)
+  - Round 60 px glass button at the middle of the right edge with an
+    orange count badge, shown while the cart has something in it.
+  - Jumps in with a short bounce when the cart goes from empty to 1 on
+    that page; every later add gives a small pulse and the count updates.
+    Reduce-motion: no bounce or pulse, it just appears.
+  - Tapping it opens the cart. Gone when the cart is empty.
+  - Not shown on the product page, cart, checkout, account, orders or
+    admin. It sits above the page but below the bottom nav, sheets and
+    dialogs (an open option picker covers it — tested).
+  - Glass: semi-transparent white (dark: semi-transparent dark grey),
+    blur, a soft light border and a soft shadow, in both modes.
+
+PART 3 — Card cart button → quantity stepper; no brand line on cards
+  - The cards had no brand line any more (nothing to remove); the test
+    checks it stays that way.
+  - Cart button is now neutral: light grey circle with a dark icon (dark
+    mode: dark grey circle with a light icon).
+  - Tap → added (1) and the button becomes a "− 1 +" pill (dark pill in
+    light mode, light pill in dark mode). + adds one up to the stock
+    limit ("Only N in stock" message at the limit). − removes one; at 0
+    the item leaves the cart and the cart button comes back.
+  - The number is read from the cart itself, so it always matches the
+    cart page, the product page and other cards of the same product.
+  - Products with options still open the "Choose options" sheet; after
+    adding, the card's stepper shows that option's quantity.
+  - The old green tick is gone; the haptic buzz stays.
+  - Card price is now orange (the batch text: "orange only on the price"
+    on cards), since the cart button lost its orange.
+
+PART 4 — "You may also like"
+  The exact rule as built (src/lib/relatedProducts.ts):
+   1. Start from the catalogue the site already loaded. Remove the
+      current product, hidden products and out-of-stock products.
+   2. Group 1: same category AND same brand. Group 2: same category.
+      Group 3: same brand. (Brand = brand id; for an old product without
+      a brand id, the brand name, ignoring capitals and spaces.)
+   3. Inside each group, the closest price first (the price shown on the
+      card); a tie goes alphabetically.
+   4. Take up to 6.
+   5. If fewer than 3 matched, fill up (to 6) with the newest other
+      in-stock products. (The batch text said "same category group or
+      the newest"; the shop has no category groups, so it is the newest.)
+   6. If fewer than 2 in the end, the section is hidden.
+  - One sideways row using the browser's own scrolling (no touch code, so
+    up/down scrolling with a finger on the row works normally).
+  - Small cards with the Part 3 rules. On the product page their price is
+    black (orange on this page is only Add to Cart).
+  - Tapping a card opens that product with a plain quick fade (no picture
+    morph from this row, so it can never interfere with the main grid's
+    morph). Back (phone or ←) returns to the previous product at the same
+    scroll position — tested.
+
+PART 5 — Card titles rebuilt from scratch
+  The real reason the title never used the card's full width: the cart
+  button had its own column BESIDE the text, so the title only got the
+  card width minus about 42 px. CSS word-break tweaks could never fix
+  that.
+  Deleted:
+  - the old title rules: white-space / word-break: normal /
+    overflow-wrap: normal / hyphens: none / min-height on
+    .product-card__name;
+  - the two-column card body (.product-card__info text column + the
+    34 px .product-card__cart-slot column beside it);
+  - the leftover comment pointing to the old JS splitter (textWrap.ts was
+    already gone since Batch 7 — no JS measuring or splitting names
+    exists anywhere now).
+  New: the title is a plain block, 100% of the card's text area,
+  -webkit-line-clamp: 2 + overflow-wrap: break-word, normal word
+  wrapping, line-height 1.35, a fixed 2-line height. The card is now:
+  title (full width) → price → bottom row with "In stock" on the left and
+  the cart button / stepper on the right in its own grid slot (never over
+  the text). Same component on Home, Search, brand pages and "You may
+  also like".
+  Proof: the e2e test measures, at 360, 390 and 412 px, light and dark,
+  on the first 12 search results for "aveeno": title width = card content
+  width (±1 px), every first line is full (the next word really would
+  not have fitted), and every title box is the same height.
+  Screenshots: reports/batch-27-screens/titles-<width>-<light|dark>.png.
+  Note: a very long name (e.g. "Aveeno Baby Daily Moisture Lightly
+  Scented Wash & Shampoo 236mL") needs more than 2 lines at phone width,
+  so it still ends with "…" after the second line — that is the
+  "truncate only if longer than two lines" rule. The full name is on the
+  product page.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. No database changes, no function deploys.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was built.
+  - Commits are one per Part. The Parts share files (the product page
+    uses the new card, the stepper and the cart badge), so only the final
+    commit is guaranteed to build on its own. The final state was built
+    and fully tested three times.
+Needs a later batch (not built, as asked):
+  - an admin "Suggest with" picker per product (hand-picked "You may
+    also like" products) — needs a new table/column;
+  - "customers who bought this also bought", from real orders — needs a
+    database query over orders/order lines.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - The floating glass cart sits at the middle of the right edge, as
+    designed. While a right-hand card is exactly mid-screen, the glass
+    button covers that card's cart button / stepper until you scroll a
+    little. That is the trade-off of this position — please check on your
+    phone whether it bothers you.
+  - The live catalogue has no products with options today (they were
+    split into separate products in Batch 24). The option tests therefore
+    add one pretend option to the page's own copy of the data (the
+    database is never touched), so they always run.
+  - The cart page itself has no stock limit on its + button (it never
+    had). The card and product page now respect stock; the cart page
+    could too in a later batch.
+  - The old "Video Review" section used to keep playing sound after its
+    section was closed (the content was only hidden). Fixed as a side
+    effect: a closed section's content is removed.
+  - The big loading spinner is orange everywhere on the site; on the
+    video cover it is white now.
+  - FIXED a small admin bug (Admin → Banner & Texts → Site texts): if the
+    shop's data reloaded just after the page opened (it does when your
+    sign-in is confirmed), whatever you had already typed in a text box was
+    wiped, and Save then saved an empty box (= back to the default text).
+    Now a box you have typed in is never overwritten until you save. This
+    is what made the Batch 24 "checkout sign-in note" test fail now and
+    then; it now passes 5 out of 5 on repeat.
+  - Video play/pause now follows the tap at once (the label and our cover
+    change on the tap itself), then settles to what YouTube reports.
+    Before, after very fast taps the button could briefly show the wrong
+    word. Found while making the old Batch 23 video test pass reliably;
+    it is now 12 out of 12 on repeat.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Mockup vs text: the text won where they differ:
+    · Card prices: the mockup and the text both show orange card prices,
+      but CLAUDE.md says prices are black. I followed this batch's text
+      (orange price, neutral cart button = still one orange thing per
+      card). On the product page all prices are black.
+    · "the glass cart appears" after Add to Cart on the product page vs
+      "not on the product page": the header cart is the product page's
+      cart button, so it pulses and counts instead.
+    · "Video review" is closed by default (the mockup shows it open), to
+      keep the page short and the video from loading for everyone.
+  - Section titles use sentence case like the mockup ("How to use",
+    "Video review").
+  - The header buttons stay round glass circles in both states; only the
+    bar behind them fades in (cleaner than morphing the buttons).
+  - Sticky bar uses the same quantity as the main stepper.
+  - Glass look: the bento tiles in the code have no blur of their own,
+    so I built the glass from the bottom nav's frosted look plus a light
+    border and soft shadow (new tokens --glass-* in tokens.css, light and
+    dark).
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Stock limit on the cart page (small). The cart page's + still lets a
+   shopper go past the stock count; the order would then fail or be
+   short. Same "Only N in stock" rule as the cards.
+2. Reviews / star rating on the product page (medium). The page now has
+   trust boxes and a video, but no customer reviews — the biggest trust
+   signal on most shops.
+3. Delivery estimate (small). "Fast delivery" is a claim; "Dhaka 1–2 days,
+   outside 3–5 days" near Add to Cart is more convincing and cuts
+   "when will it arrive?" messages.
+4. Home speed (large) — unchanged from Batch 26: one 750 KB script.
+   The shop script is now 753.7 KB (Batch 26 reported about 750 KB), so
+   this batch added only a few KB.
+
+
+WHAT ONLY NAEEM'S PHONE CAN CONFIRM
+-----------------------------------
+  - The card titles really fill the card width on your phones (the tests
+    prove it in Chrome at 360/390/412 px, but your earlier reports were
+    about the real phones).
+  - The glass look (blur) on your phones, light and dark.
+  - The photo morph from a card into the product page and back, now that
+    the header floats over the photo (the morph code is untouched). While
+    the photo flies in, it passes over where the header buttons are; the
+    buttons show on top as soon as it lands.
+  - The video cover: YouTube may still show its logo in a corner WHILE
+    playing (we can't remove that); before play, paused and after the end
+    only our cover should show.
+
+
+SCREENSHOTS
+-----------
+reports/batch-27-screens/ (390 px, light and dark):
+  product-top-390-*, product-scrolled-390-*, product-bottom-390-*,
+  home-glass-cart-390-* (glass cart + steppers),
+  titles-360/390/412-* (a row of long card titles).
+Retake: SCREENS=1 npx playwright test e2e/batch-27-screens.spec.ts
+
+
+TESTS
+-----
+New: e2e/batch-27.spec.ts (24 tests)
+  Part 1 — header Cart badge = cart count (and goes up after Add), opens
+    the cart, no theme switch in the header · brand link opens the brand
+    page · stepper: min 1, max = stock, "Only N in stock", Add to Cart adds
+    the chosen quantity, then "All in your cart" · sticky bar hidden while
+    the main button is on screen, shown once it is scrolled off, adds,
+    hides again, never covers the last content · opening AND closing a
+    section keeps its header within 2 px (checked every 80 ms) · no tap
+    highlight (computed style) · video: our cover before play (no YouTube
+    frame at all), still our cover while starting, our cover the moment
+    it is paused and filling the whole player, nothing ever opens a new
+    page · wholesale row hidden for a visitor and a signed-in customer ·
+    no orange on the product page except the two Add to Cart buttons and
+    the count badge (every visible element's text, background and border
+    colours, light and dark)
+  Part 2 — glass cart hidden when empty, appears with the bounce after
+    the first add, 56–62 px at the middle of the right edge above the
+    bottom nav, pulses and counts, goes when emptied, opens the cart ·
+    shown on Home, Search, /brands, a brand page; not on the product page,
+    cart, checkout, account (admin: see the unit test — a visitor opening
+    /admin is sent Home) · an open option sheet covers it
+  Part 3 — add → stepper, + / −, 0 → button back, neutral button, no
+    brand line, taps never open the product · in sync with the cart page
+    (changed there) and the product page (added there) · stock limit on a
+    card · a product with options opens the picker, then the card shows
+    that option's quantity
+  Part 4 — exact order on seeded data (the page's own copy of the
+    catalogue is rearranged; the database is untouched): same category +
+    brand by closest price, then same category, then same brand; current,
+    hidden and out-of-stock excluded · tap opens the product; Back (phone
+    and ←) returns to the same product at the same scroll position (±2 px)
+  Part 5 — at 360 / 390 / 412 px, light and dark: title width = card
+    content width (±1 px), every first line full before wrapping, all
+    title boxes the same height
+New: e2e/batch-27-screens.spec.ts — screenshots (only with SCREENS=1).
+New unit tests: src/lib/relatedProducts.test.ts (the "You may also like"
+  rules + stockLimit), src/components/viewer/GlassCartButton.test.ts
+  (which pages show the glass cart).
+
+Older tests changed (only where the UI changed on purpose, none weakened):
+  - e2e/batch-23.spec.ts "every card's cart button adds to cart": now
+    checks the card shows the "− 1 +" stepper with the real quantity
+    (it used to check the green tick). Before each tap it scrolls the
+    button away from the glass cart at the middle of the right edge.
+  - e2e/batch-23.spec.ts video test: the section is now called "Video
+    review"; it names the product page's own Add to Cart (the new "You may
+    also like" cards have their own add buttons).
+  - e2e/batch-23.spec.ts "Back restores the spot": cards are taller now,
+    so at the test's fixed spot no card was fully on screen and the tap
+    itself scrolled the page first. It now brings the card into view and
+    THEN notes the spot being left — still checks Back returns to exactly
+    that spot (±5 px).
+  - e2e/batch-24.spec.ts sign-in note: scoped to its own group, because
+    the Texts page now has a second group with its own Save button.
+  - e2e/batch-25.spec.ts: the sub-page is now called "Site texts (checkout
+    note, trust boxes)".
+
+
+BUILD & TEST RESULTS
+--------------------
+Final code, run three times in a row (as this batch asks, because the
+layout around the picture morph changed):
+  npm run build    PASSED (0 errors)
+  npx vitest run   106/106 passed (16 files)
+  npm run test:e2e run 1: 115 passed, 0 failed, 21 skipped
+                   run 2: 115 passed, 0 failed, 21 skipped
+                   run 3: 115 passed, 0 failed, 21 skipped
+  The 21 skips are all screenshot runs (only on request: Batch 25, 26 and
+  27 screens) plus the same 3 data-condition skips as before (2 bento
+  tests, the CeraVe region part).
+  Earlier full runs (before the two fixes above) had failures in the
+  Batch 23 video test and the Batch 24 sign-in note test; both were
+  traced to real causes, fixed, and the three runs above were redone from
+  scratch on the final code.
+Clean-up: the tests only use the browser's own cart (emptied after each
+test) and never place orders. The sign-in note test puts the default text
+back. Nothing is left in the database.
