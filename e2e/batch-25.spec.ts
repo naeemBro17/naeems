@@ -30,6 +30,7 @@ const ADMIN_PAGES: { name: string; query: string }[] = [
   { name: 'Customers', query: '?tab=customers' },
   { name: 'Products', query: '?tab=products' },
   { name: 'Categories', query: '?tab=categories' },
+  { name: 'Brands', query: '?tab=brands' },
   { name: 'Import / Export', query: '?tab=import-export' },
   { name: 'Promo Codes', query: '?tab=promo-codes' },
   { name: 'Wholesalers', query: '?tab=wholesalers' },
@@ -163,7 +164,7 @@ test.describe('phone, 360px', () => {
     await expect(page.locator('.adm-row', { hasText: 'Activity Log' }).locator('.adm-pill-lock')).toHaveText('Super Admin');
 
     // Every More item opens its page (by tapping), and phone Back returns.
-    for (const label of ['Categories', 'Import / Export', 'Promo Codes', 'Wholesalers', 'Reviews', 'Bento Tiles', 'Banner, Expert page, Texts', 'Team', 'Activity Log', 'Settings']) {
+    for (const label of ['Categories', 'Brands', 'Import / Export', 'Promo Codes', 'Wholesalers', 'Reviews', 'Bento Tiles', 'Banner, Expert page, Texts', 'Team', 'Activity Log', 'Settings']) {
       await page.locator('.adm-row', { hasText: label }).first().click();
       await expect(page.locator('.adm-page-header__title')).toBeVisible();
       await noSidewaysScroll(page);
@@ -194,7 +195,7 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
   expect(await page.locator('.adm-sidebar__heading').allInnerTexts()).toEqual(['CATALOG', 'SALES', 'STORE DESIGN', 'ADMIN']);
   expect((await page.locator('.adm-sidebar__label').allInnerTexts()).map((t) => t.trim())).toEqual([
     'Home', 'Orders', 'Customers',
-    'Products', 'Categories', 'Import / Export',
+    'Products', 'Categories', 'Brands', 'Import / Export',
     'Promo Codes', 'Wholesalers', 'Reviews',
     'Bento Tiles', 'Banner & Texts',
     'Team', 'Activity Log', 'Settings',
