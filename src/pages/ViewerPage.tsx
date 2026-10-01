@@ -30,6 +30,7 @@ import { HeroBanner } from '../components/viewer/HeroBanner';
 import { BrowseCircles } from '../components/viewer/BrowseCircles';
 import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
+import { BrandRow } from '../components/viewer/BrandRow';
 import { ProductGrid } from '../components/viewer/ProductGrid';
 import { SiteFooter } from '../components/shared/SiteFooter';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
@@ -391,14 +392,19 @@ export function ViewerPage() {
             />
           ),
           bento: <BentoGrid products={activeProducts} settings={settings} />,
+          // "Shop by Brand" rides with the chips, so it always sits right
+          // above them (below the bento) whatever order the sections are in.
           chips: (
-            <div className="home-chips" ref={chipsRowRef}>
-              <CategoryChips
-                categories={categories}
-                selectedId={selectedCategoryId}
-                onSelect={handleSelectCategory}
-              />
-            </div>
+            <>
+              <BrandRow activeProducts={activeProducts} />
+              <div className="home-chips" ref={chipsRowRef}>
+                <CategoryChips
+                  categories={categories}
+                  selectedId={selectedCategoryId}
+                  onSelect={handleSelectCategory}
+                />
+              </div>
+            </>
           ),
         };
         const isDragged = sectionDrag.dragIndex === index;
