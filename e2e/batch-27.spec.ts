@@ -4,6 +4,13 @@ import { select } from './helpers/api';
 import { signInAsTestCustomer } from './helpers/auth';
 import { E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 
+// The site's service worker fetches Supabase data and photos itself, and
+// page.route can't see requests a service worker makes — so whether the
+// pretend option / test photos were used depended on how fast the worker
+// took over the page (a flaky race). Off for this file; nothing here tests
+// the offline worker.
+test.use({ serviceWorkers: 'block' });
+
 /**
  * Covers reports/batch-27.txt — product page redesign, glass cart, card
  * stepper, "You may also like", card titles.
@@ -105,7 +112,9 @@ async function seedOption(page: Page): Promise<string> {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 1 — product page', () => {
-  test('header cart badge equals the cart count and opens the cart; no theme toggle in the header', async ({ page }) => {
+  // Batch 28: the header cart moved to the floating glass cart (the only
+  // cart button on the product page now) — same checks on that button.
+  test('cart badge equals the cart count and opens the cart; no theme toggle in the header', async ({ page }) => {
     await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
     await page.evaluate(() =>
       localStorage.setItem(
@@ -118,13 +127,14 @@ test.describe('Part 1 — product page', () => {
     );
     await page.reload();
     const header = page.getByTestId('pdp-header');
-    await expect(header.getByTestId('header-cart-badge')).toHaveText('3');
+    const glass = page.getByTestId('glass-cart');
+    await expect(glass.getByTestId('glass-cart-badge')).toHaveText('3');
     await expect(header.getByRole('button', { name: /theme|dark|light/i })).toHaveCount(0);
 
     await page.getByTestId('add-to-cart').click();
-    await expect(header.getByTestId('header-cart-badge')).toHaveText('4');
+    await expect(glass.getByTestId('glass-cart-badge')).toHaveText('4');
 
-    await header.getByTestId('header-cart').click();
+    await glass.click();
     await expect(page).toHaveURL(/\/cart$/);
     await emptyCart(page);
   });
@@ -138,73 +148,25 @@ test.describe('Part 1 — product page', () => {
     await expect(page.locator('.brand-page__name')).toHaveText(/aveeno/i);
   });
 
-  test('quantity stepper: min 1, max = stock; Add to Cart adds the chosen quantity', async ({ page }) => {
+  // Batch 28: the in-page "− 1 +" and Add to Cart were replaced by the buy
+  // bar, whose stepper IS the cart quantity. Same rule checked there: it
+  // never goes past the stock count, with the "Only N in stock" note.
+  test('buy bar stepper: max = stock with the "Only N in stock" note', async ({ page }) => {
     const product = await smallStockProduct();
     test.skip(product === null, 'No product with a small tracked stock count today.');
     const p = product as LiveProduct;
     const stock = p.stock_quantity as number;
 
     await openFresh(page, `/product/${p.slug}`);
-    const value = page.getByTestId('qty-value');
-    const minus = page.getByRole('button', { name: 'Decrease quantity' });
-    const plus = page.getByRole('button', { name: 'Increase quantity' });
+    await page.getByTestId('add-to-cart').click();
+    const value = page.getByTestId('buy-bar-qty');
     await expect(value).toHaveText('1');
-    await expect(minus).toBeDisabled();
-
+    const plus = page.getByTestId('buy-bar-plus');
     for (let i = 1; i < stock + 2; i++) await plus.click();
     await expect(value).toHaveText(String(stock));
     await expect(page.locator('.toast', { hasText: `Only ${stock} in stock` }).first()).toBeVisible();
-
-    await minus.click();
-    await expect(value).toHaveText(String(stock - 1));
-    await plus.click();
-    await expect(value).toHaveText(String(stock));
-
-    await page.getByTestId('add-to-cart').click();
     await expect.poll(() => cartUnits(page)).toBe(stock);
-    await expect(page.getByTestId('header-cart-badge')).toHaveText(String(stock));
-    await expect(page.getByTestId('add-to-cart')).toContainText('Added');
-    // Everything in stock is now in the cart: nothing more can be added.
-    await expect(page.getByTestId('add-to-cart')).toHaveText('All in your cart', { timeout: 3000 });
-    await expect(page.getByTestId('add-to-cart')).toBeDisabled();
-    await emptyCart(page);
-  });
-
-  test('sticky bar shows only once the main button is off screen, hides again, and adds', async ({ page }) => {
-    await openFresh(page, '/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
-    const bar = page.getByTestId('sticky-bar');
-    const buyRow = page.getByTestId('buy-row');
-    await expect(bar).not.toHaveClass(/pdp-sticky--shown/);
-
-    // Main button on screen → no bar.
-    await scrollElementTo(buyRow, 400);
-    await expect(bar).not.toHaveClass(/pdp-sticky--shown/);
-
-    // Main button scrolled up out of view → bar.
-    await scrollElementTo(buyRow, -200);
-    await expect(bar).toHaveClass(/pdp-sticky--shown/);
-    await expect(bar).toHaveCSS('opacity', '1');
-    await expect(bar.locator('.pdp-sticky__amount')).toHaveText(
-      (await page.locator('.product-detail__price').textContent()) ?? ''
-    );
-    await page.getByTestId('sticky-add').click();
-    await expect.poll(() => cartUnits(page)).toBe(1);
-
-    // Back to the main button → bar hides.
-    await scrollElementTo(buyRow, 400);
-    await expect(bar).not.toHaveClass(/pdp-sticky--shown/);
-
-    // The bar never covers the last content: the page ends with room for it.
-    await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-    await scrollElementTo(buyRow, -200);
-    const lastContentBottom = await page.evaluate(() => {
-      const main = document.querySelector('.pdp-main .product-detail') as HTMLElement;
-      return main.getBoundingClientRect().bottom;
-    });
-    const barTop = (await bar.boundingBox())?.y ?? 0;
-    if ((await page.evaluate(() => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2))) {
-      expect(lastContentBottom).toBeLessThanOrEqual(barTop + 1);
-    }
+    await expect(page.getByTestId('glass-cart-badge')).toHaveText(String(stock));
     await emptyCart(page);
   });
 
@@ -300,18 +262,18 @@ test.describe('Part 1 — product page', () => {
     const slug = res.data?.[0]?.slug;
     test.skip(!slug, 'No product with a wholesale price today.');
     await page.goto(`/product/${slug}`);
-    await expect(page.getByTestId('add-to-cart').or(page.locator('.copy-button--disabled')).first()).toBeVisible();
+    await expect(page.getByTestId('buy-bar-action')).toBeVisible();
     await expect(page.locator('.wholesale-row')).toHaveCount(0);
 
     test.skip(!E2E_EMAIL || !E2E_PASSWORD, 'No test customer in .env.e2e.');
     await signInAsTestCustomer(page);
     await page.goto(`/product/${slug}`);
-    await expect(page.getByTestId('add-to-cart').or(page.locator('.copy-button--disabled')).first()).toBeVisible();
+    await expect(page.getByTestId('buy-bar-action')).toBeVisible();
     await page.waitForTimeout(1500);
     await expect(page.locator('.wholesale-row')).toHaveCount(0);
   });
 
-  test('no orange on the product page except the Add to Cart buttons (light and dark)', async ({ page }) => {
+  test('no orange on the product page except the Add to Cart pill and the count badge (light and dark)', async ({ page }) => {
     for (const theme of ['light', 'dark'] as const) {
       await page.goto('/');
       await page.evaluate((t) => localStorage.setItem('theme', t), theme);
@@ -327,7 +289,7 @@ test.describe('Part 1 — product page', () => {
       await page.waitForTimeout(600);
 
       const offenders = await page.evaluate(() => {
-        const allowed = '[data-testid="add-to-cart"], [data-testid="sticky-add"], .cart-count-badge';
+        const allowed = '[data-testid="add-to-cart"], .cart-count-badge';
         const isOrange = (value: string): boolean => {
           const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(value);
           if (!m) return false;
@@ -438,7 +400,7 @@ test.describe('Part 2 — glass cart button', () => {
     await emptyCart(page);
   });
 
-  test('shown on Search and brand pages, never on the product page, cart, checkout or admin', async ({ page }) => {
+  test('shown on Search, brand pages and the product page; never on the cart, checkout or admin', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() =>
       localStorage.setItem(
@@ -447,12 +409,18 @@ test.describe('Part 2 — glass cart button', () => {
       )
     );
     const glass = page.getByTestId('glass-cart');
-    for (const path of ['/', '/search', '/brands', '/brand/aveeno']) {
+    // Batch 28: the product page joined the pages that show it.
+    for (const path of [
+      '/',
+      '/search',
+      '/brands',
+      '/brand/aveeno',
+      '/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml',
+    ]) {
       await page.goto(path);
       await expect(glass, path).toBeVisible();
     }
     for (const path of [
-      '/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml',
       '/cart',
       '/checkout/delivery',
       '/admin',
@@ -547,13 +515,15 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await page.goto('/');
     await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('3');
 
-    // Add 2 more on the product page → the card shows 5.
+    // Add 2 more on the product page → the card shows 5. (Batch 28: the
+    // product page's buy bar already shows the cart's 3 as its stepper.)
     await cardNamed(page, name).locator('.product-card__image-wrap').click();
-    await expect(page.getByTestId('add-to-cart')).toBeVisible();
-    await expect(page.getByTestId('header-cart-badge')).toHaveText('3');
-    await page.getByRole('button', { name: 'Increase quantity' }).click();
-    await page.getByTestId('add-to-cart').click();
-    await expect(page.getByTestId('header-cart-badge')).toHaveText('5');
+    await expect(page.getByTestId('buy-bar-qty')).toHaveText('3');
+    await expect(page.getByTestId('glass-cart-badge')).toHaveText('3');
+    await page.getByTestId('buy-bar-plus').click();
+    await page.getByTestId('buy-bar-plus').click();
+    await expect(page.getByTestId('buy-bar-qty')).toHaveText('5');
+    await expect(page.getByTestId('glass-cart-badge')).toHaveText('5');
     await page.getByRole('button', { name: 'Go back' }).click();
     await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('5');
     await emptyCart(page);

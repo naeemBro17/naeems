@@ -37,7 +37,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('add-to-cart')).toBeVisible();
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `${DIR}/product-top-390-${theme}.png` });
-    await page.getByTestId('buy-row').evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().bottom + 20));
+    await page.getByTestId('trust-plate').evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().bottom + 20));
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${DIR}/product-scrolled-390-${theme}.png` });
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
