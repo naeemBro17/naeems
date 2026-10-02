@@ -18,6 +18,10 @@ import { CheckoutLoginSheet } from '../../components/checkout/CheckoutLoginSheet
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { trackInitiateCheckout } from '../../lib/analytics';
+import { useProducts } from '../../contexts/ProductContext';
+import { useToast } from '../../hooks/useToast';
+import { stockLimitMessage } from '../../hooks/useCartLine';
+import { stockLimit } from '../../lib/stockStatus';
 import type { CartItem } from './types';
 
 export function CartPage() {
@@ -25,6 +29,8 @@ export function CartPage() {
   const { items, subtotal, updateQuantity, removeItem } = useCheckoutState();
   const { session } = useAuth();
   const navigate = useNavigate();
+  const { variantsFor } = useProducts();
+  const { showToast } = useToast();
   const [pendingRemove, setPendingRemove] = useState<CartItem | null>(null);
   const [showLoginSheet, setShowLoginSheet] = useState(false);
 
@@ -53,6 +59,24 @@ export function CartPage() {
     } else {
       setPendingRemove(item);
     }
+  };
+
+  // + stops at the tracked stock count (Batch 28 Part 6) — the same limit
+  // the cards and the product page use: the option's own count for a line
+  // with an option, the product's count otherwise (blank = not tracked).
+  const lineLimit = (item: CartItem): number => {
+    const variant =
+      item.variantId !== null ? variantsFor(item.product.id).find((v) => v.id === item.variantId) : undefined;
+    return stockLimit(variant ? variant.stock_quantity : item.product.stock_quantity);
+  };
+
+  const handleIncrement = (item: CartItem) => {
+    const limit = lineLimit(item);
+    if (item.quantity >= limit) {
+      showToast(stockLimitMessage(limit), 'info');
+      return;
+    }
+    updateQuantity(item.product.id, item.quantity + 1, item.variantId);
   };
 
   const handleConfirmRemove = () => {
@@ -116,10 +140,10 @@ export function CartPage() {
                     <span className="checkout-cart__step-count">{item.quantity}</span>
                     <button
                       type="button"
-                      className="checkout-cart__step-btn"
-                      onClick={() =>
-                        updateQuantity(item.product.id, item.quantity + 1, item.variantId)
-                      }
+                      className={`checkout-cart__step-btn${
+                        item.quantity >= lineLimit(item) ? ' checkout-cart__step-btn--max' : ''
+                      }`}
+                      onClick={() => handleIncrement(item)}
                       aria-label={`Increase quantity of ${item.product.name}`}
                     >
                       +

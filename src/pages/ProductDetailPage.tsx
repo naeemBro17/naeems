@@ -22,14 +22,13 @@ import {
   variantOptionLabel,
   variantOptionsFor,
 } from '../lib/variants';
-import { productHeroName } from '../lib/viewTransition';
-import { setCurrentDetailProductId } from '../lib/heroTransition';
+import { prefersReducedMotion, productHeroName } from '../lib/viewTransition';
+import { isTransitionRunning, setCurrentDetailProductId } from '../lib/heroTransition';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
-import { tapHaptic } from '../components/viewer/CartButton';
-import { HeaderCartButton } from '../components/viewer/CartBadgeButton';
+import { CartIcon, tapHaptic } from '../components/viewer/CartButton';
 import { RelatedProducts } from '../components/viewer/RelatedProducts';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
 import { VariantSelector } from '../components/viewer/VariantSelector';
@@ -40,9 +39,6 @@ import type { Product, ProductVariant, VariantOption } from '../types';
 
 /** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
 const VARIANT_PARAM = 'variant';
-
-/** How long the Add to Cart button holds its "Added" success state. */
-const ADDED_RESET_MS = 1200;
 
 /** App-wide og: values from index.html, restored when the detail page unmounts. */
 const DEFAULT_OG = {
@@ -125,13 +121,18 @@ function PlaceholderIcon() {
 /** Height of the product page's top bar — the part of the screen it covers. */
 const PDP_HEADER_PX = 56;
 
-/** Highest number the quantity stepper goes to when stock isn't tracked. */
-const MAX_QTY_UNTRACKED = 99;
+/** Buy bar scroll behaviour (Batch 28 Part 4): always shown within this many
+ *  px of the top or the bottom of the page; hidden after a scroll down of
+ *  BUY_BAR_HIDE_AFTER_PX, shown again after a scroll up of BUY_BAR_SHOW_AFTER_PX. */
+const BUY_BAR_TOP_ZONE_PX = 24;
+const BUY_BAR_BOTTOM_ZONE_PX = 8;
+const BUY_BAR_HIDE_AFTER_PX = 12;
+const BUY_BAR_SHOW_AFTER_PX = 10;
 
 function TrustIcon({ kind }: { kind: 'authentic' | 'cod' | 'delivery' }) {
   return (
     <svg
-      className="trust-box__icon"
+      className="trust-plate__icon"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -174,21 +175,72 @@ function StepIcon({ plus }: { plus: boolean }) {
   );
 }
 
-function TickIcon() {
-  return (
-    <svg
-      className="copy-button__icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
+/**
+ * The buy bar's scroll behaviour (Batch 28 Part 4): slides away while the
+ * shopper scrolls down, comes back on a scroll up of 10 px or more, and is
+ * always shown at the top of the page, at the very bottom, and right after
+ * a cart change. Tiny jitters (a few px either way) never toggle it, and it
+ * never hides while a finger is on it.
+ */
+function useBuyBarVisibility(cartCount: number): {
+  shown: boolean;
+  onPressStart: () => void;
+} {
+  const [shown, setShown] = useState(true);
+  const pressedRef = useRef(false);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    // Distance travelled in the current direction (+ down, − up); reset
+    // whenever the direction flips, so jitter never adds up to a toggle.
+    let travelled = 0;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastY;
+      lastY = y;
+      if (delta === 0) return;
+      const atTop = y <= BUY_BAR_TOP_ZONE_PX;
+      const atBottom =
+        window.innerHeight + y >= document.documentElement.scrollHeight - BUY_BAR_BOTTOM_ZONE_PX;
+      if (atTop || atBottom) {
+        travelled = 0;
+        setShown(true);
+        return;
+      }
+      travelled = Math.sign(delta) === Math.sign(travelled) ? travelled + delta : delta;
+      if (travelled >= BUY_BAR_HIDE_AFTER_PX && !pressedRef.current) setShown(false);
+      else if (travelled <= -BUY_BAR_SHOW_AFTER_PX) setShown(true);
+    };
+    const onRelease = () => {
+      pressedRef.current = false;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('pointerup', onRelease);
+    window.addEventListener('pointercancel', onRelease);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('pointerup', onRelease);
+      window.removeEventListener('pointercancel', onRelease);
+    };
+  }, []);
+
+  // Any cart change (this product, an option, a "You may also like" card)
+  // brings the bar back.
+  const firstQuantity = useRef(true);
+  useEffect(() => {
+    if (firstQuantity.current) {
+      firstQuantity.current = false;
+      return;
+    }
+    setShown(true);
+  }, [cartCount]);
+
+  const onPressStart = useCallback(() => {
+    pressedRef.current = true;
+    setShown(true);
+  }, []);
+
+  return { shown, onPressStart };
 }
 
 function DetailContent({
@@ -201,18 +253,16 @@ function DetailContent({
   /** Told whether the main picture has scrolled away (the top bar's cue). */
   onHeroOffScreen: (off: boolean) => void;
 }) {
-  const { addItem, items } = useCart();
+  const { addItem, updateQuantity, items, itemCount } = useCart();
   const { brands, settings } = useProducts();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
-  const [justAddedToCart, setJustAddedToCart] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-  const [stickyShown, setStickyShown] = useState(false);
-  const cartTimerRef = useRef<number>();
   const carouselRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
-  const buyRowRef = useRef<HTMLDivElement>(null);
+  // Opened by the picture morph: the sheet waits for the photo to land
+  // before sliding up over its bottom edge (see .pdp-sheet--settle).
+  const [settleSheet] = useState(() => isTransitionRunning() && !prefersReducedMotion());
 
   // Option zero is always the product's own data; real variant rows follow.
   // A product with no real variants has exactly one option and no selector
@@ -244,12 +294,6 @@ function DetailContent({
     next.set(VARIANT_PARAM, option.id);
     setSearchParams(next, { replace: true });
   };
-
-  useEffect(() => {
-    return () => {
-      window.clearTimeout(cartTimerRef.current);
-    };
-  }, []);
 
   // The selected option's own photos first (the default option's are the
   // product's own — the same photo its card showed), then every other photo
@@ -288,23 +332,6 @@ function DetailContent({
     };
   }, [onHeroOffScreen]);
 
-  // The sticky bottom bar: shown only once the main Add to Cart row has
-  // scrolled up out of view (above the screen), hidden again whenever it is
-  // visible — never for a row still below the fold.
-  useEffect(() => {
-    const el = buyRowRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const above = entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? PDP_HEADER_PX);
-        setStickyShown(!entry.isIntersecting && above);
-      },
-      { rootMargin: `-${PDP_HEADER_PX}px 0px 0px 0px` }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   const outOfStock = hasSelector ? !isVariantInStock(selectedOption) : isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = hasSelector
     ? variantDisplayPrice(selectedOption)
@@ -327,26 +354,15 @@ function DetailContent({
   // No real variants, but the product itself carries a Region/Size label —
   // shown as plain text since there's nothing to select between (state 2).
   const plainLabel = !hasSelector ? variantOptionLabel(options[0], '') : '';
-  const sizeLabel = (hasSelector ? selectedOption.size : options[0].size)?.trim() ?? '';
 
-  // Quantity: at least 1, at most what's left in stock after what this
-  // cart line already holds (stock that isn't tracked: up to 99).
+  // The buy bar shows the real cart quantity of exactly this product (and
+  // selected option) — read from the cart itself, so it always matches the
+  // cards, the floating cart badge and the cart page, also after a reload.
   const lineVariantId = hasSelector ? selectedOption.id : null;
   const inCart =
     items.find((item) => item.productId === product.id && item.variantId === lineVariantId)?.quantity ?? 0;
   const limit = stockLimit(hasSelector ? selectedOption.stock_quantity : product.stock_quantity);
-  const available = Number.isFinite(limit) ? Math.max(0, limit - inCart) : MAX_QTY_UNTRACKED;
-  const allInCart = !outOfStock && available === 0;
-  const maxQuantity = Math.max(1, available);
-
-  // A new option (or a cart change that lowers what's left) never leaves the
-  // stepper above what can actually be added.
-  useEffect(() => {
-    setQuantity(1);
-  }, [selectedOption.id]);
-  useEffect(() => {
-    setQuantity((q) => Math.min(q, maxQuantity));
-  }, [maxQuantity]);
+  const { shown: barShown, onPressStart } = useBuyBarVisibility(itemCount);
 
   // Fires once per product shown (not on every variant swap) — see
   // trackViewContent's own doc comment for what is/isn't sent.
@@ -361,39 +377,34 @@ function DetailContent({
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
 
-  const increase = () => {
-    if (quantity >= maxQuantity) {
-      if (Number.isFinite(limit)) showToast(stockLimitMessage(limit), 'info');
+  const handleAddToCart = () => {
+    if (outOfStock || inCart > 0) return;
+    if (limit < 1) {
+      showToast(stockLimitMessage(limit), 'info');
       return;
     }
-    setQuantity(quantity + 1);
-  };
-
-  const handleAddToCart = () => {
-    if (outOfStock || allInCart) return;
-    const units = Math.min(quantity, maxQuantity);
     const variant = hasSelector
       ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
       : null;
-    addItem(product.id, mainPrice, variant, units);
-    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, units);
+    addItem(product.id, mainPrice, variant, 1);
+    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
     tapHaptic();
-    setQuantity(1);
-    setJustAddedToCart(true);
-    window.clearTimeout(cartTimerRef.current);
-    cartTimerRef.current = window.setTimeout(() => setJustAddedToCart(false), ADDED_RESET_MS);
   };
 
-  const addButtonContent = justAddedToCart ? (
-    <>
-      Added
-      <TickIcon />
-    </>
-  ) : allInCart ? (
-    'All in your cart'
-  ) : (
-    'Add to Cart'
-  );
+  const increase = () => {
+    tapHaptic();
+    if (inCart >= limit) {
+      showToast(stockLimitMessage(limit), 'info');
+      return;
+    }
+    updateQuantity(product.id, inCart + 1, lineVariantId);
+    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
+  };
+
+  const decrease = () => {
+    tapHaptic();
+    updateQuantity(product.id, inCart - 1, lineVariantId);
+  };
 
   const trustTexts = [
     { kind: 'authentic' as const, text: siteText(settings, 'text_trust_authentic') },
@@ -428,21 +439,9 @@ function DetailContent({
             ))}
           </div>
           {images.length > 1 && (
-            <>
-              <div className="product-detail__dots" aria-hidden="true">
-                {images.map((url, index) => (
-                  <span
-                    key={url}
-                    className={`product-detail__dot${
-                      index === activeImage ? ' product-detail__dot--active' : ''
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="product-detail__counter" aria-hidden="true" data-testid="image-counter">
-                {activeImage + 1} / {images.length}
-              </span>
-            </>
+            <span className="product-detail__counter" aria-hidden="true" data-testid="image-counter">
+              {activeImage + 1} / {images.length}
+            </span>
           )}
         </div>
       ) : (
@@ -456,177 +455,183 @@ function DetailContent({
         </div>
       )}
 
-      <div className="product-detail__info">
-        {brand !== '' &&
-          (brandSlug ? (
-            <p className="product-detail__brand">
-              <Link to={`/brand/${brandSlug}`} className="product-detail__brand-link" data-testid="product-brand-link">
-                {brand}
-              </Link>
-              <svg
-                className="product-detail__brand-chevron"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </p>
-          ) : (
-            <p className="product-detail__brand">{brand}</p>
-          ))}
-
-        <h1 className="product-detail__name">{product.name}</h1>
-
-        <div className={`price-block${outOfStock ? ' price-block--out' : ''}`}>
-          <span className="product-detail__price">{formatTaka(mainPrice)}</span>
-          {strikePrice !== null && (
-            <span className="price-block__strike">{formatTaka(strikePrice)}</span>
-          )}
-          {strikePrice !== null && savePercent !== null && !outOfStock && (
-            <span className="save-badge">Save {savePercent}%</span>
-          )}
-        </div>
-
-        {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
-
-        {hasSelector && (
-          <VariantSelector
-            options={options}
-            productName={product.name}
-            selected={selectedOption}
-            onSelect={handleSelectOption}
-          />
+      {/* The rounded sheet (Batch 28 Part 2): sits over the bottom of the
+          photo, page-coloured, never part of the morphing picture. */}
+      <div className={`pdp-sheet${settleSheet ? ' pdp-sheet--settle' : ''}`} data-testid="pdp-sheet">
+        <span className="pdp-sheet__notch" aria-hidden="true" data-testid="pdp-sheet-notch" />
+        {images.length > 1 && (
+          <div className="pdp-sheet__dots" aria-hidden="true" data-testid="pdp-sheet-dots">
+            {images.map((url, index) => (
+              <span
+                key={url}
+                className={`pdp-sheet__dot${index === activeImage ? ' pdp-sheet__dot--active' : ''}`}
+              />
+            ))}
+          </div>
         )}
 
-        <p className="stock-row">
-          <span
-            className={`stock-dot ${
-              outOfStock ? 'stock-dot--red' : 'stock-dot--green'
-            }`}
-            aria-hidden="true"
-          />
-          <span className="stock-row__text">
-            {outOfStock ? 'Out of stock' : 'In stock'}
-            {noteText !== '' && <span className="stock-row__note"> · {noteText}</span>}
-          </span>
-        </p>
+        <div className="product-detail__info">
+          {brand !== '' &&
+            (brandSlug ? (
+              <p className="product-detail__brand" data-sheet-part="brand">
+                <Link to={`/brand/${brandSlug}`} className="product-detail__brand-link" data-testid="product-brand-link">
+                  {brand}
+                </Link>
+                <svg
+                  className="product-detail__brand-chevron"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </p>
+            ) : (
+              <p className="product-detail__brand" data-sheet-part="brand">{brand}</p>
+            ))}
 
-        <ul className="trust-boxes" aria-label="Why buy here">
-          {trustTexts.map((t) => (
-            <li key={t.kind} className="trust-box" data-testid={`trust-${t.kind}`}>
-              <TrustIcon kind={t.kind} />
-              <span className="trust-box__text">{t.text}</span>
+          <h1 className="product-detail__name" data-sheet-part="name">{product.name}</h1>
+
+          <div className={`price-block${outOfStock ? ' price-block--out' : ''}`} data-sheet-part="price">
+            <span className="product-detail__price">{formatTaka(mainPrice)}</span>
+            {strikePrice !== null && (
+              <span className="price-block__strike">{formatTaka(strikePrice)}</span>
+            )}
+            {strikePrice !== null && savePercent !== null && !outOfStock && (
+              <span className="save-badge pdp-save">Save {savePercent}%</span>
+            )}
+          </div>
+
+          <ul className="pdp-chips" data-sheet-part="chips" aria-label="Availability">
+            <li className="pdp-chip" data-testid="stock-chip">
+              <span
+                className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : 'pdp-chip__dot--in'}`}
+                aria-hidden="true"
+              />
+              {outOfStock ? 'Out of stock' : 'In stock'}
             </li>
-          ))}
-        </ul>
+            {noteText !== '' && <li className="pdp-chip pdp-chip--note">{noteText}</li>}
+          </ul>
 
-        <div ref={buyRowRef} className="buy-row" data-testid="buy-row">
-          {outOfStock ? (
-            <button
-              type="button"
-              className="button copy-button copy-button--disabled"
-              disabled
-              aria-label={`${product.name} is out of stock`}
-            >
-              Out of Stock
-            </button>
-          ) : (
-            <>
-              <div className="qty-stepper" role="group" aria-label="Quantity">
+          {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
+
+          {hasSelector && (
+            <div data-sheet-part="options">
+              <VariantSelector
+                options={options}
+                productName={product.name}
+                selected={selectedOption}
+                onSelect={handleSelectOption}
+              />
+            </div>
+          )}
+
+          <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
+
+          <ul className="trust-plate" aria-label="Why buy here" data-sheet-part="trust" data-testid="trust-plate">
+            {trustTexts.map((t) => (
+              <li key={t.kind} className="trust-plate__item" data-testid={`trust-${t.kind}`}>
+                <TrustIcon kind={t.kind} />
+                <span className="trust-plate__text">{t.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {hasSections && (
+          <Accordion>
+            {about !== '' && (
+              <AccordionItem title="About this product" defaultOpen>
+                <p className="accordion__text">{about}</p>
+              </AccordionItem>
+            )}
+            {howToUse !== '' && (
+              <AccordionItem title="How to use" defaultOpen={about === ''}>
+                <p className="accordion__text">{howToUse}</p>
+              </AccordionItem>
+            )}
+            {keyIngredients !== '' && (
+              <AccordionItem title="Key ingredients">
+                <p className="accordion__text">{keyIngredients}</p>
+              </AccordionItem>
+            )}
+            {youtubeUrl !== '' && (
+              <AccordionItem title="Video review">
+                <VideoReview url={youtubeUrl} />
+              </AccordionItem>
+            )}
+          </Accordion>
+        )}
+
+        <RelatedProducts product={product} />
+      </div>
+
+      {createPortal(
+        <div
+          className={`buy-bar${barShown ? '' : ' buy-bar--hidden'}`}
+          data-testid="buy-bar"
+          data-shown={barShown}
+          onPointerDown={onPressStart}
+        >
+          <span className="buy-bar__price" data-testid="buy-bar-price">
+            {formatTaka(mainPrice)}
+          </span>
+          <div className="buy-bar__action" data-testid="buy-bar-action">
+            {outOfStock ? (
+              <button
+                type="button"
+                className="buy-bar__pill buy-bar__pill--out"
+                disabled
+                tabIndex={barShown ? 0 : -1}
+                aria-label={`${product.name} is out of stock`}
+                data-testid="buy-bar-out"
+              >
+                Out of stock
+              </button>
+            ) : inCart > 0 ? (
+              <div className="buy-bar__pill buy-bar__stepper" role="group" aria-label={`${product.name} in cart`} data-testid="buy-bar-stepper">
                 <button
                   type="button"
-                  className="qty-stepper__step"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
-                  aria-label="Decrease quantity"
+                  className="buy-bar__step"
+                  onClick={decrease}
+                  tabIndex={barShown ? 0 : -1}
+                  aria-label={inCart === 1 ? `Remove ${product.name} from cart` : `One less ${product.name}`}
+                  data-testid="buy-bar-minus"
                 >
                   <StepIcon plus={false} />
                 </button>
-                <span className="qty-stepper__value" aria-live="polite" data-testid="qty-value">
-                  {quantity}
+                <span className="buy-bar__qty" aria-live="polite" data-testid="buy-bar-qty">
+                  {inCart}
                 </span>
                 <button
                   type="button"
-                  className={`qty-stepper__step${quantity >= maxQuantity ? ' qty-stepper__step--max' : ''}`}
+                  className={`buy-bar__step${inCart >= limit ? ' buy-bar__step--max' : ''}`}
                   onClick={increase}
-                  aria-label="Increase quantity"
+                  tabIndex={barShown ? 0 : -1}
+                  aria-label={`One more ${product.name}`}
+                  data-testid="buy-bar-plus"
                 >
                   <StepIcon plus />
                 </button>
               </div>
+            ) : (
               <button
                 type="button"
-                className={`button copy-button buy-row__add${justAddedToCart ? ' copy-button--copied' : ''}${
-                  allInCart ? ' copy-button--disabled' : ''
-                }`}
+                className="buy-bar__pill buy-bar__add"
                 onClick={handleAddToCart}
-                disabled={allInCart}
+                tabIndex={barShown ? 0 : -1}
                 aria-label={`Add ${product.name} to cart`}
                 data-testid="add-to-cart"
               >
-                {addButtonContent}
+                <CartIcon className="buy-bar__add-icon" />
+                Add to Cart
               </button>
-            </>
-          )}
-        </div>
-
-        <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
-      </div>
-
-      {hasSections && (
-        <Accordion>
-          {about !== '' && (
-            <AccordionItem title="About this product" defaultOpen>
-              <p className="accordion__text">{about}</p>
-            </AccordionItem>
-          )}
-          {howToUse !== '' && (
-            <AccordionItem title="How to use" defaultOpen={about === ''}>
-              <p className="accordion__text">{howToUse}</p>
-            </AccordionItem>
-          )}
-          {keyIngredients !== '' && (
-            <AccordionItem title="Key ingredients">
-              <p className="accordion__text">{keyIngredients}</p>
-            </AccordionItem>
-          )}
-          {youtubeUrl !== '' && (
-            <AccordionItem title="Video review">
-              <VideoReview url={youtubeUrl} />
-            </AccordionItem>
-          )}
-        </Accordion>
-      )}
-
-      <RelatedProducts product={product} />
-
-      {createPortal(
-        <div
-          className={`pdp-sticky${stickyShown ? ' pdp-sticky--shown' : ''}`}
-          aria-hidden={!stickyShown}
-          data-testid="sticky-bar"
-        >
-          <div className="pdp-sticky__price">
-            <span className="pdp-sticky__amount">{formatTaka(mainPrice)}</span>
-            {sizeLabel !== '' && <span className="pdp-sticky__size">{sizeLabel}</span>}
+            )}
           </div>
-          <button
-            type="button"
-            className={`button copy-button pdp-sticky__add${justAddedToCart ? ' copy-button--copied' : ''}${
-              outOfStock || allInCart ? ' copy-button--disabled' : ''
-            }`}
-            onClick={handleAddToCart}
-            disabled={outOfStock || allInCart}
-            tabIndex={stickyShown ? 0 : -1}
-            data-testid="sticky-add"
-          >
-            {outOfStock ? 'Out of Stock' : addButtonContent}
-          </button>
         </div>,
         document.body
       )}
@@ -809,8 +814,10 @@ export function ProductDetailPage() {
 
   return (
     <div className="viewer-shell detail-shell pdp-shell">
-      {/* Floats over the picture (Batch 27): round glass buttons; once the
-          picture has scrolled away it becomes a glass bar with the name. */}
+      {/* Floats over the picture: two round crystal-glass buttons (← and
+          Share, Batch 28 — the cart is the floating glass cart now); once
+          the picture has scrolled away a neutral glass bar with the name
+          fades in behind them. */}
       <header
         className={`pdp-header${product && heroOffScreen ? ' pdp-header--solid' : ''}${
           product ? '' : ' pdp-header--plain'
@@ -828,7 +835,6 @@ export function ProductDetailPage() {
               <ShareButton product={product} variant="header" />
             </span>
           )}
-          <HeaderCartButton />
         </div>
       </header>
 

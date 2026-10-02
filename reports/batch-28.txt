@@ -1,0 +1,324 @@
+BATCH 28 — Product page remaster: crystal glass buttons, rounded info
+sheet, glass buy bar, one cart that follows you
+====================================================================
+Branch: feature/batch-28-pdp-remaster (made from the latest origin/main,
+which already has Batch 27 merged). Pushed. NOT merged, nothing pushed
+to main. No database changes and no Supabase deploys.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Top buttons: crystal glass
+  - Only two buttons over the photo now: ← (left) and Share (right). The
+    Cart button is gone from the product page header (the floating glass
+    cart replaces it, Part 5).
+  - Crystal glass: a thin dark tint (30%), blur(12px) saturate(150%), a
+    bright hairline border (white 50%), an inner top highlight, a soft
+    shadow, and a white line icon with a tiny drop shadow.
+  - Visible on any photo. I measured it on swapped-in test photos:
+      pure white photo  → icon vs. button contrast 2.0 : 1
+      very light photo  → 2.2 : 1
+      dark photo        → 18.5 : 1
+    At the first try (20% tint) a pure white photo only gave 1.5 : 1 —
+    too faint — so I used the "slightly darker inner tint" the batch
+    allows (30%) and a stronger icon shadow. On white the buttons read as
+    soft grey glass discs with white icons (see the white-photo
+    screenshots).
+  - Scrolled: the glass top bar with the product name still fades in.
+    Its buttons keep the crystal style, tinted for a light (or dark) bar
+    with a dark (or white) icon. Share now stays visible when scrolled
+    (before it faded out) — with the cart gone, the bar would otherwise
+    have had nothing on the right.
+  - BUG FIX — orange glow on the right of the scrolled bar: the bar's
+    glass was 82% white with a strong colour boost (saturate 1.6), so a
+    colourful photo passing under it bled through as a coloured glow
+    (and the orange cart badge sat right there too). The bar is now a
+    near-solid neutral page tint (90%) with a plain blur, no colour boost,
+    and the cart badge is gone from the header. Tested: an all-orange
+    photo under the scrolled bar → zero orange pixels in the bar, light
+    and dark.
+  Proof: e2e/batch-28.spec.ts Part 1 (7 tests).
+
+PART 2 — Rounded info sheet over the photo
+  - The info area is a sheet: 28 px rounded top corners, overlaps the
+    bottom of the photo by 24 px, very soft upward shadow, page colour
+    (light: warm off-white #FAF8F5; dark: black). The whole product page
+    background is that same colour, so the sheet reads as one surface.
+  - No gradient anywhere on the photo (tested: nothing over the photo
+    has a gradient, including ::before/::after).
+  - Small centred grabber notch at the top of the sheet (decorative).
+    The photo dots sit just under it, only with 2+ photos. The "1 / 3"
+    pill on the photo was raised so the sheet never covers it.
+  - Inside, in this order: brand (small, letter-spaced, grey, with ›,
+    links to the brand page) → name (bold, 19.5 px, line-height 1.27,
+    full name) → price row (big black/white price, struck-through old
+    price, soft "Save x%" pill: red-orange text on a light tint) → chips
+    ("● In stock" with a green dot and soft halo, + the product note) →
+    region / size chips (only with 2+ options; the selected chip has a
+    solid dark border; all Batch 23 rules unchanged) → the wholesale row
+    (unchanged component, only for approved wholesalers/admins) → ONE
+    trust plate with the 3 items and thin dividers (texts still from
+    Admin → Banner & Texts → Site texts) → the sections (unchanged) →
+    "You may also like" (unchanged).
+  - There is no Add to Cart inside the page any more.
+  Proof: e2e/batch-28.spec.ts Part 2 (4 tests).
+
+  WAS THE OVERLAP SAFE WITH THE MORPH? Yes, so the overlap is kept.
+  - The sheet is a sibling AFTER the photo, never inside it, so the
+    morphing picture (same element, same view-transition-name, Batch 23
+    corner logic untouched) never includes it. During the morph the
+    flying picture is drawn above the whole page, so the sheet can't hide
+    it either.
+  - When the page is opened by the morph, the sheet starts flush with the
+    bottom of the photo and slides up 24 px over it just after the photo
+    lands (300 ms, starts at 340 ms; transform only). So the landing
+    frame shows the whole photo and the overlap arrives as its own small,
+    calm movement. Reduce-motion: no slide, the overlap is just there.
+  - Back: the full photo shrinks back into its card as before.
+  - Checked with frame captures (open and back), and all the existing
+    morph / transition / phone-back e2e tests pass in all three runs.
+  - No transition or scroll-memory code was edited (I only READ the
+    "is a transition running?" flag).
+
+PART 3 — Glass buy bar (the only place to buy)
+  - Removed: the in-page Add to Cart, its "− 1 +" stepper and the Batch
+    27 sticky bar.
+  - One floating glass bar, shown from the moment the page opens: 12 px
+    from the sides, 14 px above the bottom (+ safe area), 66 px tall,
+    fully rounded. Strong glass: light white 60% / dark
+    rgba(30,30,34,.45), blur(22px) saturate(160%), thin light border,
+    inner top highlight, soft deep shadow. The page is visibly blurred
+    behind it.
+  - Layout 4 : 1 : 4 (≈ 44% : 11% : 44%): left = only the price, big and
+    bold (no label, no thumbnail); middle = air; right = the action.
+  - Action: not in the cart → orange "Add to Cart" pill with a cart icon.
+    Tap → adds 1, haptic buzz, and the pill becomes, in exactly the same
+    place and size (tested ±1 px), a "− 1 +" stepper (dark pill in light
+    mode, light pill in dark mode, not orange); the floating cart jumps
+    in or pulses.
+  - The stepper always shows the real cart quantity of this product (or
+    the selected option): + up to the stock count ("Only N in stock");
+    − down; at 0 the item leaves the cart and Add to Cart comes back. It
+    never flips back by itself (tested with a 4 s wait), and stays in
+    sync with the cart page, the cards and after a reload (all tested).
+  - Out of stock: a disabled grey "Out of stock" pill.
+  - With options: the bar shows the selected option's price and that
+    option's own cart quantity (tested with a pretend option).
+  Proof: e2e/batch-28.spec.ts Part 3 (5 tests).
+
+PART 4 — Buy bar scroll behaviour
+  - Scroll down → the bar slides away (200 ms). Scroll up 10 px or more →
+    it slides back. Always shown at the top of the page, at the very
+    bottom, and right after any cart change (this product, an option, or
+    a "You may also like" card). Small jitters never toggle it (the
+    distance only adds up while you keep going one way). It never hides
+    while your finger is on it. Transform + opacity only, same curve both
+    ways; reduce-motion: plain show/hide with no slide.
+  - Bottom padding grew so the bar never covers the last content ("You
+    may also like" is fully visible above it — tested).
+  Proof: e2e/batch-28.spec.ts Part 4 (2 tests).
+
+PART 5 — One cart that follows you everywhere
+  - The round floating glass cart is now the single cart button on the
+    shop pages: Home, Search, All Brands, brand pages AND the product
+    page. It appears with its jump-in bounce when the cart gets its first
+    item and stays until the cart is empty. Never on the cart, checkout,
+    account, orders or admin pages.
+  - On the product page: same middle-right spot, a little smaller
+    (52 px), never overlapping the buy bar or the top buttons (tested at
+    390×844 and a small 360×640 phone). Every add AND remove there gives
+    it a small pulse and updates its orange count; tapping opens the cart.
+    (On the other pages it still pulses on adds only, as before.)
+  - Crystal glass like Part 1 in light and dark (see decision below).
+  - The bottom navigation's own Cart tab is unchanged.
+  Proof: e2e/batch-28.spec.ts Part 5 (4 tests) + the updated Batch 27
+  Part 2 tests + src/components/viewer/GlassCartButton.test.ts.
+
+PART 6 — Small fixes
+  1. Cart page: + now stops at the stock count with the same "Only N in
+     stock" note (the option's own count for a line with an option; no
+     limit when stock isn't tracked). The + looks faded at the limit.
+  2. Cards, buy bar, floating cart badge and cart page all read the same
+     cart, so they always show the same numbers (tested across all four).
+  Proof: e2e/batch-28.spec.ts Part 6 + the sync test in Part 3.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. No database changes, no function deploys.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was built.
+  - Commits: Parts 1–4 all live in the same three files (the product
+    page, app.css, tokens.css), so they are one commit; Part 5, Part 6,
+    the tests and the report are separate commits. Only the final commit
+    is guaranteed to build on its own; the final state was built and fully
+    tested three times.
+Needs a later batch: nothing in this batch needed the database.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - The floating cart sits at the middle of the right edge on purpose.
+    On the product page, while the sheet is near that height, it can sit
+    over the end of a long product name or a "You may also like" card
+    until you scroll a little (same trade-off as on Home in Batch 27).
+    Please check on your phone whether it bothers you; moving it lower
+    (just above the buy bar) is an easy change.
+  - FIXED a flaky test (an old one and a risk in my new ones): the
+    site's offline helper (service worker) fetches the shop's data and
+    photos by itself, and the test tool can't see or change requests it
+    makes. Tests that add a pretend option or swap in a test photo
+    therefore depended on how fast that helper took over the page. In my
+    first set of three full runs, run 3 failed once in the Batch 27 test
+    "an open option picker covers the glass cart" for exactly this reason
+    (the pretend option never arrived). It is also why my first contrast
+    numbers were measured on the real CeraVe photo instead of the test
+    photos. The helper is now switched off for the Batch 27 and Batch 28
+    test files (nothing in them tests offline mode), and the three full
+    runs were redone from scratch on the final code.
+  - The cart page's − at 1 still asks "Remove this item?" (unchanged);
+    the buy bar's and the cards' − remove without asking. Both are
+    reasonable, but they now behave differently.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Header tint: 30% dark instead of 15–20% (contrast on white photos —
+    numbers in Part 1). Still mostly see-through.
+  - Floating cart glass: on Home it floats over white cards, where 10–14%
+    white glass would be nearly invisible, so it uses white 30% (dark
+    mode: dark 42%) with the same blur(12px) saturate(150%), hairline
+    border, highlight and shadow as the header buttons, and a dark icon
+    (white in dark mode).
+  - Page colour: the product page (and its sheet) use a warm off-white
+    #FAF8F5 as the batch describes; the rest of the site stays white.
+  - "Save x%" pill colour: #D9381F on a 10% tint (dark mode #FF7461 on a
+    14% tint) — clearly red-orange, but not the brand orange, so the only
+    orange things on the page stay the Add to Cart pill and the count
+    badge.
+  - Share stays visible on the scrolled bar (see Part 1).
+  - Wholesale row placed after the option chips, just before the trust
+    plate (the batch's order didn't mention it; it belongs near the
+    price information).
+  - "You may also like" cards keep their own little cart buttons and
+    steppers (unchanged, as asked) — they add those other products, not
+    this one.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Reviews / star rating near the price (medium). Still the biggest
+   missing trust signal on the product page.
+2. Delivery estimate in the buy area (small): "Dhaka 1–2 days, outside
+   3–5 days" is more convincing than "Fast delivery".
+3. Home speed (large) — unchanged: the one big shop script (~750 KB).
+4. One remove rule (small): decide whether − at 1 should ask "Remove this
+   item?" everywhere or nowhere.
+
+
+WHAT ONLY NAEEM'S PHONE CAN CONFIRM
+-----------------------------------
+  - The glass look (blur) of the buttons, the buy bar and the floating
+    cart, light and dark, on your real phones and real photos.
+  - The morph from a card into the product page and back, with the sheet
+    sliding up over the photo after it lands.
+  - The buy bar's slide away / back while scrolling with your thumb, and
+    that it never hides while you're pressing it.
+  - The haptic buzz on Add to Cart and the stepper (Android only).
+  - Whether the floating cart's middle-right spot ever gets in the way.
+
+
+SCREENSHOTS
+-----------
+reports/batch-28-screens/ (390 px, light and dark):
+  product-load-390-*         product page on load
+  product-added-390-*        after adding (stepper + floating cart)
+  product-scrolled-390-*     mid-page with the bar shown
+  product-white-photo-390-*  a product with a pure white photo
+  home-floating-cart-390-*   Home with the floating cart
+Retake: SCREENS=1 npx playwright test e2e/batch-28-screens.spec.ts
+
+
+TESTS
+-----
+New: e2e/batch-28.spec.ts (23 tests)
+  Header: only ← and Share, no cart · crystal glass (background alpha
+    ≤ 0.3 and blur(12px)) · icon contrast on a white (≥ 1.9), very light
+    (≥ 2.0) and dark (≥ 4.5) photo · zero orange pixels in the scrolled
+    bar over an orange photo, light and dark
+  Sheet: 24–28 px rounded corners, overlaps the photo 20–24 px, edge to
+    edge, centred notch · no gradient over the photo · order brand → name
+    → price → chips → trust (options between chips and trust when 2+),
+    one trust plate with 3 items, no Add to Cart / old stepper / old
+    sticky bar in the page
+  Buy bar: visible on load, blur(22px), translucent, only the price on
+    the left, position and height · add → stepper in the same box (±1 px),
+    not orange, + to stock with the note, − to 0 → Add to Cart back ·
+    reload, cart page, Search card and badge all agree; 4 s wait never
+    flips · out of stock disabled · option price and option quantity
+  Scroll: down 300 → hidden; 4 px jitter → no change; up 20 → shown;
+    a cart change → shown; top → shown; bottom → shown and the last
+    content ends above the bar
+  Floating cart: product page hidden when empty → bounce on first add →
+    pulse on add and on remove → crystal glass, 50–54 px → tap opens the
+    cart · never overlaps the buy bar or the top buttons (390×844 and
+    360×640) · Home first add; absent on cart, checkout, account
+  Cart page: + stops at the stock count with "Only N in stock"
+New: e2e/batch-28-screens.spec.ts — screenshots (only with SCREENS=1).
+Unit test updated: src/components/viewer/GlassCartButton.test.ts — the
+  product page is now in the "shows" list (also added /orders/abc to the
+  "never" list).
+
+Batch 27 tests changed (only what intentionally changed, none weakened):
+  - "header cart badge equals the cart count…": the same checks (badge =
+    3, goes to 4 after Add to Cart, tap opens the cart, no theme switch in
+    the header) now on the floating glass cart, which replaced the header
+    cart.
+  - "quantity stepper: min 1, max = stock…": the in-page stepper is gone;
+    the same stock rule (stops at stock, "Only N in stock", cart = stock)
+    is now checked on the buy bar's stepper. The "All in your cart" state
+    no longer exists (the stepper shows the cart quantity itself).
+  - "sticky bar shows only once the main button is off screen…": removed
+    with the sticky bar; its checks (shows, adds, never covers the last
+    content) are covered by the new buy bar and scroll tests.
+  - wholesale-row test: waits for the buy bar's action instead of the
+    old in-page buttons.
+  - "no orange on the product page…": the allowed list lost the old
+    sticky Add to Cart (gone); still only the Add to Cart pill and the
+    count badge, light and dark.
+  - "shown on Search and brand pages, never on the product page…": the
+    product page moved to the "shown" list; cart, checkout, admin and
+    account still checked as absent.
+  - "stays in sync with the cart page and the product page": on the
+    product page it now checks the buy bar stepper already shows the
+    cart's 3, taps + twice → 5, and the floating badge says 5 (before:
+    header badge + in-page stepper + Add to Cart).
+  - e2e/batch-27-screens.spec.ts: scrolls past the trust plate instead of
+    the removed buy row.
+  - e2e/batch-27.spec.ts as a whole: the offline helper (service worker)
+    is switched off for this file, which removes the flaky race described
+    in section 4. No check was removed or loosened.
+
+
+BUILD & TEST RESULTS
+--------------------
+Final code, run three times in a row:
+  npm run build    PASSED all 3 times (0 errors)
+  npx vitest run   106/106 passed all 3 times (16 files)
+  e2e (Playwright) run 1: 137 passed, 0 failed, 27 skipped
+                   run 2: 137 passed, 0 failed, 27 skipped
+                   run 3: 137 passed, 0 failed, 27 skipped
+  The 27 skips are the screenshot-only files (Batch 25, 26, 27 and the
+  new 28 screens — only on request) plus the same 3 data-condition skips
+  as before (2 bento tests, the CeraVe region part).
+  An earlier set of three runs (before the service-worker fix in
+  section 4) had run 1: 137 passed, run 2: 137 passed, run 3: 136 passed
+  / 1 failed (the Batch 27 option-picker test). The cause was found and
+  fixed, and the three runs above were redone from scratch.
+Clean-up: the tests only use the browser's own cart (emptied after each
+test), never place orders and never touch the database (the pretend
+option and test photos exist only inside the test browser).
