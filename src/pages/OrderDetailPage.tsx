@@ -15,7 +15,6 @@ import { fetchOrderDetail, cancelOrder } from '../lib/orders';
 import { formatTaka } from '../lib/format';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
 import {
-  ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_TONE,
@@ -23,15 +22,10 @@ import {
 } from '../lib/orderStatus';
 import type { OrderWithDetails } from '../types';
 import { steadfastTrackingUrl } from '../lib/steadfastLink';
-import { DELIVERY_STEPS, deliveryProgress, type DeliveryStepId } from '../lib/deliveryProgress';
-
-/** Which order-history status marks each step's time, where there is one. */
-const STEP_HISTORY_STATUS: Partial<Record<DeliveryStepId, OrderWithDetails['status']>> = {
-  placed: 'pending',
-  confirmed: 'confirmed',
-  handed: 'shipped',
-  delivered: 'delivered',
-};
+import { deriveOrderStep, fetchTracking, stepLabel, stepTimesFrom, type TrackingAnswer } from '../lib/orderSteps';
+import { fetchPaymentSummary, type PaymentSummary } from '../lib/payments';
+import { OrderSteps } from '../components/orders/OrderSteps';
+import { customerSafeText } from '../../supabase/functions/_shared/steadfastSteps';
 
 function shortTime(iso: string): string {
   return new Date(iso).toLocaleString('en-GB', {
@@ -43,46 +37,38 @@ function shortTime(iso: string): string {
   });
 }
 
-/** Batch 24 Part 6: the delivery progress in plain words, from the status
- *  already saved on the order (never a live call to Steadfast). */
-function DeliveryProgressSection({ order }: { order: OrderWithDetails }) {
-  const progress = deliveryProgress(order, order.history);
+/**
+ * Batch 30 Part 5: the six real steps (Order Placed → Delivered). For a
+ * parcel on Steadfast the page asks the steadfast function for its
+ * tracking steps (cached a minute) — the latest one shows under the
+ * current step, never with a rider's name or phone. Without that answer
+ * (function not updated yet, or offline) the steps come from what is saved
+ * on the order, with no error.
+ */
+function DeliveryProgressSection({ order, tracking }: { order: OrderWithDetails; tracking: TrackingAnswer | null }) {
+  const step = deriveOrderStep({
+    status: order.status,
+    booked: Boolean(order.steadfast_consignment_id),
+    courierStatus: tracking?.courierStatus ?? order.steadfast_status,
+    events: tracking?.events ?? [],
+  });
+  const historyTimes = order.history.map((h) => h.changed_at).sort();
+  const updatedAt =
+    step.latest?.at ??
+    order.steadfast_status_updated_at ??
+    historyTimes[historyTimes.length - 1] ??
+    order.updated_at ??
+    order.created_at;
   return (
-    <section className="delivery-progress" aria-label="Delivery progress">
-      <p className="delivery-progress__now">
-        <strong data-testid="delivery-status">{progress.label}</strong>
-        {progress.updatedAt && (
-          <span className="delivery-progress__time"> · Last update {shortTime(progress.updatedAt)}</span>
-        )}
-      </p>
-      {progress.exception !== 'cancelled' && (
-        <ol className="order-timeline">
-          {DELIVERY_STEPS.map((step, index) => {
-            const historyStatus = STEP_HISTORY_STATUS[step.id];
-            const historyRow = historyStatus ? order.history.find((h) => h.new_status === historyStatus) : undefined;
-            const reached = index <= progress.stepIndex;
-            return (
-              <li
-                key={step.id}
-                className={`order-timeline__step${reached ? ' order-timeline__step--reached' : ''}`}
-              >
-                <span className="order-timeline__dot" aria-hidden="true" />
-                <span className="order-timeline__label">{step.label}</span>
-                {reached && historyRow && (
-                  <span className="order-timeline__time">{shortTime(historyRow.changed_at)}</span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      {progress.exception === 'returned' && (
-        <p className="delivery-progress__note">The parcel is coming back to us. We will contact you.</p>
-      )}
-      {progress.exception === 'on_hold' && (
-        <p className="delivery-progress__note">The courier has paused this delivery for now. We will contact you.</p>
-      )}
-    </section>
+    <div className="delivery-progress" aria-label="Delivery progress">
+      <OrderSteps
+        step={step}
+        audience="customer"
+        labelTestId="delivery-status"
+        stepTimes={stepTimesFrom(order.history, tracking?.events ?? [])}
+      />
+      {updatedAt && <p className="delivery-progress__time">Last update {shortTime(updatedAt)}</p>}
+    </div>
   );
 }
 
@@ -104,6 +90,8 @@ export function OrderDetailPage() {
   const [order, setOrder] = useState<OrderWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [tracking, setTracking] = useState<TrackingAnswer | null>(null);
+  const [payment, setPayment] = useState<PaymentSummary | null>(null);
 
   useDocumentTitle(order ? `${order.order_number} — Naeem's` : "Order — Naeem's");
 
@@ -113,6 +101,15 @@ export function OrderDetailPage() {
     const data = await fetchOrderDetail(orderId);
     setOrder(data);
     setIsLoading(false);
+    if (!data) return;
+    void fetchPaymentSummary(data.id).then(setPayment);
+    if (data.steadfast_consignment_id) {
+      // The function already removes rider names and phones for a
+      // customer; cleaned again here so the page never shows them anyway.
+      void fetchTracking(data.id).then((answer) =>
+        setTracking(answer ? { ...answer, events: answer.events.map((e) => ({ ...e, text: customerSafeText(e.text) })) } : null)
+      );
+    }
   }, [orderId]);
 
   useEffect(() => {
@@ -174,7 +171,15 @@ export function OrderDetailPage() {
           <>
             <div className="order-detail__status-row">
               <span className={`status-badge status-badge--${ORDER_STATUS_TONE[order.status]}`}>
-                {ORDER_STATUS_LABELS[order.status]}
+                {stepLabel(
+                  deriveOrderStep({
+                    status: order.status,
+                    booked: Boolean(order.steadfast_consignment_id),
+                    courierStatus: tracking?.courierStatus ?? order.steadfast_status,
+                    events: tracking?.events ?? [],
+                  }),
+                  'customer'
+                )}
               </span>
               <span className="order-detail__date">
                 {new Date(order.created_at).toLocaleString('en-GB', {
@@ -187,7 +192,7 @@ export function OrderDetailPage() {
               </span>
             </div>
 
-            <DeliveryProgressSection order={order} />
+            <DeliveryProgressSection order={order} tracking={tracking} />
 
             {order.tracking_number && (
               <>
@@ -272,6 +277,12 @@ export function OrderDetailPage() {
               </div>
               {order.payment_method === 'bkash' && order.bkash_trx_id && (
                 <p className="order-detail__trx">TrxID: {order.bkash_trx_id}</p>
+              )}
+              {payment && payment.paid > 0 && (
+                <p className="order-detail__trx" data-testid="customer-payment-summary">
+                  Paid {formatTaka(payment.paid)}
+                  {payment.due > 0 ? ` · Due ${formatTaka(payment.due)}` : ''}
+                </p>
               )}
             </section>
 
