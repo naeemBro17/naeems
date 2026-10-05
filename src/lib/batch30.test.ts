@@ -172,6 +172,9 @@ describe('thanas', () => {
     expect(matchDistrict('Jhalokati')).toBe('Jhalakathi');
     expect(matchDistrict('Barishal')).toBe('Barisal');
     expect(matchDistrict('Narayangonj')).toBe('Narayanganj');
+    expect(matchDistrict('Dhaka City')).toBe('Dhaka');
+    expect(matchDistrict('Dhaka Sub-Urban')).toBe('Dhaka');
+    expect(matchDistrict('Narshindi')).toBe('Narsingdi');
     expect(matchDistrict('Nowhere')).toBeNull();
   });
   it('grouped by district A–Z, the chosen district first, searchable', () => {
@@ -205,5 +208,23 @@ describe('Steadfast COD = what is still due', () => {
   it('before migration-033 (no payments): the old rule', () => {
     expect(codAmountFor({ payment_status: 'unpaid', total: 1060 }, null)).toBe(1060);
     expect(codAmountFor({ payment_status: 'paid', total: 1060 }, null)).toBe(0);
+  });
+});
+
+describe('police_stations: one row per district with its thanas nested', () => {
+  it('flattens to thana + district', () => {
+    expect(
+      parsePoliceStations({
+        status: 200,
+        data: [
+          { id: 1, name: 'Bagerhat', police_stations: [{ id: 10, name: 'Mongla' }, { id: 11, name: 'Rampal' }] },
+          { id: 2, name: 'Dhaka', thanas: [{ id: 20, name: 'Gulshan' }] },
+        ],
+      })
+    ).toEqual([
+      { name: 'Mongla', district: 'Bagerhat' },
+      { name: 'Rampal', district: 'Bagerhat' },
+      { name: 'Gulshan', district: 'Dhaka' },
+    ]);
   });
 });

@@ -37,6 +37,10 @@ const DISTRICT_ALIASES: Record<string, string> = {
   nawabganj: 'chapainawabganj',
   chapainababganj: 'chapainawabganj',
   cumilla: 'comilla',
+  // Steadfast's live list (checked after deploy) splits Dhaka in two.
+  dhakacity: 'dhaka',
+  dhakasuburban: 'dhaka',
+  narshindi: 'narsingdi',
 };
 
 function letters(name: string): string {
