@@ -202,7 +202,9 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
   ]);
   await expect(page.locator('.adm-sidebar__item--on')).toHaveText('Products');
   await expect(page.getByRole('link', { name: /View site/ })).toHaveAttribute('target', '_blank');
-  // About 10–12 product rows on a laptop screen.
+  // About 10–12 product rows on a laptop screen. (Batch 30: wait for the
+  // list to load first — counting at once sometimes saw 0 rows.)
+  await expect(page.locator('[data-testid="product-row"]').first()).toBeVisible({ timeout: 15_000 });
   const visibleRows = await page.locator('[data-testid="product-row"]').evaluateAll(
     (rows) => rows.filter((r) => r.getBoundingClientRect().bottom <= window.innerHeight).length
   );
