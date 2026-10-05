@@ -25,6 +25,8 @@ import {
   lineNeedsReason,
   type StockWarning,
 } from '../../lib/manualOrders';
+import { findCustomers, linkOrderCustomer, type CustomerSearchResult } from '../../lib/customers';
+import { looksLikePhone } from '../../lib/phone';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { DiscountReason, OrderPaymentMethod, OrderSource } from '../../types';
 
@@ -86,8 +88,13 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
 
   const [source, setSource] = useState<OrderSource | null>(null);
   const [address, setAddress] = useState<DeliveryAddress>(emptyForm);
-  const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null);
-  const [linkedCustomerLabel, setLinkedCustomerLabel] = useState<string | null>(null);
+  // Batch 30 Part 4: the Customer field. Picking a registered customer
+  // links the order to them in admin only (admin_link_order_customer) —
+  // never through customer_id, so it never shows in their own My Orders.
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerResults, setCustomerResults] = useState<CustomerSearchResult[]>([]);
+  const [customerSearchReady, setCustomerSearchReady] = useState(true);
+  const [pickedCustomer, setPickedCustomer] = useState<CustomerSearchResult | 'new' | null>(null);
   const [matches, setMatches] = useState<{
     fromProfile: Awaited<ReturnType<typeof findCustomerMatches>>['fromProfile'];
     fromOrder: Awaited<ReturnType<typeof findCustomerMatches>>['fromOrder'];
@@ -120,8 +127,12 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     if (!isOpen) return;
     setSource(null);
     setAddress(emptyForm());
-    setLinkedCustomerId(null);
-    setLinkedCustomerLabel(null);
+    setCustomerQuery('');
+    setCustomerResults([]);
+    setPickedCustomer(null);
+    // Is the Batch 30 customer search there yet? (Before migration-033 the
+    // old phone lookup below takes over.)
+    void findCustomers('').then((rows) => setCustomerSearchReady(rows !== null));
     setMatches(null);
     setLookedUpPhone('');
     setQuery('');
@@ -140,12 +151,33 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     setPendingWarnings(null);
   }, [isOpen, settings.delivery_fee_inside_dhaka]);
 
-  // Phone lookup — offers to fill in details from a past order or an
-  // existing account, never applies anything automatically. See
-  // findCustomerMatches's own header comment for the privacy rule.
+  // Customer search: phone (any prefix or spacing) or name.
+  useEffect(() => {
+    const term = customerQuery.trim();
+    if (pickedCustomer !== null || term.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void findCustomers(term).then((rows) => {
+        if (cancelled) return;
+        setCustomerSearchReady(rows !== null);
+        setCustomerResults(rows ?? []);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [customerQuery, pickedCustomer]);
+
+  // Phone lookup (before migration-033 only) — offers to fill in details
+  // from a past order or an existing account, never applies anything
+  // automatically. See findCustomerMatches's own header comment.
   useEffect(() => {
     const digits = address.phone.replace(/\D/g, '');
-    if (digits.length < 10 || address.phone === lookedUpPhone) return;
+    if (customerSearchReady || digits.length < 10 || address.phone === lookedUpPhone) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void findCustomerMatches(address.phone).then((result) => {
@@ -159,7 +191,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [address.phone, lookedUpPhone]);
+  }, [address.phone, lookedUpPhone, customerSearchReady]);
 
   const sellableOptions = useMemo<SellableOption[]>(() => {
     const list: SellableOption[] = [];
@@ -291,10 +323,28 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     }
   };
 
-  const handleLinkAccount = () => {
-    if (!matches?.fromProfile?.profileId) return;
-    setLinkedCustomerId(matches.fromProfile.profileId);
-    setLinkedCustomerLabel(matches.fromProfile.fullName || address.phone);
+  const handlePickCustomer = (customer: CustomerSearchResult) => {
+    setPickedCustomer(customer);
+    setAddress({
+      fullName: customer.fullName,
+      phone: customer.phone,
+      division: customer.division,
+      district: customer.district,
+      thana: customer.thana,
+      fullAddress: customer.addressLine,
+    });
+    if (customer.district) handleLocationChange(customer.district, customer.thana);
+  };
+
+  const handleNewCustomer = () => {
+    const typed = customerQuery.trim();
+    setPickedCustomer('new');
+    setAddress({ ...emptyForm(), ...(looksLikePhone(typed) ? { phone: typed } : { fullName: typed }) });
+  };
+
+  const handleChangeCustomer = () => {
+    setPickedCustomer(null);
+    setCustomerResults([]);
   };
 
   const isPaidNow =
@@ -344,7 +394,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     paymentMethod,
     bkashTrxId: paymentMethod === 'bkash' ? bkashTrxId.trim() || null : null,
     bkashSender: paymentMethod === 'bkash' ? bkashSender.trim() || null : null,
-    linkedCustomerId,
+    linkedCustomerId: null,
     markDelivered: zone === 'hand_delivered' && isPaidNow && markDelivered,
     adminNote: adminNote.trim() || null,
     allowNegativeStock,
@@ -363,6 +413,10 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     if (result.error || !result.orderId) {
       showToast(result.error ?? 'Could not save this order.', 'error');
       return;
+    }
+    if (pickedCustomer && pickedCustomer !== 'new' && pickedCustomer.profileId) {
+      const link = await linkOrderCustomer(result.orderId, pickedCustomer.profileId);
+      if (link.error) showToast(`Saved, but not linked to the customer: ${link.error}`, 'error');
     }
     showToast(`Order ${result.orderNumber} saved`, 'success');
     await onCreated(result.orderId);
@@ -386,6 +440,77 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
           void handleSave(false);
         }}
       >
+        <div className="form-field customer-pick">
+          <label className="form-label" htmlFor="manual-order-customer">
+            Customer
+          </label>
+          {pickedCustomer ? (
+            <div className="customer-pick__chosen" data-testid="customer-picked">
+              <span className="customer-pick__chosen-main">
+                <strong>{pickedCustomer === 'new' ? 'New customer' : pickedCustomer.fullName || pickedCustomer.phone}</strong>
+                <span className="customer-pick__sub">
+                  {pickedCustomer === 'new'
+                    ? 'Fill in the details below'
+                    : `${pickedCustomer.phone}${pickedCustomer.orderCount > 0 ? ` · ${pickedCustomer.orderCount} order${pickedCustomer.orderCount === 1 ? '' : 's'}` : ''}${pickedCustomer.totalDue ? ` · ${formatTaka(pickedCustomer.totalDue)} due` : ''}`}
+                </span>
+              </span>
+              <button type="button" className="account-card__edit" onClick={handleChangeCustomer}>
+                Change
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="search-bar">
+                <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" />
+                </svg>
+                <input
+                  id="manual-order-customer"
+                  type="search"
+                  className="search-bar__input"
+                  placeholder="Type a phone number or name"
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              {customerQuery.trim().length >= 2 && (
+                <ul className="picker-sheet__list customer-pick__results" data-testid="customer-results">
+                  {customerResults.map((c) => (
+                    <li key={c.key}>
+                      <button type="button" className="picker-sheet__row" onClick={() => handlePickCustomer(c)}>
+                        <span className="picker-sheet__row-label customer-pick__row">
+                          <span>
+                            {c.fullName || c.phone}
+                            {c.profileId && <span className="customer-pick__tag">Account</span>}
+                          </span>
+                          <span className="picker-sheet__row-sub">
+                            {c.phone}
+                            {c.thana || c.district ? ` · ${[c.thana, c.district].filter(Boolean).join(', ')}` : ''}
+                            {c.orderCount > 0 ? ` · ${c.orderCount} order${c.orderCount === 1 ? '' : 's'}` : ''}
+                            {c.totalDue ? ` · ${formatTaka(c.totalDue)} due` : ''}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button type="button" className="picker-sheet__row customer-pick__new" onClick={handleNewCustomer}>
+                      <span className="picker-sheet__row-label">
+                        New customer
+                        <span className="picker-sheet__row-sub">
+                          {looksLikePhone(customerQuery) ? `With phone ${customerQuery.trim()}` : `Named ${customerQuery.trim()}`}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="form-field">
           <span className="form-label">
             Source <span className="form-required" aria-hidden="true">*</span>
@@ -418,27 +543,6 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
                   <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('profile')}>
                     Fill in details
                   </button>
-                  {linkedCustomerId ? (
-                    <>
-                      <span className="status-badge status-badge--success">
-                        Linked: {linkedCustomerLabel}
-                      </span>
-                      <button
-                        type="button"
-                        className="account-card__edit"
-                        onClick={() => {
-                          setLinkedCustomerId(null);
-                          setLinkedCustomerLabel(null);
-                        }}
-                      >
-                        Unlink
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="button button--secondary button--small" onClick={handleLinkAccount}>
-                      Link to this account
-                    </button>
-                  )}
                 </div>
               </>
             )}

@@ -12,8 +12,8 @@ import { CustomerNotesEditor, CustomerTagChips } from './CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../lib/brandAdmin';
 import type { OrderStatus } from '../../types';
 
-type SortKey = 'recent' | 'orders' | 'spent' | 'joined' | 'name';
-const SORT_KEYS: readonly SortKey[] = ['recent', 'orders', 'spent', 'joined', 'name'];
+type SortKey = 'recent' | 'orders' | 'spent' | 'due' | 'joined' | 'name';
+const SORT_KEYS: readonly SortKey[] = ['recent', 'orders', 'spent', 'due', 'joined', 'name'];
 
 function shortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -69,11 +69,14 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
   }, []);
 
   const showMoney = rows.some((r) => r.total_spent !== null);
+  // Batch 30: what each customer still owes (registered or phone-only).
+  const showDue = rows.some((r) => r.total_due !== null);
+  const notesFor = (c: CustomerRow) => (c.id ? (notes.get(c.id)?.tags ?? []) : []);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     const tagged = tagFilter
-      ? rows.filter((r) => (notes.get(r.id)?.tags ?? []).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+      ? rows.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
       : rows;
     const list = term
       ? tagged.filter(
@@ -91,6 +94,8 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
           return b.order_count - a.order_count;
         case 'spent':
           return (b.total_spent ?? 0) - (a.total_spent ?? 0);
+        case 'due':
+          return (b.total_due ?? 0) - (a.total_due ?? 0);
         case 'joined':
           return time(b.joined_at) - time(a.joined_at);
         case 'name':
@@ -102,7 +107,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
     return sorted;
   }, [rows, search, sort, tagFilter, notes]);
 
-  const open = rows.find((r) => r.id === openId) ?? null;
+  const open = rows.find((r) => r.key === openId) ?? null;
 
   return (
     <section aria-label="Customers" className="adm-customers">
@@ -114,6 +119,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
           <option value="recent">Last order</option>
           <option value="orders">Most orders</option>
           {showMoney && <option value="spent">Most spent</option>}
+          {showDue && <option value="due">Most due</option>}
           <option value="joined">Newest</option>
           <option value="name">Name A–Z</option>
         </select>
@@ -142,40 +148,42 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       ) : error ? (
         <EmptyState icon="alert" title={error} />
       ) : rows.length === 0 ? (
-        <EmptyState icon="customers" title="No customer accounts yet" hint="Shoppers appear here after they sign in at checkout." />
+        <EmptyState icon="customers" title="No customers yet" hint="Shoppers appear here after they sign in at checkout or you enter an order for them." />
       ) : visible.length === 0 ? (
         <EmptyState icon="search" title={tagFilter ? 'No customer has that tag' : 'No customer matches that search'} />
       ) : (
-        <div className={`adm-list adm-clist${showMoney ? ' adm-clist--money' : ''}`} role="list" aria-label="Customers">
+        <div className={`adm-list adm-clist${showMoney ? ' adm-clist--money' : ''}${showDue ? ' adm-clist--due' : ''}`} role="list" aria-label="Customers">
           <div className="adm-thead" aria-hidden="true">
             <span>NAME</span>
             <span>EMAIL</span>
             <span>PHONE</span>
             <span>ORDERS</span>
             {showMoney && <span>TOTAL SPENT</span>}
+            {showDue && <span>DUE</span>}
             <span>LAST ORDER</span>
             <span>JOINED</span>
           </div>
           {visible.map((c) => (
-            <div key={c.id} role="listitem" className="adm-lrow adm-crow" data-testid="customer-row" onClick={() => setOpenId(c.id)}>
+            <div key={c.key} role="listitem" className="adm-lrow adm-crow" data-testid="customer-row" onClick={() => setOpenId(c.key)}>
               <div className="adm-lrow__main">
                 <button
                   type="button"
                   className="adm-lrow__open"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setOpenId(c.id);
+                    setOpenId(c.key);
                   }}
                 >
-                  <span className="adm-lrow__name">{c.full_name || c.email}</span>
+                  <span className="adm-lrow__name">{c.full_name || c.email || c.phone}</span>
                 </button>
-                <CustomerTagChips tags={notes.get(c.id)?.tags ?? []} />
+                <CustomerTagChips tags={notesFor(c)} />
                 <p className="adm-lrow__meta adm-mobile-meta">
                   <span>{c.phone || c.email}</span>
                   <span>
                     {c.order_count} order{c.order_count === 1 ? '' : 's'}
                   </span>
                   {c.last_order_at && <span>last {shortDate(c.last_order_at)}</span>}
+                  {c.total_due ? <span className="adm-crow__due">{formatTakaBd(c.total_due)} due</span> : null}
                 </p>
               </div>
               <span className="adm-crow__spent adm-price adm-mobile-meta">
@@ -185,6 +193,11 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
               <span className="adm-cell">{c.phone || '—'}</span>
               <span className="adm-cell">{c.order_count}</span>
               {showMoney && <span className="adm-cell adm-price">{c.total_spent !== null ? formatTakaBd(c.total_spent) : '—'}</span>}
+              {showDue && (
+                <span className="adm-cell adm-price" data-testid="customer-due">
+                  {c.total_due ? formatTakaBd(c.total_due) : '—'}
+                </span>
+              )}
               <span className="adm-cell adm-cell--muted">{shortDate(c.last_order_at)}</span>
               <span className="adm-cell adm-cell--muted">{shortDate(c.joined_at)}</span>
             </div>
@@ -200,7 +213,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       <CustomerSheet
         customer={open}
         canOpenOrders={can('view_orders')}
-        note={open ? (notes.get(open.id) ?? null) : null}
+        note={open?.id ? (notes.get(open.id) ?? null) : null}
         knownTags={tags}
         canEditNotes={can('edit_customer_notes')}
         onNoteSaved={(id, saved) =>
@@ -242,7 +255,7 @@ function CustomerSheet({
     if (!customer) return;
     let alive = true;
     setOrders(null);
-    void fetchCustomerOrders(customer.id).then((list) => {
+    void fetchCustomerOrders(customer).then((list) => {
       if (alive) setOrders(list);
     });
     return () => {
@@ -251,21 +264,23 @@ function CustomerSheet({
   }, [customer]);
 
   return (
-    <BottomSheet isOpen={customer !== null} onClose={onClose} title={customer ? customer.full_name || customer.email : 'Customer'}>
+    <BottomSheet isOpen={customer !== null} onClose={onClose} title={customer ? customer.full_name || customer.email || customer.phone : 'Customer'}>
       {customer && (
         <div className="adm-customer">
           <ul className="adm-customer__facts">
-            <li>
-              <AdminIcon name="mail" />
-              <span>{customer.email || '—'}</span>
-            </li>
+            {customer.id && (
+              <li>
+                <AdminIcon name="mail" />
+                <span>{customer.email || '—'}</span>
+              </li>
+            )}
             <li>
               <AdminIcon name="phone" />
               <span>{customer.phone || '—'}</span>
             </li>
             <li>
               <AdminIcon name="clock" />
-              <span>Joined {formatDhakaTime(customer.joined_at)}</span>
+              <span>{customer.joined_at ? `Joined ${formatDhakaTime(customer.joined_at)}` : 'No account — orders entered by you'}</span>
             </li>
           </ul>
           <div className="adm-customer__stats">
@@ -279,16 +294,26 @@ function CustomerSheet({
                 <span className="adm-customer__stat adm-price">{formatTakaBd(customer.total_spent)}</span>
               </div>
             )}
+            {customer.total_due !== null && (
+              <div>
+                <span className="adm-kpi__label">Due</span>
+                <span className="adm-customer__stat adm-price" data-testid="customer-sheet-due">
+                  {formatTakaBd(customer.total_due)}
+                </span>
+              </div>
+            )}
           </div>
 
-          <CustomerNotesEditor
-            key={customer.id}
-            customerId={customer.id}
-            note={note}
-            knownTags={allTags}
-            canEdit={canEditNotes}
-            onSaved={(saved) => onNoteSaved(customer.id, saved)}
-          />
+          {customer.id && (
+            <CustomerNotesEditor
+              key={customer.id}
+              customerId={customer.id}
+              note={note}
+              knownTags={allTags}
+              canEdit={canEditNotes}
+              onSaved={(saved) => onNoteSaved(customer.id ?? '', saved)}
+            />
+          )}
 
           <h3 className="adm-group__title adm-customer__heading">ORDERS</h3>
           {orders === null ? (
@@ -318,6 +343,7 @@ function CustomerSheet({
                     </span>
                     <span className={`adm-status adm-status--${o.status}`}>{label}</span>
                     {o.total !== null && <span className="adm-price">{formatTakaBd(o.total)}</span>}
+                    {o.due ? <span className="adm-customer__order-due">{formatTakaBd(o.due)} due</span> : null}
                     {canOpenOrders && <AdminIcon name="chevron-right" className="adm-row__chevron adm-row__chevron--tight" />}
                   </button>
                 );
