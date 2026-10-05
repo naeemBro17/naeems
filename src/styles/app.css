@@ -9189,9 +9189,10 @@ html.vt-fade::view-transition-new(root) {
 /* The picture starts at the very top, under the floating header. */
 .pdp-main {
   padding-top: 0;
-  /* Room for the floating buy bar (66 px + 14 px gap + breathing room), so
-     it never covers the last content ("You may also like" stays visible). */
-  padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  /* Room for the floating buy bar (66 px + 14 px gap) and the floating cart
+     just above it (52 px + 11 px gap) plus breathing room, so neither ever
+     covers the last content ("You may also like" stays visible). */
+  padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px));
 }
 
 .pdp-main > .empty-state {
@@ -9507,9 +9508,9 @@ html.vt-fade::view-transition-new(root) {
   position: fixed;
   left: max(12px, calc((100vw - 480px) / 2 + 12px));
   right: max(12px, calc((100vw - 480px) / 2 + 12px));
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--buybar-offset) + env(safe-area-inset-bottom, 0px));
   z-index: 150;
-  height: 66px;
+  height: var(--buybar-height);
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 1fr) minmax(0, 4fr);
   align-items: center;
@@ -9707,12 +9708,32 @@ html.vt-fade::view-transition-new(root) {
   backdrop-filter: blur(12px) saturate(150%);
 }
 
-/* A little smaller on the product page, same middle-right spot: clear of
-   the top buttons and the buy bar. */
+/* Product page (Batch 29 Part 3): a little smaller, bottom-right, just
+   above the glass buy bar — right edges aligned, an 11 px gap. When the bar
+   slides away on a scroll down, the cart slides down by the bar's height +
+   the gap, with the bar's own duration and curve, into the corner the bar
+   left (still above the safe area); it comes back up with the bar.
+   Transform only. */
 .glass-cart--pdp {
+  top: auto;
+  bottom: calc(
+    var(--buybar-offset) + env(safe-area-inset-bottom, 0px) + var(--buybar-height) + var(--pdp-cart-gap)
+  );
   width: 52px;
   height: 52px;
-  margin-top: -26px;
+  margin-top: 0;
+  transform: translateY(0);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass-cart--pdp.glass-cart--bar-away {
+  transform: translateY(calc(var(--buybar-height) + var(--pdp-cart-gap)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-cart--pdp {
+    transition: none;
+  }
 }
 
 .glass-cart.glass-cart--pdp .glass-cart__icon {

@@ -25,6 +25,7 @@ import {
 import { prefersReducedMotion, productHeroName } from '../lib/viewTransition';
 import { isTransitionRunning, setCurrentDetailProductId } from '../lib/heroTransition';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
+import { setBuyBarState } from '../lib/buyBarState';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
@@ -363,6 +364,15 @@ function DetailContent({
     items.find((item) => item.productId === product.id && item.variantId === lineVariantId)?.quantity ?? 0;
   const limit = stockLimit(hasSelector ? selectedOption.stock_quantity : product.stock_quantity);
   const { shown: barShown, onPressStart } = useBuyBarVisibility(itemCount);
+
+  // The floating cart (outside this page) rides just above the bar and moves
+  // with it — tell it where the bar is, and that there's no bar once we leave.
+  // A layout effect, so on the page's first frame the cart is already in its
+  // spot instead of sliding there.
+  useLayoutEffect(() => {
+    setBuyBarState(barShown ? 'shown' : 'hidden');
+  }, [barShown]);
+  useLayoutEffect(() => () => setBuyBarState('none'), []);
 
   // Fires once per product shown (not on every variant swap) — see
   // trackViewContent's own doc comment for what is/isn't sent.

@@ -127,6 +127,10 @@
   --crystal-bar-border:   rgba(0, 0, 0, 0.06);
   --crystal-surface-bg:   rgba(255, 255, 255, 0.3);
   --crystal-surface-shadow: 0 6px 20px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  /* Glass buy bar size/offset, shared with the floating cart above it. */
+  --buybar-height:        66px;
+  --buybar-offset:        14px;
+  --pdp-cart-gap:         11px;
   --buybar-bg:            rgba(255, 255, 255, 0.6);
   --buybar-border:        rgba(255, 255, 255, 0.75);
   --buybar-highlight:     rgba(255, 255, 255, 0.9);

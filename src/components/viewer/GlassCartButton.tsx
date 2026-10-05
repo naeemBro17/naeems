@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { CartIcon } from './CartButton';
 import { CartCountBadge, useCartBump } from './CartBadgeButton';
+import { useBuyBarState } from '../../lib/buyBarState';
 
 /** The product page — where the floating cart is a little smaller. */
 function isProductPage(pathname: string): boolean {
@@ -22,7 +23,9 @@ export function showsGlassCart(pathname: string): boolean {
 }
 
 /**
- * Round crystal-glass cart button at the middle of the right edge — the one
+ * Round crystal-glass cart button at the middle of the right edge (on the
+ * product page: bottom-right, just above the glass buy bar, sliding down and
+ * back up together with it — Batch 29 Part 3) — the one
  * cart entry point on the shop pages (Batch 28 Part 5). Shown while the cart
  * has something in it: it jumps in the first time an item is added, gives a
  * small pulse on every later add (on the product page also on every remove),
@@ -38,13 +41,16 @@ export function GlassCartButton() {
   const onThisPage = showsGlassCart(location.pathname);
   const onProductPage = isProductPage(location.pathname);
   const { itemCount, bump, key } = useCartBump(onThisPage, onProductPage);
+  const buyBar = useBuyBarState();
 
   if (itemCount <= 0 || !onThisPage) return null;
 
   return (
     <button
       type="button"
-      className={`glass-cart${onProductPage ? ' glass-cart--pdp' : ''}`}
+      className={`glass-cart${onProductPage ? ' glass-cart--pdp' : ''}${
+        onProductPage && buyBar !== 'shown' ? ' glass-cart--bar-away' : ''
+      }`}
       onClick={() => navigate('/cart')}
       aria-label={`Open cart, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
       data-testid="glass-cart"
