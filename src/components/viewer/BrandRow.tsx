@@ -1,8 +1,8 @@
-import { useEffect, useMemo, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import { useProducts } from '../../contexts/ProductContext';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { homeBrands } from '../../lib/brands';
-import { BrandCard } from './BrandCard';
+import { BrandCard, usePreloadFirstBrandVideos } from './BrandCard';
 import type { Product } from '../../types';
 
 /** How many brands the row had last time — lets a fresh load reserve the
@@ -47,6 +47,8 @@ export function BrandRow({ activeProducts }: { activeProducts: Product[] }) {
   const navigate = useAppNavigate();
   const list = useMemo(() => homeBrands(brands, activeProducts), [brands, activeProducts]);
   const settled = !isLoading;
+  const rowRef = useRef<HTMLElement>(null);
+  usePreloadFirstBrandVideos(list, rowRef);
 
   useEffect(() => {
     if (settled) writeLastCount(list.length);
@@ -64,7 +66,7 @@ export function BrandRow({ activeProducts }: { activeProducts: Product[] }) {
   };
 
   return (
-    <section className="brand-row" aria-label="Shop by Brand" data-testid="brand-row">
+    <section ref={rowRef} className="brand-row" aria-label="Shop by Brand" data-testid="brand-row">
       <div className="brand-row__head">
         <h2 className="home-section-title brand-row__title">Shop by Brand</h2>
         <a href="/brands" className="brand-row__all" onClick={seeAll}>

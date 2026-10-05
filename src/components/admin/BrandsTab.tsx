@@ -3,7 +3,13 @@ import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { useDragReorder } from '../../hooks/useDragReorder';
 import { brandPath, productCountLabel, productCountsByBrand, sortBrands } from '../../lib/brands';
-import { deleteBrand, MOVE_PRODUCTS_FIRST, reorderBrands, setBrandOnHome } from '../../lib/brandAdmin';
+import {
+  createMissingVideoPosters,
+  deleteBrand,
+  MOVE_PRODUCTS_FIRST,
+  reorderBrands,
+  setBrandOnHome,
+} from '../../lib/brandAdmin';
 import { timeAgo } from '../../lib/adminData';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Modal } from '../shared/Modal';
@@ -50,6 +56,8 @@ export function BrandsTab() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [deleting, setDeleting] = useState<Brand | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [posterBusy, setPosterBusy] = useState(false);
+  const [posterStatus, setPosterStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setList(sortBrands(brands));
@@ -117,6 +125,22 @@ export function BrandsTab() {
   ];
 
   const deletingCount = deleting ? (counts.get(deleting.id) ?? 0) : 0;
+  const hasVideos = list.some((b) => b.banner_video_url !== null);
+
+  // Batch 29 Part 6: the still picture each brand page shows while its video
+  // loads, for videos uploaded before previews were made automatically.
+  const createPreviews = async () => {
+    setPosterBusy(true);
+    const result = await createMissingVideoPosters(list, (done, total) => {
+      setPosterStatus(total === 0 ? 'No brand has an uploaded video.' : `Working… ${done} of ${total}`);
+    });
+    setPosterBusy(false);
+    const parts = [`Done. ${result.made} made`, `${result.alreadyHad} already had one`];
+    if (result.failed.length > 0) parts.push(`could not read: ${result.failed.join(', ')}`);
+    setPosterStatus(`${parts.join(', ')}.`);
+    if (result.failed.length > 0) showToast('Some video previews could not be made', 'error');
+    else showToast('Video previews ready');
+  };
 
   return (
     <section aria-label="Brands" className="adm-brands">
@@ -137,6 +161,24 @@ export function BrandsTab() {
       <p className="adm-brands__hint">
         {term ? 'Clear the search to drag brands into a new order.' : 'Drag the handle to change the order. Home shows brands in this order.'}
       </p>
+
+      {hasVideos && (
+        <div className="adm-brands__posters">
+          <button
+            type="button"
+            className="adm-btn adm-btn--ghost adm-btn--sm"
+            disabled={posterBusy}
+            onClick={() => void createPreviews()}
+            data-testid="create-video-previews"
+          >
+            <AdminIcon name="video" />
+            Create missing video previews
+          </button>
+          <p className="form-helper" role="status" data-testid="video-previews-status">
+            {posterStatus ?? 'The picture a brand page shows while its video loads. Tap once; new uploads get one automatically.'}
+          </p>
+        </div>
+      )}
 
       {isLoading && list.length === 0 ? (
         <SkeletonRows rows={8} />

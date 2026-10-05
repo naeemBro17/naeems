@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -30,6 +31,16 @@ export interface CartLineVariant {
   label: string;
 }
 
+/** The line most recently removed from the cart (Batch 29 Part 4), kept so
+ *  the "Removed · Undo" toast can put it back exactly: same product, option,
+ *  quantity and position. `id` is new for every removal, so a later removal
+ *  replaces the toast (only the latest can be undone). */
+export interface RemovedCartLine {
+  id: number;
+  item: CartItem;
+  index: number;
+}
+
 interface CartContextValue {
   items: CartItem[];
   /** Adds `quantity` units (default 1) of a product (optionally a specific
@@ -44,6 +55,12 @@ interface CartContextValue {
   /** Removes the item when quantity drops to 0 or below. */
   updateQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
   clearCart: () => void;
+  /** The latest removed line, until it's undone, dismissed or replaced. */
+  lastRemoved: RemovedCartLine | null;
+  /** Puts the latest removed line back where it was. */
+  undoRemove: () => void;
+  /** Forgets the latest removed line (the Undo toast timed out). */
+  dismissRemoved: () => void;
   /** The variant id of the line most recently added for a product this
    *  session (null = the product itself), or undefined when none was — lets
    *  a card's stepper follow the option the shopper just picked. */
@@ -112,6 +129,12 @@ function loadCart(): CartItem[] {
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadCart);
   const [lastVariants, setLastVariants] = useState<Record<string, string | null>>({});
+  const [lastRemoved, setLastRemoved] = useState<RemovedCartLine | null>(null);
+  // The cart as last rendered — read (outside any state updater, which
+  // StrictMode runs twice) to remember a line just before it's removed.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const removalIdRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -152,12 +175,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const removeItem = useCallback((productId: string, variantId: string | null = null) => {
-    setItems((prev) => prev.filter((item) => !sameLine(item, productId, variantId)));
+  /** Remembers a line that's about to be removed, for Undo. */
+  const rememberRemoval = useCallback((productId: string, variantId: string | null) => {
+    const index = itemsRef.current.findIndex((item) => sameLine(item, productId, variantId));
+    if (index === -1) return;
+    removalIdRef.current += 1;
+    setLastRemoved({ id: removalIdRef.current, item: itemsRef.current[index], index });
   }, []);
+
+  const removeItem = useCallback(
+    (productId: string, variantId: string | null = null) => {
+      rememberRemoval(productId, variantId);
+      setItems((prev) => prev.filter((item) => !sameLine(item, productId, variantId)));
+    },
+    [rememberRemoval]
+  );
 
   const updateQuantity = useCallback(
     (productId: string, quantity: number, variantId: string | null = null) => {
+      if (quantity <= 0) rememberRemoval(productId, variantId);
       setItems((prev) => {
         if (quantity <= 0) return prev.filter((item) => !sameLine(item, productId, variantId));
         return prev.map((item) =>
@@ -165,10 +201,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
         );
       });
     },
-    []
+    [rememberRemoval]
   );
 
-  const clearCart = useCallback(() => setItems([]), []);
+  const undoRemove = useCallback(() => {
+    if (!lastRemoved) return;
+    const { item, index } = lastRemoved;
+    setItems((prev) => {
+      // If the same line was added again meanwhile, Undo still restores the
+      // removed line as it was (its quantity, its place) rather than adding.
+      const rest = prev.filter((line) => !sameLine(line, item.productId, item.variantId));
+      const at = Math.min(index, rest.length);
+      return [...rest.slice(0, at), item, ...rest.slice(at)];
+    });
+    setLastRemoved(null);
+  }, [lastRemoved]);
+
+  const dismissRemoved = useCallback(() => setLastRemoved(null), []);
+
+  const clearCart = useCallback(() => {
+    setItems([]);
+    setLastRemoved(null);
+  }, []);
 
   const lastVariantFor = useCallback(
     (productId: string) => (productId in lastVariants ? lastVariants[productId] : undefined),
@@ -191,11 +245,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeItem,
       updateQuantity,
       clearCart,
+      lastRemoved,
+      undoRemove,
+      dismissRemoved,
       lastVariantFor,
       itemCount,
       subtotal,
     }),
-    [items, addItem, removeItem, updateQuantity, clearCart, lastVariantFor, itemCount, subtotal]
+    [
+      items,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+      lastRemoved,
+      undoRemove,
+      dismissRemoved,
+      lastVariantFor,
+      itemCount,
+      subtotal,
+    ]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

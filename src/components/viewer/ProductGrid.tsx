@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigationType } from 'react-router-dom';
+import { recallScroll } from '../../lib/scrollMemory';
 import type { Product } from '../../types';
 import { ProductCard } from './ProductCard';
 import { SkeletonCard } from '../shared/SkeletonCard';
@@ -11,6 +14,43 @@ interface ProductGridProps {
   /** Active Brand/Skin Type filter count, and how to clear them. */
   activeFilterCount: number;
   onClearFilters: () => void;
+}
+
+/** Cards drawn straight away — about two screens on a phone. */
+const FIRST_CARDS = 8;
+/** Cards added per idle moment after that — few enough that each step
+ *  stays well under the 50 ms a phone can spend without a tap feeling stuck. */
+const CARDS_PER_STEP = 4;
+
+/**
+ * How many cards to draw (Batch 29 Part 7). Drawing all ~150 at once kept a
+ * phone busy for over a second before anything could be tapped, so a fresh
+ * visit draws the first few and adds the rest in small steps whenever the
+ * phone is idle (each step short enough never to freeze a tap). Coming Back
+ * to a page that remembers a scroll spot draws everything at once, exactly
+ * as before — the spot and the card the morph returns to must be there on
+ * the very first frame.
+ */
+function useCardsToDraw(total: number): number {
+  const navigationType = useNavigationType();
+  const location = useLocation();
+  const [count, setCount] = useState(() => {
+    const returning = navigationType === 'POP' && (recallScroll(location.key) ?? 0) > 0;
+    return returning ? Number.POSITIVE_INFINITY : FIRST_CARDS;
+  });
+
+  useEffect(() => {
+    if (count >= total) return;
+    const step = () => setCount((c) => c + CARDS_PER_STEP);
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(step, { timeout: 300 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(step, 16);
+    return () => window.clearTimeout(timer);
+  }, [count, total]);
+
+  return count;
 }
 
 function EmptyState({
@@ -55,6 +95,8 @@ export function ProductGrid({
   activeFilterCount,
   onClearFilters,
 }: ProductGridProps) {
+  const cardsToDraw = useCardsToDraw(products.length);
+
   if (isLoading) {
     return (
       <div className="product-grid" aria-label="Loading products">
@@ -90,7 +132,7 @@ export function ProductGrid({
 
   return (
     <div className="product-grid">
-      {products.map((product) => (
+      {(cardsToDraw >= products.length ? products : products.slice(0, cardsToDraw)).map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}
     </div>

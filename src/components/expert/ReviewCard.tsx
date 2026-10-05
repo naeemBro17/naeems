@@ -1,3 +1,5 @@
+// Country flags (Batch 29: loaded with the review cards only, not on every page).
+import 'flag-icons/css/flag-icons.min.css';
 import type { Review } from '../../types';
 import { normalizeCountryCode } from '../../lib/reviews';
 import { StarRating } from './StarRating';
@@ -11,7 +13,7 @@ export function ReviewCard({ review }: { review: Review }) {
     <article className="exp-review">
       <div className="exp-review__top">
         <span className="exp-review__avatar" aria-hidden="true">
-          {review.photo_url ? <img src={review.photo_url} alt="" /> : initial}
+          {review.photo_url ? <img src={review.photo_url} alt="" loading="lazy" decoding="async" /> : initial}
         </span>
 
         <div className="exp-review__who">

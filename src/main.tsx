@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { unstable_HistoryRouter as HistoryRouter } from 'react-router-dom';
 import App from './App';
 import { appHistory } from './lib/appHistory';
-import 'flag-icons/css/flag-icons.min.css';
+import { pageForPath, preloadShopPages } from './lib/routePages';
 import './styles/tokens.css';
 import './styles/app.css';
 
@@ -23,6 +23,12 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
 
+// Batch 29 Part 7: a direct visit to a page's link starts that page's own
+// file downloading right away, alongside the main one, instead of after it.
+void pageForPath(window.location.pathname)
+  ?.preload()
+  .catch(() => undefined);
+
 createRoot(rootElement).render(
   <StrictMode>
     {/* Same as BrowserRouter, but on a history object this app owns — see
@@ -32,3 +38,7 @@ createRoot(rootElement).render(
     </HistoryRouter>
   </StrictMode>
 );
+
+// Then, once the first page is up and the phone is idle, the other shop
+// pages (product page first) so every tap opens at once.
+preloadShopPages();

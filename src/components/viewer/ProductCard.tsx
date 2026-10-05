@@ -10,6 +10,7 @@ import { useProducts } from '../../contexts/ProductContext';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
+import { ProductDetailPage, whenRouteReady } from '../../lib/routePages';
 import { heroReverseTargetFor, rememberHeroOrigin } from '../../lib/heroTransition';
 import { CardMenu } from './CardMenu';
 import { CartButton } from './CartButton';
@@ -57,7 +58,8 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
     // is exactly what was making the tap-to-open feel slow.
     imageWrapRef.current?.style.setProperty('view-transition-name', productHeroName(product.id));
     rememberHeroOrigin(product.id, 'grid');
-    navigateToProductWithHero(navigate, productPath(product), product);
+    const path = productPath(product);
+    whenRouteReady(path, () => navigateToProductWithHero(navigate, path, product));
   };
 
   // A product with real variant rows shows its cheapest option (including
@@ -90,6 +92,9 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
         role="button"
         tabIndex={0}
         onClick={openDetail}
+        // The product page's file starts downloading on touch, so it's here
+        // before the tap ends (it's normally pre-loaded already).
+        onPointerDown={() => void ProductDetailPage.preload().catch(() => undefined)}
         onKeyDown={handleCardKeyDown}
         aria-label={`View details for ${product.name}`}
       >

@@ -36,7 +36,7 @@ import { SiteFooter } from '../components/shared/SiteFooter';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
-import { ProductEditSheet } from '../components/admin/edit-sheets/ProductEditSheet';
+import { ProductEditSheet } from '../components/admin/edit-sheets/deferred';
 
 function OfflineBanner() {
   return (

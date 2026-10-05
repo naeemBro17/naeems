@@ -14,6 +14,36 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      // Batch 29: on Home, the banner photo is the biggest thing on the first
+      // screen, but the app only learns its address after its own code and
+      // the shop's data have loaded. Ask for the banner list right away and
+      // let the browser start downloading the first photo in parallel. Any
+      // failure just means the app loads it the normal way, a bit later.
+      (function () {
+        if (location.pathname !== '/' || !window.fetch) return;
+        // The public key goes in the address, not a header, so the browser
+        // can send this at once without an extra permission round-trip.
+        fetch('%VITE_SUPABASE_URL%/rest/v1/app_settings?select=value&key=eq.banner_slides&apikey=%VITE_SUPABASE_ANON_KEY%')
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (rows) {
+            var slides = JSON.parse((rows[0] && rows[0].value) || '[]');
+            for (var i = 0; i < slides.length; i += 1) {
+              var slide = slides[i];
+              if (!slide || slide.is_active === false) continue;
+              if (!slide.image_url) return;
+              var link = document.createElement('link');
+              link.rel = 'preload';
+              link.as = 'image';
+              link.href = slide.image_url;
+              link.setAttribute('fetchpriority', 'high');
+              document.head.appendChild(link);
+              return;
+            }
+          })
+          .catch(function () {});
+      })();
+    </script>
     <meta name="description" content="Authentic Australian skincare imported to Bangladesh. Browse prices and order directly via WhatsApp." />
     <meta property="og:site_name" content="Naeem's" />
     <meta property="og:title" content="Naeem's Price Hub" />
@@ -28,12 +58,26 @@
     <link rel="canonical" href="https://naeems-all.vercel.app/" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- Batch 29: start talking to the shop's database and the font server
+         before the app asks (saves a round-trip on a slow phone). -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts load without blocking the first paint (font-display: swap —
+         the system font shows first, then swaps). -->
     <link
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;600;700&display=swap"
-      rel="stylesheet"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;600;700&display=swap"
+      />
+    </noscript>
     <title>Naeem's</title>
   </head>
   <body>

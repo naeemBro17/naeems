@@ -2,10 +2,11 @@
 //
 // Both load only once an ID is configured in Admin → Settings — a blank
 // field means that tracker never loads, no errors, nothing in the network
-// tab. Both scripts are injected async so they can never block or slow the
-// page. Nothing here ever sends a customer's name, phone, address or email —
-// only product id/name/price (BDT), quantities, an order's total/number,
-// and a typed search term. Nothing fires at all while the visitor is on
+// tab. Both scripts are injected async, after the page has loaded and gone
+// idle, so they can never block or slow the page. Nothing here ever
+// sends a customer's name, phone, address or email — only product
+// id/name/price (BDT), quantities, an order's total/number, and a typed
+// search term. Nothing fires at all while the visitor is on
 // /admin or /wholesaler-access (enforced by the one router-level PageView
 // listener in App.tsx — see useAnalyticsPageviews).
 
@@ -24,6 +25,44 @@ declare global {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
   }
+}
+
+/** After the page has loaded and gone idle, wait this long (unless the
+ *  visitor touches or scrolls first) before adding the trackers. */
+const TRACKER_DELAY_MS = 4000;
+const INTERACTION_EVENTS = ['pointerdown', 'scroll', 'keydown', 'touchstart'] as const;
+
+/**
+ * Adds a tracker's script on the visitor's first touch, scroll or key — or
+ * 4 seconds after the page has loaded and gone idle, whichever comes first
+ * (Batch 29 Part 7) — so the two trackers (~290 KB, ~0.6 s of phone work)
+ * never compete with the shop's own first screen. Nothing is lost
+ * meanwhile: fbq() and gtag() are set up at once and queue every event
+ * (PageView included), which each script sends as soon as it arrives.
+ */
+function addScriptWhenIdle(src: string): void {
+  let added = false;
+  let timer = 0;
+  const add = () => {
+    if (added) return;
+    added = true;
+    window.clearTimeout(timer);
+    for (const name of INTERACTION_EVENTS) window.removeEventListener(name, add);
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = src;
+    document.head.appendChild(script);
+  };
+  for (const name of INTERACTION_EVENTS) window.addEventListener(name, add, { once: true, passive: true });
+  const afterLoad = () => {
+    const wait = () => {
+      timer = window.setTimeout(add, TRACKER_DELAY_MS);
+    };
+    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(wait, { timeout: 3000 });
+    else wait();
+  };
+  if (document.readyState === 'complete') afterLoad();
+  else window.addEventListener('load', afterLoad, { once: true });
 }
 
 let fbInitialized = false;
@@ -53,10 +92,7 @@ function initFbPixel(pixelId: string): void {
     window.fbq = fbq;
     window._fbq = fbq;
 
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    document.head.appendChild(script);
+    addScriptWhenIdle('https://connect.facebook.net/en_US/fbevents.js');
   }
 
   window.fbq?.('init', pixelId);
@@ -91,10 +127,7 @@ function initGa(measurementId: string): void {
   // route change (this is a single-page app) counts as a real pageview.
   window.gtag('config', measurementId, { send_page_view: false });
 
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-  document.head.appendChild(script);
+  addScriptWhenIdle(`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`);
 }
 
 /** Called once settings are known (see useAnalyticsInit) — safe to call

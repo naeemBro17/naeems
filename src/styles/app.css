@@ -8813,6 +8813,20 @@ html.vt-fade::view-transition-new(root) {
   object-fit: contain;
 }
 
+/* Batch 29 Part 5: a logo with a brand-colour background — the whole card
+   takes that colour (set inline from the logo), so there is no inner box. */
+.brand-card--colour {
+  border-color: transparent;
+}
+
+/* The logo's fixed box stays while the cleaned logo is being prepared, so
+   nothing moves. */
+.brand-logo--waiting {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .brand-card__name {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -8908,6 +8922,53 @@ html.vt-fade::view-transition-new(root) {
   pointer-events: none;
 }
 
+/* Batch 29 Part 6: while a banner video loads, a still picture sits in
+   exactly its box (the preview frame or banner image above, this logo
+   surface below), and the video fades in only once it's playing. */
+.brand-banner__fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18% 28%;
+  background: var(--color-bg-secondary);
+}
+
+.brand-banner__fallback--light {
+  background: #f5f5f7;
+}
+
+.brand-banner__fallback--dark {
+  background: #1c1c1e;
+}
+
+.brand-banner__fallback-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brand-banner__fallback .brand-banner__plate-name {
+  font-size: 18px;
+}
+
+.brand-banner__video {
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.brand-banner__video--playing {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-banner__video {
+    transition: none;
+  }
+}
+
 /* Takes every tap over a YouTube banner: nothing inside YouTube's frame
    can be pressed, so there is no way out to YouTube. */
 .brand-banner__cover {
@@ -8934,6 +8995,10 @@ html.vt-fade::view-transition-new(root) {
 .brand-banner__plate--dark {
   background: #1c1c1e;
   border-color: #38383a;
+}
+
+.brand-banner__plate--colour {
+  border-color: transparent;
 }
 
 .brand-banner__logo {
@@ -9008,9 +9073,10 @@ html.vt-fade::view-transition-new(root) {
 
 /* ---------- Crystal glass round buttons over the photo (Batch 28) ---------- */
 
-/* Almost clear: a thin dark tint (so a white icon stays readable on a white
-   photo), blur, a bright hairline border, an inner top highlight and a soft
-   shadow. White line icon with a tiny drop shadow. */
+/* Pure crystal glass (Batch 29, Naeem's decision): white at 13%, blur, a
+   bright hairline border and a thin inner top highlight. No dark tint and no
+   dark shadow on the button or its white icon — on a pure white photo the
+   icon is fainter, and that is accepted. Same in light and dark mode. */
 .pdp-header .detail-header__back,
 .pdp-header .share-button--header {
   position: relative;
@@ -9022,8 +9088,8 @@ html.vt-fade::view-transition-new(root) {
   min-width: 40px;
   border-radius: 50%;
   background: var(--crystal-photo-bg);
-  border: 1px solid var(--crystal-border);
-  box-shadow: inset 0 1px 0 var(--crystal-highlight), var(--crystal-shadow);
+  border: 1px solid var(--crystal-photo-border);
+  box-shadow: inset 0 1px 0 var(--crystal-photo-highlight);
   color: #FFFFFF;
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   backdrop-filter: blur(12px) saturate(150%);
@@ -9033,11 +9099,6 @@ html.vt-fade::view-transition-new(root) {
 .pdp-header .detail-header__back:hover {
   background: var(--crystal-photo-bg);
   color: #FFFFFF;
-}
-
-.pdp-header .detail-header__back svg,
-.pdp-header .share-button--header .share-button__icon {
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.3));
 }
 
 .pdp-header .detail-header__back svg {
@@ -9064,6 +9125,7 @@ html.vt-fade::view-transition-new(root) {
 .pdp-header--plain .detail-header__back:hover {
   background: var(--crystal-bar-bg);
   border-color: var(--crystal-bar-border);
+  box-shadow: inset 0 1px 0 var(--crystal-highlight), var(--crystal-shadow);
   color: var(--color-text-primary);
 }
 
@@ -9192,9 +9254,10 @@ html.vt-fade::view-transition-new(root) {
 /* The picture starts at the very top, under the floating header. */
 .pdp-main {
   padding-top: 0;
-  /* Room for the floating buy bar (66 px + 14 px gap + breathing room), so
-     it never covers the last content ("You may also like" stays visible). */
-  padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  /* Room for the floating buy bar (66 px + 14 px gap) and the floating cart
+     just above it (52 px + 11 px gap) plus breathing room, so neither ever
+     covers the last content ("You may also like" stays visible). */
+  padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px));
 }
 
 .pdp-main > .empty-state {
@@ -9209,7 +9272,12 @@ html.vt-fade::view-transition-new(root) {
   z-index: 2;
   padding: 3px 9px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.55);
+  /* Same pure crystal glass as the ← and Share buttons (Batch 29). */
+  background: var(--crystal-photo-bg);
+  border: 1px solid var(--crystal-photo-border);
+  box-shadow: inset 0 1px 0 var(--crystal-photo-highlight);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
   color: #FFFFFF;
   font-size: 11px;
   font-weight: 700;
@@ -9354,33 +9422,54 @@ html.vt-fade::view-transition-new(root) {
   color: var(--pdp-save-fg);
 }
 
-/* "● In stock" + the product's note, as subtle rounded chips. */
-.pdp-chips {
-  list-style: none;
+/* "● In stock" capsule + the product's note as one quiet group (Batch 29):
+   price row → capsule 18px, capsule → note 8px, note → trust plate 24px. */
+.pdp-stock {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: var(--pdp-gap-price-stock);
 }
 
 .pdp-chip {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 30px;
-  padding: 5px 12px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   font-size: 12.5px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1;
   color: var(--color-text-primary);
 }
 
-.pdp-chip--note {
-  font-weight: 600;
+/* The note reads like a caption: no box, no border, no background — a small
+   line info icon, then the full text in secondary grey. */
+.pdp-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
   color: var(--color-text-secondary);
+}
+
+.pdp-note__icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  /* Centres the 14px icon on the first 18px line of text. */
+  margin-top: 2px;
+}
+
+.pdp-stock + .trust-plate {
+  margin-top: var(--space-6);
 }
 
 .pdp-chip__dot {
@@ -9484,9 +9573,9 @@ html.vt-fade::view-transition-new(root) {
   position: fixed;
   left: max(12px, calc((100vw - 480px) / 2 + 12px));
   right: max(12px, calc((100vw - 480px) / 2 + 12px));
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--buybar-offset) + env(safe-area-inset-bottom, 0px));
   z-index: 150;
-  height: 66px;
+  height: var(--buybar-height);
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 1fr) minmax(0, 4fr);
   align-items: center;
@@ -9684,12 +9773,32 @@ html.vt-fade::view-transition-new(root) {
   backdrop-filter: blur(12px) saturate(150%);
 }
 
-/* A little smaller on the product page, same middle-right spot: clear of
-   the top buttons and the buy bar. */
+/* Product page (Batch 29 Part 3): a little smaller, bottom-right, just
+   above the glass buy bar — right edges aligned, an 11 px gap. When the bar
+   slides away on a scroll down, the cart slides down by the bar's height +
+   the gap, with the bar's own duration and curve, into the corner the bar
+   left (still above the safe area); it comes back up with the bar.
+   Transform only. */
 .glass-cart--pdp {
+  top: auto;
+  bottom: calc(
+    var(--buybar-offset) + env(safe-area-inset-bottom, 0px) + var(--buybar-height) + var(--pdp-cart-gap)
+  );
   width: 52px;
   height: 52px;
-  margin-top: -26px;
+  margin-top: 0;
+  transform: translateY(0);
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass-cart--pdp.glass-cart--bar-away {
+  transform: translateY(calc(var(--buybar-height) + var(--pdp-cart-gap)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-cart--pdp {
+    transition: none;
+  }
 }
 
 .glass-cart.glass-cart--pdp .glass-cart__icon {
@@ -9746,4 +9855,127 @@ html.vt-fade::view-transition-new(root) {
 /* Cart page: + at the stock limit looks spent (Batch 28 Part 6). */
 .checkout-cart__step-btn--max {
   opacity: 0.4;
+}
+
+/* ---------- "Removed · Undo" toast (Batch 29 Part 4) ---------- */
+
+/* Glass pill in the buy bar's family: blurred, translucent, a thin light
+   border and an inner highlight. Bottom-centre, always above the page's
+   bottom controls (bottom nav, buy bar + floating cart, cart total bar).
+   No orange — "Undo" is bold primary text. */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: min(calc(100vw - 32px), 420px);
+  height: 48px;
+  padding: 0 6px 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--buybar-bg);
+  border: 1px solid var(--buybar-border);
+  box-shadow: inset 0 1px 0 var(--buybar-highlight), var(--buybar-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  color: var(--color-text-primary);
+  transform: translateX(-50%);
+  animation: undo-toast-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.undo-toast--above-nav {
+  bottom: calc(var(--bottom-nav-height) + var(--space-3));
+}
+
+/* Above the buy bar AND the floating cart sitting on top of it. */
+.undo-toast--above-buybar {
+  bottom: calc(
+    var(--buybar-offset) + env(safe-area-inset-bottom, 0px) + var(--buybar-height) + var(--pdp-cart-gap) + 52px +
+      var(--space-3)
+  );
+}
+
+.undo-toast--above-cart-bar {
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.undo-toast__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.undo-toast__text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.undo-toast__undo {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.undo-toast__undo:active {
+  transform: scale(0.95);
+}
+
+.undo-toast--leaving {
+  animation: undo-toast-out 200ms ease-in forwards;
+}
+
+@keyframes undo-toast-in {
+  from {
+    transform: translate(-50%, 14px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes undo-toast-out {
+  from {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, 14px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast {
+    animation: none;
+  }
+
+  .undo-toast--leaving {
+    animation: undo-toast-fade 200ms linear forwards;
+  }
+
+  @keyframes undo-toast-fade {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+/* Batch 29 Part 7: the moment a page's own file is still downloading —
+   just the page background (no spinner, nothing to jump). */
+.route-fallback {
+  min-height: 100vh;
+  background: var(--color-bg);
 }

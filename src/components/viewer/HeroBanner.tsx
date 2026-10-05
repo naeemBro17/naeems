@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminEdit } from '../../contexts/AdminEditContext';
+import { useProducts } from '../../contexts/ProductContext';
+import { hadContentLastTime, rememberHadContent } from '../../lib/lastSeen';
 import { EditButton } from '../admin/EditButton';
-import { BannerEditSheet } from '../admin/edit-sheets/BannerEditSheet';
+import { BannerEditSheet } from '../admin/edit-sheets/deferred';
 import type { BannerSlide } from '../../types';
 
 interface HeroBannerProps {
@@ -32,6 +34,11 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
 
   const activeSlides = slides.filter((s) => s.is_active);
   const slideCount = activeSlides.length;
+  const { isLoading } = useProducts();
+
+  useEffect(() => {
+    if (!isLoading) rememberHadContent('hero', slideCount > 0);
+  }, [isLoading, slideCount]);
 
   const goToSlide = useCallback((index: number) => {
     const track = trackRef.current;
@@ -88,6 +95,18 @@ export function HeroBanner({ slides, onScrollToProducts }: HeroBannerProps) {
       <BannerEditSheet isOpen={editorOpen} onClose={() => setEditorOpen(false)} />
     </>
   );
+
+  if (slideCount === 0 && isLoading && hadContentLastTime('hero')) {
+    // The slides arrive with the shop's data: hold the banner's exact box
+    // until then, so the page below never jumps down (Batch 29 Part 7).
+    return (
+      <section className="hero-banner" aria-hidden="true" data-testid="hero-placeholder">
+        <div className="hero-banner__track">
+          <div className="hero-banner__slide skeleton" />
+        </div>
+      </section>
+    );
+  }
 
   if (slideCount === 0) {
     // Nothing for customers; in Edit Mode the admin still needs a way in.

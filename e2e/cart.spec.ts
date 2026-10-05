@@ -22,8 +22,9 @@ test.describe('Cart', () => {
       await page.waitForTimeout(150);
     }
 
-    // Decreasing to zero asks for confirmation ("Remove this item?") rather
-    // than silently deleting the line.
+    // Decreasing to zero removes the line at once (Batch 29: one rule
+    // everywhere, with a "Removed · Undo" toast instead of a dialog). The
+    // old confirm button is still tapped if it ever appears.
     const decreaseBtn = page.getByRole('button', { name: new RegExp(`Decrease quantity of ${escapeRegExp(name)}`, 'i') });
     let guard = 0;
     while ((await decreaseBtn.count()) > 0 && guard < 10) {

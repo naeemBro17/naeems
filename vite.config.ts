@@ -15,6 +15,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registers the offline helper after the page has loaded, so it never
+      // holds up the first paint (Batch 29 Part 7).
+      injectRegister: 'script-defer',
       includeAssets: ['offline.html', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: "Naeem's",
@@ -55,6 +58,21 @@ export default defineConfig({
               cacheName: 'supabase-api',
               networkTimeoutSeconds: 6,
               cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Brand banner videos (Batch 29 Part 6): the whole file is kept
+            // once it has been downloaded in full (the shop pre-loads it),
+            // and the video player's byte-range requests are answered from
+            // that copy — a second visit starts at once, even offline. Must
+            // stay above the general Storage rule (first match wins).
+            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/brand-media\/videos\/[^?]+\.(mp4|webm)(\?.*)?$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'brand-videos',
+              rangeRequests: true,
+              expiration: { maxEntries: 12, maxAgeSeconds: 2592000 },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {

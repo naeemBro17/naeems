@@ -1,9 +1,10 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { BRAND_SLUG_PATTERN, brandSlugify } from '../../lib/brands';
-import { checkMediaFile, saveBrand, uploadBrandMedia, type MediaKind } from '../../lib/brandAdmin';
+import { checkMediaFile, saveBrand, uploadBrandMedia, videoSizeNote, type MediaKind } from '../../lib/brandAdmin';
 import { extractYouTubeId } from '../../lib/youtube';
 import { formatDhakaTime } from '../../lib/staff';
 import { AdminIcon } from './ui/AdminIcon';
+import { BrandLogoImage, brandCardStyle, useBrandLogo } from '../viewer/BrandLogo';
 import type { Brand } from '../../types';
 
 interface BrandEditorProps {
@@ -42,26 +43,51 @@ function initialState(brand: Brand | null): FormState {
   };
 }
 
+/** One preview card — the shop's own brand card, logo rule and clean-up
+ *  (BrandLogo.tsx), so it shows exactly what customers will see. */
+function PreviewCard({
+  label,
+  logo,
+  logoDark,
+  theme,
+  testId,
+}: {
+  label: string;
+  logo: string | null;
+  logoDark: string | null;
+  theme: 'light' | 'dark';
+  testId: string;
+}) {
+  const view = useBrandLogo({ logo_url: logo, logo_dark_url: logoDark }, theme);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showLogo = view.src !== null && view.src !== failedSrc;
+  return (
+    <span
+      className={`brand-card brand-card--${view.tone} adm-brand-preview__card adm-brand-preview__card--on-${theme}`}
+      style={brandCardStyle(view)}
+      data-testid={testId}
+    >
+      {showLogo ? (
+        <BrandLogoImage view={view} className="brand-card__logo" width={160} height={80} onError={() => setFailedSrc(view.src)} />
+      ) : (
+        <span className="brand-card__name">{label}</span>
+      )}
+    </span>
+  );
+}
+
 /** How a logo will look in the shop: a light card and a dark card. */
 function LogoPreview({ name, logo, logoDark }: { name: string; logo: string | null; logoDark: string | null }) {
   const label = name.trim() || 'Brand';
-  const dark = logoDark ? { src: logoDark, tone: 'dark' } : logo ? { src: logo, tone: 'light' } : { src: null, tone: 'dark' };
   return (
     <div className="adm-brand-preview" aria-label="Preview">
       <div className="adm-brand-preview__col">
         <span className="adm-brand-preview__caption">Light mode</span>
-        <span className="adm-brand-preview__card adm-brand-preview__card--light adm-brand-preview__card--on-light" data-testid="logo-preview-light">
-          {logo ? <img src={logo} alt="" /> : <b>{label}</b>}
-        </span>
+        <PreviewCard label={label} logo={logo} logoDark={logoDark} theme="light" testId="logo-preview-light" />
       </div>
       <div className="adm-brand-preview__col">
         <span className="adm-brand-preview__caption">Dark mode</span>
-        <span
-          className={`adm-brand-preview__card adm-brand-preview__card--${dark.tone} adm-brand-preview__card--on-dark`}
-          data-testid="logo-preview-dark"
-        >
-          {dark.src ? <img src={dark.src} alt="" /> : <b>{label}</b>}
-        </span>
+        <PreviewCard label={label} logo={logo} logoDark={logoDark} theme="dark" testId="logo-preview-dark" />
       </div>
     </div>
   );
@@ -85,6 +111,7 @@ function MediaField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<{ text: string; warn: boolean } | null>(null);
 
   const choose = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,9 +123,11 @@ function MediaField({
       return;
     }
     setError(null);
+    setNote(null);
     setBusy(true);
     try {
       onChange(await uploadBrandMedia(kind, file));
+      if (kind === 'video') setNote(videoSizeNote(file.size));
     } catch (err) {
       console.error('Brand upload failed:', err);
       setError('Could not upload. Please try again.');
@@ -152,6 +181,11 @@ function MediaField({
         aria-label={label}
         data-testid={`${testId}-input`}
       />
+      {note && (
+        <p className={note.warn ? 'form-error' : 'form-helper'} role="status" data-testid={`${testId}-size-note`}>
+          {note.text}
+        </p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -278,7 +312,7 @@ export function BrandEditor({ brand, nextOrder, productCount, onSaved, onCancel,
       <MediaField
         kind="logo"
         label="Logo"
-        help="Transparent PNG works best, at least 400 px wide."
+        help="One-colour logo: upload a normal and a white version. Logo with a coloured background: upload one; it fills the card in both modes."
         value={form.logo_url}
         onChange={(url) => set('logo_url', url)}
         testId="brand-logo"

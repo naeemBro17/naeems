@@ -2571,20 +2571,11 @@ html[data-admin] .toast--info .toast__icon {
   color: var(--adm-muted);
 }
 
-/* Each preview card sits on the page colour it will really be seen on. */
+/* Each preview card is the shop's own brand card (.brand-card in app.css,
+   same size rules, colours and logo clean-up — Batch 29), sitting on the
+   page colour it will really be seen on. */
 .adm-brand-preview__card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 2 / 1;
-  padding: 10px 14px;
-  border-radius: 14px;
-  border: 1px solid #e5e5ea;
-  background: #ffffff;
-  color: #1c1c1e;
-  font-size: var(--adm-fs-body);
-  text-align: center;
-  overflow: hidden;
+  width: 100%;
 }
 
 .adm-brand-preview__card--on-light {
@@ -2593,18 +2584,6 @@ html[data-admin] .toast--info .toast__icon {
 
 .adm-brand-preview__card--on-dark {
   box-shadow: 0 0 0 6px #000000;
-}
-
-.adm-brand-preview__card--dark {
-  background: #1c1c1e;
-  border-color: #38383a;
-  color: #ffffff;
-}
-
-.adm-brand-preview__card img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 
 .adm-segment {
@@ -2916,4 +2895,13 @@ html[data-admin] .toast--info .toast__icon {
 .adm-cnote__save {
   align-self: flex-start;
   margin-top: var(--adm-s2);
+}
+
+/* Batch 29 Part 6: "Create missing video previews". */
+.adm-brands__posters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 var(--adm-s3);
 }

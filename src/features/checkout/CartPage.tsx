@@ -8,7 +8,6 @@ import { Link } from 'react-router-dom';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { ConfirmDialog } from '../../components/shared/ConfirmDialog';
 import { CartIcon } from '../../components/viewer/CartButton';
 import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
@@ -26,12 +25,11 @@ import type { CartItem } from './types';
 
 export function CartPage() {
   useDocumentTitle("Your Cart — Naeem's");
-  const { items, subtotal, updateQuantity, removeItem } = useCheckoutState();
+  const { items, subtotal, updateQuantity } = useCheckoutState();
   const { session } = useAuth();
   const navigate = useNavigate();
   const { variantsFor } = useProducts();
   const { showToast } = useToast();
-  const [pendingRemove, setPendingRemove] = useState<CartItem | null>(null);
   const [showLoginSheet, setShowLoginSheet] = useState(false);
 
   const handleCheckout = () => {
@@ -53,12 +51,10 @@ export function CartPage() {
     setShowLoginSheet(true);
   };
 
+  // − at 1 removes the line at once, like the cards and the product page's
+  // buy bar (Batch 29 Part 4) — the "Removed · Undo" toast puts it back.
   const handleDecrement = (item: CartItem) => {
-    if (item.quantity > 1) {
-      updateQuantity(item.product.id, item.quantity - 1, item.variantId);
-    } else {
-      setPendingRemove(item);
-    }
+    updateQuantity(item.product.id, item.quantity - 1, item.variantId);
   };
 
   // + stops at the tracked stock count (Batch 28 Part 6) — the same limit
@@ -77,11 +73,6 @@ export function CartPage() {
       return;
     }
     updateQuantity(item.product.id, item.quantity + 1, item.variantId);
-  };
-
-  const handleConfirmRemove = () => {
-    if (pendingRemove) removeItem(pendingRemove.product.id, pendingRemove.variantId);
-    setPendingRemove(null);
   };
 
   return (
@@ -170,17 +161,6 @@ export function CartPage() {
           </button>
         </div>
       )}
-
-      <ConfirmDialog
-        isOpen={pendingRemove !== null}
-        title="Remove this item?"
-        message={
-          pendingRemove ? `"${pendingRemove.product.name}" will be removed from your cart.` : ''
-        }
-        confirmLabel="Remove"
-        onConfirm={handleConfirmRemove}
-        onClose={() => setPendingRemove(null)}
-      />
 
       <CheckoutLoginSheet
         isOpen={showLoginSheet}

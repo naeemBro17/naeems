@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useProducts } from '../contexts/ProductContext';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { brandsWithProducts, productCountLabel, productCountsByBrand } from '../lib/brands';
 import { BackButton } from '../components/shared/BackButton';
-import { BrandCard } from '../components/viewer/BrandCard';
+import { BrandCard, usePreloadFirstBrandVideos } from '../components/viewer/BrandCard';
 
 /**
  * /brands (Batch 26 Part 4): every brand with at least one live product, in
@@ -17,6 +17,8 @@ export function BrandsPage() {
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
   const list = useMemo(() => brandsWithProducts(brands, activeProducts), [brands, activeProducts]);
   const counts = useMemo(() => productCountsByBrand(activeProducts), [activeProducts]);
+  const mainRef = useRef<HTMLElement>(null);
+  usePreloadFirstBrandVideos(list, mainRef);
 
   return (
     <div className="viewer-shell detail-shell">
@@ -26,7 +28,7 @@ export function BrandsPage() {
         <div className="detail-header__actions" />
       </header>
 
-      <main className="detail-main brands-page">
+      <main ref={mainRef} className="detail-main brands-page">
         {isLoading && list.length === 0 ? (
           <div className="brands-grid" aria-label="Loading brands">
             {Array.from({ length: 6 }, (_, i) => (

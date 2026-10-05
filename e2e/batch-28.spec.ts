@@ -238,11 +238,11 @@ test.describe('Part 1 — crystal glass header', () => {
     }
   });
 
-  for (const [label, rgb, min] of [
-    ['a white photo', [255, 255, 255], 1.9],
-    ['a very light photo', [244, 242, 238], 2.0],
-    ['a dark photo', [20, 20, 22], 4.5],
-  ] as const) {
+  // Batch 29 (Naeem's decision): pure crystal glass with no dark tint, so a
+  // white icon on a pure white photo is faint by design — the white and
+  // very-light thresholds were removed; the dark photo keeps its check. The
+  // glass itself is checked in e2e/batch-29.spec.ts Part 1.
+  for (const [label, rgb, min] of [['a dark photo', [20, 20, 22], 4.5]] as const) {
     test(`icons stay visible on ${label}`, async ({ page }) => {
       await usePhotoColour(page, [...rgb]);
       await openFresh(page, PDP);
@@ -655,9 +655,10 @@ test.describe('Part 5 — one floating cart', () => {
       for (const name of ['Go back', /^Share /] as const) {
         expect(overlaps(g, await box(header.getByRole('button', { name })))).toBe(false);
       }
-      // Middle of the right edge.
-      expect(Math.abs(g.y + g.height / 2 - size.height / 2)).toBeLessThanOrEqual(2);
-      expect(size.width - (g.x + g.width)).toBeLessThanOrEqual(16);
+      // Batch 29: bottom-right, just above the buy bar (right edges aligned).
+      expect(Math.abs(g.x + g.width - (bar.x + bar.width))).toBeLessThanOrEqual(2);
+      expect(bar.y - (g.y + g.height)).toBeGreaterThanOrEqual(8);
+      expect(bar.y - (g.y + g.height)).toBeLessThanOrEqual(14);
       await emptyCart(page);
     });
   }

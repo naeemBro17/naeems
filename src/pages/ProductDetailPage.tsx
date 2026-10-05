@@ -25,6 +25,7 @@ import {
 import { prefersReducedMotion, productHeroName } from '../lib/viewTransition';
 import { isTransitionRunning, setCurrentDetailProductId } from '../lib/heroTransition';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
+import { setBuyBarState } from '../lib/buyBarState';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
@@ -364,6 +365,15 @@ function DetailContent({
   const limit = stockLimit(hasSelector ? selectedOption.stock_quantity : product.stock_quantity);
   const { shown: barShown, onPressStart } = useBuyBarVisibility(itemCount);
 
+  // The floating cart (outside this page) rides just above the bar and moves
+  // with it — tell it where the bar is, and that there's no bar once we leave.
+  // A layout effect, so on the page's first frame the cart is already in its
+  // spot instead of sliding there.
+  useLayoutEffect(() => {
+    setBuyBarState(barShown ? 'shown' : 'hidden');
+  }, [barShown]);
+  useLayoutEffect(() => () => setBuyBarState('none'), []);
+
   // Fires once per product shown (not on every variant swap) — see
   // trackViewContent's own doc comment for what is/isn't sent.
   useEffect(() => {
@@ -506,16 +516,36 @@ function DetailContent({
             )}
           </div>
 
-          <ul className="pdp-chips" data-sheet-part="chips" aria-label="Availability">
-            <li className="pdp-chip" data-testid="stock-chip">
+          {/* The stock capsule and the note are one quiet group (Batch 29):
+              the note is a plain caption with a small info icon, never a box. */}
+          <div className="pdp-stock" data-sheet-part="chips">
+            <span className="pdp-chip" data-testid="stock-chip">
               <span
                 className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : 'pdp-chip__dot--in'}`}
                 aria-hidden="true"
               />
               {outOfStock ? 'Out of stock' : 'In stock'}
-            </li>
-            {noteText !== '' && <li className="pdp-chip pdp-chip--note">{noteText}</li>}
-          </ul>
+            </span>
+            {noteText !== '' && (
+              <p className="pdp-note" data-testid="product-note">
+                <svg
+                  className="pdp-note__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v5" />
+                  <path d="M12 7.6v.1" />
+                </svg>
+                <span className="pdp-note__text">{noteText}</span>
+              </p>
+            )}
+          </div>
 
           {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
 
