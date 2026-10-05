@@ -15,10 +15,8 @@ import { StarRating } from '../components/expert/StarRating';
 import { useAdminEdit } from '../contexts/AdminEditContext';
 import { EditButton } from '../components/admin/EditButton';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
-import {
-  ExpertEditSheet,
-  type ExpertEditSection,
-} from '../components/admin/edit-sheets/ExpertEditSheet';
+import type { ExpertEditSection } from '../components/admin/edit-sheets/ExpertEditSheet';
+import { ExpertEditSheet } from '../components/admin/edit-sheets/deferred';
 import type { Review } from '../types';
 
 function MapPinIcon() {

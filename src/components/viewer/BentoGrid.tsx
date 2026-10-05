@@ -7,6 +7,7 @@ import { isOutOfStock } from '../../lib/stockStatus';
 import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
+import { whenRouteReady } from '../../lib/routePages';
 import {
   heroReverseTargetFor,
   rememberHeroOrigin,
@@ -30,7 +31,8 @@ import { useAdminEdit } from '../../contexts/AdminEditContext';
 import { useToast } from '../../hooks/useToast';
 import { BentoCustomTile } from './BentoCustomTile';
 import { EditButton } from '../admin/EditButton';
-import { BentoEditSheet, type BentoEditTarget } from '../admin/edit-sheets/BentoEditSheet';
+import type { BentoEditTarget } from '../admin/edit-sheets/BentoEditSheet';
+import { BentoEditSheet } from '../admin/edit-sheets/deferred';
 
 interface BentoGridProps {
   products: Product[];
@@ -304,7 +306,7 @@ function ExpertCard({
       <div className="bento-expert__head">
         <span className="bento-expert__avatar">
           {expert_photo_url !== '' ? (
-            <img src={expert_photo_url} alt="" />
+            <img src={expert_photo_url} alt="" width={34} height={34} decoding="async" />
           ) : (
             <svg
               viewBox="0 0 24 24"
@@ -476,7 +478,8 @@ export function BentoGrid({ products, settings }: BentoGridProps) {
     rememberHeroOrigin(product.id, origin);
     // Same hero morph the product grid uses — bento cards used to fall back
     // to a plain slide with a near-black frame instead (batch-21 Part 1).
-    navigateToProductWithHero(navigate, productPath(product), product);
+    const path = productPath(product);
+    whenRouteReady(path, () => navigateToProductWithHero(navigate, path, product));
   };
 
   // Default allocation when the admin hasn't arranged the tiles: the flip

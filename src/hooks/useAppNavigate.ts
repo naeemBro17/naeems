@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate as useRouterNavigate, type NavigateOptions, type To } from 'react-router-dom';
 import { navigateWithTransition } from '../lib/viewTransition';
+import { whenRouteReady } from '../lib/routePages';
 
 /**
  * Drop-in replacement for react-router's `useNavigate` for forward/lateral
@@ -20,7 +21,10 @@ export function useAppNavigate() {
 
   return useCallback(
     (to: To, options?: NavigateOptions) => {
-      navigateWithTransition(navigate, to, options);
+      // Waits for the target page's file if it isn't here yet (Batch 29), so
+      // the transition never captures a loading placeholder.
+      const path = typeof to === 'string' ? to : to.pathname ?? '';
+      whenRouteReady(path, () => navigateWithTransition(navigate, to, options));
     },
     [navigate]
   );

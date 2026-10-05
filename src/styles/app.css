@@ -9991,3 +9991,10 @@ html.vt-fade::view-transition-new(root) {
     }
   }
 }
+
+/* Batch 29 Part 7: the moment a page's own file is still downloading —
+   just the page background (no spinner, nothing to jump). */
+.route-fallback {
+  min-height: 100vh;
+  background: var(--color-bg);
+}

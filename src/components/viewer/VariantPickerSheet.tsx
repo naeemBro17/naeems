@@ -72,7 +72,7 @@ export function VariantPickerSheet({
       <div className="variant-picker">
         <div className="variant-picker__head">
           <div className="variant-picker__thumb">
-            {image && <img src={image} alt="" />}
+            {image && <img src={image} alt="" loading="lazy" decoding="async" />}
           </div>
           <div className="variant-picker__summary">
             <p className="variant-picker__name">{product.name}</p>

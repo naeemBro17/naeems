@@ -70,7 +70,7 @@ export function CollapsingHeader({
       <div className="exp-header__title" aria-hidden={!collapsed}>
         <span className="exp-header__avatar">
           {expertPhotoUrl !== '' ? (
-            <img src={expertPhotoUrl} alt="" />
+            <img src={expertPhotoUrl} alt="" decoding="async" />
           ) : (
             <svg
               viewBox="0 0 24 24"

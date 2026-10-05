@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SKIN_TYPES } from '../../lib/skinFields';
 import { BottomSheet } from '../shared/BottomSheet';
-import { ChipGroup } from '../admin/edit-sheets/SheetChrome';
+import { ChipGroup } from '../shared/ChipGroup';
 import { applyProductFilters, type ProductFilterState } from '../../hooks/useProductFilters';
 import type { Product } from '../../types';
 

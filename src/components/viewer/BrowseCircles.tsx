@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
 import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
 import { useProducts } from '../../contexts/ProductContext';
+import { hadContentLastTime, rememberHadContent } from '../../lib/lastSeen';
 import { useAdminEdit } from '../../contexts/AdminEditContext';
 import { EditButton } from '../admin/EditButton';
-import { BrowseEditSheet } from '../admin/edit-sheets/BrowseEditSheet';
+import { BrowseEditSheet } from '../admin/edit-sheets/deferred';
 
 interface BrowseCirclesProps {
   categories: Category[];
@@ -235,7 +236,7 @@ export function BrowseCircles({
   onSelect,
 }: BrowseCirclesProps) {
   const navigate = useNavigate();
-  const { settings } = useProducts();
+  const { settings, isLoading } = useProducts();
   const { isEditMode } = useAdminEdit();
   const [editorOpen, setEditorOpen] = useState(false);
 
@@ -310,6 +311,30 @@ export function BrowseCircles({
     [entries, categories]
   );
 
+  useEffect(() => {
+    if (!isLoading) rememberHadContent('browse', entries.length > 0);
+  }, [isLoading, entries.length]);
+
+  if (entries.length === 0 && isLoading && hadContentLastTime('browse')) {
+    // Same-size placeholder circles while the shop's data loads, so the page
+    // below never jumps down when the real ones arrive (Batch 29 Part 7).
+    return (
+      <section className="browse" aria-hidden="true" data-testid="browse-placeholder">
+        <div className="browse__head">
+          <h2 className="browse__title">Browse</h2>
+        </div>
+        <div className="browse__row">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <span key={i} className="browse-item">
+              <span className="browse-circle skeleton" />
+              <span className="browse-item__label">&nbsp;</span>
+            </span>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   if (entries.length === 0 && !isEditMode) return null;
 
   return (
@@ -341,7 +366,7 @@ export function BrowseCircles({
                 }`}
               >
                 {entry.imageUrl ? (
-                  <img className="browse-circle__image" src={entry.imageUrl} alt="" />
+                  <img className="browse-circle__image" src={entry.imageUrl} alt="" width={64} height={64} decoding="async" />
                 ) : (
                   <Icon />
                 )}

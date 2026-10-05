@@ -15,6 +15,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registers the offline helper after the page has loaded, so it never
+      // holds up the first paint (Batch 29 Part 7).
+      injectRegister: 'script-defer',
       includeAssets: ['offline.html', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: "Naeem's",

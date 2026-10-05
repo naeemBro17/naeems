@@ -85,13 +85,15 @@ export function BrandBanner({ brand }: { brand: Brand }) {
                 // then answers with a plain error (never kept by the offline
                 // helper), so it can appear later without a stale miss.
                 crossOrigin={posterSrc ? 'anonymous' : undefined}
+                // The brand page's largest picture (its first paint).
+                fetchPriority="high"
                 onError={() => setStillIndex((i) => i + 1)}
                 data-testid="brand-banner-still"
               />
             )}
           </>
         ) : (
-          image && <img className="brand-banner__image" src={image} alt="" decoding="async" />
+          image && <img className="brand-banner__image" src={image} alt="" decoding="async" fetchPriority="high" />
         )}
         {video && (
           <video
