@@ -13,7 +13,6 @@
   <url><loc>https://naeems-all.vercel.app/product/cerave-moisturising-cream-50-ml</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cancer-council-spf-50-active-200ml-pump</loc><lastmod>2026-09-18</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cancer-council-150ml-daily-sunscreen-spf50-sun-block-face-body</loc><lastmod>2026-09-18</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/beauty-of-joseon-red-bean-water-gel</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/garnier-micellar-cleansing-water-pink-400ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/aveeno-baby-daily-moisture-fragrance-free-lotion-227g</loc><lastmod>2026-09-17</lastmod><changefreq>weekly</changefreq></url>
@@ -30,6 +29,7 @@
   <url><loc>https://naeems-all.vercel.app/product/the-ordinary-natural-moisturizing-factors-inulin-body-lotion-240-ml</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/laneige-lip-sleeping-mask-3g</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/skin1004-madagascar-centella-hyalu-cica-water-fit-sun-serum-50ml</loc><lastmod>2026-08-09</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/the-ordinary-natural-moisturizing-factors-phytoceramides-dry-dehydrated-compromised-skin-barrier</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/blackmores-omega-triple-super-strength-fish-oil</loc><lastmod>2026-08-05</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/beauty-of-joseon-revive-eye-serum-with-ginseng-retinal</loc><lastmod>2026-09-22</lastmod><changefreq>weekly</changefreq></url>
@@ -113,12 +113,6 @@
   <url><loc>https://naeems-all.vercel.app/product/lenor-fabric-tumble-dryer-sheets-spring-awakening</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/cerave-sa-smoothing-cleanser-236ml</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/product/nads-for-men-down-under-hair-removal-cream</loc><lastmod>2026-09-24</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/david-beckham</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/dove</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/gaia</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/mcobeauty</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/aveeno</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/avene</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/beauty-of-joseon</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/bio-oil</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/blackmores</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
@@ -127,34 +121,40 @@
   <url><loc>https://naeems-all.vercel.app/brand/cerave</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/cetaphil</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/colgate</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/geek-gorgeous</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/nads</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/cosrx</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/david-beckham</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/aveeno</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/avene</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/dr-althea</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/invisible-zinc</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/dove</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/gaia</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/garnier</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/geek-gorgeous</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/gillette</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/goat</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/hamilton</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/invisible-zinc</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/illiyoon</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/kirkland</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/loreal</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/la-roche-posay</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/laneige</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/listerine</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/lenor</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/nads</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/mcobeauty</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/neutrogena</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/nivea</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/olay</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/omi-brotherhood</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/oral-b</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/paulas-choice</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/plunketts</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/purito</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
+  <url><loc>https://naeems-all.vercel.app/brand/sensodyne</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/skin1004</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/sukin</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/garnier</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/gillette</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/illiyoon</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/kirkland</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/sensodyne</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/laneige</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/lenor</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/the-ordinary</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/vaseline</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
   <url><loc>https://naeems-all.vercel.app/brand/zgts</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/plunketts</loc><lastmod>2026-10-01</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/purito</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
-  <url><loc>https://naeems-all.vercel.app/brand/listerine</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq></url>
 </urlset>

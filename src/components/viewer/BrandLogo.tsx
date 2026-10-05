@@ -129,15 +129,16 @@ interface BrandLogoImageProps {
   onError: () => void;
 }
 
-/** The logo picture itself — fitted into the same fixed box in every mode,
- *  shown (with a short fade) once it's ready. */
+/** The logo picture itself — fitted into the same fixed box in every mode.
+ *  It simply appears once ready (no fade: nothing may animate on its own
+ *  after a page has settled), and its box is held meanwhile. */
 export function BrandLogoImage({ view, className, width, height, alt = '', lazy = false, onError }: BrandLogoImageProps) {
   if (!view.ready || view.src === null) {
     return <span className={`${className} brand-logo--waiting`} aria-hidden="true" />;
   }
   return (
     <img
-      className={`${className} brand-logo--in`}
+      className={className}
       src={view.src}
       alt={alt}
       width={width}

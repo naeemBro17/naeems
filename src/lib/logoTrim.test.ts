@@ -89,6 +89,11 @@ describe('logo backdrop detection and display clean-up', () => {
     expect(detectBackground(photo, 8, 8).kind).toBe('plain');
   });
 
+  it('a picture that is all one colour has no backdrop — shown as it is', () => {
+    const block = image(10, 4, [200, 30, 30, 255], [200, 30, 30, 255], { x: 0, y: 0, w: 0, h: 0 });
+    expect(detectBackground(block, 10, 4).kind).toBe('plain');
+  });
+
   it('never clears the inside of a letter (the hole in an "O")', () => {
     // A dark ring with a white hole, on white.
     const data = image(12, 12, [255, 255, 255, 255], [0, 0, 0, 255], { x: 2, y: 2, w: 8, h: 8 });

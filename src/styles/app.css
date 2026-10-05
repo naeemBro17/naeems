@@ -8820,30 +8820,11 @@ html.vt-fade::view-transition-new(root) {
 }
 
 /* The logo's fixed box stays while the cleaned logo is being prepared, so
-   nothing moves; it then fades in. */
+   nothing moves. */
 .brand-logo--waiting {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.brand-logo--in {
-  animation: brand-logo-in 220ms ease-out;
-}
-
-@keyframes brand-logo-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand-logo--in {
-    animation: none;
-  }
 }
 
 .brand-card__name {

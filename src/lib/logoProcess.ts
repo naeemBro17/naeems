@@ -32,6 +32,8 @@ const MAX_SEE_THROUGH_EDGE = 0.02;
 export const SAME_COLOUR = 28;
 /** Share of the edge that must be one colour to call it a solid background. */
 const SOLID_EDGE_SHARE = 0.6;
+/** Share of the picture that must differ from the backdrop colour. */
+const MIN_CONTENT_SHARE = 0.01;
 /** Every channel at least this → near-white; at most NEAR_BLACK → near-black. */
 const NEAR_WHITE = 225;
 const NEAR_BLACK = 35;
@@ -94,6 +96,12 @@ export function detectBackground(data: Uint8ClampedArray, width: number, height:
   let same = 0;
   for (const o of edge) if (maxDiff(data, o, color) <= SAME_COLOUR) same += 1;
   if (same / edge.length < SOLID_EDGE_SHARE) return { kind: 'plain' };
+
+  // A backdrop needs something on it: a picture that is all one colour (e.g.
+  // a plain block, already trimmed) is the logo itself, shown as it is.
+  let content = 0;
+  for (let o = 0; o < data.length; o += 4) if (maxDiff(data, o, color) > SAME_COLOUR) content += 1;
+  if (content / (width * height) < MIN_CONTENT_SHARE) return { kind: 'plain' };
 
   if (Math.min(...color) >= NEAR_WHITE) return { kind: 'white', color };
   if (Math.max(...color) <= NEAR_BLACK) return { kind: 'black', color };

@@ -100,6 +100,7 @@ export function BrandBanner({ brand }: { brand: Brand }) {
             ref={videoRef}
             className={`brand-banner__video${playing ? ' brand-banner__video--playing' : ''}`}
             src={video}
+            poster={image ?? undefined}
             onPlaying={() => setPlaying(true)}
             muted
             autoPlay
