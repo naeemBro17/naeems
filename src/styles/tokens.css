@@ -112,7 +112,12 @@
   --pdp-sheet-overlap:    24px;
   --pdp-save-bg:          rgba(232, 67, 46, 0.1);
   --pdp-save-fg:          #D9381F;
-  --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
+  /* Batch 29: pure crystal glass over the photo (← / Share / "1 / 3") —
+     the same in light and dark mode, no dark tint and no dark shadow, so
+     the dark theme blocks below never override these three. */
+  --crystal-photo-bg:     rgba(255, 255, 255, 0.13);
+  --crystal-photo-border: rgba(255, 255, 255, 0.55);
+  --crystal-photo-highlight: rgba(255, 255, 255, 0.35);
   --crystal-border:       rgba(255, 255, 255, 0.5);
   --crystal-highlight:    rgba(255, 255, 255, 0.35);
   --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.16);
@@ -187,7 +192,6 @@
   --pdp-bar-bg:           rgba(10, 10, 12, 0.86);
   --pdp-save-bg:          rgba(255, 105, 80, 0.14);
   --pdp-save-fg:          #FF7461;
-  --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
   --crystal-border:       rgba(255, 255, 255, 0.24);
   --crystal-highlight:    rgba(255, 255, 255, 0.14);
   --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.4);
@@ -259,7 +263,6 @@
     --pdp-bar-bg:           rgba(10, 10, 12, 0.86);
     --pdp-save-bg:          rgba(255, 105, 80, 0.14);
     --pdp-save-fg:          #FF7461;
-    --crystal-photo-bg:     rgba(18, 18, 22, 0.3);
     --crystal-border:       rgba(255, 255, 255, 0.24);
     --crystal-highlight:    rgba(255, 255, 255, 0.14);
     --crystal-shadow:       0 4px 14px rgba(0, 0, 0, 0.4);
