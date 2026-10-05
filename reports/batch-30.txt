@@ -1,0 +1,368 @@
+BATCH 30 — Faster tests, edit any order, payments, pick a customer,
+real Steadfast steps, all thanas
+=====================================================================
+Branch: feature/batch-30-orders-payments (made from the latest
+origin/main, which has Batch 29 merged). Pushed. NOT merged, nothing
+pushed to main. Commits are grouped one per Part; the branch builds and
+passes at its last commit.
+
+Note: Steadfast's API guide PDF was on your Desktop ("API guide _ Merchant
+Dashboard _ Steadfast Courier Limited.pdf"), not in Downloads. I read it
+in a temporary folder with every key-like string blanked out. No key was
+copied, printed, logged or committed.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Faster, lighter test runs (same safety)
+  - New: npm run verify (build + vitest + every e2e test) and
+    npm run verify:3 (three runs in a row, build once). When all pass it
+    prints ONE line, e.g.
+      build OK (26s) · vitest 160/160 (15s) · e2e 161 passed, 43 skipped (760s)
+    On a failure it prints only the failing tests, their error and
+    file:line. Full logs go to .verify/ (ignored by git); the HTML report
+    is kept only when something failed (traces were already
+    "keep on failure").
+  - E2e tests now run in two groups:
+      parallel (2 at a time): cart, home, search, history, policy pages,
+        batch-29 and the screenshot specs (72 tests).
+      serial (one at a time, run last and alone):
+        back-known-good, batch-23, one-transition-system, phone-back,
+        product-transitions — they measure animations frame by frame and
+        must not share the CPU (this is what made runs flaky before);
+        batch-27, batch-28 — they measure scroll positions / glass right
+        after animations; in my first parallel run two of their tests
+        missed by 1 pixel, and passed 44/44 alone, so they stay serial;
+        batch-24, batch-25, batch-26, batch-30, checkout — they change
+        live TEST data (team logins, roles, settings, test orders, test
+        brands/products) and must never overlap with each other or with a
+        test reading the catalogue.
+  - No test was deleted, skipped or weakened. Same 189 old tests.
+  - CLAUDE.md now says: use npm run verify / verify:3, read only the
+    summary, open full logs only for failures, read only the parts of
+    files you need.
+  - Time, full suite (build + vitest + e2e):
+      before: 15.7 min (build 74 s, vitest 59 s, e2e 807 s, serial)
+      after:  13.4 min (same 189 tests, first run of verify)
+    Honest note: the time saving is modest (~15%). This PC has 4 cores and
+    most of the slow tests are the frame-timing ones, which must stay one
+    at a time. The bigger saving is the token one: a passing run is now
+    one line to read instead of hundreds.
+  Proof: e2e/batch-30.spec.ts "Part 1" checks the summary text (one line
+  on success, only the failing test + file:line on failure).
+
+PART 2 — Edit everything on an order, at any stage
+  - Order screen → "Edit order" opens one sheet with: name, phone,
+    alternative phone, division / district / thana (the new full list,
+    Part 6) and address, items (quantity, remove, add a product, price),
+    delivery fee (any amount, 0 allowed), order discount with a reason,
+    and a note for the courier.
+  - Allowed at ANY status, for you, and for staff only with the new
+    "Edit orders" switch (Team → role; OFF for every existing role).
+    Checked inside the database (admin_edit_order), not just by hiding the
+    button. Prices and the discount stay yours only (same rule as the old
+    price edit).
+  - Every change becomes its own History line with who and when, e.g.
+    "Delivery fee ৳130 → ৳0 · by naeem", "Address Road 1, Gulshan, Dhaka
+    → Road 9, Banani, Dhaka", "Added Wash ×1 (৳300 each)", and the total
+    change. One Activity Log entry ("Order edits") lists them all.
+  - Stock: removing / reducing puts stock back, adding / increasing takes
+    it, a cancelled order moves no stock, and stock never goes below 0
+    (the sheet shows "Only N in stock" and the database refuses too).
+  - Totals recalculate in the database; the invoice, the customer page and
+    Customers all read the same total.
+  - Booked on Steadfast: after a change that matters to the courier (name,
+    phone, alternative phone, address/thana, courier note) or when the COD
+    no longer matches what is due, the order shows a banner:
+    "Steadfast still has the old details: Name, Address. Update them on
+    Steadfast." / "COD on Steadfast should now be ৳X (it has ৳Y)." with
+    "Open on Steadfast" (new tab) and "Done, I updated Steadfast" (hides
+    it, writes a History line). Nothing is ever re-booked automatically.
+  - The old inline "Edit price" and fee edit still work as before.
+  Proof: Part 2 tests (UI edit on a booked order, History, Activity Log,
+  stock both ways, never below 0, cancelled = no stock, staff refused in
+  the database and no button), dry run on the live database (below),
+  screenshots admin-edit-order-*, admin-order-banner-*.
+
+PART 3 — Payments on an order
+  - New table order_payments: amount, method (bKash / Nagad / Cash / Bank
+    / COD via Steadfast / Other), TrxID, date/time, note, who recorded it,
+    and payment or refund.
+  - Security: staff with "View orders" can read it; adding a payment needs
+    "Change order status" (the switch that already covers "mark paid");
+    editing, deleting and refunds are Super Admin only. All writes go
+    through database functions that check this. Customers never read the
+    table: their order page asks order_payment_summary(), which answers
+    only for their own order and gives only amounts (no notes, no names).
+  - Order screen: a Payment block — Total · Paid · Due, and the state
+    Unpaid / Partly paid / Paid / Refunded; every payment with method,
+    TrxID, time and who; Add payment; Mark fully paid (adds one payment
+    for what is due); Edit / Delete (you); over-payment shows
+    "Over-paid ৳X". Each action → History + Activity Log ("Payments").
+  - Old data: nothing moved or deleted. Orders already marked paid get one
+    payment row copied from what is saved on them (bKash: amount, TrxID,
+    order time, note "bKash advance"). A bKash TrxID still waiting for your
+    check shows as "bKash advance · TrxID … · Not checked yet" with
+    "Confirm received" (your old Mark as paid). COD orders already
+    delivered get one "Collected on delivery" row. The old "paid"
+    switch keeps working and records the money automatically. (Live today:
+    your 2 orders are both COD, unpaid and in transit, so nothing is
+    copied.)
+  - COD = what is due: booking sends total minus everything paid, never
+    the full total once money was paid. The "Book with Steadfast?"
+    confirmation shows the same amount (one shared rule, unit-tested). If
+    the due changes after booking, the Part 2 banner says what COD
+    Steadfast should now have.
+  - Steadfast CONFIRMED "delivered" (never "delivered_approval_pending")
+    records "COD via Steadfast" once — a database rule, so it works for
+    the Check button, the 3-hourly refresh and the old live code alike, and
+    can never be recorded twice. Partly delivered records nothing; the
+    order says "check the amount Steadfast collected".
+  - Orders list: the Payment column says Unpaid / Partly paid · ৳X due /
+    Paid; a new "Due" filter chip. Customers: a DUE column and the total
+    due in each customer's sheet, plus each order's due.
+  Proof: Part 3 tests, dry run, unit tests, screenshot
+  admin-payment-partly-paid-*.
+
+PART 4 — New order: pick an existing customer or create one
+  - The first field of New order is now Customer: type a phone (any of
+    +880 / 880 / 0 / spaces / dashes) or a name → matching customers
+    appear with phone, area, number of orders and what they owe. Picking
+    one fills name, phone and their last used address (all editable).
+    No match → "New customer" with the typed phone (or name).
+  - Customers are grouped by phone number, so people who never made an
+    account (Facebook / WhatsApp customers) now appear on the Customers
+    page too, with all their orders and dues. A registered customer you
+    pick is linked in admin only (a new admin_customer_id field) — the
+    order still never shows in their own My Orders (your earlier rule).
+  - Changed on purpose: the old "Link to this account" button in New
+    order put manual orders into the customer's My Orders. That
+    contradicts the rule above, so it is gone; the new picker replaces it.
+  Proof: Part 4 test, unit tests for the phone rule, screenshot
+  admin-new-order-customer-*.
+
+PART 5 — Real order steps from Steadfast
+  Steps (customer page, My Orders and admin):
+    Order Placed → Processing → Booked → In Transit → Out for Delivery →
+    Delivered; side states Partly delivered, Cancelled / Returning, On
+    hold, Needs attention. The exact rules:
+      order pending → Order Placed; confirmed → Processing
+      booked, Steadfast in_review or no status yet → Booked
+      Steadfast pending → In Transit
+      tracking text "sent to / received at / arrived at / returned to …
+        hub / warehouse" → In Transit (any case, any hub name)
+      tracking text "assigned to rider" / "rider assigned" / "out for
+        delivery" → Out for Delivery
+      "consignment created" → Booked
+      any other text → nothing (the last known step stays; never guessed
+        forward). The newest recognised text wins, with the status as the
+        floor, so a failed attempt (back at the hub) shows In Transit.
+      delivered → Delivered
+      delivered_approval_pending → customer: Delivered; admin:
+        "Delivered — awaiting Steadfast confirmation"; the stored order
+        and the COD payment change only on confirmed "delivered"
+      partial_delivered* → Partly delivered
+      cancelled* (incl. every return status) → Cancelled / Returning
+      hold → On hold
+      exceptional / unknown / unknown_approval_pending → Needs attention
+        (customer sees "Delayed — we're checking")
+      order cancelled on the site → Cancelled
+      marked shipped by hand without Steadfast → In Transit
+  - New steadfast function action "tracking" (GET
+    /trackings_by_invoice/{invoice}) + the current status. Called when an
+    order page opens (customer or admin) and in the 3-hourly refresh. One
+    Steadfast call per order per minute at most: the last answer is kept in
+    a staff-only table and a 60-second phone cache.
+  - Customer page: a clean vertical list (done = check, current
+    highlighted, later grey), Steadfast's latest words and time under the
+    current step. NO rider name or phone: any rider text becomes "Assigned
+    to a rider — your parcel is out for delivery.", phone numbers are
+    removed (done in the function AND again on the page). "Track parcel on
+    Steadfast" stays.
+  - Admin: the same steps plus the full Steadfast timeline (rider
+    included). "Check delivery status" refreshes both.
+  - If the new action isn't deployed, pages show what is saved on the
+    order, with no error. Stored status values are unchanged; the admin
+    filter "Shipped" is now "With courier".
+  Proof: 25 unit tests of every rule above; Part 5 e2e (all four steps,
+  no rider details, admin timeline, missing action = old display);
+  screenshots customer-order-{booked,in-transit,out-for-delivery,
+  delivered}-*, admin-order-timeline-*.
+
+PART 6 — All thanas
+  - One new picker for thanas in checkout, admin New order and Edit order:
+    grouped by district (A–Z, the chosen district first), searchable
+    (thana or district; Bangla is no longer matched, see section 4), and
+    "Other — type your thana" at the end so an order is never blocked. The
+    typed name is saved in the same thana field as always.
+  - Searching finds a thana in another district; picking it moves the
+    address to that district (and its division).
+  - Source of the list: Steadfast's GET /police_stations through a new
+    steadfast function action (keys stay in Supabase), cached 7 days on
+    the phone and refreshed in the background. Until the function answers
+    (it isn't deployed yet) the list bundled with the site is the snapshot:
+    559 thanas in 64 districts. So: NOT Steadfast's real list yet — it
+    switches automatically once the updated function is deployed.
+    District spellings are matched (Chittagong = Chattogram, Bogra =
+    Bogura, Jessore = Jashore, Cumilla = Comilla, …).
+  Proof: Part 6 e2e (checkout grouped + sorted + search + Other; function
+  failing → snapshot; Steadfast list used and cached; New order and Edit
+  order), unit tests, screenshots checkout-thana-*.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+supabase/migration-033-orders-payments.sql — see section 10 for whether it
+was applied after your "yes". If you ever need to run it by hand: open the
+file, copy all of it, paste into the Supabase SQL Editor, Run. Safe to run
+again.
+
+In plain words it ADDS:
+  - the "Edit orders" staff switch (off for everyone);
+  - five order columns: alternative phone, courier note, admin-only
+    customer link, the COD Steadfast was given, and the list of details
+    Steadfast still has old;
+  - the order_payments table (+ one copied row per order already paid or
+    delivered by COD);
+  - functions: edit an order, add / mark fully paid / edit / delete a
+    payment, "Done, I updated Steadfast", payment summary, customers by
+    phone, customer search, link a manual order to a customer;
+  - rules (triggers): the old "paid" switch records the money; a
+    confirmed Steadfast delivery records "COD via Steadfast" once;
+  - steadfast_tracking_cache (staff only).
+Nothing existing is dropped, renamed or changed in meaning. The one
+existing function re-created (orders_activity) is identical except it
+stays quiet while a Batch 30 function writes its own single log line.
+The old live site keeps working after it runs.
+
+Before asking you, I ran it on the live database inside a transaction that
+was always rolled back (nothing stayed — checked), as the test Super Admin
+on a throwaway test order: edit + History, stock back/taken/never below 0,
+cancelled = no stock move, partial → paid → over-paid → delete, COD once
+on "delivered" and none on approval pending, customer can't edit, a
+signed-out visitor sees nothing. All passed.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+  - Steadfast's real thana list and live tracking steps need the updated
+    function deployed (section 10).
+  - The 8 database e2e tests in batch-30.spec.ts skip until migration-033
+    is live (they say so); see section 10 for their run after "yes".
+
+Needs a later batch:
+  - Steadfast webhook: instead of asking Steadfast every 3 hours / on page
+    open, Steadfast would call us when a parcel moves. Needs: a new public
+    Supabase function (webhook URL) that checks Steadfast's signature or a
+    long secret token, maps their payload (status + tracking text) to the
+    order by invoice/consignment id, saves status and steps through
+    system_update_steadfast_status, and the URL entered in Steadfast →
+    Webhooks. Your PDF lists Webhooks but not the payload/signature page —
+    export that page too.
+  - Customer-side payment history (they see only Paid / Due now).
+  - A printed / PDF receipt that lists the payments.
+
+
+4. WHAT I FOUND ALONG THE WAY
+-----------------------------
+  - The old thana picker matched Bangla names too; the new grouped picker
+    searches English thana and district names only (the site is English
+    since Batch 23). Say if you want Bangla search back.
+  - src/lib/deliveryProgress.ts (the Batch 24 customer steps) is no longer
+    used by any page; its unit test still runs. Can be removed later.
+  - The steadfast function had type errors with the newest supabase-js
+    (deploy doesn't type-check, so it still worked). Fixed while here.
+  - In money text the "৳" sign is drawn in a fallback font inside normal
+    sentences (e.g. the banner), so it looks smaller. Existing, site-wide.
+  - Fixed while testing: the "Other" box was a form inside the checkout
+    form, so pressing it would also submit checkout. Never shipped.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Customers = grouped by phone (registered or not), because most of your
+    customers come from Facebook / WhatsApp and never sign up.
+  - "Partly paid" etc. are worked out from payments at read time; the old
+    payment_status column is kept in step so the invoice, Telegram and the
+    old site agree.
+  - Add payment needs "Change order status" (it already covered "mark
+    paid") — no extra switch. Edit / delete / refund: you only.
+  - A booked order's COD is "what is due". When Steadfast confirms
+    delivery, the amount recorded is the COD Steadfast was actually given
+    (if you never updated it, Steadfast collected the old amount).
+  - The "Open on Steadfast" button goes to
+    https://steadfast.com.bd/user/consignment/<id>. The guide doesn't give
+    the merchant page address, so please check it opens the parcel
+    (section 8). One line to change in src/lib/orderEdit.ts if not.
+  - Steps use near-black checks and grey; no orange. The Steadfast banner
+    uses the existing soft warning colour.
+  - E2e tests can never reach the real Steadfast: every test page gets a
+    mocked Steadfast function by default (e2e/fixtures.ts).
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+----------------------------------------
+  1. Steadfast webhook (above) — real-time steps, fewer API calls. Medium.
+  2. Daily "money still due" report on Home / Telegram — dues are now
+     tracked, so remind yourself who owes what. Small.
+  3. Reconcile Steadfast payouts (GET /payments/{id}) against "COD via
+     Steadfast" rows, so you see if a parcel's COD never arrived. Medium.
+  4. Fraud check (GET /fraud_check/score/{phone}) shown in New order /
+     on web orders before confirming COD — cuts returns. Small.
+  5. Customer merge tool (two numbers, one person). Small.
+
+
+7. TESTS CHANGED (only where Batch 30 changed what they check)
+--------------------------------------------------------------
+  - e2e/batch-24.spec.ts: the customer page label for a parcel with
+    Steadfast "pending" was "On the way"; it is now "In Transit" (Part 5).
+    Only that word changed.
+  - e2e/fixtures.ts: adds the default Steadfast mock;
+    e2e/helpers/tracking.ts: route.continue() → route.fallback() so the
+    mock can answer (same behaviour for everything else).
+  - src/lib/manualOrders.test.ts: its sample order got the five new
+    (empty) order fields.
+
+
+8. WHAT ONLY YOUR PHONE / PC CAN CONFIRM
+---------------------------------------
+  - "Open on Steadfast" opens that parcel in your Steadfast account.
+  - The thana list after deploy: open checkout → Thana → it should include
+    Steadfast's names (the cache is per phone, 7 days).
+  - A real parcel's steps: open a booked order (customer and admin) the
+    next day and compare with Steadfast's own tracking page.
+  - Your first real advance payment + COD delivery: Paid / Due correct.
+
+
+9. BUILD / TEST RESULTS
+-----------------------
+npm run verify:3 (three full runs; the old 189 tests + 27 new e2e):
+  run 1: build OK · vitest 161/161 · e2e 153 passed, 62 skipped, 1 FAILED
+         batch-25 "sidebar groups at 1280px": the test counted product
+         rows before the list had loaded (0 rows). An old race in the test,
+         not this batch (Products untouched). Fixed by waiting for the
+         first row before counting (stricter, not weaker); batch-25 then
+         9/9 passed.
+  run 2: build OK · vitest 161/161 · e2e 161 passed, 55 skipped — green
+  run 3: build OK · vitest 161/161 · e2e 160 passed, 55 skipped, 1 FAILED
+         batch-27 "Back returns to the same scroll position": 752 vs 756
+         px (allowed 2-3 px), while running alone in the serial group. It
+         then passed 6 of 6 times on its own. This batch does not touch
+         the product page or scroll memory; I believe it is a rare timing
+         race (a late image shifting the page a few px after the scroll is
+         restored). I did NOT loosen it. Watch for it; if it shows again it
+         deserves its own small fix batch.
+Final npm run verify after the fix:
+  build OK (25s) · vitest 161/161 (16s) · e2e 161 passed, 55 skipped (742s)
+  ALL GREEN (13.1 min)
+The 55 skipped = 35 skipped before + 12 screenshot tests (SCREENS=1 only)
++ 8 Batch 30 database tests waiting for migration-033 (see section 10).
+TypeScript: npm run build has 0 errors; the two Steadfast functions pass
+deno check. Main shop script size: 506.99 KB → 507.22 KB (+0.2 KB; Batch
+30 code loads only with the order / checkout / admin pages).
+
+
+10. MIGRATION + FUNCTION DEPLOY (your yes/no)
+---------------------------------------------
+(filled in after your answer)
