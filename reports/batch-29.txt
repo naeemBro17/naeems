@@ -1,0 +1,391 @@
+BATCH 29 — Speed + polish: crystal buttons, stock note, cart position,
+Undo, brand logos, brand video, fast Home
+=====================================================================
+Branch: feature/batch-29-speed-polish (made from the latest origin/main,
+which already has Batch 28 merged). Pushed. NOT merged, nothing pushed to
+main. No database changes and no Supabase function deploys.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Top buttons on the photo: pure crystal glass
+  - ←, Share and the "1 / 6" photo counter now all use the same glass:
+    white at 13%, blur(12px) saturate(150%), a 1 px white border (55%),
+    a thin white inner highlight. No dark tint, no dark shadow on the
+    button, no shadow on the icon. Identical in light and dark mode.
+  - The Batch 28 dark tint (30%) and the icon drop shadows are removed.
+  - The scrolled glass bar with the product name is unchanged (it keeps
+    its own look, including its old soft shadow).
+  - As you decided: on a pure white photo the white icons are faint.
+  Proof: e2e/batch-29.spec.ts Part 1 (light + dark) and the screenshots
+  product-orange-photo-390-* / product-white-photo-390-*.
+
+PART 2 — "In stock" and the product note
+  - The capsule is smaller: 26 px high, 0 10 px padding, 12.5 px text,
+    7 px green dot with its halo. "Out of stock" uses the same size.
+  - The note is now a quiet caption: no box, no border, no background —
+    a small ⓘ line icon, then grey 12.5 px text (line height 1.45),
+    full text, wrapping. No note = nothing shown at all.
+  - Spacing: price → capsule 18 px, capsule → note 8 px, note → trust
+    plate 24 px (spacing tokens; 18 px is a new named token).
+  - WHY THE NOTE SHOWED TWICE: it's the DATA, not the code. The code
+    shows the note once. The product "La Roche Posay Anthelios Invisible
+    Fluid SPF 50+ 50ml" has this in its note field:
+      "Packaging may vary slightly depending on the market of
+       origin.Packaging may vary slightly depending on the market of
+       origin."
+    PLEASE FIX IN ADMIN: Admin → Products → that product → the "Note"
+    field → delete the second copy of the sentence → Save.
+    I checked every live product and option: this is the only one.
+  Proof: Part 2 tests (sizes, gaps ±2 px, no box, icon, hidden when
+  empty, text appears once) + stock-note-390-*.
+
+PART 3 — Floating cart on the product page: bottom-right, moves with the bar
+  - Product page only: the round glass cart sits bottom-right, its right
+    edge lined up with the buy bar's, 11 px above it.
+  - When the bar slides away on a scroll down, the cart slides down at
+    the same time (same 200 ms and same curve) into the corner the bar
+    left (still above the safe area). Scroll up: both come back.
+    Transform only; reduce-motion: it just jumps to the final spot.
+  - Same size (52 px), glass, pulse, orange count, tap → cart.
+  - The page got extra bottom space so neither the bar nor the cart can
+    cover "You may also like".
+  - Every other page: unchanged (middle-right).
+  Proof: Part 3 tests (aligned ±2 px, 8–14 px gap, moves down and back,
+  on screen, no overlap with the bar or top buttons; middle-right on
+  Home, Search and a brand page) + product-bar-shown/-hidden-390-*.
+
+PART 4 — One remove rule: remove at once + "Removed · Undo"
+  - The cart page's "Remove this item?" dialog is gone. Everywhere (cart
+    page, product cards, the buy bar) − at 1 removes straight away.
+  - A small glass toast appears for 5 s: a bin line icon, "Removed" and
+    a bold "Undo" (no orange). It sits above the bottom navigation on
+    Home, above the buy bar AND the floating cart on the product page,
+    and above the total bar on the cart page.
+  - Undo puts back exactly that line: same product, same option, same
+    quantity, same place in the cart. Every count (cards, buy bar,
+    floating cart badge, cart page) updates; if the cart had become
+    empty the floating cart comes back.
+  - A new removal replaces the toast — only the latest can be undone.
+  - The rule lives in the cart itself, so any future remove button gets
+    the same behaviour automatically.
+  Proof: Part 4 tests (cart page, card, buy bar; same line and position
+  after Undo; all counters; 5 s; replace) + undo-toast-390-*.
+
+PART 5 — Brand logos: same size in light and dark, coloured backgrounds fill the card
+  - One shared logo component (components/viewer/BrandLogo.tsx) used by
+    Home's "Shop by Brand", /brands, the brand page logo plate AND the
+    admin Brands preview (which now draws the real shop card, so it
+    shows exactly what customers see).
+  - The rules (lib/logoProcess.ts):
+      * Transparent logo → empty edges trimmed (as before).
+      * Solid white or black backdrop (judged from the whole outer edge,
+        not just the four corner pixels, so a letter touching a corner
+        can't fool it) → the backdrop becomes see-through, spreading in
+        from the edges only — never inside letters — with soft
+        anti-aliased edges and no halo, then trimmed.
+      * Any other solid colour backdrop (blue, yellow…) → the colour is
+        KEPT: the whole card takes that colour, same rounded corners, no
+        inner box, the same in light and dark (the dark-mode logo slot is
+        ignored for these).
+      * A picture that is all one colour is never treated as a backdrop.
+      * Anything else (e.g. a photo) → shown as it is.
+  - Both logos are fitted into the same box with the same padding, so
+    switching light/dark changes colours only, never size or position.
+  - HOW EXISTING LOGOS WORK WITHOUT RE-UPLOADING:
+      * New uploads are cleaned in the admin before saving (a white/black
+        backdrop is removed for good; a brand colour is kept, with a thin
+        frame of that colour, so the shop can still read it).
+      * Logos already uploaded are cleaned in the shopper's browser, in a
+        background worker (off the main thread), only for cards near the
+        screen, and the result is stored on that phone — so it's done
+        once per phone, not on every visit. Logos that are already clean
+        (most of yours) are left exactly as they are.
+      * If a logo can't be read (no permission, error, too slow) it is
+        shown exactly as today — never a broken image.
+  - What changes on the live site: David Beckham, Bio-Oil, Hamilton and
+    ILLIYOON (normal logos with a white box behind them) are now the
+    same size as their dark-mode twins; Invisible Zinc's card is now
+    fully yellow in both modes. Admin helper text updated as asked.
+  Proof: Part 5 tests with test pictures inside the test browser
+  (black/white twins within 3%, no black box; blue card = sampled blue,
+  no inner box, both modes; unreadable logo still shows) + 14 unit tests
+  (src/lib/logoTrim.test.ts) + home-brands-*-390-*.
+
+PART 6 — Brand page video banner shows immediately
+  - Never blank: a still picture fills the video's exact box from the
+    first paint, and the video fades in over it (250 ms) only once it is
+    really playing. Still picture order: the video's own preview frame →
+    the brand's banner image → the brand logo on a calm surface. If the
+    video never plays (blocked autoplay, slow network) the still stays.
+  - Preview frames: new video uploads save a JPEG of the frame at 0.1 s
+    next to the video (same path + ".poster.jpg" — no database change).
+    For videos already uploaded there is a new button in Admin → Brands:
+    "Create missing video previews" (with progress and a done message).
+    >>> NAEEM: please tap it once. Today La Roche-Posay's page shows its
+    logo while the video loads; after you tap it, it shows the video's
+    first frame instead.
+  - Compression: I chose "warn, don't compress". Re-encoding video
+    reliably on a phone needs a ~30 MB tool that often runs out of
+    memory on mid-range Android. After a video upload the admin shows its
+    size, and above 4 MB a warning suggesting a shorter clip, 720p, no
+    sound. (Your La Roche-Posay video is 5.1 MB.)
+  - Starting early: touching a brand card starts its video downloading;
+    on Home and /brands, once the cards are on screen and the phone is
+    idle, the videos of the first 3 brands start downloading. Skipped on
+    Data Saver and 2g/3g.
+  - The offline helper now keeps brand videos (with support for the
+    byte-range requests videos use), so a second visit plays at once,
+    even offline. (Your current video is served with "no-cache", which is
+    one reason it was slow every single time.)
+  - Muted, inline, looping, autoplay, no controls — unchanged.
+  Proof: Part 6 test (video held back 3 s: still visible at once, video
+  invisible, then fades in, same box ±1 px) + brand-opening/-video-390-*.
+
+PART 7 — Fast Home
+  What I changed:
+  - Every page except Home is now its own small file, downloaded only
+    when needed: product page, search, brands, brand page, cart,
+    checkout, account, orders, policies, admin. Admin's in-page edit
+    sheets (banner, bento, browse, product, expert) are only downloaded
+    the first time an admin opens one — customers never load them.
+  - Morph safety: the product page's file is pre-loaded as soon as the
+    phone is idle after the first page appears, and again on touching
+    any card. Every in-app navigation waits for the target page's file
+    if it isn't there yet (normally it already is), so the card →
+    product morph and Back look exactly as before — the transition never
+    captures a loading placeholder. The fallback (only on a direct visit
+    to a link, for a moment) is the plain page background, no spinner.
+  - Home draws the first 8 product cards at once, then the rest 4 at a
+    time whenever the phone is idle (each step well under the 50 ms that
+    makes taps feel stuck). Coming BACK to Home at a remembered spot
+    draws everything at once, so scroll memory and the reverse morph work
+    exactly as before (all their tests pass).
+  - Fixed the big layout jump (score 0.31): the banner and the Browse
+    circles now hold their exact space while the shop's data loads.
+  - The Home banner photo is requested from the page's very first lines
+    (index.html), instead of after the app's code and data have loaded.
+  - Facebook Pixel / Google Analytics: their scripts now load on the
+    visitor's first touch/scroll, or 4 s after the page has loaded —
+    whichever is first. Every event (PageView included) is queued from
+    the first moment and sent when they arrive, so nothing is lost.
+  - Fonts no longer block the first paint (shown with the system font,
+    then swapped). Early connection to the Supabase server. The offline
+    helper registers after the page has loaded. The country-flag styles
+    (28 KB) load only with the review cards on the Expert page.
+  - vercel.json: hashed files (/assets/…) cached for a year
+    ("immutable"); index.html, the service worker, registerSW.js and the
+    manifest are never cached.
+  - Pictures: the banner's first photo is high priority and not lazy;
+    product card photos are lazy; brand/browse/avatar images got sizes
+    and async decoding; the brand page's banner is high priority.
+    Uploads were already compressed in the browser (products, banners,
+    bento, settings: max 1200 px, WebP 85%; card copies 400 px), so I
+    left that as is (it's tighter than the 1600 px asked).
+
+  MEASUREMENTS (vite preview on this computer, Lighthouse 12 mobile
+  preset, 3 runs each, median; the live database and live photos are
+  used, so runs vary with the network):
+
+                      BEFORE        AFTER
+    Home              40            72  (75 / 72 / 66)
+                      (26/40/41)    — an earlier set on the same final
+                                      build gave 63 (69 / 55 / 63)
+    Product page      47            71  (70 / 71 / 72)
+    Brand page        54            69  (67 / 78 / 69)
+
+    Home details (median)   BEFORE      AFTER
+      Blocking time (TBT)   1,100 ms    ~200 ms
+      Layout shift (CLS)    up to 0.31  0
+      Largest paint (LCP)   7.8 s       ~5.3 s
+      First paint (FCP)     3.9 s       ~2.2 s
+
+    Home's own JavaScript    BEFORE                  AFTER
+      main file              753.8 KB (215.8 gzip)   507.0 KB (148.3 gzip)  −33%
+      main stylesheet        182.1 KB (31.9 gzip)    155.4 KB (24.8 gzip)
+
+  IS THE GOAL (70+) REACHED? Mostly: the latest set's median is 72, but
+  one earlier set gave 63, so Home sits right at the line. What still
+  holds it back, plainly:
+    1. The pictures. 108 images / 7.2 MB load on Home. Several product
+       cards use the FULL-SIZE photo because their small card copy was
+       never made, and the Browse circles use 120–150 KB photos for a
+       64 px circle. The 10 heaviest on Home:
+         188 KB  product-images/products/db1f9db0-a7c3-4201-9fbe-324b86b7279b.webp
+         148 KB  product-images/categories/82a5c7ec-8b32-4f50-8f03-a39541724c46.webp
+         142 KB  product-images/products/8c8c25b6-0eac-4c81-997b-ac47a80c005f.webp
+         140 KB  product-images/products/338723e0-0557-43cd-8a0c-b06c53a67874.webp
+         134 KB  product-images/products/5c7403fc-6d34-45e1-afeb-8a7450410cc0.webp
+         130 KB  product-images/products/e29cc821-4244-4998-8e44-3ed0e2338956.webp
+         124 KB  product-images/products/833e4430-e26a-4f2f-8c11-e33d8022ba72.webp
+         119 KB  product-images/products/031d4f71-081f-4ce8-b7fc-a385981d5511.webp
+         119 KB  product-images/categories/a5ebca9d-d61c-4b04-b6a8-606f184d6885.webp
+         119 KB  product-images/products/86deba5b-bd2f-4fe9-9d1a-6bfebd2ef1ef.webp
+       (all under …supabase.co/storage/v1/object/public/)
+       EASY FIX FOR YOU: Admin → Products → "Generate small images"
+       (the existing button) makes the missing 400 px card copies.
+    2. The Supabase library is ~210 KB of the 507 KB and can't be trimmed
+       without rewriting how the whole shop talks to the database.
+    3. Every database request needs an extra security round-trip
+       (browser "preflight") — fine on Wi-Fi, costly on a slow 4G.
+    4. When the shop's data arrives, drawing Home still takes one
+       ~150–350 ms burst on a slow phone.
+  See "Industry-level suggestions" for what would fix each.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. No database changes, no function deploys. (Part 6's preview
+pictures are files in Storage, saved through the existing admin upload.)
+
+
+3. WHAT I COULD NOT FINISH / NEEDS A LATER BATCH
+------------------------------------------------
+Everything asked was built. Not done, by choice:
+  - Video compression in the admin (see Part 6: unreliable on a phone).
+  - Re-saving already-uploaded photos smaller (the batch said not to).
+  - Smaller photo sizes via srcset: Supabase image resizing isn't
+    something the current setup uses, and I didn't make the site depend
+    on it.
+Needs a later batch (none of these need the database):
+  - Lighter Home data: Home downloads every product's full row (27 KB)
+    before it can draw; a slimmer first request would speed up LCP.
+
+
+4. WHAT I FOUND ALONG THE WAY
+----------------------------
+  - Kirkland's dark-mode logo shows a white box in dark mode. That's in
+    the file itself (a white box with see-through corners — it isn't a
+    plain solid backdrop, so it's shown as uploaded). Fix: upload a
+    white Kirkland logo on a transparent (or plain black) background in
+    the "Logo for dark mode" slot.
+  - Invisible Zinc's logo file has faint JPEG blocks next to "ZINC"
+    (visible on the yellow card if you look closely). A cleaner PNG would
+    fix it.
+  - Your La Roche-Posay video (5.1 MB) is served with "no-cache": every
+    visit used to download it again. The offline helper now keeps it.
+  - Several product cards on Home use the full-size photo (no small copy
+    yet) — see Part 7. "Generate small images" fixes it.
+  - Category photos for the Browse circles are 120–150 KB each for a
+    64 px circle; re-uploading them through the category editor (which
+    compresses) would make them ~10x smaller.
+
+
+5. DESIGN DECISIONS (made by me)
+-------------------------------
+  - Part 3: the cart slides down by the bar's height + the gap (77 px),
+    so it lands exactly where the bar was, above the safe area. (Moving
+    by the bar's own exit distance would have pushed it to the very
+    bottom edge, against your "still visible, above the safe area".)
+  - Part 3: the scrolled top bar's buttons keep their Batch 28 shadow,
+    because you asked for that bar to stay as it is.
+  - Part 4: the toast is a pill in the buy bar's glass, with a small bin
+    icon; "Undo" is bold black (white in dark mode).
+  - Part 4: if the same item was added again before Undo, Undo restores
+    the removed line as it was (its quantity and place), not added on top.
+  - Part 5: a backdrop is judged from the whole outer edge (≥60% one
+    colour) rather than only the four corner pixels — Hamilton's logo has
+    a blue letter edge in one corner and would otherwise not be cleaned.
+  - Part 5: logos appear without a fade (a fade replaying after Back
+    broke the "nothing animates after a page settles" rule).
+  - Part 6: the still picture under the video is the logo on a calm grey
+    (dark: near-black) surface until a preview frame exists.
+  - Part 7: trackers load on first touch/scroll or after 4 s, instead of
+    at once. Honest trade-off: a visitor who closes the page within
+    those first seconds without touching or scrolling at all may not be
+    counted by Facebook/Google (their PageView was queued but the script
+    never arrived). Everyone who touches or scrolls is counted, and all
+    other events are unaffected.
+  - Part 7: the early banner request in index.html uses the public
+    (anon) key that is already inside the app's code — it's meant to be
+    public; the database rules still protect everything.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not implemented)
+-----------------------------------------------
+1. Real image resizing (medium–large). Serve each photo at the size it's
+   shown (e.g. a resizing CDN or Supabase's image transformations on a
+   paid plan, plus srcset). Biggest remaining speed win on Home and the
+   cheapest data for customers on mobile data.
+2. Show Home from the phone's saved copy first, then refresh (medium).
+   Repeat visitors (most of your ad traffic after the first click) would
+   see the shop instantly instead of waiting for the network.
+3. A slimmer first data request for Home (medium): only the fields the
+   cards need, not every product's full description.
+4. Run "Generate small images" and re-upload the category photos
+   (small, you can do it today — see section 4).
+5. Reviews / star rating near the price (medium) — still the biggest
+   missing trust signal.
+
+
+WHAT ONLY NAEEM'S PHONE CAN CONFIRM
+-----------------------------------
+  - The pure crystal buttons on your real photos, light and dark — and
+    whether the faint icons on white photos are acceptable to you.
+  - The cart sliding down/up together with the buy bar under your thumb.
+  - The "Removed · Undo" toast's place and feel.
+  - Brand logos on your phone (first visit cleans them; then cached).
+  - The brand page: logo still picture → video fade (and after tapping
+    "Create missing video previews", the first frame instead of the logo).
+  - That Facebook Events Manager / Google Realtime still show visits
+    (they now arrive a few seconds later).
+  - Home speed on mobile data.
+
+
+SCREENSHOTS
+-----------
+reports/batch-29-screens/ (390 px, light and dark):
+  product-orange-photo-390-*   crystal buttons on a colourful photo
+  product-white-photo-390-*    on a white photo (with the note)
+  stock-note-390-*             the stock capsule + note area
+  product-bar-shown-390-*      cart just above the bar
+  product-bar-hidden-390-*     bar away, cart in its corner
+  undo-toast-390-*             "Removed · Undo"
+  home-brands-390-*, home-brands-david-beckham-390-*,
+  home-brands-invisible-zinc-390-*   "Shop by Brand"
+  brand-opening-390-*          brand page right after opening (still)
+  brand-video-390-*            after the video plays
+Retake: SCREENS=1 npx playwright test e2e/batch-29-screens.spec.ts
+
+
+TESTS
+-----
+New: e2e/batch-29.spec.ts (19 tests) — all seven Parts as listed above.
+New: e2e/batch-29-screens.spec.ts — screenshots (only with SCREENS=1).
+Unit: src/lib/logoTrim.test.ts rewritten for the new logo rules (the old
+  trim checks kept, now on the new code; 14 tests).
+Older tests changed (only what your decisions changed):
+  - batch-28 "icons stay visible on a white / very light photo": the two
+    light-photo contrast thresholds removed (pure crystal = faint icons
+    on white, accepted by you); the dark-photo check stays.
+  - batch-28 "never overlaps the buy bar or the top buttons": the
+    "middle of the right edge" position check became "right edge lined
+    up with the bar, 8–14 px above it"; the no-overlap checks stay.
+  - cart.spec.ts: comment only (the old confirm button is still handled
+    if it ever appears; the line must still be gone).
+  - home.spec.ts "a category chip filters the grid…": now waits until
+    Home has finished drawing its cards before counting "All" (Home now
+    draws them in steps); the same checks.
+CODE (not tests) kept for old checks: the banner video still has its
+  poster attribute (batch-26 checks it); card logos keep loading="lazy".
+
+
+BUILD & TEST RESULTS
+--------------------
+Final code, run three times in a row:
+  npm run build    PASSED all 3 times (0 errors)
+  npx vitest run   115/115 passed all 3 times (16 files)
+  npm run test:e2e run 1: 154 passed, 0 failed, 35 skipped
+                   run 2: 154 passed, 0 failed, 35 skipped
+                   run 3: 154 passed, 0 failed, 35 skipped
+  The 35 skips are the screenshot-only files (Batch 25–29, only on
+  request) plus the same 3 data-condition skips as before.
+  Before those three runs, one full run on the first finished version
+  found 7 failures: 4 were the old Batch 28 checks listed above (changed
+  on purpose), and 3 were real and are fixed — a logo fade replaying
+  after Back (fade removed), the banner video's poster attribute (kept),
+  and the Home chip test counting cards mid-drawing (test waits now).
+Clean-up: the tests only use the browser's own cart, test pictures and
+pretend data inside the test browser; nothing is written to the
+database or Storage.
