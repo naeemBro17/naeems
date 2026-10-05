@@ -111,7 +111,7 @@ export function BrandPage() {
   return (
     <div className="viewer-shell detail-shell brand-page">
       {header}
-      <BrandBanner brand={brand} />
+      <BrandBanner key={brand.id} brand={brand} />
       <main className="brand-page__main">
         <div className="brand-page__intro">
           <h1 className="brand-page__name">{brand.name}</h1>

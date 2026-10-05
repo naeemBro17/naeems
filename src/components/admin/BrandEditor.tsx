@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { BRAND_SLUG_PATTERN, brandSlugify } from '../../lib/brands';
-import { checkMediaFile, saveBrand, uploadBrandMedia, type MediaKind } from '../../lib/brandAdmin';
+import { checkMediaFile, saveBrand, uploadBrandMedia, videoSizeNote, type MediaKind } from '../../lib/brandAdmin';
 import { extractYouTubeId } from '../../lib/youtube';
 import { formatDhakaTime } from '../../lib/staff';
 import { AdminIcon } from './ui/AdminIcon';
@@ -111,6 +111,7 @@ function MediaField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<{ text: string; warn: boolean } | null>(null);
 
   const choose = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,9 +123,11 @@ function MediaField({
       return;
     }
     setError(null);
+    setNote(null);
     setBusy(true);
     try {
       onChange(await uploadBrandMedia(kind, file));
+      if (kind === 'video') setNote(videoSizeNote(file.size));
     } catch (err) {
       console.error('Brand upload failed:', err);
       setError('Could not upload. Please try again.');
@@ -178,6 +181,11 @@ function MediaField({
         aria-label={label}
         data-testid={`${testId}-input`}
       />
+      {note && (
+        <p className={note.warn ? 'form-error' : 'form-helper'} role="status" data-testid={`${testId}-size-note`}>
+          {note.text}
+        </p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}

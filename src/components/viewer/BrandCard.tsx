@@ -1,13 +1,40 @@
-import { useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type RefObject } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { brandPath } from '../../lib/brands';
+import { preloadBrandVideo } from '../../lib/brandVideo';
 import { BrandLogoImage, brandCardStyle, useBrandLogo, useNearScreen } from './BrandLogo';
 import type { Brand } from '../../types';
 
 /** The logo box's fixed size, so a lazy logo never moves anything. */
 const LOGO_WIDTH = 160;
 const LOGO_HEIGHT = 80;
+
+/**
+ * Home's brand row and /brands (Batch 29 Part 6): once the cards are on
+ * screen and the page has gone quiet, start downloading the banner videos
+ * of the first three brands, so their pages open with the video ready.
+ * (preloadBrandVideo skips data saver and slow connections.)
+ */
+export function usePreloadFirstBrandVideos(brands: Brand[], containerRef: RefObject<Element>): void {
+  const near = useNearScreen(containerRef);
+  const firstVideos = brands
+    .slice(0, 3)
+    .map((b) => b.banner_video_url)
+    .filter((url): url is string => url !== null)
+    .join(' ');
+
+  useEffect(() => {
+    if (!near || firstVideos === '') return;
+    const run = () => firstVideos.split(' ').forEach((url) => preloadBrandVideo(url));
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(run, 2000);
+    return () => window.clearTimeout(timer);
+  }, [near, firstVideos]);
+}
 
 /**
  * One wide (2:1) rounded brand card: only the logo, centred with padding —
@@ -40,6 +67,8 @@ export function BrandCard({ brand }: { brand: Brand }) {
       ref={cardRef}
       href={path}
       onClick={open}
+      // Touching the card starts its banner video downloading at once.
+      onPointerDown={() => preloadBrandVideo(brand.banner_video_url, 'high')}
       className={`brand-card brand-card--${logo.tone}`}
       style={brandCardStyle(logo)}
       aria-label={brand.name}

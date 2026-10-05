@@ -2896,3 +2896,12 @@ html[data-admin] .toast--info .toast__icon {
   align-self: flex-start;
   margin-top: var(--adm-s2);
 }
+
+/* Batch 29 Part 6: "Create missing video previews". */
+.adm-brands__posters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 var(--adm-s3);
+}

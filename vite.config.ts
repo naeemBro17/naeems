@@ -58,6 +58,21 @@ export default defineConfig({
             },
           },
           {
+            // Brand banner videos (Batch 29 Part 6): the whole file is kept
+            // once it has been downloaded in full (the shop pre-loads it),
+            // and the video player's byte-range requests are answered from
+            // that copy — a second visit starts at once, even offline. Must
+            // stay above the general Storage rule (first match wins).
+            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/brand-media\/videos\/[^?]+\.(mp4|webm)(\?.*)?$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'brand-videos',
+              rangeRequests: true,
+              expiration: { maxEntries: 12, maxAgeSeconds: 2592000 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
             // Supabase Storage images: CacheFirst, 150 entries, 30 days.
             urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/.*/i,
             handler: 'CacheFirst',

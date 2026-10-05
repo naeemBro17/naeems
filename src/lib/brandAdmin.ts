@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { resizeImage } from './imageResize';
 import { trimLogo } from './logoTrim';
 import { BRANDS_TABLE, BRAND_SELECT } from './brands';
+import { videoPosterUrl } from './brandVideo';
 import type { Brand } from '../types';
 
 /* Admin-only brand writes and the Batch 26 admin extras (Restock, 7-day
@@ -43,6 +44,143 @@ async function uploadMedia(path: string, blob: Blob, contentType: string): Promi
 
 export type MediaKind = 'logo' | 'logo-dark' | 'banner' | 'video';
 
+/** Videos above this load slowly on a phone (Batch 29 Part 6). */
+export const BRAND_VIDEO_WARN_BYTES = 4 * 1024 * 1024;
+
+/** "5.1 MB" */
+export function megabytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** A gentle note after a video upload: its size, and a warning when it's
+ *  big enough to make the brand page slow. */
+export function videoSizeNote(bytes: number): { text: string; warn: boolean } {
+  if (bytes > BRAND_VIDEO_WARN_BYTES) {
+    return {
+      text: `This video is ${megabytes(bytes)}. Over 4 MB loads slowly on phones — a shorter clip (5–10 seconds) or 720p, without sound, loads much faster.`,
+      warn: true,
+    };
+  }
+  return { text: `Video size: ${megabytes(bytes)} — good for phones.`, warn: false };
+}
+
+/* ---------- Video preview pictures (Batch 29 Part 6) ---------- */
+
+/** Widest preview picture saved. */
+const POSTER_MAX_WIDTH = 1280;
+/** The frame used: just after the start (the very first frame is often black). */
+const POSTER_TIME_S = 0.1;
+const POSTER_TIMEOUT_MS = 30000;
+
+/**
+ * One still frame of a video as a compressed JPEG — the picture the brand
+ * page shows while its video loads. `remote` = a video already in Storage
+ * (read with CORS so the frame can be copied).
+ */
+export function captureVideoFrame(src: string, remote: boolean): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    let done = false;
+    const finish = (error: Error | null, blob?: Blob) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      video.removeAttribute('src');
+      video.load();
+      if (error || !blob) reject(error ?? new Error('No frame.'));
+      else resolve(blob);
+    };
+    const timer = window.setTimeout(() => finish(new Error('The video took too long to read.')), POSTER_TIMEOUT_MS);
+    if (remote) video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.onerror = () => finish(new Error('Could not read the video.'));
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(POSTER_TIME_S, Math.max(0, video.duration - 0.05) || 0);
+    };
+    video.onseeked = () => {
+      const scale = Math.min(1, POSTER_MAX_WIDTH / (video.videoWidth || POSTER_MAX_WIDTH));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        finish(new Error('Canvas is not supported in this browser.'));
+        return;
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      try {
+        canvas.toBlob((blob) => finish(blob ? null : new Error('Could not save the frame.'), blob ?? undefined), 'image/jpeg', 0.8);
+      } catch (err) {
+        finish(err instanceof Error ? err : new Error('Could not save the frame.'));
+      }
+    };
+    video.src = src;
+  });
+}
+
+/** A brand-media public URL's path inside the bucket ("videos/x.mp4"). */
+function brandMediaPath(url: string): string | null {
+  const marker = `/object/public/${BRAND_MEDIA_BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  const path = decodeURIComponent(url.slice(index + marker.length).split('?')[0]);
+  return path === '' ? null : path;
+}
+
+async function uploadPoster(videoPath: string, frame: Blob): Promise<void> {
+  await uploadMedia(`${videoPath}.poster.jpg`, frame, 'image/jpeg');
+}
+
+/** Whether a video already has its preview picture in Storage. */
+async function hasPoster(videoUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(videoPosterUrl(videoUrl), { method: 'HEAD', cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface PosterRunResult {
+  made: number;
+  alreadyHad: number;
+  failed: string[];
+}
+
+/**
+ * Admin → Brands → "Create missing video previews": for every brand with an
+ * uploaded video but no preview picture yet, saves one (Naeem taps it once
+ * for the videos uploaded before Batch 29). Never touches the database.
+ */
+export async function createMissingVideoPosters(
+  brands: Pick<Brand, 'name' | 'banner_video_url'>[],
+  onProgress: (done: number, total: number) => void
+): Promise<PosterRunResult> {
+  const withVideo = brands.filter((b): b is typeof b & { banner_video_url: string } => b.banner_video_url !== null);
+  const result: PosterRunResult = { made: 0, alreadyHad: 0, failed: [] };
+  onProgress(0, withVideo.length);
+  for (const [i, brand] of withVideo.entries()) {
+    const path = brandMediaPath(brand.banner_video_url);
+    if (!path) {
+      result.failed.push(brand.name);
+    } else if (await hasPoster(brand.banner_video_url)) {
+      result.alreadyHad += 1;
+    } else {
+      try {
+        await uploadPoster(path, await captureVideoFrame(brand.banner_video_url, true));
+        result.made += 1;
+      } catch (err) {
+        console.error(`Video preview failed for ${brand.name}:`, err);
+        result.failed.push(brand.name);
+      }
+    }
+    onProgress(i + 1, withVideo.length);
+  }
+  return result;
+}
+
 /** Checks a chosen file before any work is done. Null = fine. */
 export function checkMediaFile(kind: MediaKind, file: File): string | null {
   if (kind === 'video') {
@@ -61,14 +199,29 @@ export function checkMediaFile(kind: MediaKind, file: File): string | null {
 /**
  * Prepares and uploads one file; returns its public URL. Logos are trimmed,
  * resized and compressed (transparent WebP); banners are compressed like
- * product photos; videos go up as they are. Every upload gets a new file
+ * product photos; videos go up as they are (re-encoding a video reliably on
+ * a phone isn't possible without a ~30 MB tool — the admin shows the size
+ * and warns above 4 MB instead), plus a preview picture of the first frame. Every upload gets a new file
  * name, so a replaced logo never shows an old cached copy.
  */
 export async function uploadBrandMedia(kind: MediaKind, file: File): Promise<string> {
   const id = randomId();
   if (kind === 'video') {
     const ext = file.type === 'video/webm' ? 'webm' : 'mp4';
-    return uploadMedia(`videos/${id}.${ext}`, file, file.type);
+    const path = `videos/${id}.${ext}`;
+    const url = await uploadMedia(path, file, file.type);
+    // Its preview picture, saved next to it (Part 6). A video whose frame
+    // can't be read still uploads fine — the brand page then shows the
+    // banner image or the logo while it loads.
+    const local = URL.createObjectURL(file);
+    try {
+      await uploadPoster(path, await captureVideoFrame(local, false));
+    } catch (err) {
+      console.error('Video preview picture failed:', err);
+    } finally {
+      URL.revokeObjectURL(local);
+    }
+    return url;
   }
   if (kind === 'banner') {
     return uploadMedia(`banners/${id}.webp`, await resizeImage(file), 'image/webp');
