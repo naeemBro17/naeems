@@ -22,6 +22,6 @@ export async function blockAdTracking(page: Page): Promise<void> {
       route.abort();
       return;
     }
-    route.continue();
+    route.fallback();
   });
 }

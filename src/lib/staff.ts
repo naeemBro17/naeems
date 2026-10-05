@@ -20,6 +20,7 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'see_sales', label: 'See sales figures', hint: 'See money totals: today, this month, the 7-day chart, and what each customer has spent.' },
   { id: 'edit_brands', label: 'Edit brands', hint: 'Add, rename, reorder and delete brands; logos, banners and the Home row.' },
   { id: 'edit_customer_notes', label: 'Edit customer notes', hint: 'Write private notes and tags on customers. Needs View customers to see them.' },
+  { id: 'edit_orders', label: 'Edit orders', hint: 'Change name, phone, address, items, quantities and delivery fee on any order, at any stage. Prices and discounts stay with you.' },
 ];
 
 /** Order permissions that are useless without "View orders" — switching
@@ -29,6 +30,7 @@ export const ORDER_SUB_PERMISSIONS: StaffPermission[] = [
   'create_orders',
   'book_steadfast',
   'delete_early_orders',
+  'edit_orders',
 ];
 
 /** Applies the "order permissions need View orders" rule to a toggle. */
@@ -201,6 +203,8 @@ export const ACTIVITY_TYPES: { value: string; label: string }[] = [
   { value: 'order.', label: 'Orders' },
   { value: 'order.status', label: 'Order status changes' },
   { value: 'order.price_changed', label: 'Price edits' },
+  { value: 'order.edited', label: 'Order edits' },
+  { value: 'order.payment', label: 'Payments' },
   { value: 'order.deleted', label: 'Order deletes' },
   { value: 'order.steadfast', label: 'Steadfast' },
   { value: 'product.', label: 'Products and stock' },

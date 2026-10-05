@@ -32,6 +32,14 @@ import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 import { orderHistoryNote } from '../../lib/orderHistoryNotes';
 import { fetchAdminOrderDetail } from '../../lib/adminData';
+import { EditOrderSheet } from './EditOrderSheet';
+import { OrderPaymentBlock } from './OrderPaymentBlock';
+import { fetchOrderPayments, summarizePayments, type OrderPayment } from '../../lib/payments';
+import { markSteadfastUpdated, steadfastBanner, steadfastParcelUrl } from '../../lib/orderEdit';
+import { deriveOrderStep, fetchTracking, type TrackingAnswer } from '../../lib/orderSteps';
+import { CourierTimeline, OrderSteps } from '../orders/OrderSteps';
+import { AdminIcon } from './ui/AdminIcon';
+import { codAmountFor } from '../../../supabase/functions/_shared/cod';
 
 interface OrderDetailSheetProps {
   orderId: string | null;
@@ -139,6 +147,13 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   const [steadfastConfirmOpen, setSteadfastConfirmOpen] = useState(false);
   const [isBookingSteadfast, setIsBookingSteadfast] = useState(false);
   const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
+  // Batch 30: payments (null = migration-033 not run yet), the edit sheet,
+  // and Steadfast's tracking steps (null = function not updated yet).
+  const canEditOrder = can('edit_orders');
+  const [payments, setPayments] = useState<OrderPayment[] | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [tracking, setTracking] = useState<TrackingAnswer | null>(null);
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
 
   useEffect(() => {
     if (!orderId) {
@@ -147,9 +162,16 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     }
     let cancelled = false;
     setIsLoading(true);
-    void fetchAdminOrderDetail(orderId).then((data) => {
+    setTracking(null);
+    void Promise.all([fetchAdminOrderDetail(orderId), fetchOrderPayments(orderId)]).then(([data, pays]) => {
       if (cancelled) return;
       setOrder(data);
+      setPayments(pays);
+      if (data?.steadfast_consignment_id) {
+        void fetchTracking(data.id).then((answer) => {
+          if (!cancelled) setTracking(answer);
+        });
+      }
       setTrackingInput(data?.tracking_number ?? '');
       setNoteInput(data?.admin_note ?? '');
       setFeeInput(data ? String(data.delivery_fee) : '');
@@ -163,9 +185,23 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
 
   const reload = async () => {
     if (!orderId) return;
-    const data = await fetchAdminOrderDetail(orderId);
+    const [data, pays] = await Promise.all([fetchAdminOrderDetail(orderId), fetchOrderPayments(orderId)]);
     setOrder(data);
+    setPayments(pays);
     onChanged();
+  };
+
+  const handleSteadfastDone = async () => {
+    if (!order) return;
+    setIsMarkingDone(true);
+    const { error } = await markSteadfastUpdated(order.id);
+    setIsMarkingDone(false);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showToast('Noted: Steadfast is up to date');
+    await reload();
   };
 
   const handleStatusChange = async (status: OrderStatus) => {
@@ -262,7 +298,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   const handleRefreshSteadfastStatus = async () => {
     if (!order) return;
     setIsRefreshingSteadfast(true);
-    const result = await refreshSteadfastStatus(order.id);
+    const [result, answer] = await Promise.all([refreshSteadfastStatus(order.id), fetchTracking(order.id)]);
+    if (answer) setTracking(answer);
     setIsRefreshingSteadfast(false);
     if (result.error) {
       showToast(result.error, 'error');
@@ -345,12 +382,22 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   // 22's 'cash'/'due' methods) so the confirm dialog shows exactly what
   // will be sent — null means "blocked", the bKash payment hasn't been
   // verified yet.
+  // Batch 30: with payments recorded, COD = what is still due (the
+  // function sends exactly this; before migration-033, the old rule).
+  const paymentSummary = order && payments ? summarizePayments(order.total, payments) : null;
   const steadfastCodAmount = order
-    ? order.payment_method === 'bkash' && order.payment_status !== 'paid'
+    ? order.payment_method === 'bkash' && order.payment_status !== 'paid' && (paymentSummary?.paid ?? 0) <= 0
       ? null
-      : order.payment_status === 'paid'
-        ? 0
-        : order.total
+      : codAmountFor(order, paymentSummary ? paymentSummary.due : null)
+    : null;
+  const banner = order ? steadfastBanner(order, paymentSummary) : null;
+  const courierStep = order
+    ? deriveOrderStep({
+        status: order.status,
+        booked: Boolean(order.steadfast_consignment_id),
+        courierStatus: tracking?.courierStatus ?? order.steadfast_status,
+        events: tracking?.events ?? [],
+      })
     : null;
 
   return (
@@ -391,7 +438,56 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             <button type="button" className="button button--secondary button--small" onClick={handleDownloadInvoice}>
               Invoice
             </button>
+            {canEditOrder && (
+              <button
+                type="button"
+                className="button button--secondary button--small order-admin-detail__edit"
+                onClick={() => setIsEditOpen(true)}
+                data-testid="edit-order"
+              >
+                <AdminIcon name="edit" className="adm-icon--sm" />
+                Edit order
+              </button>
+            )}
           </div>
+
+          {banner && order.steadfast_consignment_id && (
+            <div className="steadfast-banner" role="status" data-testid="steadfast-banner">
+              <AdminIcon name="alert" className="steadfast-banner__icon" />
+              <div className="steadfast-banner__body">
+                {banner.fields.length > 0 && (
+                  <p className="steadfast-banner__text">
+                    Steadfast still has the old details: <strong>{banner.fields.join(', ')}</strong>. Update them on Steadfast.
+                  </p>
+                )}
+                {banner.codShouldBe !== null && (
+                  <p className="steadfast-banner__text" data-testid="steadfast-banner-cod">
+                    COD on Steadfast should now be <strong>{formatTaka(banner.codShouldBe)}</strong>
+                    {order.steadfast_cod_amount !== null ? ` (it has ${formatTaka(order.steadfast_cod_amount)})` : ''}.
+                  </p>
+                )}
+                <div className="steadfast-banner__actions">
+                  <a
+                    className="button button--secondary button--small"
+                    href={steadfastParcelUrl(order.steadfast_consignment_id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open on Steadfast
+                    <AdminIcon name="external" className="adm-icon--sm" />
+                  </a>
+                  <button
+                    type="button"
+                    className="button button--secondary button--small"
+                    onClick={handleSteadfastDone}
+                    disabled={isMarkingDone}
+                  >
+                    {isMarkingDone ? <span className="spinner" aria-hidden="true" /> : 'Done, I updated Steadfast'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <section className="order-detail__section">
             <h2 className="order-detail__section-title">Items</h2>
@@ -539,6 +635,18 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             <p className="order-detail__address">{addressText(order)}</p>
           </section>
 
+          {payments && paymentSummary ? (
+            <OrderPaymentBlock
+              order={order}
+              payments={payments}
+              summary={paymentSummary}
+              canRecord={canChangeStatus}
+              isAdmin={isAdmin}
+              onChanged={reload}
+              onConfirmBkash={handleMarkPaid}
+              isConfirmingBkash={isSavingField === 'paid'}
+            />
+          ) : (
           <section className="order-detail__section">
             <h2 className="order-detail__section-title">Payment</h2>
             <div className="order-detail__payment-row">
@@ -564,7 +672,13 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                 )}
               </>
             )}
+            {isAdmin && (
+              <p className="admin-panel__description order-detail__needs-update">
+                Recording payments needs the Batch 30 database update (migration-033).
+              </p>
+            )}
           </section>
+          )}
 
           {(order.steadfast_consignment_id || order.status === 'confirmed') && (
             <section className="order-detail__section">
@@ -575,6 +689,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                   {order.steadfast_tracking_code && (
                     <p className="order-detail__trx">Tracking code: {order.steadfast_tracking_code}</p>
                   )}
+                  {courierStep && <OrderSteps step={courierStep} audience="admin" />}
+                  {tracking && <CourierTimeline events={tracking.events} />}
                   {order.steadfast_status && (
                     <p className="order-detail__trx">
                       Courier status: {order.steadfast_status}
@@ -759,6 +875,19 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             </section>
           )}
         </div>
+      )}
+
+      {canEditOrder && (
+        <EditOrderSheet
+          order={order}
+          isOpen={isEditOpen}
+          isAdmin={isAdmin}
+          onClose={() => setIsEditOpen(false)}
+          onSaved={async () => {
+            setIsEditOpen(false);
+            await reload();
+          }}
+        />
       )}
 
       {order && (

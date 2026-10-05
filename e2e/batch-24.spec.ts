@@ -478,7 +478,7 @@ test('The customer sees a friendly delivery status, for their own orders only', 
 
   await useSessionInPage(page, customer);
   await page.goto(`/orders/${order.id}`);
-  await expect(page.getByTestId('delivery-status')).toHaveText('On the way', { timeout: 15_000 });
+  await expect(page.getByTestId('delivery-status')).toHaveText('In Transit', { timeout: 15_000 });
   await expect(page.locator('.delivery-progress')).toContainText('Last update');
   await expect(page.locator('.order-timeline__step--reached')).toHaveCount(4);
   await expect(page.getByText('Track parcel on Steadfast →')).toHaveCount(0);

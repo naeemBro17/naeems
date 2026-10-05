@@ -12,3 +12,4 @@ playwright-report
 blob-report
 
 backups/
+.verify

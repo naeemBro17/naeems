@@ -25,11 +25,49 @@
 // for the cases that actually need him.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { checkSteadfastStatus } from '../_shared/steadfast.ts';
+import { STEADFAST_BASE_URL, checkSteadfastStatus, steadfastHeaders } from '../_shared/steadfast.ts';
+import { parseTrackingResponse } from '../_shared/steadfastSteps.ts';
 
 interface ShippedOrder {
   id: string;
+  order_number: string;
   steadfast_consignment_id: string;
+}
+
+function serviceClientFor(supabaseUrl: string, serviceRoleKey: string) {
+  return createClient(supabaseUrl, serviceRoleKey);
+}
+
+/**
+ * Batch 30 Part 5: also keeps each parcel's tracking steps fresh in
+ * steadfast_tracking_cache (migration-033), so the order pages open with
+ * the latest step. Best effort: a failure here never stops the status
+ * refresh, and before migration-033 it simply does nothing.
+ */
+async function refreshTracking(
+  serviceClient: ReturnType<typeof serviceClientFor>,
+  order: ShippedOrder,
+  courierStatus: string,
+  apiKey: string,
+  secretKey: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${STEADFAST_BASE_URL}/trackings_by_invoice/${encodeURIComponent(order.order_number)}`, {
+      headers: steadfastHeaders(apiKey, secretKey),
+    });
+    if (!res.ok) return false;
+    const events = parseTrackingResponse(await res.json());
+    const { error } = await serviceClient.from('steadfast_tracking_cache').upsert({
+      order_id: order.id,
+      delivery_status: courierStatus,
+      events,
+      fetched_at: new Date().toISOString(),
+    });
+    return !error;
+  } catch (err) {
+    console.error(`steadfast-refresh-all: tracking steps failed for order ${order.id}:`, err);
+    return false;
+  }
 }
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -60,7 +98,7 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+  const serviceClient = serviceClientFor(supabaseUrl, serviceRoleKey);
 
   // "Every shipped + booked order" (task wording) — in this app a shipped
   // order that came through Steadfast always has a consignment id (booking
@@ -69,7 +107,7 @@ Deno.serve(async (req: Request) => {
   // courier, which Steadfast has never heard of.
   const { data: orders, error: fetchErr } = await serviceClient
     .from('orders')
-    .select('id, steadfast_consignment_id')
+    .select('id, order_number, steadfast_consignment_id')
     .eq('status', 'shipped')
     .not('steadfast_consignment_id', 'is', null);
 
@@ -83,6 +121,7 @@ Deno.serve(async (req: Request) => {
   let delivered = 0;
   let flagged = 0;
   let failed = 0;
+  let tracked = 0;
 
   for (const order of shipped) {
     const result = await checkSteadfastStatus(order.steadfast_consignment_id, apiKey, secretKey);
@@ -104,6 +143,7 @@ Deno.serve(async (req: Request) => {
     }
 
     updated += 1;
+    if (await refreshTracking(serviceClient, order, result.courierStatus, apiKey, secretKey)) tracked += 1;
     if (result.markedDelivered) delivered += 1;
     if (result.needsAttention) flagged += 1;
   }
@@ -115,5 +155,6 @@ Deno.serve(async (req: Request) => {
     delivered,
     flagged,
     failed,
+    tracked,
   });
 });

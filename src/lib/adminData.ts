@@ -70,7 +70,11 @@ export function isLowStockProduct(product: Pick<Product, 'stock_quantity' | 'is_
 /* ---------- Customers ---------- */
 
 export interface CustomerRow {
-  id: string;
+  /** Batch 30: "p:<profile id>" for a registered customer, "ph:<phone>"
+   *  for someone who only ever ordered through Naeem. */
+  key: string;
+  /** The profile id; null for a phone-only customer. */
+  id: string | null;
   full_name: string;
   email: string;
   phone: string;
@@ -78,10 +82,34 @@ export interface CustomerRow {
   /** Null without "See sales figures". */
   total_spent: number | null;
   last_order_at: string | null;
-  joined_at: string;
+  /** Null for a phone-only customer (no account). */
+  joined_at: string | null;
+  /** What they still owe across their orders (Batch 30); null when not
+   *  known (before migration-033, or no permission to see money). */
+  total_due: number | null;
 }
 
+/** Batch 30: everyone (registered or phone-only) with what they owe —
+ *  admin_customers_v2 (migration-033); before it, the Batch 25 list. */
 export async function fetchCustomers(): Promise<{ rows: CustomerRow[]; error: string | null }> {
+  const v2 = await supabase.rpc('admin_customers_v2');
+  if (!v2.error) {
+    return {
+      rows: ((v2.data ?? []) as Record<string, unknown>[]).map((r) => ({
+        key: r.customer_key as string,
+        id: (r.profile_id as string | null) ?? null,
+        full_name: (r.full_name as string) ?? '',
+        email: (r.email as string) ?? '',
+        phone: (r.phone as string) ?? '',
+        order_count: Number(r.order_count ?? 0),
+        total_spent: r.total_spent === null || r.total_spent === undefined ? null : Number(r.total_spent),
+        last_order_at: (r.last_order_at as string | null) ?? null,
+        joined_at: (r.joined_at as string | null) ?? null,
+        total_due: r.total_due === null || r.total_due === undefined ? null : Number(r.total_due),
+      })),
+      error: null,
+    };
+  }
   const { data, error } = await supabase.rpc('admin_customers');
   if (error) {
     console.error('admin_customers failed:', error.message);
@@ -89,6 +117,8 @@ export async function fetchCustomers(): Promise<{ rows: CustomerRow[]; error: st
   }
   return {
     rows: ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      key: `p:${r.id as string}`,
+      total_due: null,
       id: r.id as string,
       full_name: (r.full_name as string) ?? '',
       email: (r.email as string) ?? '',
@@ -109,10 +139,27 @@ export interface CustomerOrderRow {
   status: string;
   item_count: number;
   total: number | null;
+  /** Still due on this order (Batch 30); null when not known. */
+  due: number | null;
 }
 
-export async function fetchCustomerOrders(customerId: string): Promise<CustomerOrderRow[]> {
-  const { data, error } = await supabase.rpc('admin_customer_orders', { p_customer_id: customerId });
+/** One customer's orders by their key (Batch 30, with what is due);
+ *  before migration-033, the Batch 25 list for a registered customer. */
+export async function fetchCustomerOrders(customer: Pick<CustomerRow, 'key' | 'id'>): Promise<CustomerOrderRow[]> {
+  const v2 = await supabase.rpc('admin_customer_orders_v2', { p_customer_key: customer.key });
+  if (!v2.error) {
+    return ((v2.data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id: r.id as string,
+      order_number: r.order_number as string,
+      created_at: r.created_at as string,
+      status: r.status as string,
+      item_count: Number(r.item_count ?? 0),
+      total: r.total === null || r.total === undefined ? null : Number(r.total),
+      due: r.due === null || r.due === undefined ? null : Number(r.due),
+    }));
+  }
+  if (!customer.id) return [];
+  const { data, error } = await supabase.rpc('admin_customer_orders', { p_customer_id: customer.id });
   if (error) {
     console.error('admin_customer_orders failed:', error.message);
     return [];
@@ -124,6 +171,7 @@ export async function fetchCustomerOrders(customerId: string): Promise<CustomerO
     status: r.status as string,
     item_count: Number(r.item_count ?? 0),
     total: r.total === null || r.total === undefined ? null : Number(r.total),
+    due: null,
   }));
 }
 

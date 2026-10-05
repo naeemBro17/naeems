@@ -540,6 +540,17 @@ export interface Order {
    *  to the customer as "last update". Null before the first courier update
    *  or before migration-030 is run. */
   steadfast_status_updated_at: string | null;
+  /** Batch 30 (migration-033). Defaults below until it is run. */
+  alt_phone: string | null;
+  /** Delivery instructions for the courier (sent to Steadfast as the note). */
+  courier_note: string | null;
+  /** Admin-only link to a registered customer (never shows the order in
+   *  that customer's own My Orders). */
+  admin_customer_id: string | null;
+  /** The COD amount Steadfast was given; null when unknown. */
+  steadfast_cod_amount: number | null;
+  /** Details Steadfast still has the old version of. */
+  steadfast_outdated: string[];
   created_at: string;
   updated_at: string;
 }
@@ -606,7 +617,8 @@ export type StaffPermission =
   | 'view_wholesalers'
   | 'see_sales'
   | 'edit_brands'
-  | 'edit_customer_notes';
+  | 'edit_customer_notes'
+  | 'edit_orders';
 
 /** The signed-in staff member's own row (Super Admin or moderator). */
 export interface StaffMember {

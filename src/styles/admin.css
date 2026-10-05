@@ -2254,6 +2254,17 @@ html[data-admin] .toast--info .toast__icon {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 130px 70px 110px 120px 120px;
   }
 
+  /* Batch 30: the DUE column. */
+  .adm-customers .adm-clist--due .adm-thead,
+  .adm-customers .adm-clist--due .adm-lrow {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 130px 70px 110px 120px 120px;
+  }
+
+  .adm-customers .adm-clist--money.adm-clist--due .adm-thead,
+  .adm-customers .adm-clist--money.adm-clist--due .adm-lrow {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) 120px 60px 100px 100px 110px 110px;
+  }
+
   .adm-crow .adm-cell {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2904,4 +2915,16 @@ html[data-admin] .toast--info .toast__icon {
   align-items: flex-start;
   gap: 6px;
   margin: 0 0 var(--adm-s3);
+}
+
+/* Batch 30: what a customer still owes. */
+.adm-crow__due,
+.adm-customer__order-due {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.adm-customer__order-due {
+  font-size: 12px;
+  white-space: nowrap;
 }

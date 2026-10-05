@@ -44,7 +44,13 @@ export function useModalBackClose(isOpen: boolean, onClose: () => void): void {
 
     const handlePopState = () => {
       if (suppressNextPopstate) {
-        suppressNextPopstate = false;
+        // Cleared after EVERY listener has seen this one event (they all
+        // run in the same task): with three layers open (order → Edit order
+        // → thana picker, Batch 30) clearing it here let the third layer
+        // mistake the same event for a real back press and close itself.
+        window.setTimeout(() => {
+          suppressNextPopstate = false;
+        }, 0);
         return;
       }
       pushed = false;

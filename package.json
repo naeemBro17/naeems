@@ -9,7 +9,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "verify": "node scripts/verify.mjs",
+    "verify:3": "node scripts/verify.mjs --runs=3"
   },
   "dependencies": {
     "@remix-run/router": "1.23.3",
