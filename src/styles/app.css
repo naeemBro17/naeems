@@ -8813,6 +8813,39 @@ html.vt-fade::view-transition-new(root) {
   object-fit: contain;
 }
 
+/* Batch 29 Part 5: a logo with a brand-colour background — the whole card
+   takes that colour (set inline from the logo), so there is no inner box. */
+.brand-card--colour {
+  border-color: transparent;
+}
+
+/* The logo's fixed box stays while the cleaned logo is being prepared, so
+   nothing moves; it then fades in. */
+.brand-logo--waiting {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-logo--in {
+  animation: brand-logo-in 220ms ease-out;
+}
+
+@keyframes brand-logo-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo--in {
+    animation: none;
+  }
+}
+
 .brand-card__name {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -8934,6 +8967,10 @@ html.vt-fade::view-transition-new(root) {
 .brand-banner__plate--dark {
   background: #1c1c1e;
   border-color: #38383a;
+}
+
+.brand-banner__plate--colour {
+  border-color: transparent;
 }
 
 .brand-banner__logo {

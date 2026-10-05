@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { brandLogoFor } from '../../lib/brands';
 import { extractYouTubeId, youtubeBannerUrl } from '../../lib/youtube';
+import { BrandLogoImage, brandCardStyle, useBrandLogo } from './BrandLogo';
 import type { Brand } from '../../types';
 
 /** Reduce-motion or the browser's data saver: the picture only, no video. */
@@ -21,7 +21,8 @@ function prefersStillBanner(): boolean {
 export function BrandBanner({ brand }: { brand: Brand }) {
   const { theme } = useTheme();
   const [still] = useState(prefersStillBanner);
-  const logo = brandLogoFor(brand, theme);
+  const logo = useBrandLogo(brand, theme);
+  const [logoFailed, setLogoFailed] = useState(false);
   const youtubeId = brand.banner_youtube_url ? extractYouTubeId(brand.banner_youtube_url) : null;
   const video = !still && brand.banner_video_url ? brand.banner_video_url : null;
   const youtube = !still && !video && youtubeId ? youtubeId : null;
@@ -74,9 +75,16 @@ export function BrandBanner({ brand }: { brand: Brand }) {
           </>
         )}
       </div>
-      <div className={`brand-banner__plate brand-banner__plate--${logo.tone}`}>
-        {logo.src ? (
-          <img className="brand-banner__logo" src={logo.src} alt={brand.name} width={120} height={60} decoding="async" />
+      <div className={`brand-banner__plate brand-banner__plate--${logo.tone}`} style={brandCardStyle(logo)}>
+        {logo.src && !logoFailed ? (
+          <BrandLogoImage
+            view={logo}
+            className="brand-banner__logo"
+            alt={brand.name}
+            width={120}
+            height={60}
+            onError={() => setLogoFailed(true)}
+          />
         ) : (
           <span className="brand-banner__plate-name">{brand.name}</span>
         )}
