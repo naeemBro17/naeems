@@ -9791,3 +9791,119 @@ html.vt-fade::view-transition-new(root) {
 .checkout-cart__step-btn--max {
   opacity: 0.4;
 }
+
+/* ---------- "Removed · Undo" toast (Batch 29 Part 4) ---------- */
+
+/* Glass pill in the buy bar's family: blurred, translucent, a thin light
+   border and an inner highlight. Bottom-centre, always above the page's
+   bottom controls (bottom nav, buy bar + floating cart, cart total bar).
+   No orange — "Undo" is bold primary text. */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: min(calc(100vw - 32px), 420px);
+  height: 48px;
+  padding: 0 6px 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--buybar-bg);
+  border: 1px solid var(--buybar-border);
+  box-shadow: inset 0 1px 0 var(--buybar-highlight), var(--buybar-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  color: var(--color-text-primary);
+  transform: translateX(-50%);
+  animation: undo-toast-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.undo-toast--above-nav {
+  bottom: calc(var(--bottom-nav-height) + var(--space-3));
+}
+
+/* Above the buy bar AND the floating cart sitting on top of it. */
+.undo-toast--above-buybar {
+  bottom: calc(
+    var(--buybar-offset) + env(safe-area-inset-bottom, 0px) + var(--buybar-height) + var(--pdp-cart-gap) + 52px +
+      var(--space-3)
+  );
+}
+
+.undo-toast--above-cart-bar {
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.undo-toast__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.undo-toast__text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.undo-toast__undo {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.undo-toast__undo:active {
+  transform: scale(0.95);
+}
+
+.undo-toast--leaving {
+  animation: undo-toast-out 200ms ease-in forwards;
+}
+
+@keyframes undo-toast-in {
+  from {
+    transform: translate(-50%, 14px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes undo-toast-out {
+  from {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, 14px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .undo-toast {
+    animation: none;
+  }
+
+  .undo-toast--leaving {
+    animation: undo-toast-fade 200ms linear forwards;
+  }
+
+  @keyframes undo-toast-fade {
+    to {
+      opacity: 0;
+    }
+  }
+}
