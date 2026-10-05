@@ -506,16 +506,36 @@ function DetailContent({
             )}
           </div>
 
-          <ul className="pdp-chips" data-sheet-part="chips" aria-label="Availability">
-            <li className="pdp-chip" data-testid="stock-chip">
+          {/* The stock capsule and the note are one quiet group (Batch 29):
+              the note is a plain caption with a small info icon, never a box. */}
+          <div className="pdp-stock" data-sheet-part="chips">
+            <span className="pdp-chip" data-testid="stock-chip">
               <span
                 className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : 'pdp-chip__dot--in'}`}
                 aria-hidden="true"
               />
               {outOfStock ? 'Out of stock' : 'In stock'}
-            </li>
-            {noteText !== '' && <li className="pdp-chip pdp-chip--note">{noteText}</li>}
-          </ul>
+            </span>
+            {noteText !== '' && (
+              <p className="pdp-note" data-testid="product-note">
+                <svg
+                  className="pdp-note__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v5" />
+                  <path d="M12 7.6v.1" />
+                </svg>
+                <span className="pdp-note__text">{noteText}</span>
+              </p>
+            )}
+          </div>
 
           {plainLabel !== '' && <p className="product-detail__variant-label">{plainLabel}</p>}
 

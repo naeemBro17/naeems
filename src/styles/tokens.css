@@ -110,6 +110,8 @@
   --pdp-bg:               #FAF8F5;   /* warm off-white page + sheet */
   --pdp-bar-bg:           rgba(250, 248, 245, 0.9);
   --pdp-sheet-overlap:    24px;
+  /* Batch 29: price row → "In stock" capsule (between --space-4 and -5). */
+  --pdp-gap-price-stock:  18px;
   --pdp-save-bg:          rgba(232, 67, 46, 0.1);
   --pdp-save-fg:          #D9381F;
   /* Batch 29: pure crystal glass over the photo (← / Share / "1 / 3") —
