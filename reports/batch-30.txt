@@ -201,9 +201,10 @@ PART 6 — All thanas
   - Source of the list: Steadfast's GET /police_stations through a new
     steadfast function action (keys stay in Supabase), cached 7 days on
     the phone and refreshed in the background. Until the function answers
-    (it isn't deployed yet) the list bundled with the site is the snapshot:
-    559 thanas in 64 districts. So: NOT Steadfast's real list yet — it
-    switches automatically once the updated function is deployed.
+    (or if it ever fails) the list bundled with the site is the snapshot:
+    559 thanas in 64 districts. AFTER DEPLOY (section 10): Steadfast's real
+    list is live — 732 thanas in 65 districts (Steadfast splits Dhaka into
+    "Dhaka City" and "Dhaka Sub-Urban"; both are grouped under Dhaka).
     District spellings are matched (Chittagong = Chattogram, Bogra =
     Bogura, Jessore = Jashore, Cumilla = Comilla, …).
   Proof: Part 6 e2e (checkout grouped + sorted + search + Other; function
@@ -246,10 +247,8 @@ signed-out visitor sees nothing. All passed.
 
 3. WHAT I COULD NOT FINISH
 --------------------------
-  - Steadfast's real thana list and live tracking steps need the updated
-    function deployed (section 10).
-  - The 8 database e2e tests in batch-30.spec.ts skip until migration-033
-    is live (they say so); see section 10 for their run after "yes".
+  - Nothing from the brief is left undone (see section 10: migration
+    applied, functions deployed, database tests run).
 
 Needs a later batch:
   - Steadfast webhook: instead of asking Steadfast every 3 hours / on page
@@ -277,6 +276,12 @@ Needs a later batch:
     sentences (e.g. the banner), so it looks smaller. Existing, site-wide.
   - Fixed while testing: the "Other" box was a form inside the checkout
     form, so pressing it would also submit checkout. Never shipped.
+  - Fixed (existing bug, found by the Batch 30 test): with three sheets
+    open (order → Edit order → thana picker), closing the top one also
+    closed Edit order — the shared back-button helper
+    (src/hooks/useModalBackClose.ts) let the third layer mistake the clean-
+    up for a real Back press. One-line fix; two-layer sheets everywhere
+    else behave exactly as before (phone-back / back-known-good pass).
 
 
 5. DESIGN DECISIONS
@@ -356,7 +361,10 @@ npm run verify:3 (three full runs; the old 189 tests + 27 new e2e):
 Final npm run verify after the fix:
   build OK (25s) · vitest 161/161 (16s) · e2e 161 passed, 55 skipped (742s)
   ALL GREEN (13.1 min)
-The 55 skipped = 35 skipped before + 12 screenshot tests (SCREENS=1 only)
+After the deploy and the two post-deploy fixes (section 10), final run:
+  build OK (26s) · vitest 162/162 (16s) · e2e 169 passed, 47 skipped (760s)
+  ALL GREEN (13.4 min) — the 8 Batch 30 database tests now run and pass.
+Before that: the 55 skipped = 35 skipped before + 12 screenshot tests (SCREENS=1 only)
 + 8 Batch 30 database tests waiting for migration-033 (see section 10).
 TypeScript: npm run build has 0 errors; the two Steadfast functions pass
 deno check. Main shop script size: 506.99 KB → 507.22 KB (+0.2 KB; Batch
@@ -365,4 +373,34 @@ deno check. Main shop script size: 506.99 KB → 507.22 KB (+0.2 KB; Batch
 
 10. MIGRATION + FUNCTION DEPLOY (your yes/no)
 ---------------------------------------------
-(filled in after your answer)
+Your answer: YES.
+  - migration-033 applied to the live database. Checked: order_payments
+    and steadfast_tracking_cache exist, the 5 new order columns exist,
+    "edit_orders" is a known switch. 0 payment rows copied (none of your 3
+    live orders is paid yet — correct).
+  - Deployed: steadfast and steadfast-refresh-all.
+  - Smoke check (read-only, NO parcel booked, "create" never called):
+      police_stations → ok. First answer showed 65 district names and no
+        thanas: Steadfast nests each district's thanas inside it (not in
+        the guide). Fixed the reader, unit-tested, redeployed → 732 thanas
+        in 65 districts; 3 district spellings added (Dhaka City, Dhaka
+        Sub-Urban → Dhaka; Narshindi → Narsingdi).
+      tracking on your live parcel NM-1388 → ok, Steadfast status
+        "pending", 2 steps (latest "Consignment status has been updated as
+        Pending") → shows In Transit. A second call within the minute was
+        served from the cache (Steadfast not asked again).
+      a signed-out visitor asking for that order → refused.
+  - The 8 Batch 30 database tests then ran against the live database
+    (test orders only, Steadfast mocked): first run found the Edit order /
+    thana-picker sheet bug above; after the fix all 15 Batch 30 tests
+    pass. Test orders, staff login and role were all removed afterwards;
+    your 3 real orders were not changed (checked).
+  - Note: while finding that bug, a debug run OPENED your real order
+    NM-1388's Edit sheet and picked a thana in the picker, but nothing was
+    saved (no History line, no change — checked). All other testing used
+    test orders only.
+  - The website part (Edit order, payments, steps, thanas, customer
+    search) goes live when you merge this branch (Vercel deploys main).
+    Until then the live site keeps working as before; the new database
+    pieces simply aren't used yet, and the deployed function only adds
+    actions (booking works as before, now with COD = due).
