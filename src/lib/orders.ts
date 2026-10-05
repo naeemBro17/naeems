@@ -15,6 +15,11 @@ import type { StockWarning } from './manualOrders';
 // Batch 24 (migration-030) adds steadfast_status_updated_at. Tried first;
 // if that column isn't there yet, the Batch 22 select below, then the
 // legacy one — the same "never break a screen over a missing column" rule.
+// Batch 30 (migration-033): alternative phone, courier note, the admin
+// customer link and the Steadfast COD / outdated-details columns.
+const ORDER_SELECT_033 =
+  'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, alt_phone, courier_note, admin_customer_id, steadfast_cod_amount, steadfast_outdated, created_at, updated_at';
+
 const ORDER_SELECT_030 =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, created_at, updated_at';
 
@@ -61,6 +66,12 @@ function normalizeOrderRow(row: Record<string, unknown>): Order {
     list_value: (row.list_value as number | undefined) ?? subtotal,
     free_value: (row.free_value as number | undefined) ?? 0,
     steadfast_status_updated_at: (row.steadfast_status_updated_at as string | null | undefined) ?? null,
+    alt_phone: (row.alt_phone as string | null | undefined) ?? null,
+    courier_note: (row.courier_note as string | null | undefined) ?? null,
+    admin_customer_id: (row.admin_customer_id as string | null | undefined) ?? null,
+    steadfast_cod_amount:
+      row.steadfast_cod_amount === null || row.steadfast_cod_amount === undefined ? null : Number(row.steadfast_cod_amount),
+    steadfast_outdated: (row.steadfast_outdated as string[] | null | undefined) ?? [],
   };
 }
 
@@ -77,6 +88,8 @@ function normalizeOrderItemRow(row: Record<string, unknown>): OrderItem {
 type OrdersQueryResult = { data: Record<string, unknown>[] | null; error: { code?: string; message: string } | null };
 
 async function selectOrdersList(): Promise<OrdersQueryResult> {
+  const newest = await supabase.from('orders').select(ORDER_SELECT_033).order('created_at', { ascending: false });
+  if (newest.error?.code !== UNDEFINED_COLUMN) return newest;
   const latest = await supabase.from('orders').select(ORDER_SELECT_030).order('created_at', { ascending: false });
   if (latest.error?.code !== UNDEFINED_COLUMN) return latest;
   const res = await supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
@@ -92,6 +105,8 @@ type OrderQueryResult = {
 };
 
 async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const newest = await supabase.from('orders').select(ORDER_SELECT_033).eq('id', orderId).maybeSingle();
+  if (newest.error?.code !== UNDEFINED_COLUMN) return newest;
   const latest = await supabase.from('orders').select(ORDER_SELECT_030).eq('id', orderId).maybeSingle();
   if (latest.error?.code !== UNDEFINED_COLUMN) return latest;
   const res = await supabase.from('orders').select(ORDER_SELECT).eq('id', orderId).maybeSingle();

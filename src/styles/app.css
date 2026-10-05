@@ -9979,3 +9979,561 @@ html.vt-fade::view-transition-new(root) {
   min-height: 100vh;
   background: var(--color-bg);
 }
+
+/* ============================================================
+   Batch 30 — order steps, payments, Steadfast banner, Edit order,
+   thana picker, New order customer search. Neutral colours only (the
+   brand orange stays on each screen's main action).
+   ============================================================ */
+
+/* ---------- Order steps (customer + admin) ---------- */
+.order-steps {
+  margin-bottom: var(--space-2);
+}
+
+.order-steps__now {
+  font-size: 15px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.order-steps__side {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.order-steps__side--returning,
+.order-steps__side--needs_attention {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.order-steps__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-steps__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.order-steps__step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 24px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+
+.order-steps__step--done:not(:last-child)::before {
+  background: var(--color-text-primary);
+}
+
+.order-steps__dot {
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-bg);
+  display: grid;
+  place-items: center;
+}
+
+.order-steps__dot svg {
+  width: 12px;
+  height: 12px;
+}
+
+.order-steps__dot--check {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg);
+}
+
+.order-steps__step--current .order-steps__dot:not(.order-steps__dot--check) {
+  border-color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  box-shadow: inset 0 0 0 4px var(--color-bg);
+}
+
+.order-steps__step--done,
+.order-steps__step--current {
+  color: var(--color-text-primary);
+}
+
+.order-steps__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.order-steps__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.order-steps__step--current .order-steps__label {
+  font-weight: 800;
+}
+
+.order-steps__time {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.order-steps__latest {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.order-steps__latest-time {
+  color: var(--color-text-muted);
+}
+
+.courier-timeline {
+  list-style: none;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.courier-timeline__row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.courier-timeline__time {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Payment block (admin order) ---------- */
+.order-pay__figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.order-pay__figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.order-pay__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.order-pay__value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.order-pay__over {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  margin-bottom: var(--space-3);
+}
+
+.order-pay__pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.order-pay__pending-tag {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.order-pay__list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.order-pay__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.order-pay__row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.order-pay__row-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.order-pay__row-sub {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.order-pay__row-amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.order-pay__row-amount--refund {
+  color: var(--color-danger);
+}
+
+.order-pay__row-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.order-pay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.order-pay__note {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* ---------- "Steadfast still has the old details" ---------- */
+.steadfast-banner {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  margin: var(--space-3) 0;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+}
+
+.steadfast-banner__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.steadfast-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.steadfast-banner__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.steadfast-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.steadfast-banner__actions .button,
+.order-admin-detail__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-detail__needs-update {
+  margin-top: var(--space-2);
+}
+
+/* ---------- Edit order sheet ---------- */
+.edit-order__heading {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.edit-order__heading:first-child {
+  margin-top: 0;
+}
+
+.edit-order__items {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.edit-order__item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.edit-order__item .checkout-cart__thumb {
+  width: 44px;
+  height: 44px;
+}
+
+.edit-order__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.edit-order__item-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.edit-order__item-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.edit-order__price {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.edit-order__price-input {
+  width: 96px;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.edit-order__stock {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-danger);
+}
+
+.edit-order__item-end {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.edit-order__line-total {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.edit-order__search {
+  margin-bottom: var(--space-2);
+}
+
+.edit-order__results {
+  max-height: 260px;
+  margin-bottom: var(--space-3);
+}
+
+.edit-order__totals {
+  margin-top: var(--space-4);
+}
+
+/* ---------- Thana picker ---------- */
+.thana-picker__list {
+  padding-bottom: var(--space-4);
+}
+
+.thana-picker__group + .thana-picker__group {
+  margin-top: var(--space-2);
+}
+
+.thana-picker__district {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.thana-picker__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.thana-picker__other {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.thana-picker__other-row .picker-sheet__row-label {
+  color: var(--color-text-secondary);
+}
+
+.thana-picker__other-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
+}
+
+.thana-picker__other-form .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-sheet__row-sub {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- New order: customer search ---------- */
+.customer-pick__results {
+  margin-top: var(--space-2);
+  max-height: 300px;
+}
+
+.customer-pick__row,
+.customer-pick__new .picker-sheet__row-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.customer-pick__tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.customer-pick__chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.customer-pick__chosen-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.customer-pick__sub {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Secondary row actions stay neutral (orange is for the main action). */
+.order-pay__row-actions .account-card__edit,
+.edit-order__item-end .account-card__edit {
+  color: var(--color-text-secondary);
+}
