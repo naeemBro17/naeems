@@ -42,8 +42,12 @@ import {
   steadfastHeaders,
   extractSteadfastError,
   checkSteadfastStatus,
+  meansDelivered,
   type SteadfastStatusResponse,
 } from '../_shared/steadfast.ts';
+import { customerSafeText, parseTrackingResponse, type TrackingEvent } from '../_shared/steadfastSteps.ts';
+import { parsePoliceStations, type PoliceStation } from '../_shared/policeStations.ts';
+import { codAmountFor } from '../_shared/cod.ts';
 
 // Unlike notify-telegram-order (only ever invoked server-side by a database
 // webhook), this function is called directly from the admin's browser via
@@ -56,6 +60,16 @@ const CORS_HEADERS: HeadersInit = {
   'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+/** Steadfast caches status answers for 60 seconds (API guide), so a parcel
+ *  is never asked about more often than this (Batch 30 Part 5). */
+const TRACKING_CACHE_MS = 60_000;
+/** The thana list changes rarely (API guide: "fetch it occasionally and
+ *  keep it"). Kept in memory for a day per function instance. */
+const POLICE_STATIONS_CACHE_MS = 24 * 60 * 60 * 1000;
+let policeStationsCache: { at: number; list: PoliceStation[] } | null = null;
+/** Fallback rate limit while migration-033's cache table isn't there yet. */
+const trackingMemory = new Map<string, { at: number; courierStatus: string | null; events: TrackingEvent[] }>();
 
 /** Confirmed from the API guide's "Booking parcels" section — sending more
  *  than this is rejected outright rather than truncated (unlike the text
@@ -82,12 +96,18 @@ interface OrderRow {
   steadfast_tracking_code: string | null;
   steadfast_tracking_link: string | null;
   steadfast_status: string | null;
+  /** Batch 30 (migration-033) — absent until it is run. */
+  alt_phone?: string | null;
+  courier_note?: string | null;
 }
 
 interface RequestBody {
-  action?: 'create' | 'status';
+  action?: 'create' | 'status' | 'tracking' | 'police_stations';
   orderId?: string;
 }
+
+const ORDER_COLUMNS =
+  'id, order_number, customer_name, customer_phone, division, district, thana, address_line, total, payment_method, payment_status, status, customer_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status';
 
 interface SteadfastCreateResponse {
   status?: number;
@@ -101,13 +121,28 @@ interface SteadfastCreateResponse {
   };
 }
 
-type SupabaseUserClient = ReturnType<typeof createClient>;
+/** A client that acts as the caller (their own session, so RLS applies). */
+function userClientFor(supabaseUrl: string, anonKey: string, authHeader: string) {
+  return createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
 
-function json(body: Record<string, unknown>): Response {
+type SupabaseUserClient = ReturnType<typeof userClientFor>;
+
+function json(body: Record<string, unknown>, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', ...extraHeaders },
   });
+}
+
+/** "+880 1712-345678" → "01712345678"; null unless it is a valid
+ *  Bangladeshi mobile number (Steadfast refuses anything else). */
+function steadfastPhone(raw: string | null | undefined): string | null {
+  let digits = (raw ?? '').replace(/\D/g, '').replace(/^(00)?880/, '0');
+  if (/^1[3-9]\d{8}$/.test(digits)) digits = `0${digits}`;
+  return /^01[3-9]\d{8}$/.test(digits) ? digits : null;
 }
 
 async function handleCreate(
@@ -143,7 +178,12 @@ async function handleCreate(
       error: 'This bKash payment has not been verified yet — mark it as paid before booking with Steadfast.',
     });
   }
-  const codAmount = order.payment_status === 'paid' ? 0 : order.total;
+  // Batch 30: COD = what is still due (total minus every payment recorded
+  // on the order), never the full total once money was paid. Before
+  // migration-033 there are no payments to read, so the old rule stays.
+  const { data: summary, error: summaryErr } = await userClient.rpc('order_payment_summary', { p_order_id: order.id });
+  const summaryRow = (summary as { due: number | string }[] | null)?.[0];
+  const codAmount = codAmountFor(order, !summaryErr && summaryRow ? Number(summaryRow.due) : null);
 
   if (codAmount > MAX_COD_AMOUNT) {
     return json({
@@ -165,7 +205,8 @@ async function handleCreate(
         recipient_phone: order.customer_phone,
         recipient_address: recipientAddress,
         cod_amount: codAmount,
-        ...(order.customer_note ? { note: order.customer_note } : {}),
+        ...(order.courier_note || order.customer_note ? { note: order.courier_note || order.customer_note } : {}),
+        ...(steadfastPhone(order.alt_phone) ? { alternative_phone: steadfastPhone(order.alt_phone) } : {}),
       }),
     });
   } catch (err) {
@@ -207,7 +248,160 @@ async function handleCreate(
     });
   }
 
+  // Batch 30: remember the COD Steadfast was given, so the order can say
+  // when it no longer matches what is due. Missing before migration-033 —
+  // the booking itself is already saved either way.
+  const { error: codErr } = await userClient.rpc('admin_set_steadfast_cod', { p_order_id: order.id, p_amount: codAmount });
+  if (codErr) console.error('admin_set_steadfast_cod skipped:', codErr.message);
+
   return json({ ok: true, consignmentId, trackingCode, trackingLink, courierStatus });
+}
+
+interface TrackingOrderRow {
+  id: string;
+  order_number: string;
+  status: string;
+  steadfast_consignment_id: string | null;
+  steadfast_status: string | null;
+}
+
+/**
+ * Batch 30 Part 5: every step the parcel went through (GET
+ * /trackings_by_invoice/{invoice}) plus its current status. The caller's own
+ * session reads the order, so a customer only ever gets their own order
+ * (RLS) and staff need "View orders". Never more than one Steadfast call
+ * per order per minute: the last answer is kept in steadfast_tracking_cache
+ * (migration-033). Customers get rider names and phone numbers removed.
+ */
+async function handleTracking(
+  orderId: string,
+  userClient: SupabaseUserClient,
+  apiKey: string,
+  secretKey: string
+): Promise<Response> {
+  const { data: orderData, error: orderErr } = await userClient
+    .from('orders')
+    .select('id, order_number, status, steadfast_consignment_id, steadfast_status')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (orderErr || !orderData) {
+    return json({ ok: false, error: 'Order not found.' });
+  }
+  const order = orderData as TrackingOrderRow;
+
+  const { data: canView, error: canErr } = await userClient.rpc('staff_can', { p_perm: 'view_orders' });
+  const isStaff = !canErr && canView === true;
+
+  if (!order.steadfast_consignment_id) {
+    return json({ ok: true, courierStatus: order.steadfast_status, events: [], fetchedAt: null });
+  }
+
+  const serviceClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const now = Date.now();
+
+  let courierStatus: string | null = order.steadfast_status;
+  let events: TrackingEvent[] = [];
+  let fetchedAt: string | null = null;
+  let fresh = false;
+
+  const { data: cached, error: cacheErr } = await serviceClient
+    .from('steadfast_tracking_cache')
+    .select('delivery_status, events, fetched_at')
+    .eq('order_id', order.id)
+    .maybeSingle();
+  const cacheTableReady = !cacheErr;
+  const cacheRow = cached as { delivery_status: string | null; events: TrackingEvent[]; fetched_at: string } | null;
+  const memory = trackingMemory.get(order.id);
+
+  if (cacheRow && now - new Date(cacheRow.fetched_at).getTime() < TRACKING_CACHE_MS) {
+    courierStatus = cacheRow.delivery_status ?? courierStatus;
+    events = Array.isArray(cacheRow.events) ? cacheRow.events : [];
+    fetchedAt = cacheRow.fetched_at;
+    fresh = true;
+  } else if (!cacheTableReady && memory && now - memory.at < TRACKING_CACHE_MS) {
+    courierStatus = memory.courierStatus ?? courierStatus;
+    events = memory.events;
+    fetchedAt = new Date(memory.at).toISOString();
+    fresh = true;
+  }
+
+  if (!fresh) {
+    let trackRes: Response;
+    try {
+      trackRes = await fetch(`${STEADFAST_BASE_URL}/trackings_by_invoice/${encodeURIComponent(order.order_number)}`, {
+        headers: steadfastHeaders(apiKey, secretKey),
+      });
+    } catch (err) {
+      console.error('Steadfast trackings_by_invoice network error:', err);
+      return json({ ok: false, error: 'Could not reach Steadfast. Please try again.' });
+    }
+    let trackBody: unknown = null;
+    try {
+      trackBody = await trackRes.json();
+    } catch {
+      trackBody = null;
+    }
+    if (!trackRes.ok) {
+      return json({ ok: false, error: extractSteadfastError((trackBody ?? {}) as SteadfastStatusResponse, trackRes.status) });
+    }
+    events = parseTrackingResponse(trackBody);
+
+    const status = await checkSteadfastStatus(order.steadfast_consignment_id, apiKey, secretKey);
+    if (status.ok && status.courierStatus) {
+      courierStatus = status.courierStatus;
+      if (status.courierStatus !== order.steadfast_status) {
+        // Same save the 3-hourly refresh makes (marks delivered only on a
+        // confirmed delivered / partial_delivered).
+        const { error: saveErr } = await serviceClient.rpc('system_update_steadfast_status', {
+          p_order_id: order.id,
+          p_courier_status: status.courierStatus,
+          p_mark_delivered: meansDelivered(status.courierStatus),
+        });
+        if (saveErr) console.error('system_update_steadfast_status failed:', saveErr.message);
+      }
+    }
+
+    fetchedAt = new Date(now).toISOString();
+    if (cacheTableReady) {
+      const { error: upsertErr } = await serviceClient
+        .from('steadfast_tracking_cache')
+        .upsert({ order_id: order.id, delivery_status: courierStatus, events, fetched_at: fetchedAt });
+      if (upsertErr) console.error('steadfast_tracking_cache save failed:', upsertErr.message);
+    } else {
+      trackingMemory.set(order.id, { at: now, courierStatus, events });
+    }
+  }
+
+  const shown = isStaff ? events : events.map((e) => ({ text: customerSafeText(e.text), at: e.at }));
+  return json({ ok: true, courierStatus, events: shown, fetchedAt });
+}
+
+/** Batch 30 Part 6: every thana Steadfast delivers to (GET
+ *  /police_stations). Public data, so any visitor of the shop may ask. */
+async function handlePoliceStations(apiKey: string, secretKey: string): Promise<Response> {
+  const now = Date.now();
+  if (policeStationsCache && now - policeStationsCache.at < POLICE_STATIONS_CACHE_MS) {
+    return json({ ok: true, stations: policeStationsCache.list }, { 'Cache-Control': 'public, max-age=86400' });
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${STEADFAST_BASE_URL}/police_stations`, { headers: steadfastHeaders(apiKey, secretKey) });
+  } catch (err) {
+    console.error('Steadfast police_stations network error:', err);
+    return json({ ok: false, error: 'Could not reach Steadfast.' });
+  }
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  const list = res.ok ? parsePoliceStations(body) : [];
+  if (list.length === 0) {
+    return json({ ok: false, error: 'Steadfast did not return a thana list.' });
+  }
+  policeStationsCache = { at: now, list };
+  return json({ ok: true, stations: list }, { 'Cache-Control': 'public, max-age=86400' });
 }
 
 async function handleStatus(
@@ -262,16 +456,26 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ ok: false, error: 'Invalid request.' });
   }
-  if (!requestBody.orderId || (requestBody.action !== 'create' && requestBody.action !== 'status')) {
+  // Batch 30: the thana list is public (checkout needs it before sign-in).
+  if (requestBody.action === 'police_stations') {
+    return await handlePoliceStations(apiKey, secretKey);
+  }
+
+  const knownActions = ['create', 'status', 'tracking'];
+  if (!requestBody.orderId || !knownActions.includes(requestBody.action ?? '')) {
     return json({ ok: false, error: 'Invalid request.' });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const authHeader = req.headers.get('Authorization') ?? '';
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
+  const userClient = userClientFor(supabaseUrl, anonKey, authHeader);
+
+  // Batch 30: tracking steps — the customer who owns the order or staff
+  // with "View orders"; the order read itself (RLS) decides.
+  if (requestBody.action === 'tracking') {
+    return await handleTracking(requestBody.orderId, userClient, apiKey, secretKey);
+  }
 
   // Batch 24: the Super Admin always passes; a moderator needs "Book on
   // Steadfast" to book, and that or "Change order status" to check the
@@ -297,13 +501,19 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: 'Not authorized.' });
   }
 
-  const { data: order, error: orderErr } = await userClient
+  // Batch 30 columns first; before migration-033 they don't exist yet, so
+  // the same read without them.
+  const withNewColumns = await userClient
     .from('orders')
-    .select(
-      'id, order_number, customer_name, customer_phone, division, district, thana, address_line, total, payment_method, payment_status, status, customer_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status'
-    )
+    .select(`${ORDER_COLUMNS}, alt_phone, courier_note`)
     .eq('id', requestBody.orderId)
     .maybeSingle();
+  const orderRes =
+    withNewColumns.error?.code === '42703'
+      ? await userClient.from('orders').select(ORDER_COLUMNS).eq('id', requestBody.orderId).maybeSingle()
+      : withNewColumns;
+  const order = orderRes.data as OrderRow | null;
+  const orderErr = orderRes.error;
 
   if (orderErr || !order) {
     return json({ ok: false, error: 'Order not found.' });

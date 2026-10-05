@@ -5,6 +5,7 @@ import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } fro
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
 import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
 import { fetchOrderItemCounts } from '../../lib/adminData';
+import { fetchAllPayments, paymentStateText, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
 import { NewOrderSheet } from './NewOrderSheet';
 import { useToast } from '../../hooks/useToast';
@@ -16,16 +17,18 @@ import { AdminPageHeader, AdminSearch, BulkBar, ChipRow, EmptyState, type MenuIt
 import { AdminIcon } from './ui/AdminIcon';
 import type { Order, OrderStatus } from '../../types';
 
-type StatusFilter = OrderStatus | 'all';
+// 'due' (Batch 30): orders with money still due, whatever their status.
+type StatusFilter = OrderStatus | 'all' | 'due';
 type SourceFilter = Order['source'] | 'all';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'To confirm' },
   { value: 'confirmed', label: 'Confirmed' },
-  { value: 'shipped', label: 'Shipped' },
+  { value: 'shipped', label: 'With courier' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'due', label: 'Due' },
 ];
 
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
@@ -102,6 +105,30 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [itemCounts, setItemCounts] = useState<Map<string, number>>(() => new Map());
+  // Batch 30: every order's payments (null until migration-033 is run —
+  // the Payment column then shows the old method · status text).
+  const [payments, setPayments] = useState<Map<string, OrderPayment[]> | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchAllPayments().then((map) => {
+      if (alive) setPayments(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [orders]);
+
+  const dueOf = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!payments) return map;
+    for (const o of orders) {
+      if (o.status === 'cancelled') continue;
+      const due = summarizePayments(o.total, payments.get(o.id) ?? []).due;
+      if (due > 0) map.set(o.id, due);
+    }
+    return map;
+  }, [orders, payments]);
 
   useEffect(() => {
     let alive = true;
@@ -118,13 +145,16 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: orders.length };
     for (const o of orders) counts[o.status] = (counts[o.status] ?? 0) + 1;
+    counts.due = dueOf.size;
     return counts;
-  }, [orders]);
+  }, [orders, dueOf]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((o) => {
-      if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+      if (statusFilter === 'due') {
+        if (!dueOf.has(o.id)) return false;
+      } else if (statusFilter !== 'all' && o.status !== statusFilter) return false;
       if (sourceFilter !== 'all' && o.source !== sourceFilter) return false;
       if (term === '') return true;
       return (
@@ -133,7 +163,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         o.customer_name.toLowerCase().includes(term)
       );
     });
-  }, [orders, statusFilter, sourceFilter, search]);
+  }, [orders, statusFilter, sourceFilter, search, dueOf]);
 
   // Batch 20: every shipped order that's actually been booked with
   // Steadfast (a shipped order without a consignment id was marked shipped
@@ -249,7 +279,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         label="Filter by status"
         active={statusFilter}
         onSelect={(id) => setStatusFilter(id as StatusFilter)}
-        chips={STATUS_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label, count: statusCounts[opt.value] ?? 0 }))}
+        chips={STATUS_OPTIONS.filter((opt) => opt.value !== 'due' || payments !== null).map((opt) => ({
+          id: opt.value,
+          label: opt.label,
+          count: statusCounts[opt.value] ?? 0,
+        }))}
       />
 
       {filtered.length === 0 ? (
@@ -335,8 +369,10 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                 <span className="adm-cell">
                   <span className={`adm-status adm-status--${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
                 </span>
-                <span className="adm-cell adm-cell--muted">
-                  {PAYMENT_METHOD_LABELS[order.payment_method]} · {PAYMENT_STATUS_LABELS[order.payment_status]}
+                <span className="adm-cell adm-cell--muted" data-testid="order-payment-cell">
+                  {payments
+                    ? paymentStateText(summarizePayments(order.total, payments.get(order.id) ?? []), formatTakaBd)
+                    : `${PAYMENT_METHOD_LABELS[order.payment_method]} · ${PAYMENT_STATUS_LABELS[order.payment_status]}`}
                 </span>
                 <span className={`adm-cell${attention ? ' adm-orow__courier--alert' : ' adm-cell--muted'}`}>
                   {attention ? 'Needs attention' : (courier ?? '—')}
