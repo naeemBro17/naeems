@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { BD_DIVISIONS, BD_DISTRICTS, BD_THANAS } from '../../data/bangladeshGeo';
+import { BD_DIVISIONS, BD_DISTRICTS } from '../../data/bangladeshGeo';
 import { PickerSheet, type PickerOption } from '../shared/PickerSheet';
+import { ThanaPickerSheet } from './ThanaPickerSheet';
 import type { DeliveryAddress } from '../../features/checkout/types';
 
 export type AddressFieldErrors = Partial<Record<keyof DeliveryAddress, string>>;
@@ -69,10 +70,6 @@ export function AddressFormFields({
   }, [selectedDivision]);
   const selectedDistrict = BD_DISTRICTS.find((d) => d.name === form.district) ?? null;
 
-  const thanaOptions = useMemo(() => {
-    if (!selectedDistrict) return [];
-    return toOptions(BD_THANAS.filter((t) => t.districtId === selectedDistrict.id));
-  }, [selectedDistrict]);
 
   const handlePickDivision = (option: PickerOption) => {
     onChange({ division: option.label, district: '', thana: '' });
@@ -84,9 +81,18 @@ export function AddressFormFields({
     onLocationChange?.(option.label, '');
   };
 
-  const handlePickThana = (option: PickerOption) => {
-    onChange({ thana: option.label });
-    onLocationChange?.(form.district, option.label);
+  // Batch 30 Part 6: a thana found under another district (by searching)
+  // moves the address to that district (and its division) too.
+  const handlePickThana = (thana: string, fromDistrict: string | null) => {
+    if (fromDistrict && fromDistrict !== form.district) {
+      const district = BD_DISTRICTS.find((d) => d.name === fromDistrict) ?? null;
+      const division = district ? (BD_DIVISIONS.find((d) => d.id === district.divisionId)?.name ?? form.division) : form.division;
+      onChange({ thana, district: fromDistrict, division });
+      onLocationChange?.(fromDistrict, thana);
+      return;
+    }
+    onChange({ thana });
+    onLocationChange?.(form.district, thana);
   };
 
   return (
@@ -226,14 +232,12 @@ export function AddressFormFields({
         onSelect={handlePickDistrict}
         searchPlaceholder="Search district..."
       />
-      <PickerSheet
+      <ThanaPickerSheet
         isOpen={openPicker === 'thana'}
         onClose={() => setOpenPicker(null)}
-        title="Select thana / upazila"
-        options={thanaOptions}
-        selectedId={BD_THANAS.find((t) => t.name === form.thana)?.id ?? null}
-        onSelect={handlePickThana}
-        searchPlaceholder="Search thana..."
+        district={form.district}
+        selectedThana={form.thana}
+        onPick={handlePickThana}
       />
     </>
   );
