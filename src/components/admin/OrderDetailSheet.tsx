@@ -5,12 +5,10 @@ import { useToast } from '../../hooks/useToast';
 import {
   adminSetOrderStatus,
   adminUpdateOrder,
-  adminUpdateOrderDeliveryFee,
   bookSteadfastShipment,
   refreshSteadfastStatus,
   steadfastNeedsAttention,
   adminDeleteOrders,
-  adminUpdateOrderItemPrice,
   isEarlyStageOrder,
 } from '../../lib/orders';
 import { useAuth } from '../../contexts/AuthContext';
@@ -27,7 +25,7 @@ import {
   PAYMENT_STATUS_TONE,
 } from '../../lib/orderStatus';
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../lib/manualOrders';
-import type { OrderItem, OrderStatus, OrderWithDetails } from '../../types';
+import type { OrderStatus, OrderWithDetails } from '../../types';
 import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/checkout/types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 import { orderHistoryNote } from '../../lib/orderHistoryNotes';
@@ -129,20 +127,12 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   const canChangeStatus = can('change_order_status');
   const canBook = can('book_steadfast');
   const canDeleteEarly = can('delete_early_orders');
-  const [priceEditItemId, setPriceEditItemId] = useState<string | null>(null);
-  const [priceInput, setPriceInput] = useState('');
-  const [isSavingPrice, setIsSavingPrice] = useState(false);
-  const [priceSteadfastConfirm, setPriceSteadfastConfirm] = useState<number | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [order, setOrder] = useState<OrderWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [trackingInput, setTrackingInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
-  const [feeInput, setFeeInput] = useState('');
-  const [isEditingFee, setIsEditingFee] = useState(false);
-  const [isSavingField, setIsSavingField] = useState<'tracking' | 'note' | 'paid' | 'fee' | null>(
-    null
-  );
+  const [isSavingField, setIsSavingField] = useState<'tracking' | 'note' | 'paid' | null>(null);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [steadfastConfirmOpen, setSteadfastConfirmOpen] = useState(false);
@@ -175,8 +165,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
       }
       setTrackingInput(data?.tracking_number ?? '');
       setNoteInput(data?.admin_note ?? '');
-      setFeeInput(data ? String(data.delivery_fee) : '');
-      setIsEditingFee(false);
       setIsLoading(false);
     });
     return () => {
@@ -263,25 +251,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     await reload();
   };
 
-  const handleSaveFee = async () => {
-    if (!order) return;
-    const fee = Number(feeInput);
-    if (!Number.isFinite(fee) || fee < 0) {
-      showToast('Delivery fee must be a positive number.', 'error');
-      return;
-    }
-    setIsSavingField('fee');
-    const { error } = await adminUpdateOrderDeliveryFee(order.id, fee);
-    setIsSavingField(null);
-    if (error) {
-      showToast(error, 'error');
-      return;
-    }
-    showToast('Delivery fee updated');
-    setIsEditingFee(false);
-    await reload();
-  };
-
   const handleBookSteadfast = async () => {
     if (!order) return;
     setSteadfastConfirmOpen(false);
@@ -312,44 +281,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
       showToast(result.markedDelivered ? 'Marked delivered' : `Courier status: ${result.courierStatus}`);
     }
     await reload();
-  };
-
-  const startPriceEdit = (item: OrderItem) => {
-    setPriceEditItemId(item.id);
-    setPriceInput(String(item.unit_price));
-  };
-
-  const savePrice = async (price: number) => {
-    if (!order || !priceEditItemId) return;
-    setIsSavingPrice(true);
-    const { error } = await adminUpdateOrderItemPrice(priceEditItemId, price);
-    setIsSavingPrice(false);
-    setPriceSteadfastConfirm(null);
-    if (error) {
-      showToast(error, 'error');
-      return;
-    }
-    setPriceEditItemId(null);
-    showToast(
-      order.steadfast_consignment_id
-        ? 'Price saved. Change the COD amount on the Steadfast portal too.'
-        : 'Price saved, total updated'
-    );
-    await reload();
-  };
-
-  // A booked parcel's COD amount can't be changed through Steadfast's API
-  // (it has no "edit parcel" call), so warn before saving.
-  const requestSavePrice = (price: number) => {
-    if (!Number.isFinite(price) || price < 0) {
-      showToast('Price must be 0 or more.', 'error');
-      return;
-    }
-    if (order?.steadfast_consignment_id) {
-      setPriceSteadfastConfirm(price);
-      return;
-    }
-    void savePrice(price);
   };
 
   const handleDelete = async () => {
@@ -402,7 +333,29 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
     : null;
 
   return (
-    <BottomSheet isOpen={orderId !== null} onClose={onClose} title={order?.order_number ?? 'Order'}>
+    <BottomSheet
+      isOpen={orderId !== null}
+      onClose={onClose}
+      title={order?.order_number ?? 'Order'}
+      headerAction={
+        // Batch 31 Part 4: everything on an order is edited from one place,
+        // the Edit order sheet, opened by this pen beside the close button.
+        canEditOrder && order && !isLoading ? (
+          <button
+            type="button"
+            className="sheet-icon-button"
+            onClick={() => setIsEditOpen(true)}
+            aria-label="Edit order"
+            data-testid="edit-order"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </button>
+        ) : null
+      }
+    >
       {isLoading || !order ? (
         <div className="full-screen-center" style={{ minHeight: 200 }}>
           <span className="spinner spinner--large" aria-hidden="true" />
@@ -439,17 +392,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             <button type="button" className="button button--secondary button--small" onClick={handleDownloadInvoice}>
               Invoice
             </button>
-            {canEditOrder && (
-              <button
-                type="button"
-                className="button button--secondary button--small order-admin-detail__edit"
-                onClick={() => setIsEditOpen(true)}
-                data-testid="edit-order"
-              >
-                <AdminIcon name="edit" className="adm-icon--sm" />
-                Edit order
-              </button>
-            )}
           </div>
 
           <FraudCheckCard phone={order.customer_phone} />
@@ -519,57 +461,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
                   </span>
                   <span className="checkout-summary-card__item-price">
                     {formatTaka(item.line_total)}
-                    {isAdmin && priceEditItemId !== item.id && (
-                      <button
-                        type="button"
-                        className="account-card__edit order-item-price__edit"
-                        onClick={() => startPriceEdit(item)}
-                        aria-label={`Edit price of ${item.product_name}`}
-                      >
-                        Edit price
-                      </button>
-                    )}
                   </span>
-                  {isAdmin && priceEditItemId === item.id && (
-                    <span className="order-item-price">
-                      <label className="order-item-price__label" htmlFor={`price-${item.id}`}>
-                        Unit price (৳)
-                      </label>
-                      <input
-                        id={`price-${item.id}`}
-                        type="number"
-                        min="0"
-                        inputMode="decimal"
-                        className="form-input order-item-price__input"
-                        value={priceInput}
-                        onChange={(e) => setPriceInput(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="button button--secondary button--small"
-                        onClick={() => requestSavePrice(0)}
-                        disabled={isSavingPrice}
-                      >
-                        Free
-                      </button>
-                      <button
-                        type="button"
-                        className="button button--secondary button--small"
-                        onClick={() => requestSavePrice(Number(priceInput))}
-                        disabled={isSavingPrice || priceInput.trim() === ''}
-                      >
-                        {isSavingPrice ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-                      </button>
-                      <button
-                        type="button"
-                        className="account-card__edit"
-                        onClick={() => setPriceEditItemId(null)}
-                        disabled={isSavingPrice}
-                      >
-                        Cancel
-                      </button>
-                    </span>
-                  )}
                 </li>
               ))}
             </ul>
@@ -579,39 +471,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
             </div>
             <div className="checkout-summary-card__row">
               <span>Delivery fee</span>
-              {isEditingFee ? (
-                <span className="order-admin-detail__field-row">
-                  <input
-                    type="number"
-                    min="0"
-                    className="form-input"
-                    value={feeInput}
-                    onChange={(e) => setFeeInput(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="button button--secondary button--small"
-                    onClick={handleSaveFee}
-                    disabled={isSavingField === 'fee'}
-                  >
-                    {isSavingField === 'fee' ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-                  </button>
-                </span>
-              ) : (
-                <span>
-                  {formatTaka(order.delivery_fee)}
-                  {isAdmin && (order.status === 'pending' || order.status === 'confirmed') && (
-                    <button
-                      type="button"
-                      className="account-card__edit"
-                      style={{ marginLeft: 8 }}
-                      onClick={() => setIsEditingFee(true)}
-                    >
-                      Edit
-                    </button>
-                  )}
-                </span>
-              )}
+              <span>{formatTaka(order.delivery_fee)}</span>
             </div>
             {order.discount > 0 && (
               <div className="checkout-summary-card__row">
@@ -901,17 +761,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
           onClose={() => setDeleteOpen(false)}
         />
       )}
-
-      <ConfirmDialog
-        isOpen={priceSteadfastConfirm !== null}
-        title="Booked on Steadfast"
-        message={`This order is booked on Steadfast (consignment ${order?.steadfast_consignment_id ?? ''}). The COD amount there will not change automatically. After saving, change the COD amount on the Steadfast portal too.`}
-        confirmLabel="Save price"
-        cancelLabel="Cancel"
-        danger={false}
-        onConfirm={() => savePrice(priceSteadfastConfirm ?? 0)}
-        onClose={() => setPriceSteadfastConfirm(null)}
-      />
 
       <ConfirmDialog
         isOpen={cancelOpen}
