@@ -1,8 +1,25 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/** Batch 31 Part 7: which version a phone runs, shown in Admin → Settings.
+ *  Vercel gives the commit; a local build asks git. */
+function buildCommit(): string {
+  const fromVercel = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (fromVercel) return fromVercel.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'local';
+  }
+}
+
 export default defineConfig({
+  define: {
+    __APP_COMMIT__: JSON.stringify(buildCommit()),
+    __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+  },
   build: {
     // flag-icons ships ~540 country SVGs, nearly all under Vite's default 4kB
     // inline threshold. Left alone they get base64'd into the stylesheet and
@@ -14,29 +31,43 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      // Registers the offline helper after the page has loaded, so it never
-      // holds up the first paint (Batch 29 Part 7).
-      injectRegister: 'script-defer',
-      includeAssets: ['offline.html', 'icons/icon-192.png', 'icons/icon-512.png'],
+      // Batch 31 Part 7: a new version downloads in the background and waits;
+      // src/lib/appUpdate.ts switches it on at a safe moment (never during
+      // checkout or an open form) and checks for new versions on open, on
+      // return to the app and every 30 minutes. It registers the worker
+      // itself after the page has loaded, so it never holds up the first
+      // paint (Batch 29 Part 7).
+      registerType: 'prompt',
+      injectRegister: false,
+      includeAssets: [
+        'offline.html',
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'icons/icon-maskable-192.png',
+        'icons/icon-maskable-512.png',
+      ],
       manifest: {
-        name: "Naeem's",
-        short_name: "Naeem's",
-        description: 'Internal price lookup tool',
-        theme_color: '#F2F2F7',
-        background_color: '#F2F2F7',
+        name: "NAEEM'S",
+        short_name: "NAEEM'S",
+        description: 'Authentic Australian skincare in Bangladesh',
+        // The page background in light mode (--color-bg). A manifest can hold
+        // one colour only; dark mode's bar colour comes from the theme-color
+        // meta tags in index.html.
+        theme_color: '#FFFFFF',
+        background_color: '#FFFFFF',
         display: 'standalone',
+        id: '/',
         orientation: 'portrait-primary',
         start_url: '/',
         scope: '/',
+        // "any": the round logo, used for the splash screen (logo on the
+        // background colour). "maskable": the same logo on a full orange
+        // square, so Android's icon shapes never cut it or leave a white ring.
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
@@ -48,6 +79,9 @@ export default defineConfig({
         // own icons are inline JSX, and its PNG/ICO assets live in public/.
         globIgnores: ['**/assets/*.svg'],
         navigateFallback: '/index.html',
+        // Old versions' precached files are removed when a new one switches on.
+        // (Runtime caches — images, brand videos, fonts — are kept.)
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             // Supabase REST API: NetworkFirst — on fail, serve from cache.

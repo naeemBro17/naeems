@@ -44,6 +44,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    // Batch 31 Part 7: the phone's status bar follows the app's own choice
+    // (--color-bg), not only the system setting the meta tags start from.
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.setAttribute('content', theme === 'dark' ? '#000000' : '#FFFFFF');
+    });
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

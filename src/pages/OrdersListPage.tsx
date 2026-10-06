@@ -25,7 +25,7 @@ function OrdersSkeleton() {
 }
 
 export function OrdersListPage() {
-  useDocumentTitle("My Orders — Naeem's");
+  useDocumentTitle("My Orders — NAEEM'S");
   const { session, isLoading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);

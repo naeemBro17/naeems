@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { categoryCircleImage } from '../../lib/smallImages';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
@@ -270,7 +271,8 @@ export function BrowseCircles({
         label: category.name,
         categoryId: category.id,
         icon,
-        imageUrl: category.image_url,
+        // Batch 31 Part 8: the ~160 px copy when there is one.
+        imageUrl: categoryCircleImage(category),
         isHot: featuredCategoryIds.has(category.id),
         isNew: freshCategoryIds.has(category.id),
       });

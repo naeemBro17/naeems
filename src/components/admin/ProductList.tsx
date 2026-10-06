@@ -4,7 +4,8 @@ import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { normalizeText } from '../../lib/format';
-import { productImages, coverImage, generateCardThumb } from '../../lib/productImages';
+import { productImages, coverImage, productNeedsSmallCopies } from '../../lib/productImages';
+import { findSmallImagesWork, runSmallImages, workCount } from '../../lib/smallImages';
 import { ProductForm } from './ProductForm';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { RestockSheet } from './RestockSheet';
@@ -90,8 +91,8 @@ export function ProductList() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [combineOpen, setCombineOpen] = useState(false);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
-  // One-time (self-healing) backfill for products saved before Batch 19's
-  // small "card" image column existed — see generateCardThumb.
+  // Batch 31 Part 8: "Generate small images" — every product, variant and
+  // Browse-circle photo that has no real small copy yet (lib/smallImages).
   const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false);
   const [thumbBackfillProgress, setThumbBackfillProgress] = useState<{ done: number; total: number } | null>(
     null
@@ -165,48 +166,37 @@ export function ProductList() {
     setCategoryFilter(id.startsWith('cat:') ? id.slice(4) : '');
   };
 
-  // Batch 19: products saved before the small "card" image column existed
-  // (or with a photo added/kept since then that never got backfilled).
-  const productsNeedingThumb = useMemo(
-    () =>
-      products.filter((p) => {
-        const full = productImages(p);
-        return full.length > 0 && (p.image_urls_thumb ?? []).length < full.length;
-      }),
-    [products]
-  );
+  // Products whose photos still have no real small copy (Batch 31: a full
+  // photo saved in the small slot counts as missing).
+  const productsNeedingThumb = useMemo(() => products.filter(productNeedsSmallCopies), [products]);
 
   const handleGenerateThumbnails = async () => {
+    if (isBackfillingThumbs) return;
     setIsBackfillingThumbs(true);
-    const total = productsNeedingThumb.length;
-    let done = 0;
-    let failed = 0;
-    setThumbBackfillProgress({ done: 0, total });
-
-    for (const product of productsNeedingThumb) {
-      try {
-        const full = productImages(product);
-        const existing = product.image_urls_thumb ?? [];
-        const thumbs: string[] = [];
-        for (let i = 0; i < full.length; i += 1) {
-          thumbs.push(existing[i] ?? (await generateCardThumb(full[i])));
-        }
-        const { error } = await supabase.from('products').update({ image_urls_thumb: thumbs }).eq('id', product.id);
-        if (error) throw error;
-        patchProductLocal(product.id, { image_urls_thumb: thumbs });
-        done += 1;
-      } catch {
-        failed += 1;
-      }
-      setThumbBackfillProgress({ done: done + failed, total });
+    setThumbBackfillProgress({ done: 0, total: 0 });
+    const work = await findSmallImagesWork(products, categories);
+    if (workCount(work) === 0) {
+      setIsBackfillingThumbs(false);
+      setThumbBackfillProgress(null);
+      showToast(
+        work.columnsReady
+          ? 'All photos already have small copies'
+          : 'All product photos already have small copies (variant and category photos need the Batch 31 database update)'
+      );
+      return;
     }
-
+    const { made, failed } = await runSmallImages(
+      work,
+      (done, total) => setThumbBackfillProgress({ done, total }),
+      (productId, thumbs) => patchProductLocal(productId, { image_urls_thumb: thumbs })
+    );
+    if (work.categories.length > 0 || work.variants.length > 0) await refetch();
     setIsBackfillingThumbs(false);
     setThumbBackfillProgress(null);
     showToast(
       failed === 0
-        ? `Done: generated small images for ${done} product${done === 1 ? '' : 's'}`
-        : `Done: ${done} succeeded, ${failed} failed (run it again to retry those)`,
+        ? `Done: small images made for ${made} item${made === 1 ? '' : 's'}`
+        : `Done: ${made} made, ${failed} failed (run it again to retry those)`,
       failed === 0 ? 'success' : 'error'
     );
   };
@@ -415,7 +405,11 @@ export function ProductList() {
 
   return (
     <section aria-label="Products" className="adm-products">
-      <AdminPageHeader title="Products" primary={addButton} />
+      <AdminPageHeader
+        title="Products"
+        primary={addButton}
+        menu={[{ label: 'Generate small images', icon: 'products', onSelect: () => void handleGenerateThumbnails(), disabled: isBackfillingThumbs }]}
+      />
 
       <div className="adm-filter-row">
         <AdminSearch
@@ -446,7 +440,7 @@ export function ProductList() {
           <h3 className="admin-panel__title">Speed up product photos</h3>
           <p className="admin-panel__description">
             {isBackfillingThumbs
-              ? `Generating small card images: ${thumbBackfillProgress?.done ?? 0} of ${
+              ? `Generating small images: ${thumbBackfillProgress?.done ?? 0} of ${
                   thumbBackfillProgress?.total ?? 0
                 } done. Keep this tab open.`
               : `${productsNeedingThumb.length} product${

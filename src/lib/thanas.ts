@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { BD_DISTRICTS, BD_THANAS } from '../data/bangladeshGeo';
-import { parsePoliceStations } from '../../supabase/functions/_shared/policeStations';
+import { isPlaceholderPlaceName, parsePoliceStations } from '../../supabase/functions/_shared/policeStations';
 
 /* Batch 30 Part 6 — every thana, in checkout and admin.
    The list Steadfast delivers to (GET /police_stations through the
@@ -82,6 +82,9 @@ export function groupThanas(list: ThanaEntry[], query: string, district: string 
   const q = query.trim().toLowerCase();
   const groups = new Map<string, Set<string>>();
   for (const t of list) {
+    // A list cached on the phone before Batch 31 may still hold Steadfast's
+    // "test thana"; it is skipped here too.
+    if (isPlaceholderPlaceName(t.name)) continue;
     const d = t.district || 'Other areas';
     if (q === '') {
       if (district && d !== district) continue;

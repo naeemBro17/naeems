@@ -1,0 +1,94 @@
+# Batch 31 Part 1: nightly database backup (free: GitHub Actions + a private
+# GitHub repo). What it does and how to restore: docs/RESTORE.md.
+#
+# Secrets (Settings → Secrets and variables → Actions), never in this file:
+#   SUPABASE_DB_URL      Supabase session-pooler connection string
+#   BACKUP_PASSWORD      encrypts every backup (Naeem keeps it on paper)
+#   BACKUP_DEPLOY_KEY    SSH key that can write ONLY to naeemBro17/naeems-backups
+#   BACKUP_ALERT_SECRET  lets this job ask the backup-alert function to send Telegram
+#
+# This repository is public, so its Action logs are public: the scripts
+# print only pass/fail lines, never data or row counts.
+name: Nightly backup
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # 21:00 UTC = 03:00 Bangladesh time
+  workflow_dispatch:
+    inputs:
+      storage:
+        description: 'Also copy the Storage files (images, logos, videos) now'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      # Throw-away database for the restore test. Lives only inside this job.
+      restore:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: restore-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/backup
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the Postgres 17 tools (same version as the database)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Back up, encrypt, verify, restore-test and save
+        id: backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+          BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          RESTORE_DB_URL: postgresql://postgres:restore-test-only@localhost:5432/postgres
+          SUPABASE_URL: https://afkgkpuppmwmkyrbheew.supabase.co
+          WITH_STORAGE: ${{ github.event_name == 'workflow_dispatch' && (inputs.storage && 'yes' || 'no') || 'auto' }}
+        run: bash scripts/backup/backup.sh
+
+      - name: Sunday note to Telegram
+        if: success() && steps.backup.outputs.WEEK_SAVED != ''
+        env:
+          BACKUP_ALERT_SECRET: ${{ secrets.BACKUP_ALERT_SECRET }}
+          SAVED: ${{ steps.backup.outputs.WEEK_SAVED }}
+        run: |
+          curl -fsS -o /dev/null -X POST https://afkgkpuppmwmkyrbheew.supabase.co/functions/v1/backup-alert \
+            -H "Content-Type: application/json" -H "x-backup-alert-secret: $BACKUP_ALERT_SECRET" \
+            -d "{\"kind\":\"weekly\",\"date\":\"$(TZ=Asia/Dhaka date +%F)\",\"saved\":$SAVED}" || echo "Telegram note not sent."
+
+      - name: Tell Naeem on Telegram that the backup failed
+        if: failure()
+        env:
+          BACKUP_ALERT_SECRET: ${{ secrets.BACKUP_ALERT_SECRET }}
+        run: |
+          curl -fsS -o /dev/null -X POST https://afkgkpuppmwmkyrbheew.supabase.co/functions/v1/backup-alert \
+            -H "Content-Type: application/json" -H "x-backup-alert-secret: $BACKUP_ALERT_SECRET" \
+            -d "{\"kind\":\"failed\",\"date\":\"$(TZ=Asia/Dhaka date +%F)\"}" || echo "Telegram alert not sent."

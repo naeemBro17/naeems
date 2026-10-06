@@ -252,8 +252,8 @@ test('See all → /brands → a brand → only that brand’s products; unknown 
   await expect(page.locator('[data-testid="brand-count"]')).toHaveText('2 products');
   const names = await page.locator('.product-card .product-card__name').allInnerTexts();
   expect(names.sort()).toEqual([`${PREFIX} Test Product 1`, `${PREFIX} Test Product 2`]);
-  await expect(page).toHaveTitle(`${ALPHA.name} — Naeem's`);
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', `${ALPHA.name} — Naeem's`);
+  await expect(page).toHaveTitle(`${ALPHA.name} — NAEEM'S`);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', `${ALPHA.name} — NAEEM'S`);
 
   // Back returns to /brands, then Home.
   await page.locator('.detail-header__back').click();

@@ -7,6 +7,10 @@ interface BottomSheetProps {
   /** Accessible name for the dialog. */
   title: string;
   children: ReactNode;
+  /** Batch 31: an icon button shown in the header, left of the close button. */
+  headerAction?: ReactNode;
+  /** Batch 31: extra class on the panel (e.g. a fixed height for a picker). */
+  panelClassName?: string;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -24,8 +28,15 @@ const CLOSE_ANIMATION_MS = 220;
  * Closing keeps the sheet mounted for one animation so it slides back down
  * instead of vanishing.
  */
-export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({ isOpen, onClose, title, children, headerAction, panelClassName }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // Batch 31 Part 3: the focus effect below must run only when the sheet
+  // opens or closes. Callers often pass a new onClose on every render; with
+  // onClose in its dependencies, every keystroke in a search box inside the
+  // sheet re-ran it — focus jumped back to the page and then to the first
+  // button, and the phone keyboard closed after each letter.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
@@ -60,7 +71,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -87,7 +98,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isRendered) return null;
 
@@ -100,7 +111,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
     >
       <div
         ref={panelRef}
-        className={`sheet-panel${isClosing ? ' sheet-panel--closing' : ''}`}
+        className={`sheet-panel${panelClassName ? ` ${panelClassName}` : ''}${isClosing ? ' sheet-panel--closing' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -109,6 +120,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
         <div className="sheet-handle" aria-hidden="true" />
         <header className="sheet-header">
           <h2 className="sheet-title">{title}</h2>
+          {headerAction && <div className="sheet-header__actions">{headerAction}</div>}
           <button
             type="button"
             className="sheet-close"

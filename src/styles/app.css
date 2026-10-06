@@ -1,5 +1,5 @@
 /* ============================================================
-   Naeem's Price Hub — application styles
+   NAEEM'S — application styles
    Mobile-first. Pure CSS with the tokens in tokens.css.
    ============================================================ */
 
@@ -28,6 +28,23 @@ body {
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+}
+
+/* Batch 31 Part 7: feels like an app when installed — no pull-to-refresh
+   bounce of the whole page (inner lists still scroll normally). */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* No accidental text selection when a button is pressed and held. */
+button,
+[role='button'],
+.button {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 img {
@@ -2766,6 +2783,31 @@ textarea {
 }
 
 .sheet-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Batch 31 Part 4: an icon button beside the close button, same size. */
+.sheet-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.sheet-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.sheet-icon-button svg {
   width: 16px;
   height: 16px;
 }
@@ -10423,8 +10465,43 @@ html.vt-fade::view-transition-new(root) {
 }
 
 /* ---------- Thana picker ---------- */
+/* Batch 31 Part 3: the picker keeps one height while searching (the list
+   scrolls inside), so the sheet's top never jumps down as results shrink. */
+.sheet-panel--fixed-height {
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sheet-panel--fixed-height .sheet-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-panel--fixed-height .thana-picker {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The search box keeps its own height (the shared search-bar style grows
+   with flex: 1, which in this column would stretch it); the list takes
+   the rest of the sheet. */
+.sheet-panel--fixed-height .picker-sheet__search {
+  flex: 0 0 auto;
+}
+
 .thana-picker__list {
   padding-bottom: var(--space-4);
+}
+
+.sheet-panel--fixed-height .thana-picker__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .thana-picker__group + .thana-picker__group {

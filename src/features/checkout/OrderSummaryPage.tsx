@@ -29,7 +29,7 @@ function isValidBangladeshiPhone(raw: string): boolean {
 }
 
 export function OrderSummaryPage() {
-  useDocumentTitle("Order Summary — Naeem's");
+  useDocumentTitle("Order Summary — NAEEM'S");
   const {
     items,
     isCatalogLoading,

@@ -1,3 +1,4 @@
+import { appVersionLabel } from '../../lib/appVersion';
 import {
   useEffect,
   useRef,
@@ -992,7 +993,17 @@ export function SettingsTab() {
 
   return (
     <section aria-label="Settings">
-      <SubPages title="Settings" param="sset" pages={pages} />
+      <SubPages
+        title="Settings"
+        param="sset"
+        pages={pages}
+        footer={
+          // Batch 31 Part 7: which version this phone / PC runs.
+          <p className="adm-app-version" data-testid="app-version">
+            Version {appVersionLabel()}
+          </p>
+        }
+      />
     </section>
   );
 }

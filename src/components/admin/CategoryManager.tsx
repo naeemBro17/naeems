@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { saveCategorySmallCopy } from '../../lib/smallImages';
 import { supabase } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -71,11 +72,17 @@ export function CategoryManager() {
       .from('categories')
       .update({ name, slug: slugify(name), image_url: editingImageUrl })
       .eq('id', category.id);
-    setIsSavingEdit(false);
     if (error) {
+      setIsSavingEdit(false);
       showToast('Could not save category — the name may already exist', 'error');
       return;
     }
+    // Batch 31 Part 8: a new / changed photo gets its small Browse-circle
+    // copy right away (best effort — the full photo is used meanwhile).
+    if (editingImageUrl !== category.image_url) {
+      await saveCategorySmallCopy(category.id, editingImageUrl);
+    }
+    setIsSavingEdit(false);
     setEditingId(null);
     await refetch();
     showToast('Category updated');

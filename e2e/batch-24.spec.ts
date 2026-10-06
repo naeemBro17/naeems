@@ -417,10 +417,13 @@ test('Price edit recalculates the total; a moderator cannot do it', async ({ pag
 
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${order.id}`);
-  await page.getByRole('button', { name: `Edit price of ${product.name}` }).click();
-  await page.getByLabel('Unit price (৳)').fill('100');
-  await page.locator('.order-item-price').getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Price saved, total updated')).toBeVisible({ timeout: 15_000 });
+  // Batch 31 Part 4: prices are edited only in the Edit order sheet (the
+  // pen beside the close button); the inline "Edit price" link is gone.
+  await expect(page.getByRole('button', { name: `Edit price of ${product.name}` })).toHaveCount(0, { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Edit order' }).click();
+  await page.getByLabel(`Price of ${product.name}`).fill('100');
+  await page.getByTestId('edit-order-sheet').getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByTestId('edit-order-sheet')).toHaveCount(0, { timeout: 15_000 });
 
   const [after] = (
     await select<{ total: number; subtotal: number }[]>(admin.accessToken, `orders?select=total,subtotal&id=eq.${order.id}`)

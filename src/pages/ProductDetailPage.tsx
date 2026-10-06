@@ -43,7 +43,7 @@ const VARIANT_PARAM = 'variant';
 
 /** App-wide og: values from index.html, restored when the detail page unmounts. */
 const DEFAULT_OG = {
-  title: "Naeem's Price Hub",
+  title: "NAEEM'S",
   description: 'Premium Australian skincare — check prices instantly',
   image: window.location.origin + '/og-image.png',
   url: window.location.origin + '/',
@@ -838,7 +838,7 @@ export function ProductDetailPage() {
     };
   }, [product]);
 
-  useDocumentTitle(product ? `${product.name} — Naeem's` : "Naeem's");
+  useDocumentTitle(product ? `${product.name} — NAEEM'S` : "NAEEM'S");
 
   const showLoading = !product && (isLoading || isFetching);
 

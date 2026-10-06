@@ -48,6 +48,7 @@ import {
 import { customerSafeText, parseTrackingResponse, type TrackingEvent } from '../_shared/steadfastSteps.ts';
 import { parsePoliceStations, type PoliceStation } from '../_shared/policeStations.ts';
 import { codAmountFor } from '../_shared/cod.ts';
+import { parseFraudCheck, type FraudCheckResult } from '../_shared/fraudCheck.ts';
 
 // Unlike notify-telegram-order (only ever invoked server-side by a database
 // webhook), this function is called directly from the admin's browser via
@@ -70,6 +71,13 @@ const POLICE_STATIONS_CACHE_MS = 24 * 60 * 60 * 1000;
 let policeStationsCache: { at: number; list: PoliceStation[] } | null = null;
 /** Fallback rate limit while migration-033's cache table isn't there yet. */
 const trackingMemory = new Map<string, { at: number; courierStatus: string | null; events: TrackingEvent[] }>();
+/** Batch 31 Part 2: one Steadfast customer check per number per day at
+ *  most (their limit is shared with booking volume). "Refresh" may ask
+ *  again, but never within a minute of the last answer. */
+const FRAUD_CACHE_MS = 24 * 60 * 60 * 1000;
+const FRAUD_REFRESH_MIN_MS = 60_000;
+/** Fallback while migration-034's steadfast_fraud_cache isn't there yet. */
+const fraudMemory = new Map<string, { at: number; result: FraudCheckResult }>();
 
 /** Confirmed from the API guide's "Booking parcels" section — sending more
  *  than this is rejected outright rather than truncated (unlike the text
@@ -102,8 +110,11 @@ interface OrderRow {
 }
 
 interface RequestBody {
-  action?: 'create' | 'status' | 'tracking' | 'police_stations';
+  action?: 'create' | 'status' | 'tracking' | 'police_stations' | 'fraud_check';
   orderId?: string;
+  /** fraud_check only */
+  phone?: string;
+  refresh?: boolean;
 }
 
 const ORDER_COLUMNS =
@@ -404,6 +415,71 @@ async function handlePoliceStations(apiKey: string, secretKey: string): Promise<
   return json({ ok: true, stations: list }, { 'Cache-Control': 'public, max-age=86400' });
 }
 
+/** Batch 31 Part 2: Steadfast's customer check for one phone number.
+ *  Staff with "View orders" only — customers and visitors are refused. The
+ *  answer is kept 24 h in steadfast_fraud_cache (service role only). */
+async function handleFraudCheck(
+  body: RequestBody,
+  userClient: SupabaseUserClient,
+  apiKey: string,
+  secretKey: string
+): Promise<Response> {
+  const { data: canView, error: canErr } = await userClient.rpc('staff_can', { p_perm: 'view_orders' });
+  let allowed = !canErr && canView === true;
+  if (canErr) {
+    const { data: isAdmin } = await userClient.rpc('is_admin');
+    allowed = isAdmin === true;
+  }
+  if (!allowed) return json({ ok: false, error: 'Not authorized.' });
+
+  const phone = steadfastPhone(body.phone);
+  if (!phone) return json({ ok: false, error: 'Not a valid Bangladeshi mobile number.' });
+
+  const serviceClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const now = Date.now();
+  const { data: cached, error: cacheErr } = await serviceClient
+    .from('steadfast_fraud_cache')
+    .select('result, fetched_at')
+    .eq('phone', phone)
+    .maybeSingle();
+  const cacheTableReady = !cacheErr;
+  const row = cached as { result: FraudCheckResult; fetched_at: string } | null;
+  const memory = fraudMemory.get(phone);
+  const last = row ? { at: new Date(row.fetched_at).getTime(), result: row.result } : !cacheTableReady ? memory : undefined;
+  const maxAge = body.refresh === true ? FRAUD_REFRESH_MIN_MS : FRAUD_CACHE_MS;
+  if (last && now - last.at < maxAge) {
+    return json({ ok: true, result: last.result, fetchedAt: new Date(last.at).toISOString(), cached: true });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${STEADFAST_BASE_URL}/fraud_check/score/${phone}`, { headers: steadfastHeaders(apiKey, secretKey) });
+  } catch (err) {
+    console.error('Steadfast fraud_check network error:', err);
+    return json({ ok: false, error: 'Could not reach Steadfast.' });
+  }
+  let answer: unknown = null;
+  try {
+    answer = await res.json();
+  } catch {
+    answer = null;
+  }
+  const result = res.ok ? parseFraudCheck(answer, phone) : null;
+  if (!result) {
+    return json({ ok: false, error: res.status === 429 ? 'Steadfast is busy. Try again later.' : 'Steadfast did not answer the check.' });
+  }
+  const fetchedAt = new Date(now).toISOString();
+  if (cacheTableReady) {
+    const { error: upsertErr } = await serviceClient
+      .from('steadfast_fraud_cache')
+      .upsert({ phone, result, fetched_at: fetchedAt });
+    if (upsertErr) console.error('steadfast_fraud_cache save failed:', upsertErr.message);
+  } else {
+    fraudMemory.set(phone, { at: now, result });
+  }
+  return json({ ok: true, result, fetchedAt, cached: false });
+}
+
 async function handleStatus(
   order: OrderRow,
   userClient: SupabaseUserClient,
@@ -459,6 +535,16 @@ Deno.serve(async (req: Request) => {
   // Batch 30: the thana list is public (checkout needs it before sign-in).
   if (requestBody.action === 'police_stations') {
     return await handlePoliceStations(apiKey, secretKey);
+  }
+
+  // Batch 31 Part 2: the customer check (staff only, checked inside).
+  if (requestBody.action === 'fraud_check') {
+    const fraudClient = userClientFor(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      req.headers.get('Authorization') ?? ''
+    );
+    return await handleFraudCheck(requestBody, fraudClient, apiKey, secretKey);
   }
 
   const knownActions = ['create', 'status', 'tracking'];

@@ -32,6 +32,15 @@ function answer(route: Route, body: Record<string, unknown>): Promise<void> {
   });
 }
 
+/** Batch 31: Steadfast's customer check as the function returns it. */
+export interface MockFraudResult {
+  deliveryRatio: number | null;
+  cancellationRatio: number | null;
+  volumeBand: string | null;
+  volumeRange: string | null;
+  totalReports: number;
+}
+
 export interface MockTracking {
   courierStatus: string | null;
   events: { text: string; at: string | null }[];
@@ -40,7 +49,8 @@ export interface MockTracking {
 /**
  * A page-level steadfast function: `tracking` answers with the given steps
  * (as the real function would for this audience), `police_stations` with
- * the given list (or a failure), `status` with the courier status, and
+ * the given list (or a failure), `status` with the courier status,
+ * `fraud_check` with the given customer check (Batch 31), and
  * `create` is refused — no test books a parcel. Every request body is
  * recorded for assertions.
  */
@@ -50,6 +60,9 @@ export async function mockSteadfast(
     tracking?: MockTracking | null;
     policeStations?: { name: string; district: string }[] | null;
     status?: string;
+    /** Batch 31: fraud_check answers by phone (01XXXXXXXXX); a phone not
+     *  listed (or no map) answers as if the action didn't exist. */
+    fraud?: Record<string, MockFraudResult>;
   }
 ): Promise<Record<string, unknown>[]> {
   const calls: Record<string, unknown>[] = [];
@@ -66,6 +79,12 @@ export async function mockSteadfast(
       return options.policeStations
         ? answer(route, { ok: true, stations: options.policeStations })
         : answer(route, { ok: false, error: 'Could not reach Steadfast.' });
+    }
+    if (body.action === 'fraud_check') {
+      const result = options.fraud?.[String(body.phone ?? '')];
+      return result
+        ? answer(route, { ok: true, result: { phone: body.phone, ...result }, fetchedAt: new Date().toISOString(), cached: false })
+        : answer(route, { ok: false, error: 'Invalid request.' });
     }
     if (body.action === 'status' && options.status) {
       return answer(route, { ok: true, courierStatus: options.status, markedDelivered: false, needsAttention: false });

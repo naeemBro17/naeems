@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAppNavigate } from './hooks/useAppNavigate';
 import { BottomNav } from './components/viewer/BottomNav';
@@ -38,6 +38,8 @@ import {
   AboutPage,
 } from './lib/routePages';
 import { forgetScroll } from './lib/scrollMemory';
+import { useToast } from './hooks/useToast';
+import { consumeUpdatedFlag } from './lib/appUpdate';
 
 // Admin panel (product editor, CSV import, image editors, banner/bento
 // editors, etc.) is the single biggest chunk of this app's JS — a customer
@@ -54,6 +56,16 @@ const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default:
  */
 function RouteFallback() {
   return <div className="route-fallback" aria-hidden="true" />;
+}
+
+/** Batch 31 Part 7: one quiet "Updated" after the app switched to a new
+ *  version (src/lib/appUpdate.ts). */
+function AppUpdatedToast() {
+  const { showToast } = useToast();
+  useEffect(() => {
+    if (consumeUpdatedFlag()) showToast('Updated');
+  }, [showToast]);
+  return null;
 }
 
 function AdminPageFallback() {
@@ -100,6 +112,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastContainer>
+        <AppUpdatedToast />
         <AuthProvider>
           <ProductProvider>
             <CartProvider>

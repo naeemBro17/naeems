@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-const DEFAULT_TITLE = "Naeem's";
+const DEFAULT_TITLE = "NAEEM'S";
 
 /** Sets the browser tab title for as long as the calling page is mounted,
  *  restoring the app-wide default on unmount. */

@@ -6,6 +6,9 @@ export interface Category {
    *  on rows cached before migration-015) falls back to the curated/generic
    *  SVG icon exactly as before this column existed. */
   image_url: string | null;
+  /** Batch 31 Part 8: the ~160 px Browse circle copy (migration-034);
+   *  absent before it runs — the full photo is used then. */
+  image_url_thumb?: string | null;
   created_at: string;
 }
 

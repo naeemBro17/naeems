@@ -3,6 +3,7 @@ import { useUrlParam } from '../../hooks/useUrlParams';
 import { useAuth } from '../../contexts/AuthContext';
 import { BottomSheet } from '../shared/BottomSheet';
 import { fetchCustomerOrders, fetchCustomers, type CustomerOrderRow, type CustomerRow } from '../../lib/adminData';
+import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import { formatTakaBd } from '../../lib/adminNav';
 import { formatDhakaTime } from '../../lib/staff';
 import { ORDER_STATUS_LABELS } from '../../lib/orderStatus';
@@ -31,7 +32,10 @@ function isOrderStatus(value: string): value is OrderStatus {
  * database leaves it out otherwise).
  */
 export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) => void }) {
-  const { can } = useAuth();
+  const { can, staff } = useAuth();
+  // Batch 31 Part 3: the automatic tests' own customers stay out of the
+  // list for real staff (the test logins still see them).
+  const hideTestCustomers = !isTestViewer(staff);
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,9 +79,10 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const real = hideTestCustomers ? rows.filter((r) => !isTestCustomer({ name: r.full_name, email: r.email })) : rows;
     const tagged = tagFilter
-      ? rows.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
-      : rows;
+      ? real.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+      : real;
     const list = term
       ? tagged.filter(
           (r) =>
@@ -105,7 +110,7 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
       }
     });
     return sorted;
-  }, [rows, search, sort, tagFilter, notes]);
+  }, [rows, search, sort, tagFilter, notes, hideTestCustomers]);
 
   const open = rows.find((r) => r.key === openId) ?? null;
 

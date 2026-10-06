@@ -80,7 +80,7 @@ export function productsToCSV(products: Product[]): string {
 export function exportFilename(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `naeem-price-hub-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`;
+  return `naeems-products-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`;
 }
 
 /** Accepts in_stock / low_stock / out_of_stock case-insensitively; null if invalid. */

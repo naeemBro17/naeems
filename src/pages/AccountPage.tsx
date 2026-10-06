@@ -282,7 +282,7 @@ function StaffAccountView() {
 /** The bottom nav's Account tab. Public browsing never requires this page —
  *  it's the one place a customer opts into an account at all. */
 export function AccountPage() {
-  useDocumentTitle("Account — Naeem's");
+  useDocumentTitle("Account — NAEEM'S");
   const { session, profile, isLoading } = useAuth();
   // Role alone, not approval status — a wholesaler awaiting approval is
   // still a wholesaler, not a customer, and belongs on their own account

@@ -1,4 +1,4 @@
-# Naeem's Price Hub — Deployment Guide
+# NAEEM'S — Deployment Guide
 
 Follow these steps in order. Total time: roughly 20 minutes.
 
