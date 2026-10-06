@@ -5,7 +5,7 @@ export function AboutPage() {
   return (
     <PolicyLayout title="About us">
       <p>
-        Naeem's is a trusted place for original skincare, brought directly from Australia, Canada,
+        NAEEM'S is a trusted place for original skincare, brought directly from Australia, Canada,
         Japan, the USA, the UK and India.
       </p>
       <p>
@@ -26,7 +26,7 @@ export function AboutPage() {
       <p>
         I'm Naeem, a non-medical skincare consultant. After struggling with my own skin problems and
         with fake products, I realised how hard it is to find original skincare in this country. So
-        in 2024 I started Naeem's.
+        in 2024 I started NAEEM'S.
       </p>
       <p>
         I check what I sell before I sell it. I don't recommend products that don't work or that are

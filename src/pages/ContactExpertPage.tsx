@@ -55,7 +55,7 @@ function PersonPlusIcon() {
 }
 
 export function ContactExpertPage() {
-  useDocumentTitle("Talk to an Expert — Naeem's");
+  useDocumentTitle("Talk to an Expert — NAEEM'S");
   const { settings } = useProducts();
   const { showToast } = useToast();
   const { isEditMode } = useAdminEdit();

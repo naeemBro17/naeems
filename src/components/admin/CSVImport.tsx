@@ -231,7 +231,7 @@ export function CSVImport() {
         <button
           type="button"
           className="button button--secondary"
-          onClick={() => downloadCSV('naeem-price-hub-template.csv', generateTemplate())}
+          onClick={() => downloadCSV('naeems-products-template.csv', generateTemplate())}
         >
           Download CSV Template
         </button>

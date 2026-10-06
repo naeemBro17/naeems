@@ -13,7 +13,7 @@ interface PolicyLayoutProps {
  *  itself lives in `.policy-page` (see app.css) for readable line length
  *  and heading/list/table styling. */
 export function PolicyLayout({ title, children }: PolicyLayoutProps) {
-  useDocumentTitle(`${title} — Naeem's`);
+  useDocumentTitle(`${title} — NAEEM'S`);
 
   return (
     <div className="viewer-shell detail-shell">

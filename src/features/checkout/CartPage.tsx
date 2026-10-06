@@ -24,7 +24,7 @@ import { stockLimit } from '../../lib/stockStatus';
 import type { CartItem } from './types';
 
 export function CartPage() {
-  useDocumentTitle("Your Cart — Naeem's");
+  useDocumentTitle("Your Cart — NAEEM'S");
   const { items, subtotal, updateQuantity } = useCheckoutState();
   const { session } = useAuth();
   const navigate = useNavigate();

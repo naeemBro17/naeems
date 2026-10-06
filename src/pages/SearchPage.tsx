@@ -39,7 +39,7 @@ function ClockIcon() {
 }
 
 export function SearchPage() {
-  useDocumentTitle("Search — Naeem's");
+  useDocumentTitle("Search — NAEEM'S");
   const navigate = useAppNavigate();
   const routerNavigate = useRouterNavigate();
   const [searchParams, updateParams] = useUrlParams();

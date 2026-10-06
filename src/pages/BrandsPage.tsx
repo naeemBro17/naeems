@@ -12,7 +12,7 @@ import { BrandCard, usePreloadFirstBrandVideos } from '../components/viewer/Bran
  * (PageTransition's scroll memory, like every page).
  */
 export function BrandsPage() {
-  useDocumentTitle("Brands — Naeem's");
+  useDocumentTitle("Brands — NAEEM'S");
   const { products, brands, isLoading } = useProducts();
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
   const list = useMemo(() => brandsWithProducts(brands, activeProducts), [brands, activeProducts]);

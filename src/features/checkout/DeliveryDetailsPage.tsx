@@ -19,7 +19,7 @@ import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { DELIVERY_ZONES, type DeliveryAddress } from './types';
 
 export function DeliveryDetailsPage() {
-  useDocumentTitle("Delivery Details — Naeem's");
+  useDocumentTitle("Delivery Details — NAEEM'S");
   const { items, isCatalogLoading, zoneId, setZoneId, address, setAddress } = useCheckoutState();
   const { profile, isCustomer, updateOwnProfile } = useAuth();
   const navigate = useNavigate();

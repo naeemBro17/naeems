@@ -20,8 +20,8 @@ export default defineConfig({
       injectRegister: 'script-defer',
       includeAssets: ['offline.html', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: "Naeem's",
-        short_name: "Naeem's",
+        name: "NAEEM'S",
+        short_name: "NAEEM'S",
         description: 'Internal price lookup tool',
         theme_color: '#F2F2F7',
         background_color: '#F2F2F7',

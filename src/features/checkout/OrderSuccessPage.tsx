@@ -16,7 +16,7 @@ import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
 export function OrderSuccessPage() {
-  useDocumentTitle("Order Placed — Naeem's");
+  useDocumentTitle("Order Placed — NAEEM'S");
   const { lastOrder } = useCheckoutState();
   const navigate = useNavigate();
 

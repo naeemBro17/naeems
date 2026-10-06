@@ -10,12 +10,11 @@ interface HamburgerMenuProps {
 }
 
 /** Which sub-screen the sheet is showing. */
-type MenuScreen = 'root' | 'settings' | 'about';
+type MenuScreen = 'root' | 'settings';
 
 const SCREEN_TITLES: Record<MenuScreen, string> = {
   root: 'Menu',
   settings: 'Settings',
-  about: "About Naeem's Price Hub",
 };
 
 function ChevronRight() {
@@ -49,8 +48,9 @@ function ComingSoon({ onBack }: { onBack: () => void }) {
 /**
  * Left-side sliding drawer behind the header's hamburger button. The Dark
  * Mode switch is live and shares state with the header's theme button;
- * Settings and About are placeholders that swap the drawer body for a
- * Coming Soon panel.
+ * Settings is a placeholder that swaps the drawer body for a Coming Soon
+ * panel. Batch 31: the old "About Naeem's Price Hub" placeholder is gone —
+ * "About Us" (the real About page) is the one About item.
  */
 export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
   const { theme, toggleTheme } = useTheme();
@@ -95,15 +95,6 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
             onClick={() => setScreen('settings')}
           >
             <span className="menu-row__label">Settings</span>
-            <ChevronRight />
-          </button>
-
-          <button
-            type="button"
-            className="menu-row menu-row--button"
-            onClick={() => setScreen('about')}
-          >
-            <span className="menu-row__label">About Naeem&apos;s Price Hub</span>
             <ChevronRight />
           </button>
 

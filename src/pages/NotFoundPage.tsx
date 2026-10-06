@@ -4,7 +4,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 /** Shown for any URL that doesn't match a real route. Every screen needs a
  *  visible way out — this replaces the previous silent redirect to "/". */
 export function NotFoundPage() {
-  useDocumentTitle("Page not found — Naeem's");
+  useDocumentTitle("Page not found — NAEEM'S");
 
   return (
     <div className="viewer-shell detail-shell">
