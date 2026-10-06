@@ -209,6 +209,11 @@ Needs a later batch:
     Worth moving into a Vault secret one day. I did not print or copy it.
   - Order history notes are stored in a private table by an existing
     trigger (correct); they read as empty from the orders table itself.
+  - MISSING PHOTO: the photo file of "Cancer Council 150mL Daily
+    Sunscreen SPF50 Sun Block - Face & Body" is not in Storage any more
+    (the link answers "not found"), so the shop shows a grey placeholder
+    for it and no small copy could be made. Please upload its photo again
+    (Admin → Products → that product). I did not change it.
   - ProductForm.tsx (the old product pop-up) is now unused and removed;
     the in-shop "Edit Product" sheet on product cards is unchanged.
 
@@ -273,6 +278,11 @@ Needs a later batch:
     and returns with "Back to products" (was: close the pop-up).
   - e2e/batch-26.spec.ts: after saving a customer's note the test goes
     "Back to customers" (was: Escape to close the pop-up). Same checks.
+  - e2e/batch-23.spec.ts, batch-31.spec.ts (Part 8): the live catalogue
+    now has small copies with a "?v=" marker and one product whose photo
+    file is missing — the tests compare photos without the marker and use
+    a product whose photo really exists (found through search).
+  - e2e/batch-25.spec.ts: Home's title is now "Good …, <name>".
   - src/lib/batch30.test.ts, manualOrders.test.ts: the sample order has
     the new collect_mode field.
   - playwright.config.ts: batch-32 joins the serial group.
@@ -324,4 +334,33 @@ no real order was changed.)
 
 10. NAEEM'S TURN — the database addition
 ----------------------------------------
-(filled in below)
+Your answer to "Apply the database addition now?": YES.
+  - migration-035 applied to the live database. Checked (read-only):
+      orders: 6, all "collect on delivery" (nothing changed for them);
+      NM-1721 still "collect on delivery", Steadfast COD ৳4,079 recorded —
+        untouched, waiting for your step in Part 1;
+      customers table exists (empty); "Manage customers" switch exists;
+      all 8 new functions exist.
+  - The steadfast function was deployed again (it now reads the mode).
+    Smoke check, NO parcel booked: a visitor and a customer are refused
+    ("Not authorized."), the admin asking to book a non-existent order
+    gets "Order not found." (the new order read works), the thana list
+    answers (731 thanas).
+  - Then the 6 waiting tests ran against the live database (pay later end
+    to end, delivered pay-later records no COD, Edit order mode switch,
+    refusals, add / hide / delete customers, staff switch) — all passed,
+    after two fixes they exposed:
+      * after deleting a customer the page went "back" to an older page
+        of the same (deleted) customer → now goes to the Customers list;
+      * the browser's "Leave site?" stayed on for a moment after saving a
+        new order → it now switches off the instant the save succeeds.
+    All test data (test orders, the test customer added by hand, the test
+    staff login and role) was deleted afterwards. One invisible row stays
+    in the customers table: the "not hidden" switch for the tests' own
+    phone 01799990032 (no name, no orders, never shown; the next test run
+    reuses it).
+  - FINAL npm run verify, with the database update live:
+      build OK (26s) · vitest 216/216 (19s) · e2e 198 passed,
+      84 skipped (15.1 min) — ALL GREEN.
+    (skipped = screenshot specs that only run with SCREENS=1 and older
+    batches' tests written for situations that no longer apply, as before.)

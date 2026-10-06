@@ -485,7 +485,15 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
   );
   const all = rows.data ?? [];
   const withSmall = all.find((p) => (p.image_urls_thumb?.[0] ?? '').includes('/thumb/'));
-  const withoutSmall = all.find((p) => p.image_urls?.length && (!p.image_urls_thumb?.[0] || p.image_urls_thumb[0] === p.image_urls[0]));
+  // Batch 32: only a product whose photo file really exists (a missing
+  // file shows the placeholder, with no photo to compare).
+  let withoutSmall: (typeof all)[number] | undefined;
+  for (const p of all.filter((p) => p.image_urls?.length && (!p.image_urls_thumb?.[0] || p.image_urls_thumb[0] === p.image_urls[0]))) {
+    if ((await page.request.get(p.image_urls[0])).ok()) {
+      withoutSmall = p;
+      break;
+    }
+  }
   for (const [item, expectSmall] of [
     [withSmall, true],
     [withoutSmall, false],
@@ -493,7 +501,7 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
     if (!item) continue;
     // Batch 32: found through search — nearly every product has a small
     // copy now, so the one without may not be among Home's cards.
-    await page.goto(`/search?q=${encodeURIComponent(item.name)}`);
+    await page.goto(`/search?q=${encodeURIComponent(item.name.split(' ').slice(0, 4).join(' '))}`);
     await page.waitForSelector('.product-card');
     const card = page.locator('.product-card', { hasText: item.name }).first();
     await card.scrollIntoViewIfNeeded();

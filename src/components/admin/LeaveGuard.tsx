@@ -94,6 +94,8 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
   useEffect(() => {
     if (!dirty) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      // Read at the moment of leaving: a save that just finished counts.
+      if (!dirtyRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };

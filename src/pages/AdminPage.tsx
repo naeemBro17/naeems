@@ -190,10 +190,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         {sub?.kind === 'new-order' && (
           <NewOrderPage
             onBack={back}
-            onCreated={async (orderId) => {
-              await loadOrders();
-              openOrder(orderId);
-            }}
+            onCreated={(orderId) => openOrder(orderId)}
           />
         )}
         {sub?.kind === 'edit-order' && (
@@ -212,13 +209,15 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             customerKey={sub.customerKey}
             onBack={back}
             onOpenOrder={(id) => navigate(`/admin?tab=orders&order=${encodeURIComponent(id)}`)}
-            onDeleted={() => leave(onBack)}
+            onDeleted={() => leave(() => navigate('/admin?tab=customers', { replace: true }))}
           />
         )}
         {sub?.kind === 'new-customer' && (
           <NewCustomerPage
             onBack={back}
-            onOpenCustomer={(key) => leave(() => navigate(adminPath.customer(key), { replace: true, state: { fromList: true } }))}
+            onOpenCustomer={(key) =>
+              leave(() => navigate(adminPath.customer(key), { replace: true, state: location.state as unknown }))
+            }
           />
         )}
         {!sub && (
