@@ -8,3 +8,8 @@ project_id = "afkgkpuppmwmkyrbheew"
 # own secret internally — this only disables the platform's separate check.
 [functions.steadfast-refresh-all]
 verify_jwt = false
+
+# Batch 31 Part 1: called by the nightly backup GitHub Action, which has no
+# Supabase login. The function checks its own BACKUP_ALERT_SECRET instead.
+[functions.backup-alert]
+verify_jwt = false
