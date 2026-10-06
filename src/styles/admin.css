@@ -3300,6 +3300,12 @@ html[data-admin] .toast--info .toast__icon {
 }
 
 /* ---------- Batch 32 Part 5: Admin Home spacing and structure ---------- */
+.adm {
+  /* The brand orange, softened (sales chart days with sales). */
+  --adm-or-soft: color-mix(in srgb, var(--adm-or) 34%, transparent);
+  --adm-or-soft-strong: color-mix(in srgb, var(--adm-or) 58%, transparent);
+}
+
 .adm-home .adm-page-header__eyebrow {
   color: var(--adm-muted);
 }
@@ -3354,7 +3360,7 @@ html[data-admin] .toast--info .toast__icon {
 }
 
 .adm-home .adm-sales__bar {
-  background: rgba(242, 89, 42, 0.32);
+  background: var(--adm-or-soft);
 }
 
 .adm-home .adm-sales__bar--today {
@@ -3368,7 +3374,7 @@ html[data-admin] .toast--info .toast__icon {
 }
 
 .adm-home .adm-sales__col--picked .adm-sales__bar:not(.adm-sales__bar--today):not(.adm-sales__bar--zero) {
-  background: rgba(242, 89, 42, 0.55);
+  background: var(--adm-or-soft-strong);
 }
 
 @media (min-width: 1024px) {

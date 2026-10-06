@@ -175,8 +175,10 @@ test.describe('phone, 360px', () => {
     // Every page (and settings sub-page) at 360px: its title, no sideways scroll.
     for (const p of ADMIN_PAGES) {
       await page.goto(`/admin${p.query}`);
-      const title = p.name === 'Home' ? 'E2E' : p.name;
-      await expect(page.locator('.adm-page-header__title')).toHaveText(new RegExp(`^${title.replace(/[()&/.]/g, '\\$&')}`), {
+      // Batch 32 Part 5: Home's title is "Good morning/afternoon/evening, <name>".
+      const pattern =
+        p.name === 'Home' ? '^Good (morning|afternoon|evening), E2E' : `^${p.name.replace(/[()&/.]/g, '\\$&')}`;
+      await expect(page.locator('.adm-page-header__title')).toHaveText(new RegExp(pattern), {
         timeout: 15_000,
       });
       await page.waitForTimeout(300);

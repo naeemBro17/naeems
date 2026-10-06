@@ -43,10 +43,19 @@ interface ProviderProps {
 
 export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
   const [dirty, setDirty] = useState(false);
-  const [pending, setPending] = useState<{ go: () => void } | null>(null);
+  const [pending, setPendingState] = useState<{ go: () => void } | null>(null);
+  const pendingRef = useRef<{ go: () => void } | null>(null);
+  const setPending = useCallback((next: { go: () => void } | null) => {
+    pendingRef.current = next;
+    setPendingState(next);
+  }, []);
   const dirtyRef = useRef(false);
   const guardIdRef = useRef<string | null>(null);
   const afterRemoveRef = useRef<(() => void) | null>(null);
+  // True while our own history.back() (taking the extra entry off) is
+  // still on its way — a second leave in that moment must not step back
+  // twice; it waits for the same one.
+  const removingRef = useRef(false);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
 
@@ -63,17 +72,19 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
 
   useEffect(() => {
     const onPop = () => {
+      if (removingRef.current) {
+        removingRef.current = false;
+        guardIdRef.current = null;
+        const after = afterRemoveRef.current;
+        afterRemoveRef.current = null;
+        after?.();
+        return;
+      }
       const id = guardIdRef.current;
       if (!id) return;
       // Back onto our own entry (a sheet above it closed): nothing to do.
       if ((window.history.state as { leaveGuardId?: string } | null)?.leaveGuardId === id) return;
       guardIdRef.current = null;
-      const after = afterRemoveRef.current;
-      if (after) {
-        afterRemoveRef.current = null;
-        after();
-        return;
-      }
       if (dirtyRef.current) setPending({ go: () => onBackRef.current() });
     };
     window.addEventListener('popstate', onPop);
@@ -100,9 +111,18 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
     dirtyRef.current = false;
     setDirty(false);
     setPending(null);
+    if (removingRef.current) {
+      const before = afterRemoveRef.current;
+      afterRemoveRef.current = () => {
+        before?.();
+        go();
+      };
+      return;
+    }
     const id = guardIdRef.current;
     if (id && (window.history.state as { leaveGuardId?: string } | null)?.leaveGuardId === id) {
       // Take our extra entry off first, then go.
+      removingRef.current = true;
       afterRemoveRef.current = go;
       window.history.back();
       return;
@@ -122,7 +142,12 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
     [leave]
   );
 
-  const markClean = useCallback(() => leave(() => undefined), [leave]);
+  // Saved while "Discard changes?" was waiting (Back pressed during the
+  // save): nothing is unsaved any more, so go where they asked to go.
+  const markClean = useCallback(() => {
+    const asked = pendingRef.current;
+    leave(asked ? asked.go : () => undefined);
+  }, [leave]);
 
   const api = useMemo(() => ({ markDirty, requestLeave, leave, markClean }), [markDirty, requestLeave, leave, markClean]);
 
