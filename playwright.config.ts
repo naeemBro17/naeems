@@ -28,6 +28,7 @@ const SERIAL_SPECS = [
   'batch-26',
   'batch-30',
   'batch-31',
+  'batch-32',
   'checkout',
 ];
 const SERIAL_MATCH = new RegExp(`(^|[\\\\/])(${SERIAL_SPECS.join('|')})\\.spec\\.ts$`);

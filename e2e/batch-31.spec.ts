@@ -316,7 +316,7 @@ test('Part 4: no inline "Edit price" or fee "Edit"; the pen beside ✕ opens Edi
   // Call / WhatsApp / Invoice stay.
   for (const name of ['Call', 'WhatsApp', 'Invoice']) await expect(sheet.getByRole(name === 'Invoice' ? 'button' : 'link', { name })).toBeVisible();
   await pen.click();
-  await expect(page.getByTestId('edit-order-sheet')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('edit-order-page')).toBeVisible({ timeout: 10_000 });
 });
 
 test('Part 4: staff without "Edit orders" get no pen', async ({ page }) => {
@@ -470,7 +470,9 @@ test('Part 7: manifest, theme colours, the offline helper and the version in Set
 
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=settings');
-  await expect(page.getByTestId('app-version')).toHaveText(/^Version \d{1,2} \w{3} \d{4}, \d{2}:\d{2} · ([0-9a-f]{7}|local)$/, { timeout: 15_000 });
+  // Batch 32 Part 2: "Version 1.N.0" with "Build <commit>" under it (no date).
+  await expect(page.getByTestId('app-version')).toHaveText(/^Version \d+\.\d+\.\d+$/, { timeout: 15_000 });
+  await expect(page.getByTestId('app-build')).toHaveText(/^Build ([0-9a-f]{7}|local)$/);
 });
 
 /* ---------------------------------------------------------------- Part 8 */
@@ -483,14 +485,24 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
   );
   const all = rows.data ?? [];
   const withSmall = all.find((p) => (p.image_urls_thumb?.[0] ?? '').includes('/thumb/'));
-  const withoutSmall = all.find((p) => p.image_urls?.length && (!p.image_urls_thumb?.[0] || p.image_urls_thumb[0] === p.image_urls[0]));
-  await page.goto('/');
-  await page.waitForSelector('.product-card');
+  // Batch 32: only a product whose photo file really exists (a missing
+  // file shows the placeholder, with no photo to compare).
+  let withoutSmall: (typeof all)[number] | undefined;
+  for (const p of all.filter((p) => p.image_urls?.length && (!p.image_urls_thumb?.[0] || p.image_urls_thumb[0] === p.image_urls[0]))) {
+    if ((await page.request.get(p.image_urls[0])).ok()) {
+      withoutSmall = p;
+      break;
+    }
+  }
   for (const [item, expectSmall] of [
     [withSmall, true],
     [withoutSmall, false],
   ] as const) {
     if (!item) continue;
+    // Batch 32: found through search — nearly every product has a small
+    // copy now, so the one without may not be among Home's cards.
+    await page.goto(`/search?q=${encodeURIComponent(item.name.split(' ').slice(0, 4).join(' '))}`);
+    await page.waitForSelector('.product-card');
     const card = page.locator('.product-card', { hasText: item.name }).first();
     await card.scrollIntoViewIfNeeded();
     const src = (await card.locator('img').first().getAttribute('src')) ?? '';

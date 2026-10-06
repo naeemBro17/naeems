@@ -3040,7 +3040,350 @@ html[data-admin] .toast--info .toast__icon {
 .adm-app-version {
   margin: var(--space-5, 20px) 0 var(--space-2);
   text-align: center;
-  font-size: 12px;
-  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+.adm-app-version__number {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-text-2, var(--color-text-secondary));
+}
+
+.adm-app-version__build {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- Batch 32 Part 1: payment section (New order / Edit order) ---------- */
+.pay-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--adm-s1);
+}
+
+.pay-section__amount-row {
+  display: flex;
+  gap: var(--adm-s2);
+  align-items: center;
+}
+
+.pay-section__amount {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-section__full {
+  flex: none;
+  min-height: var(--adm-input-h);
+}
+
+.pay-section__modes .adm-segment__item {
+  min-height: 40px;
+  line-height: 1.2;
+}
+
+.pay-section__modes .adm-segment__item:disabled {
+  opacity: 0.45;
+}
+
+.pay-section__summary {
+  margin-top: var(--adm-s2);
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--adm-s2);
+}
+
+.pay-section__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--adm-s3);
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-section__row span:last-child {
+  color: var(--adm-text);
+  font-weight: 600;
+}
+
+.pay-section__row--strong {
+  padding-top: var(--adm-s2);
+  border-top: 1px solid var(--adm-line);
+  color: var(--adm-text);
+  font-weight: 600;
+}
+
+/* The small payment tag on the Orders list — neutral, never orange. */
+.adm-pay-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--adm-r-pill);
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-cell .adm-pay-tag {
+  margin-top: 2px;
+}
+
+/* ---------- Batch 32 Part 3: full admin pages for the big forms ---------- */
+.adm--no-tabbar .adm-tabbar {
+  display: none;
+}
+
+.adm--no-tabbar .adm-main {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.adm-fpage__bar {
+  position: sticky;
+  top: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  margin: 0 calc(-1 * var(--adm-s4));
+  padding: var(--adm-s2) var(--adm-s4);
+  min-height: 56px;
+  background: var(--adm-nav-bg);
+  border-bottom: 1px solid var(--adm-line);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.adm-fpage__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  min-height: var(--adm-hit);
+  margin-left: calc(-1 * var(--adm-s2));
+  padding: 0 var(--adm-s2);
+  border-radius: var(--adm-r-pill);
+  font-size: var(--adm-fs-body);
+  font-weight: 600;
+  color: var(--adm-text-2);
+}
+
+.adm-fpage__back:hover {
+  background: var(--adm-card-2);
+  color: var(--adm-text);
+}
+
+.adm-fpage__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.adm-fpage__title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-fpage__subtitle {
+  margin-top: 1px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-fpage__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  flex: none;
+}
+
+.adm-fpage__body {
+  max-width: 760px;
+  padding-top: var(--adm-s4);
+}
+
+.adm-fpage__dock-inner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  padding: var(--adm-s3) var(--adm-s4) calc(var(--adm-s3) + env(safe-area-inset-bottom));
+  background: var(--adm-nav-bg);
+  border-top: 1px solid var(--adm-line);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.adm-fpage__dock-btn {
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+}
+
+.adm-fpage__notice {
+  padding: var(--adm-s6) var(--adm-s4);
+  text-align: center;
+  color: var(--adm-muted);
+}
+
+@media (min-width: 1024px) {
+  .adm--no-tabbar .adm-main {
+    padding-bottom: 0;
+  }
+
+  .adm-fpage__bar {
+    margin: -22px -26px 0;
+    padding: 12px 26px;
+    min-height: 64px;
+  }
+
+  .adm-fpage__title {
+    font-size: var(--adm-fs-title);
+  }
+
+  .adm-fpage__body {
+    padding-top: var(--adm-s5);
+  }
+}
+
+/* ---------- Batch 32 Part 4: customers add / hide / delete ---------- */
+.adm-crow__hidden {
+  margin-left: var(--adm-s2);
+  vertical-align: middle;
+}
+
+.adm-customer__hidden-note {
+  margin-bottom: var(--adm-s3);
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card-2);
+  font-size: var(--adm-fs-label);
+  color: var(--adm-text-2);
+}
+
+.adm-customer__note {
+  margin: var(--adm-s3) 0;
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-line);
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+  white-space: pre-wrap;
+}
+
+.adm-customer__manage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adm-s2);
+  margin-top: var(--adm-s5);
+  padding-top: var(--adm-s4);
+  border-top: 1px solid var(--adm-line);
+}
+
+/* ---------- Batch 32 Part 5: Admin Home spacing and structure ---------- */
+.adm {
+  /* The brand orange, softened (sales chart days with sales). */
+  --adm-or-soft: color-mix(in srgb, var(--adm-or) 34%, transparent);
+  --adm-or-soft-strong: color-mix(in srgb, var(--adm-or) 58%, transparent);
+}
+
+.adm-home .adm-page-header__eyebrow {
+  color: var(--adm-muted);
+}
+
+.adm-page-header__subtitle {
+  margin-top: 2px;
+  font-size: var(--adm-fs-label);
+  color: var(--adm-muted);
+}
+
+.adm-home .adm-kpis {
+  gap: var(--adm-s3);
+  margin-top: var(--adm-s2);
+}
+
+.adm-home .adm-kpi {
+  min-height: 96px;
+  padding: 14px var(--adm-s4);
+  border: 1px solid var(--adm-line);
+  gap: 2px;
+}
+
+.adm-kpi--attn {
+  background: var(--adm-or-bg);
+  border-color: var(--adm-or-line);
+}
+
+.adm-kpi__sub--ok {
+  color: var(--adm-green-text);
+  font-weight: 600;
+}
+
+.adm-home__section-title {
+  margin: 28px 4px 10px;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.adm-home .adm-group {
+  margin-top: 0;
+}
+
+.adm-home .adm-sales {
+  margin-bottom: 0;
+  border: 1px solid var(--adm-line);
+}
+
+.adm-sales__week-label {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+}
+
+.adm-home .adm-sales__bar {
+  background: var(--adm-or-soft);
+}
+
+.adm-home .adm-sales__bar--today {
+  background: var(--adm-or);
+}
+
+.adm-home .adm-sales__bar--zero {
+  height: 2px !important;
+  border-radius: 1px;
+  background: var(--adm-line);
+}
+
+.adm-home .adm-sales__col--picked .adm-sales__bar:not(.adm-sales__bar--today):not(.adm-sales__bar--zero) {
+  background: var(--adm-or-soft-strong);
+}
+
+@media (min-width: 1024px) {
+  .adm-home .adm-kpis {
+    gap: var(--adm-s4);
+  }
+
+  .adm-home .adm-kpi {
+    min-height: 112px;
+    padding: 18px 20px;
+  }
 }

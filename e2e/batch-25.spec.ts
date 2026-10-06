@@ -175,8 +175,10 @@ test.describe('phone, 360px', () => {
     // Every page (and settings sub-page) at 360px: its title, no sideways scroll.
     for (const p of ADMIN_PAGES) {
       await page.goto(`/admin${p.query}`);
-      const title = p.name === 'Home' ? 'E2E' : p.name;
-      await expect(page.locator('.adm-page-header__title')).toHaveText(new RegExp(`^${title.replace(/[()&/.]/g, '\\$&')}`), {
+      // Batch 32 Part 5: Home's title is "Good morning/afternoon/evening, <name>".
+      const pattern =
+        p.name === 'Home' ? '^Good (morning|afternoon|evening), E2E' : `^${p.name.replace(/[()&/.]/g, '\\$&')}`;
+      await expect(page.locator('.adm-page-header__title')).toHaveText(new RegExp(pattern), {
         timeout: 15_000,
       });
       await page.waitForTimeout(300);
@@ -367,9 +369,12 @@ test('Products: row opens Edit; Delete only in the ⋮ menu and confirmed; Low s
   await expect(firstRow.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
 
   await firstRow.locator('.adm-lrow__name').click();
-  await expect(page.getByRole('dialog', { name: 'Edit Product' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Edit Product' }).getByRole('button', { name: 'Close dialog' }).click();
-  await expect(page.getByRole('dialog', { name: 'Edit Product' })).toHaveCount(0);
+  // Batch 32 Part 3: the editor is a page of its own; Back returns here.
+  await expect(page.getByTestId('product-page')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Edit product' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to products' }).click();
+  await expect(page.getByTestId('product-page')).toHaveCount(0);
+  await expect(firstRow).toBeVisible({ timeout: 15_000 });
 
   await firstRow.getByRole('button', { name: /^Actions for / }).click();
   const menu = page.getByRole('menu');

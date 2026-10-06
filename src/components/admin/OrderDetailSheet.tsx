@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { adminPath } from '../../lib/adminPages';
 import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useToast } from '../../hooks/useToast';
@@ -30,7 +32,6 @@ import type { AppliedPromo, CartItem, DeliveryZoneOption } from '../../features/
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../lib/steadfastLink';
 import { orderHistoryNote } from '../../lib/orderHistoryNotes';
 import { fetchAdminOrderDetail } from '../../lib/adminData';
-import { EditOrderSheet } from './EditOrderSheet';
 import { OrderPaymentBlock } from './OrderPaymentBlock';
 import { fetchOrderPayments, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { markSteadfastUpdated, steadfastBanner, steadfastParcelUrl } from '../../lib/orderEdit';
@@ -143,7 +144,16 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
   // and Steadfast's tracking steps (null = function not updated yet).
   const canEditOrder = can('edit_orders');
   const [payments, setPayments] = useState<OrderPayment[] | null>(null);
-  const [isEditOpen, setIsEditOpen] = useState(false);
+  const navigate = useNavigate();
+  // Batch 32 Part 3: Edit order is a page of its own; its Back (and Save)
+  // come back to this order on the same Orders list.
+  const openEditPage = () => {
+    if (!order) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', 'orders');
+    params.set('order', order.id);
+    navigate(adminPath.editOrder(order.order_number), { state: { returnTo: `/admin?${params.toString()}` } });
+  };
   const [tracking, setTracking] = useState<TrackingAnswer | null>(null);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
 
@@ -345,7 +355,7 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
           <button
             type="button"
             className="sheet-icon-button"
-            onClick={() => setIsEditOpen(true)}
+            onClick={openEditPage}
             aria-label="Edit order"
             data-testid="edit-order"
           >
@@ -741,19 +751,6 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
         </div>
       )}
 
-      {canEditOrder && (
-        <EditOrderSheet
-          order={order}
-          isOpen={isEditOpen}
-          isAdmin={isAdmin}
-          onClose={() => setIsEditOpen(false)}
-          onSaved={async () => {
-            setIsEditOpen(false);
-            await reload();
-          }}
-        />
-      )}
-
       {order && (
         <DeleteOrdersDialog
           isOpen={deleteOpen}
@@ -779,7 +776,9 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
         title="Book with Steadfast?"
         message={
           order
-            ? `${order.customer_name} · ${order.customer_phone} · ${order.address_line}, ${order.thana}, ${order.district} · COD amount: ${formatTaka(steadfastCodAmount ?? 0)}`
+            ? `${order.customer_name} · ${order.customer_phone} · ${order.address_line}, ${order.thana}, ${order.district} · COD amount: ${formatTaka(steadfastCodAmount ?? 0)}${
+                order.collect_mode === 'pay_later' ? ` · Courier will collect ${formatTaka(0)} — customer pays later` : ''
+              }`
             : ''
         }
         confirmLabel="Book parcel"

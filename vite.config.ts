@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -15,10 +16,17 @@ function buildCommit(): string {
   }
 }
 
+/** Batch 32 Part 2: the version lives in ONE place — package.json
+ *  "version" (each batch N sets it to 1.N.0). */
+function appVersion(): string {
+  const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version?: string };
+  return pkg.version ?? '0.0.0';
+}
+
 export default defineConfig({
   define: {
     __APP_COMMIT__: JSON.stringify(buildCommit()),
-    __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+    __APP_VERSION__: JSON.stringify(appVersion()),
   },
   build: {
     // flag-icons ships ~540 country SVGs, nearly all under Vite's default 4kB
@@ -45,6 +53,8 @@ export default defineConfig({
         'icons/icon-512.png',
         'icons/icon-maskable-192.png',
         'icons/icon-maskable-512.png',
+        'icons/icon-splash-192.png',
+        'icons/icon-splash-512.png',
       ],
       manifest: {
         name: "NAEEM'S",
@@ -60,12 +70,16 @@ export default defineConfig({
         orientation: 'portrait-primary',
         start_url: '/',
         scope: '/',
-        // "any": the round logo, used for the splash screen (logo on the
-        // background colour). "maskable": the same logo on a full orange
-        // square, so Android's icon shapes never cut it or leave a white ring.
+        // "any" (Batch 32 Part 6): the round orange logo alone on a fully
+        // transparent square, sized to sit inside Android's round splash
+        // crop — the opening screen shows just the logo on white, no square
+        // behind it (scripts/make-splash-icons.mjs). "maskable": the same
+        // logo on a full orange square, for the home-screen icon only, so
+        // Android's icon shapes never cut it or leave a white ring.
+        // A manifest has one opening-screen colour: white, in dark mode too.
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-splash-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-splash-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
           { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],

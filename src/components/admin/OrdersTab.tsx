@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { adminPath } from '../../lib/adminPages';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '../../lib/orderStatus';
@@ -7,7 +9,7 @@ import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus, steadfast
 import { fetchOrderItemCounts } from '../../lib/adminData';
 import { fetchAllPayments, paymentStateText, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
-import { NewOrderSheet } from './NewOrderSheet';
+import { orderPaymentTag } from '../../lib/paymentPlan';
 import { useToast } from '../../hooks/useToast';
 import { DeleteOrdersDialog } from './DeleteOrdersDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -103,7 +105,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
+  const navigate = useNavigate();
   const [itemCounts, setItemCounts] = useState<Map<string, number>>(() => new Map());
   // Batch 30: every order's payments (null until migration-033 is run —
   // the Payment column then shows the old method · status text).
@@ -246,7 +248,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         menu={menu}
         primary={
           can('create_orders') ? (
-            <button type="button" className="adm-btn adm-btn--primary" onClick={() => setIsNewOrderOpen(true)}>
+            <button
+              type="button"
+              className="adm-btn adm-btn--primary"
+              onClick={() => navigate(adminPath.newOrder(), { state: { fromList: true } })}
+            >
               <AdminIcon name="plus" />
               New order
             </button>
@@ -306,6 +312,9 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           </div>
           {filtered.map((order) => {
             const items = itemCounts.get(order.id);
+            // Batch 32: "COD", "Paid", "Advance ৳1,000 · rest COD", "Due · pays later"…
+            const summary = payments ? summarizePayments(order.total, payments.get(order.id) ?? []) : null;
+            const payTag = summary ? orderPaymentTag(order, summary, formatTakaBd) : null;
             const courier = courierLabel(order.steadfast_status);
             const attention = steadfastNeedsAttention(order.steadfast_status);
             return (
@@ -350,6 +359,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                     )}
                     <span className="adm-price">{formatTakaBd(order.total)}</span>
                   </p>
+                  {payTag && (
+                    <p className="adm-lrow__meta adm-mobile-meta">
+                      <span className="adm-pay-tag" data-testid="order-pay-tag-mobile">{payTag}</span>
+                    </p>
+                  )}
                 </div>
                 <span className="adm-orow__pills adm-mobile-meta">
                   <span className={`adm-status adm-status--${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
@@ -370,9 +384,15 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                   <span className={`adm-status adm-status--${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
                 </span>
                 <span className="adm-cell adm-cell--muted" data-testid="order-payment-cell">
-                  {payments
-                    ? paymentStateText(summarizePayments(order.total, payments.get(order.id) ?? []), formatTakaBd)
+                  {summary
+                    ? paymentStateText(summary, formatTakaBd)
                     : `${PAYMENT_METHOD_LABELS[order.payment_method]} · ${PAYMENT_STATUS_LABELS[order.payment_status]}`}
+                  {payTag && (
+                    <>
+                      <br />
+                      <span className="adm-pay-tag" data-testid="order-pay-tag">{payTag}</span>
+                    </>
+                  )}
                 </span>
                 <span className={`adm-cell${attention ? ' adm-orow__courier--alert' : ' adm-cell--muted'}`}>
                   {attention ? 'Needs attention' : (courier ?? '—')}
@@ -433,16 +453,6 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       )}
 
       <OrderDetailSheet orderId={openOrderId} onClose={() => setOpenOrderId(null)} onChanged={onReload} />
-
-      <NewOrderSheet
-        isOpen={isNewOrderOpen}
-        onClose={() => setIsNewOrderOpen(false)}
-        onCreated={async (orderId) => {
-          setIsNewOrderOpen(false);
-          await onReload();
-          setOpenOrderId(orderId);
-        }}
-      />
 
       <DeleteOrdersDialog
         isOpen={isConfirmingDelete}

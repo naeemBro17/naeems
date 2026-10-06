@@ -75,7 +75,7 @@ export const AboutPage = routePage(() => import('../pages/policy/AboutPage'), (m
 /** The page a path opens (null = Home, which is always loaded, or admin,
  *  which has its own loading screen). Mirrors the routes in App.tsx. */
 export function pageForPath(pathname: string): RoutePage | null {
-  if (pathname === '/' || pathname === '/admin') return null;
+  if (pathname === '/' || pathname === '/admin' || pathname.startsWith('/admin/')) return null;
   if (pathname.startsWith('/product/')) return ProductDetailPage;
   if (pathname.startsWith('/brand/')) return BrandPage;
   if (pathname.startsWith('/orders/')) return OrderDetailPage;

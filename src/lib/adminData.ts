@@ -87,6 +87,55 @@ export interface CustomerRow {
   /** What they still owe across their orders (Batch 30); null when not
    *  known (before migration-033, or no permission to see money). */
   total_due: number | null;
+  /** Batch 32 (migration-035). Defaults until it is run. */
+  hidden: boolean;
+  note: string | null;
+  alt_phone: string | null;
+  /** Added with "Add customer" (can be deleted while they have no orders). */
+  added_by_hand: boolean;
+  /** Orders of any status, cancelled included (0 = may be deleted). */
+  all_orders: number;
+}
+
+const CUSTOMER_DEFAULTS = { hidden: false, note: null, alt_phone: null, added_by_hand: false, all_orders: 0 };
+
+/** Batch 32: whether the customers additions (add / hide / delete) are live. */
+export interface CustomersResult {
+  rows: CustomerRow[];
+  error: string | null;
+  /** False before migration-035: Add / Hide / Delete are not offered. */
+  canManage: boolean;
+}
+
+/** Batch 32: admin_customers_v3 (migration-035) adds Hide, the note and
+ *  customers added by hand; before it, the Batch 30 list. */
+export async function fetchCustomersV3(): Promise<CustomersResult> {
+  const v3 = await supabase.rpc('admin_customers_v3');
+  if (!v3.error) {
+    return {
+      rows: ((v3.data ?? []) as Record<string, unknown>[]).map((r) => ({
+        key: r.customer_key as string,
+        id: (r.profile_id as string | null) ?? null,
+        full_name: (r.full_name as string) ?? '',
+        email: (r.email as string) ?? '',
+        phone: (r.phone as string) ?? '',
+        order_count: Number(r.order_count ?? 0),
+        total_spent: r.total_spent === null || r.total_spent === undefined ? null : Number(r.total_spent),
+        last_order_at: (r.last_order_at as string | null) ?? null,
+        joined_at: (r.joined_at as string | null) ?? (r.added_at as string | null) ?? null,
+        total_due: r.total_due === null || r.total_due === undefined ? null : Number(r.total_due),
+        hidden: r.hidden === true,
+        note: (r.note as string | null) ?? null,
+        alt_phone: (r.alt_phone as string | null) ?? null,
+        added_by_hand: r.added_by_hand === true,
+        all_orders: Number(r.all_orders ?? 0),
+      })),
+      error: null,
+      canManage: true,
+    };
+  }
+  const old = await fetchCustomers();
+  return { ...old, canManage: false };
 }
 
 /** Batch 30: everyone (registered or phone-only) with what they owe —
@@ -106,6 +155,8 @@ export async function fetchCustomers(): Promise<{ rows: CustomerRow[]; error: st
         last_order_at: (r.last_order_at as string | null) ?? null,
         joined_at: (r.joined_at as string | null) ?? null,
         total_due: r.total_due === null || r.total_due === undefined ? null : Number(r.total_due),
+        ...CUSTOMER_DEFAULTS,
+        all_orders: Number(r.order_count ?? 0),
       })),
       error: null,
     };
@@ -127,6 +178,8 @@ export async function fetchCustomers(): Promise<{ rows: CustomerRow[]; error: st
       total_spent: r.total_spent === null || r.total_spent === undefined ? null : Number(r.total_spent),
       last_order_at: (r.last_order_at as string | null) ?? null,
       joined_at: r.joined_at as string,
+      ...CUSTOMER_DEFAULTS,
+      all_orders: Number(r.order_count ?? 0),
     })),
     error: null,
   };
@@ -247,4 +300,11 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<OrderWithD
         : row;
     }),
   };
+}
+
+/** Batch 32 Part 3: the order behind /admin/orders/:orderNumber/edit. */
+export async function fetchOrderIdByNumber(orderNumber: string): Promise<string | null> {
+  const { data, error } = await supabase.from('orders').select('id').eq('order_number', orderNumber).maybeSingle();
+  if (error || !data) return null;
+  return (data as { id: string }).id;
 }

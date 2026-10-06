@@ -17,6 +17,7 @@ import {
   type PaymentMethodId,
   type PaymentSummary,
 } from '../../lib/payments';
+import { courierCod } from '../../lib/paymentPlan';
 import type { OrderWithDetails } from '../../types';
 
 const STATE_TONE: Record<PaymentSummary['state'], 'neutral' | 'info' | 'success' | 'danger'> = {
@@ -187,6 +188,13 @@ export function OrderPaymentBlock({
           <span className="order-pay__value order-pay__value--due" data-testid="payment-due">{formatTaka(summary.due)}</span>
         </div>
       </div>
+      {summary.due > 0 && order.status !== 'cancelled' && (order.collect_mode === 'pay_later' || order.status !== 'delivered') && (
+        <p className="order-pay__mode" data-testid="payment-collect-mode">
+          {order.collect_mode === 'pay_later'
+            ? `Customer pays later · courier collects ${formatTaka(0)}`
+            : `Courier collects ${formatTaka(courierCod(summary.total, summary.paid, order.collect_mode))} on delivery`}
+        </p>
+      )}
       {summary.overpaid > 0 && (
         <p className="order-pay__over" data-testid="payment-overpaid">
           Over-paid {formatTaka(summary.overpaid)}

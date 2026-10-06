@@ -8,6 +8,9 @@ interface ModalProps {
   children: ReactNode;
   /** Full-screen slide-over on mobile (used by the product form). */
   fullScreenOnMobile?: boolean;
+  /** Device/browser back closes it (default). Off only for a dialog that is
+   *  itself answering a back press (Batch 32's "Discard changes?"). */
+  backCloses?: boolean;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -22,6 +25,7 @@ export function Modal({
   title,
   children,
   fullScreenOnMobile = false,
+  backCloses = true,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -31,7 +35,7 @@ export function Modal({
   const [isClosing, setIsClosing] = useState(false);
 
   // Device/browser back closes the modal instead of leaving the page.
-  useModalBackClose(isOpen, onClose);
+  useModalBackClose(isOpen && backCloses, onClose);
 
   useEffect(() => {
     if (isOpen) {

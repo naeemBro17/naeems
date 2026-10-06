@@ -6,10 +6,10 @@
 // every price/stock check happens in the database, never trusted from this
 // form; this component only shapes the input and shows a live preview.
 import { useEffect, useMemo, useState } from 'react';
-import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Toggle } from './edit-sheets/SheetChrome';
-import { AddressFormFields, type AddressFieldErrors } from '../checkout/AddressFormFields';
+import { type AddressFieldErrors } from '../checkout/AddressFormFields';
+import { CustomerDetailsFields } from './CustomerDetailsFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
@@ -20,7 +20,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   MANUAL_ORDER_SOURCES,
   DISCOUNT_REASONS,
-  MANUAL_PAYMENT_METHODS,
   computeManualOrderTotals,
   lineNeedsReason,
   type StockWarning,
@@ -30,13 +29,19 @@ import { looksLikePhone } from '../../lib/phone';
 import { FraudCheckCard } from './FraudCheckCard';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import type { DeliveryAddress } from '../../features/checkout/types';
-import type { DiscountReason, OrderPaymentMethod, OrderSource } from '../../types';
+import { PaymentSection } from './PaymentSection';
+import { legacyPaymentMethod, planPayment, type CollectMode } from '../../lib/paymentPlan';
+import { isCollectModeReady } from '../../lib/orders';
+import type { PaymentMethodId } from '../../lib/payments';
+import type { DiscountReason, OrderSource } from '../../types';
 
-interface NewOrderSheetProps {
-  isOpen: boolean;
-  onClose: () => void;
-  /** Called with the new order's id once saved — the parent opens its detail
-   *  sheet immediately so Naeem lands right on the invoice/Steadfast button. */
+interface NewOrderFormProps {
+  /** The page's Create order button submits this form by id. */
+  formId: string;
+  /** Tells the page whether its Create order button can be pressed. */
+  onState: (state: { canSave: boolean; isSaving: boolean }) => void;
+  /** Called with the new order's id once saved — the page opens its detail
+   *  immediately so Naeem lands right on the invoice/Steadfast button. */
   onCreated: (orderId: string) => void | Promise<void>;
 }
 
@@ -80,7 +85,12 @@ function emptyForm(): DeliveryAddress {
 
 const emptyErrors: AddressFieldErrors = {};
 
-export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps) {
+/**
+ * Batch 32 Part 3: the form of the New order page (/admin/orders/new) —
+ * the Batch 22 sheet's form, unchanged inside; the page around it has the
+ * Back button and the Create order button.
+ */
+export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) {
   // Batch 24: custom prices, "Free" and order discounts are money changes —
   // Super Admin only. A moderator's manual order is always at the real
   // price (admin_create_order() refuses anything else from them).
@@ -104,55 +114,49 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
   } | null>(null);
   const [lookedUpPhone, setLookedUpPhone] = useState('');
 
+  // Batch 32 Part 4: the same customer form as Add customer.
+  const [altPhone, setAltPhone] = useState('');
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
 
   const [zone, setZone] = useState<DeliveryZoneChoice>('inside_dhaka');
-  const [feeInput, setFeeInput] = useState('70');
+  const [feeInput, setFeeInput] = useState(() => settings.delivery_fee_inside_dhaka || '70');
   const [zoneTouched, setZoneTouched] = useState(false);
 
   const [orderDiscountInput, setOrderDiscountInput] = useState('0');
   const [discountReason, setDiscountReason] = useState<DiscountReason | null>(null);
   const [discountNote, setDiscountNote] = useState('');
 
-  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>('cod');
-  const [bkashTrxId, setBkashTrxId] = useState('');
-  const [bkashSender, setBkashSender] = useState('');
+  // Batch 32 Part 1: Paid now, then what happens to the rest.
+  const [paidNowInput, setPaidNowInput] = useState('');
+  const [paidMethod, setPaidMethod] = useState<PaymentMethodId | null>(null);
+  const [paidTrxId, setPaidTrxId] = useState('');
+  const [collectMode, setCollectMode] = useState<CollectMode>('cod');
+  const [payLaterReady, setPayLaterReady] = useState(true);
   const [markDelivered, setMarkDelivered] = useState(false);
   const [adminNote, setAdminNote] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [pendingWarnings, setPendingWarnings] = useState<StockWarning[] | null>(null);
 
-  // Fresh form every time the sheet opens — a manual order is a one-shot
+  // A fresh form every time the page opens — a manual order is a one-shot
   // entry, not a draft worth remembering between sessions.
   useEffect(() => {
-    if (!isOpen) return;
-    setSource(null);
-    setAddress(emptyForm());
-    setCustomerQuery('');
-    setCustomerResults([]);
-    setPickedCustomer(null);
     // Is the Batch 30 customer search there yet? (Before migration-033 the
     // old phone lookup below takes over.)
     void findCustomers('').then((rows) => setCustomerSearchReady(rows !== null));
-    setMatches(null);
-    setLookedUpPhone('');
-    setQuery('');
-    setLines([]);
-    setZone('inside_dhaka');
-    setFeeInput(settings.delivery_fee_inside_dhaka || '70');
-    setZoneTouched(false);
-    setOrderDiscountInput('0');
-    setDiscountReason(null);
-    setDiscountNote('');
-    setPaymentMethod('cod');
-    setBkashTrxId('');
-    setBkashSender('');
-    setMarkDelivered(false);
-    setAdminNote('');
-    setPendingWarnings(null);
-  }, [isOpen, settings.delivery_fee_inside_dhaka]);
+    void isCollectModeReady().then(setPayLaterReady);
+  }, []);
+
+  // The delivery fee follows the shop setting (it may arrive after the page
+  // opens) until a zone is picked by hand.
+  useEffect(() => {
+    if (zoneTouched) return;
+    setFeeInput(
+      (zone === 'inside_dhaka' ? settings.delivery_fee_inside_dhaka : settings.delivery_fee_outside_dhaka) || '70'
+    );
+    // zone is read, not watched: picking a zone sets the fee itself.
+  }, [settings.delivery_fee_inside_dhaka, settings.delivery_fee_outside_dhaka, zoneTouched]);
 
   // Customer search: phone (any prefix or spacing) or name.
   useEffect(() => {
@@ -336,6 +340,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
       thana: customer.thana,
       fullAddress: customer.addressLine,
     });
+    setAltPhone(customer.altPhone ?? '');
     if (customer.district) handleLocationChange(customer.district, customer.thana);
   };
 
@@ -350,9 +355,6 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     setCustomerResults([]);
   };
 
-  const isPaidNow =
-    paymentMethod === 'cash' || (paymentMethod === 'bkash' && bkashTrxId.trim() !== '');
-
   const deliveryFee = zone === 'hand_delivered' ? 0 : Math.max(0, Number(feeInput) || 0);
   const orderDiscount = Math.max(0, Number(orderDiscountInput) || 0);
 
@@ -366,7 +368,14 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     [lines, orderDiscount, deliveryFee]
   );
 
+  const plan = planPayment({ total: totals.total, paidNowInput, mode: collectMode, formatMoney: formatTaka });
+  const methodMissing = plan.paidNow > 0 && paidMethod === null;
+  // "Mark as delivered right away" only for a hand-delivered order paid in full.
+  const isPaidNow = totals.total > 0 && plan.paidNow >= totals.total;
+
   const canSave =
+    plan.error === null &&
+    !methodMissing &&
     source !== null &&
     lines.length > 0 &&
     address.fullName.trim() !== '' &&
@@ -394,9 +403,12 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     orderDiscount,
     discountReason: orderDiscount > 0 ? discountReason ?? 'other' : null,
     discountNote: discountNote.trim() || null,
-    paymentMethod,
-    bkashTrxId: paymentMethod === 'bkash' ? bkashTrxId.trim() || null : null,
-    bkashSender: paymentMethod === 'bkash' ? bkashSender.trim() || null : null,
+    paymentMethod: legacyPaymentMethod({ total: totals.total, paidNow: plan.paidNow, method: paidMethod, mode: collectMode }),
+    paidNow: plan.paidNow,
+    paidMethod,
+    paidTrxId: paidTrxId.trim() || null,
+    collectMode: plan.remaining > 0 ? collectMode : 'cod',
+    altPhone: altPhone.trim() || null,
     linkedCustomerId: null,
     markDelivered: zone === 'hand_delivered' && isPaidNow && markDelivered,
     adminNote: adminNote.trim() || null,
@@ -425,6 +437,10 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     await onCreated(result.orderId);
   };
 
+  useEffect(() => {
+    onState({ canSave, isSaving });
+  }, [canSave, isSaving, onState]);
+
   const warningMessage = pendingWarnings
     ? pendingWarnings
         .map(
@@ -435,9 +451,11 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     : '';
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="New order">
+    <>
       <form
+        id={formId}
         className="form manual-order-form"
+        data-testid="new-order-form"
         onSubmit={(e) => {
           e.preventDefault();
           void handleSave(false);
@@ -533,7 +551,15 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
           </div>
         </div>
 
-        <AddressFormFields form={address} errors={emptyErrors} onChange={(patch) => setAddress((c) => ({ ...c, ...patch }))} onLocationChange={handleLocationChange} idPrefix="manual-order" />
+        <CustomerDetailsFields
+          idPrefix="manual-order"
+          address={address}
+          errors={emptyErrors}
+          onAddressChange={(patch) => setAddress((c) => ({ ...c, ...patch }))}
+          onLocationChange={handleLocationChange}
+          altPhone={altPhone}
+          onAltPhoneChange={setAltPhone}
+        />
 
         <FraudCheckCard phone={address.phone} />
 
@@ -740,36 +766,21 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
 
         <div className="form-field">
           <span className="form-label">Payment</span>
-          <div className="chip-group" role="group" aria-label="Payment method">
-            {MANUAL_PAYMENT_METHODS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`chip-select${paymentMethod === opt.id ? ' chip-select--on' : ''}`}
-                onClick={() => setPaymentMethod(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {paymentMethod === 'bkash' && (
-            <div className="form-row" style={{ marginTop: 8 }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="TrxID (optional)"
-                value={bkashTrxId}
-                onChange={(e) => setBkashTrxId(e.target.value)}
-              />
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Sender number (optional)"
-                value={bkashSender}
-                onChange={(e) => setBkashSender(e.target.value)}
-              />
-            </div>
-          )}
+          <PaymentSection
+            idPrefix="manual-order"
+            total={totals.total}
+            plan={plan}
+            paidNowInput={paidNowInput}
+            onPaidNowInput={setPaidNowInput}
+            method={paidMethod}
+            onMethod={setPaidMethod}
+            trxId={paidTrxId}
+            onTrxId={setPaidTrxId}
+            mode={collectMode}
+            onMode={setCollectMode}
+            payLaterAvailable={payLaterReady}
+            methodMissing={methodMissing}
+          />
         </div>
 
         {zone === 'hand_delivered' && isPaidNow && (
@@ -825,14 +836,6 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
           </div>
         </div>
 
-        <div className="edit-sheet__footer">
-          <button type="button" className="edit-sheet__cancel" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </button>
-          <button type="submit" className="edit-sheet__save" disabled={!canSave}>
-            {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-          </button>
-        </div>
       </form>
 
       <ConfirmDialog
@@ -848,6 +851,6 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
         }}
         onClose={() => setPendingWarnings(null)}
       />
-    </BottomSheet>
+    </>
   );
 }

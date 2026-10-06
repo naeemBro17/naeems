@@ -226,7 +226,9 @@ test.describe('Part 3 — variants: sizes appear, the image follows the choice',
 
     // The same photo the card showed (the card may use its small version).
     const openedOn = (await firstImage.getAttribute('src')) ?? '';
-    expect(openedOn).toBe(cardSrc.replace('/thumb/', '/'));
+    // (Batch 32: small copies made since Batch 31 carry a "?v=" version
+    // marker the full photo doesn't — same photo, so compared without it.)
+    expect(openedOn.split('?')[0]).toBe(cardSrc.replace('/thumb/', '/').split('?')[0]);
     // ...and it never changes by itself afterwards.
     for (let i = 0; i < 8; i++) {
       expect(await shownSrc()).toBe(openedOn);

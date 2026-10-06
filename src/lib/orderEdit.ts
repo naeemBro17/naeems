@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { OrderWithDetails } from '../types';
 import type { PaymentSummary } from './payments';
+import { courierCod } from '../../supabase/functions/_shared/cod';
 
 /* Batch 30 Part 2 — "Edit order" (any field, any stage). The sheet keeps a
    draft; this works out what actually changed and sends only that to
@@ -177,7 +178,9 @@ export function steadfastBanner(order: OrderWithDetails, payments: PaymentSummar
   if (FINAL_COURIER.includes(order.steadfast_status ?? '')) return null;
   const fields = order.steadfast_outdated ?? [];
   const cod = order.steadfast_cod_amount;
-  const codShouldBe = payments && cod !== null && Math.abs(payments.due - cod) > 0.004 ? payments.due : null;
+  // Batch 32: the one COD rule (0 for "Customer pays later").
+  const shouldBe = payments ? courierCod(order.total, payments.paid, order.collect_mode) : null;
+  const codShouldBe = shouldBe !== null && cod !== null && Math.abs(shouldBe - cod) > 0.004 ? shouldBe : null;
   if (fields.length === 0 && codShouldBe === null) return null;
   return { fields, codShouldBe };
 }

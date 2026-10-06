@@ -1,4 +1,4 @@
-import { appVersionLabel } from '../../lib/appVersion';
+import { appBuild, appVersionNumber } from '../../lib/appVersion';
 import {
   useEffect,
   useRef,
@@ -998,10 +998,15 @@ export function SettingsTab() {
         param="sset"
         pages={pages}
         footer={
-          // Batch 31 Part 7: which version this phone / PC runs.
-          <p className="adm-app-version" data-testid="app-version">
-            Version {appVersionLabel()}
-          </p>
+          // Batch 31 Part 7 / Batch 32 Part 2: which version this phone / PC runs.
+          <div className="adm-app-version">
+            <p className="adm-app-version__number" data-testid="app-version">
+              Version {appVersionNumber()}
+            </p>
+            <p className="adm-app-version__build" data-testid="app-build">
+              Build {appBuild()}
+            </p>
+          </div>
         }
       />
     </section>

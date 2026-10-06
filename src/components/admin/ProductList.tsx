@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
@@ -6,7 +7,7 @@ import { useToast } from '../../hooks/useToast';
 import { normalizeText } from '../../lib/format';
 import { productImages, coverImage, productNeedsSmallCopies } from '../../lib/productImages';
 import { findSmallImagesWork, runSmallImages, workCount } from '../../lib/smallImages';
-import { ProductForm } from './ProductForm';
+import { adminPath } from '../../lib/adminPages';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { RestockSheet } from './RestockSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -55,6 +56,7 @@ function stockLabel(product: Product, threshold: number): { tone: 'ok' | 'low'; 
 export function ProductList() {
   const { products, categories, settings, isLoading, refetch, patchProductLocal, variantsFor } = useProducts();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   // Batch 24: deleting a product stays with the Super Admin; moderators
   // with "Edit products and stock" can add and edit only.
   const { isAdmin } = useAuth();
@@ -80,9 +82,7 @@ export function ProductList() {
   const [brandFilter, setBrandFilter] = useUrlParam<string>('pbrand', '');
   const [statusFilter, setStatusFilter] = useUrlParam<StatusFilter>('pstatus', 'all', STATUS_FILTERS);
   const [stockFilter, setStockFilter] = useUrlParam<StockFilter>('pstock', 'all', STOCK_FILTERS);
-  const [formOpen, setFormOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   /** Phone: checkboxes appear only after "Select products". On a computer
@@ -308,9 +308,10 @@ export function ProductList() {
     );
   };
 
+  // Batch 32 Part 3: Add / Edit product are pages of their own; Back
+  // returns to this list with its filters and scroll.
   const openEditor = (product: Product | null) => {
-    setEditingProduct(product);
-    setFormOpen(true);
+    navigate(product ? adminPath.editProduct(product.id) : adminPath.newProduct(), { state: { fromList: true } });
   };
 
   const rowMenu = (product: Product): MenuItem[] => {
@@ -605,13 +606,6 @@ export function ProductList() {
         </button>
       </BottomSheet>
 
-      <ProductForm
-        isOpen={formOpen}
-        product={editingProduct}
-        editInfo={editingProduct ? (editInfo.get(editingProduct.id) ?? null) : null}
-        onClose={() => setFormOpen(false)}
-      />
-
       <RestockSheet
         product={restockProduct ? (products.find((p) => p.id === restockProduct.id) ?? restockProduct) : null}
         variants={restockProduct ? variantsFor(restockProduct.id) : []}
@@ -636,8 +630,7 @@ export function ProductList() {
         onCombined={(newProduct) => {
           setCombineOpen(false);
           exitSelectMode();
-          setEditingProduct(newProduct);
-          setFormOpen(true);
+          openEditor(newProduct);
         }}
       />
     </section>

@@ -42,6 +42,7 @@ function makeOrder(overrides: Partial<Order>): Order {
     admin_customer_id: null,
     steadfast_cod_amount: null,
     steadfast_outdated: [],
+    collect_mode: 'cod',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     ...overrides,

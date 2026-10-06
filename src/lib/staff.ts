@@ -21,6 +21,7 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'edit_brands', label: 'Edit brands', hint: 'Add, rename, reorder and delete brands; logos, banners and the Home row.' },
   { id: 'edit_customer_notes', label: 'Edit customer notes', hint: 'Write private notes and tags on customers. Needs View customers to see them.' },
   { id: 'edit_orders', label: 'Edit orders', hint: 'Change name, phone, address, items, quantities and delivery fee on any order, at any stage. Prices and discounts stay with you.' },
+  { id: 'manage_customers', label: 'Manage customers', hint: 'Add customers, hide or unhide them, and delete a customer who has no orders. Needs View customers to see the list.' },
 ];
 
 /** Order permissions that are useless without "View orders" — switching

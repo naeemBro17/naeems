@@ -88,6 +88,7 @@ function order(overrides: Partial<OrderWithDetails> = {}): OrderWithDetails {
     admin_customer_id: null,
     steadfast_cod_amount: 630,
     steadfast_outdated: [],
+    collect_mode: 'cod',
     created_at: '2026-10-01T00:00:00Z',
     updated_at: '2026-10-01T00:00:00Z',
     items: [

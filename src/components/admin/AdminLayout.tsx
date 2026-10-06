@@ -17,6 +17,8 @@ interface AdminLayoutProps {
   onNavigate: (section: AdminSection) => void;
   /** Orders waiting to be confirmed — the orange badge on Orders. */
   pendingOrders: number;
+  /** Batch 32: a form page docks its Save button where the bottom bar is. */
+  hideTabbar?: boolean;
   children: ReactNode;
 }
 
@@ -34,6 +36,7 @@ export function AdminLayout({
   banner,
   onNavigate,
   pendingOrders,
+  hideTabbar = false,
   children,
 }: AdminLayoutProps) {
   const groups = groupNavItems(items);
@@ -47,7 +50,7 @@ export function AdminLayout({
     ) : null;
 
   return (
-    <div className="adm">
+    <div className={`adm${hideTabbar ? ' adm--no-tabbar' : ''}`}>
       <aside className="adm-sidebar" aria-label="Admin menu">
         <p className="adm-sidebar__brand">{title}</p>
         <nav aria-label="Admin sections">
