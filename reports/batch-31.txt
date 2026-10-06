@@ -354,4 +354,53 @@ scripts/backup/retention.test.mjs). Screenshots: reports/batch-31-screens/
 
 10. NAEEM'S TURN — deploy and backup setup
 ------------------------------------------
-(see below)
+Your answer to "Deploy the updated Steadfast function (fraud check) now?":
+YES (it also covered migration-034 and the backup-alert function).
+  - migration-034 applied to the live database. Checked:
+    steadfast_fraud_cache exists; image_url_thumb on categories,
+    product_variants and product_variants_view; both variants still read.
+  - Deployed: steadfast (fraud_check added; booking unchanged) and
+    backup-alert (new).
+  - Smoke check, read-only, NO parcel booked:
+      fraud check on your number 01560040012 (typed "+880 1560-040012")
+        → answered: no courier history yet (volume "none").
+      the same number again → served from the 24 h cache (Steadfast not
+        asked again).
+      a customer and a signed-out visitor → "Not authorized."
+      thana list → 731 thanas, "test thana" no longer served.
+      backup-alert without its secret → refused (403).
+    (One row is now in steadfast_fraud_cache: your own number.)
+
+Backup setup:
+  - Backup password: generated, shown to you once, you wrote it down
+    ("saved"). Stored only as the GitHub secret BACKUP_PASSWORD. Not in any
+    file, log or commit; the temporary copy on this PC was deleted.
+  - Created naeemBro17/naeems-backups — PRIVATE (checked: invisible from
+    outside). Added a deploy key that can write only to that repo; its
+    private half is only in the secret BACKUP_DEPLOY_KEY (temporary copy
+    on this PC deleted). Done through this PC's existing GitHub login
+    (Git Credential Manager), nothing printed.
+  - BACKUP_ALERT_SECRET: generated, set in GitHub and in Supabase.
+  - SUPABASE_DB_URL: pasted by you directly into GitHub (never in the chat).
+    First try: "password authentication failed" (the password in the
+    address was wrong). You reset the database password (letters and
+    numbers only) and updated the secret.
+  - All four secrets set on naeemBro17/naeems.
+
+First backup run (from a temporary branch, deleted afterwards; the
+"Run workflow" button appears once this branch is merged into main):
+  run 1: FAILED at the database login (wrong password, above). The failure
+         alert reached Telegram ("Backup failed on 2026-10-06") — the alert
+         works.
+  run 2: SUCCESS.
+      Postgres 17 / pg_dump 17; backups repo not public — OK
+      Dump 744 KB → encrypted file db/2026-10-06.dump.gpg (328 KB)
+      Decrypts to the same file; all 11 main tables present — OK
+      RESTORE TEST PASSED: all 50 tables restored with exactly the rows of
+        the backup (e.g. orders 4/4, order_items 5/5, order_payments 1/1,
+        products 107/107, profiles 11/11, logins 12/12, storage list
+        375/375). 1 harmless skip: "schema public already exists" in the
+        test database.
+      Storage: 375 files, 31.4 MB copied (full copy).
+      Saved to the private repo.
+  From the merge on, it runs every night at 03:00 by itself.
