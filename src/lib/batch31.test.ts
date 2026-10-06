@@ -28,7 +28,7 @@ describe('Batch 31 Part 3: test data never reaches customers or staff lists', ()
       expect(isPlaceholderPlaceName(real)).toBe(false);
     }
     expect(isPlaceholderPlaceName('Demo Area')).toBe(true);
-    expect(isPlaceholderPlaceName('E2E thana')).toBe(true);
+    expect(isPlaceholderPlaceName('Test Para')).toBe(true);
   });
 
   it('test customers are hidden from real staff, not from the test logins', () => {

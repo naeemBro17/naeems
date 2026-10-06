@@ -57,7 +57,7 @@ function childList(row: Record<string, unknown>): Record<string, unknown>[] | nu
  * shown to customers. No real thana / upazila name contains these words.
  */
 export function isPlaceholderPlaceName(name: string): boolean {
-  return /\b(test|testing|dummy|demo|sample|e2e)\b/i.test(name);
+  return /\b(test|testing|dummy|demo|sample)\b/i.test(name);
 }
 
 export function parsePoliceStations(body: unknown): PoliceStation[] {
