@@ -27,6 +27,7 @@ import {
 } from '../../lib/manualOrders';
 import { findCustomers, linkOrderCustomer, type CustomerSearchResult } from '../../lib/customers';
 import { looksLikePhone } from '../../lib/phone';
+import { FraudCheckCard } from './FraudCheckCard';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { DiscountReason, OrderPaymentMethod, OrderSource } from '../../types';
 
@@ -531,6 +532,8 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
         </div>
 
         <AddressFormFields form={address} errors={emptyErrors} onChange={(patch) => setAddress((c) => ({ ...c, ...patch }))} onLocationChange={handleLocationChange} idPrefix="manual-order" />
+
+        <FraudCheckCard phone={address.phone} />
 
         {matches && (
           <div className="admin-panel manual-order-suggestion">

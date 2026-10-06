@@ -39,6 +39,7 @@ import { markSteadfastUpdated, steadfastBanner, steadfastParcelUrl } from '../..
 import { deriveOrderStep, fetchTracking, type TrackingAnswer } from '../../lib/orderSteps';
 import { CourierTimeline, OrderSteps } from '../orders/OrderSteps';
 import { AdminIcon } from './ui/AdminIcon';
+import { FraudCheckCard } from './FraudCheckCard';
 import { codAmountFor } from '../../../supabase/functions/_shared/cod';
 
 interface OrderDetailSheetProps {
@@ -450,6 +451,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
               </button>
             )}
           </div>
+
+          <FraudCheckCard phone={order.customer_phone} />
 
           {banner && order.steadfast_consignment_id && (
             <div className="steadfast-banner" role="status" data-testid="steadfast-banner">

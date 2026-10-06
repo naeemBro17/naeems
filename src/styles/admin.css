@@ -2928,3 +2928,108 @@ html[data-admin] .toast--info .toast__icon {
   font-size: 12px;
   white-space: nowrap;
 }
+
+/* ---------- Batch 31 Part 2: Steadfast courier history (fraud check) ---------- */
+.fraud-card {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.fraud-card--good {
+  background: var(--adm-green-bg, var(--color-success-bg));
+  border-color: transparent;
+}
+
+.fraud-card--warn {
+  background: var(--adm-amber-bg, var(--color-warning-bg));
+  border-color: transparent;
+}
+
+.fraud-card--risk {
+  background: var(--adm-red-bg, var(--color-danger-bg));
+  border-color: transparent;
+}
+
+.fraud-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.fraud-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.fraud-card__refresh {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fraud-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fraud-card__stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fraud-card__value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.fraud-card--good .fraud-card__stat--score .fraud-card__value {
+  color: var(--adm-green-text, var(--color-success));
+}
+
+.fraud-card--warn .fraud-card__stat--score .fraud-card__value {
+  color: var(--adm-amber-text, var(--color-warning));
+}
+
+.fraud-card--risk .fraud-card__stat--score .fraud-card__value {
+  color: var(--adm-red-text, var(--color-danger));
+}
+
+.fraud-card__label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.fraud-card__hint {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-red-text, var(--color-danger));
+}
+
+.fraud-card__empty {
+  margin: var(--space-1) 0 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.fraud-card__note {
+  margin: var(--space-1) 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
