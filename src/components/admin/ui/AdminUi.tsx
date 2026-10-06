@@ -35,6 +35,8 @@ interface PageHeaderProps {
   eyebrow?: string;
   /** Small grey line between eyebrow and title (Home: "Good morning,"). */
   kicker?: string;
+  /** Small grey line under the title (Home: today's date). */
+  subtitle?: string;
   /** Shows a back arrow before the title (sub-pages such as Settings → Orders). */
   onBack?: () => void;
   backLabel?: string;
@@ -49,7 +51,7 @@ interface PageHeaderProps {
  * theme switch, "View site" (computer), secondary actions and the one
  * orange main action.
  */
-export function AdminPageHeader({ title, eyebrow, kicker, onBack, backLabel, primary, menu }: PageHeaderProps) {
+export function AdminPageHeader({ title, eyebrow, kicker, subtitle, onBack, backLabel, primary, menu }: PageHeaderProps) {
   const items = (menu ?? []).filter((m) => !m.disabled);
   return (
     <header className="adm-page-header">
@@ -64,6 +66,7 @@ export function AdminPageHeader({ title, eyebrow, kicker, onBack, backLabel, pri
           )}
           <h1 className="adm-page-header__title">{title}</h1>
         </div>
+        {subtitle && <p className="adm-page-header__subtitle">{subtitle}</p>}
       </div>
       <div className="adm-page-header__actions">
         <span className="adm-only-desktop">

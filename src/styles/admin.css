@@ -3298,3 +3298,86 @@ html[data-admin] .toast--info .toast__icon {
   padding-top: var(--adm-s4);
   border-top: 1px solid var(--adm-line);
 }
+
+/* ---------- Batch 32 Part 5: Admin Home spacing and structure ---------- */
+.adm-home .adm-page-header__eyebrow {
+  color: var(--adm-muted);
+}
+
+.adm-page-header__subtitle {
+  margin-top: 2px;
+  font-size: var(--adm-fs-label);
+  color: var(--adm-muted);
+}
+
+.adm-home .adm-kpis {
+  gap: var(--adm-s3);
+  margin-top: var(--adm-s2);
+}
+
+.adm-home .adm-kpi {
+  min-height: 96px;
+  padding: 14px var(--adm-s4);
+  border: 1px solid var(--adm-line);
+  gap: 2px;
+}
+
+.adm-kpi--attn {
+  background: var(--adm-or-bg);
+  border-color: var(--adm-or-line);
+}
+
+.adm-kpi__sub--ok {
+  color: var(--adm-green-text);
+  font-weight: 600;
+}
+
+.adm-home__section-title {
+  margin: 28px 4px 10px;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.adm-home .adm-group {
+  margin-top: 0;
+}
+
+.adm-home .adm-sales {
+  margin-bottom: 0;
+  border: 1px solid var(--adm-line);
+}
+
+.adm-sales__week-label {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+}
+
+.adm-home .adm-sales__bar {
+  background: rgba(242, 89, 42, 0.32);
+}
+
+.adm-home .adm-sales__bar--today {
+  background: var(--adm-or);
+}
+
+.adm-home .adm-sales__bar--zero {
+  height: 2px !important;
+  border-radius: 1px;
+  background: var(--adm-line);
+}
+
+.adm-home .adm-sales__col--picked .adm-sales__bar:not(.adm-sales__bar--today):not(.adm-sales__bar--zero) {
+  background: rgba(242, 89, 42, 0.55);
+}
+
+@media (min-width: 1024px) {
+  .adm-home .adm-kpis {
+    gap: var(--adm-s4);
+  }
+
+  .adm-home .adm-kpi {
+    min-height: 112px;
+    padding: 18px 20px;
+  }
+}
