@@ -10,6 +10,8 @@ import type {
   OrderWithDetails,
 } from '../types';
 import { parseStockWarning } from './manualOrders';
+import type { PaymentMethodId } from './payments';
+import type { CollectMode } from '../../supabase/functions/_shared/cod';
 import type { StockWarning } from './manualOrders';
 
 // Batch 24 (migration-030) adds steadfast_status_updated_at. Tried first;
@@ -19,6 +21,9 @@ import type { StockWarning } from './manualOrders';
 // customer link and the Steadfast COD / outdated-details columns.
 const ORDER_SELECT_033 =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, alt_phone, courier_note, admin_customer_id, steadfast_cod_amount, steadfast_outdated, created_at, updated_at';
+
+// Batch 32 (migration-035): what happens to the rest of the money.
+const ORDER_SELECT_035 = `${ORDER_SELECT_033}, collect_mode`;
 
 const ORDER_SELECT_030 =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, created_at, updated_at';
@@ -72,6 +77,7 @@ function normalizeOrderRow(row: Record<string, unknown>): Order {
     steadfast_cod_amount:
       row.steadfast_cod_amount === null || row.steadfast_cod_amount === undefined ? null : Number(row.steadfast_cod_amount),
     steadfast_outdated: (row.steadfast_outdated as string[] | null | undefined) ?? [],
+    collect_mode: row.collect_mode === 'pay_later' ? 'pay_later' : 'cod',
   };
 }
 
@@ -88,6 +94,8 @@ function normalizeOrderItemRow(row: Record<string, unknown>): OrderItem {
 type OrdersQueryResult = { data: Record<string, unknown>[] | null; error: { code?: string; message: string } | null };
 
 async function selectOrdersList(): Promise<OrdersQueryResult> {
+  const b32 = await supabase.from('orders').select(ORDER_SELECT_035).order('created_at', { ascending: false });
+  if (b32.error?.code !== UNDEFINED_COLUMN) return b32;
   const newest = await supabase.from('orders').select(ORDER_SELECT_033).order('created_at', { ascending: false });
   if (newest.error?.code !== UNDEFINED_COLUMN) return newest;
   const latest = await supabase.from('orders').select(ORDER_SELECT_030).order('created_at', { ascending: false });
@@ -105,6 +113,8 @@ type OrderQueryResult = {
 };
 
 async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const b32 = await supabase.from('orders').select(ORDER_SELECT_035).eq('id', orderId).maybeSingle();
+  if (b32.error?.code !== UNDEFINED_COLUMN) return b32;
   const newest = await supabase.from('orders').select(ORDER_SELECT_033).eq('id', orderId).maybeSingle();
   if (newest.error?.code !== UNDEFINED_COLUMN) return newest;
   const latest = await supabase.from('orders').select(ORDER_SELECT_030).eq('id', orderId).maybeSingle();
@@ -483,6 +493,13 @@ export interface AdminCreateOrderInput {
   /** Resubmit with this true after the admin sees a stock warning and
    *  chooses to continue anyway — see StockWarning / parseStockWarning. */
   allowNegativeStock?: boolean;
+  /** Batch 32: "Paid now" — saved as a real payment in the same step. */
+  paidNow?: number;
+  paidMethod?: PaymentMethodId | null;
+  paidTrxId?: string | null;
+  /** Batch 32: what happens to the rest ('pay_later' = courier collects ৳0). */
+  collectMode?: CollectMode;
+  altPhone?: string | null;
 }
 
 export interface AdminCreateOrderResult {
@@ -509,6 +526,39 @@ export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<Ad
     reason_note: item.reasonNote,
   }));
 
+  // Batch 32: admin_create_order_v2 (migration-035) saves the order, the
+  // "Paid now" payment and what happens to the rest in one step. Before
+  // it is run: the Batch 30 function, then the payment added on its own.
+  const paidNow = Math.max(0, input.paidNow ?? 0);
+  const collectMode: CollectMode = input.collectMode ?? 'cod';
+  const v2 = await supabase.rpc('admin_create_order_v2', {
+    p_source: input.source,
+    p_items: items,
+    p_full_name: input.fullName,
+    p_phone: input.phone,
+    p_division: input.division,
+    p_district: input.district,
+    p_thana: input.thana,
+    p_address_line: input.addressLine,
+    p_delivery_zone: input.deliveryZone,
+    p_delivery_fee: input.deliveryFee,
+    p_order_discount: input.orderDiscount,
+    p_discount_reason: input.discountReason,
+    p_discount_note: input.discountNote,
+    p_linked_customer_id: input.linkedCustomerId ?? null,
+    p_mark_delivered: input.markDelivered ?? false,
+    p_admin_note: input.adminNote ?? null,
+    p_allow_negative_stock: input.allowNegativeStock ?? false,
+    p_paid_amount: paidNow,
+    p_paid_method: paidNow > 0 ? (input.paidMethod ?? null) : null,
+    p_paid_trx_id: paidNow > 0 ? (input.paidTrxId?.trim() || null) : null,
+    p_collect_mode: collectMode,
+    p_alt_phone: input.altPhone?.trim() || null,
+  });
+  if (v2.error?.code !== FUNCTION_NOT_FOUND) {
+    return createOrderResult(v2.data, v2.error);
+  }
+
   const { data, error } = await supabase.rpc('admin_create_order', {
     p_source: input.source,
     p_items: items,
@@ -523,15 +573,36 @@ export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<Ad
     p_order_discount: input.orderDiscount,
     p_discount_reason: input.discountReason,
     p_discount_note: input.discountNote,
-    p_payment_method: input.paymentMethod,
-    p_bkash_trx_id: input.bkashTrxId ?? null,
-    p_bkash_sender: input.bkashSender ?? null,
+    // With a "Paid now" amount the order starts unpaid and the payment is
+    // added right after (so its method and TrxID are kept as typed).
+    p_payment_method: paidNow > 0 ? 'cod' : input.paymentMethod,
+    p_bkash_trx_id: paidNow > 0 ? null : (input.bkashTrxId ?? null),
+    p_bkash_sender: paidNow > 0 ? null : (input.bkashSender ?? null),
     p_linked_customer_id: input.linkedCustomerId ?? null,
     p_mark_delivered: input.markDelivered ?? false,
     p_admin_note: input.adminNote ?? null,
     p_allow_negative_stock: input.allowNegativeStock ?? false,
   });
 
+  const result = createOrderResult(data, error);
+  if (result.orderId && paidNow > 0 && input.paidMethod) {
+    const paid = await supabase.rpc('admin_add_order_payment', {
+      p_order_id: result.orderId,
+      p_amount: paidNow,
+      p_method: input.paidMethod,
+      p_trx_id: input.paidTrxId?.trim() || null,
+      p_paid_at: null,
+      p_note: 'Paid when the order was entered',
+      p_kind: 'payment',
+    });
+    if (paid.error) {
+      return { ...result, error: `Order ${result.orderNumber ?? ''} saved, but the payment was not recorded: ${paid.error.message}` };
+    }
+  }
+  return result;
+}
+
+function createOrderResult(data: unknown, error: { message: string } | null): AdminCreateOrderResult {
   if (error) {
     const stockWarnings = parseStockWarning(error.message);
     if (stockWarnings) {
@@ -545,6 +616,29 @@ export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<Ad
     return { orderId: null, orderNumber: null, error: 'Could not save this order.', stockWarnings: null };
   }
   return { orderId: row.order_id, orderNumber: row.order_number, error: null, stockWarnings: null };
+}
+
+/** Batch 32: Edit order → "Customer pays later" / "Collect on delivery". */
+export async function adminSetCollectMode(orderId: string, mode: CollectMode): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_set_order_collect_mode', { p_order_id: orderId, p_mode: mode });
+  if (!error) return { error: null };
+  if (error.code === FUNCTION_NOT_FOUND) return { error: COLLECT_MODE_NEEDS_UPDATE };
+  return { error: error.message || 'Could not save the payment choice.' };
+}
+
+export const COLLECT_MODE_NEEDS_UPDATE =
+  '"Customer pays later" needs the Batch 32 database update (migration-035). Until then the courier collects what is due.';
+
+let collectModeReady: Promise<boolean> | null = null;
+
+/** Whether migration-035 is live (orders.collect_mode exists). Asked once. */
+export function isCollectModeReady(): Promise<boolean> {
+  if (!collectModeReady) {
+    collectModeReady = Promise.resolve(supabase.from('orders').select('collect_mode').limit(1)).then(
+      ({ error }) => error?.code !== UNDEFINED_COLUMN
+    );
+  }
+  return collectModeReady;
 }
 
 export interface CustomerMatch {

@@ -10614,3 +10614,10 @@ html.vt-fade::view-transition-new(root) {
 .edit-order__item-end .account-card__edit {
   color: var(--color-text-secondary);
 }
+
+/* Batch 32 Part 1: what happens to the money still due (admin order). */
+.order-pay__mode {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}

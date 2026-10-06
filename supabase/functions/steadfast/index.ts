@@ -107,6 +107,9 @@ interface OrderRow {
   /** Batch 30 (migration-033) — absent until it is run. */
   alt_phone?: string | null;
   courier_note?: string | null;
+  /** Batch 32 (migration-035): 'pay_later' = the courier collects ৳0.
+   *  Absent until it is run (then the normal rule). */
+  collect_mode?: string | null;
 }
 
 interface RequestBody {
@@ -192,6 +195,8 @@ async function handleCreate(
   // Batch 30: COD = what is still due (total minus every payment recorded
   // on the order), never the full total once money was paid. Before
   // migration-033 there are no payments to read, so the old rule stays.
+  // Batch 32: "Customer pays later" is booked with COD ৳0 (codAmountFor,
+  // the one shared rule).
   const { data: summary, error: summaryErr } = await userClient.rpc('order_payment_summary', { p_order_id: order.id });
   const summaryRow = (summary as { due: number | string }[] | null)?.[0];
   const codAmount = codAmountFor(order, !summaryErr && summaryRow ? Number(summaryRow.due) : null);
@@ -587,13 +592,21 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: 'Not authorized.' });
   }
 
-  // Batch 30 columns first; before migration-033 they don't exist yet, so
-  // the same read without them.
-  const withNewColumns = await userClient
+  // Batch 32 / Batch 30 columns first; before migration-035 / -033 they
+  // don't exist yet, so the same read without them.
+  const withCollectMode = await userClient
     .from('orders')
-    .select(`${ORDER_COLUMNS}, alt_phone, courier_note`)
+    .select(`${ORDER_COLUMNS}, alt_phone, courier_note, collect_mode`)
     .eq('id', requestBody.orderId)
     .maybeSingle();
+  const withNewColumns =
+    withCollectMode.error?.code === '42703'
+      ? await userClient
+          .from('orders')
+          .select(`${ORDER_COLUMNS}, alt_phone, courier_note`)
+          .eq('id', requestBody.orderId)
+          .maybeSingle()
+      : withCollectMode;
   const orderRes =
     withNewColumns.error?.code === '42703'
       ? await userClient.from('orders').select(ORDER_COLUMNS).eq('id', requestBody.orderId).maybeSingle()

@@ -3044,3 +3044,87 @@ html[data-admin] .toast--info .toast__icon {
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Batch 32 Part 1: payment section (New order / Edit order) ---------- */
+.pay-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--adm-s1);
+}
+
+.pay-section__amount-row {
+  display: flex;
+  gap: var(--adm-s2);
+  align-items: center;
+}
+
+.pay-section__amount {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-section__full {
+  flex: none;
+  min-height: var(--adm-input-h);
+}
+
+.pay-section__modes .adm-segment__item {
+  min-height: 40px;
+  line-height: 1.2;
+}
+
+.pay-section__modes .adm-segment__item:disabled {
+  opacity: 0.45;
+}
+
+.pay-section__summary {
+  margin-top: var(--adm-s2);
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--adm-s2);
+}
+
+.pay-section__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--adm-s3);
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-section__row span:last-child {
+  color: var(--adm-text);
+  font-weight: 600;
+}
+
+.pay-section__row--strong {
+  padding-top: var(--adm-s2);
+  border-top: 1px solid var(--adm-line);
+  color: var(--adm-text);
+  font-weight: 600;
+}
+
+/* The small payment tag on the Orders list — neutral, never orange. */
+.adm-pay-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--adm-r-pill);
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-cell .adm-pay-tag {
+  margin-top: 2px;
+}

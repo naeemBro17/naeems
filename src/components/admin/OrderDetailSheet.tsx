@@ -746,6 +746,8 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
           order={order}
           isOpen={isEditOpen}
           isAdmin={isAdmin}
+          payments={payments}
+          canAddPayment={canChangeStatus}
           onClose={() => setIsEditOpen(false)}
           onSaved={async () => {
             setIsEditOpen(false);
@@ -779,7 +781,9 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
         title="Book with Steadfast?"
         message={
           order
-            ? `${order.customer_name} · ${order.customer_phone} · ${order.address_line}, ${order.thana}, ${order.district} · COD amount: ${formatTaka(steadfastCodAmount ?? 0)}`
+            ? `${order.customer_name} · ${order.customer_phone} · ${order.address_line}, ${order.thana}, ${order.district} · COD amount: ${formatTaka(steadfastCodAmount ?? 0)}${
+                order.collect_mode === 'pay_later' ? ` · Courier will collect ${formatTaka(0)} — customer pays later` : ''
+              }`
             : ''
         }
         confirmLabel="Book parcel"

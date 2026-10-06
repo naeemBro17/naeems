@@ -33,6 +33,10 @@ export const PAYMENT_METHODS: { id: PaymentMethodId; label: string }[] = [
   { id: 'other', label: 'Other' },
 ];
 
+/** Batch 32: how money can be "paid now" in New order / Edit order — the
+ *  one place this list lives (it can become a shop setting later). */
+export const PAID_NOW_METHODS: readonly PaymentMethodId[] = ['bkash', 'nagad', 'cash', 'bank'];
+
 export const PAYMENT_METHOD_NAMES: Record<PaymentMethodId, string> = Object.fromEntries(
   PAYMENT_METHODS.map((m) => [m.id, m.label])
 ) as Record<PaymentMethodId, string>;

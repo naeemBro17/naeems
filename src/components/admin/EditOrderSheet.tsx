@@ -19,6 +19,10 @@ import {
   stockProblems,
   type EditDraft,
 } from '../../lib/orderEdit';
+import { PaymentSection } from './PaymentSection';
+import { planPayment, type CollectMode } from '../../lib/paymentPlan';
+import { addOrderPayment, summarizePayments, type OrderPayment, type PaymentMethodId } from '../../lib/payments';
+import { adminSetCollectMode, isCollectModeReady } from '../../lib/orders';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
 
@@ -26,19 +30,29 @@ interface EditOrderSheetProps {
   order: OrderWithDetails | null;
   isOpen: boolean;
   isAdmin: boolean;
+  /** Batch 32: the order's payments (null before migration-033) and whether
+   *  this person may record one ("Change order status"). */
+  payments: OrderPayment[] | null;
+  canAddPayment: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }
 
 const emptyErrors = {};
 
-export function EditOrderSheet({ order, isOpen, isAdmin, onClose, onSaved }: EditOrderSheetProps) {
+export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment, onClose, onSaved }: EditOrderSheetProps) {
   const { showToast } = useToast();
   const { options, stockFor } = useSellableOptions();
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Batch 32 Part 1: the payment section.
+  const [paidNowInput, setPaidNowInput] = useState('');
+  const [paidMethod, setPaidMethod] = useState<PaymentMethodId | null>(null);
+  const [paidTrxId, setPaidTrxId] = useState('');
+  const [collectMode, setCollectMode] = useState<CollectMode>('cod');
+  const [payLaterReady, setPayLaterReady] = useState(true);
 
   // A fresh draft every time the sheet opens on an order.
   useEffect(() => {
@@ -46,6 +60,11 @@ export function EditOrderSheet({ order, isOpen, isAdmin, onClose, onSaved }: Edi
     setDraft(draftFromOrder(order, stockFor));
     setQuery('');
     setError(null);
+    setPaidNowInput('');
+    setPaidMethod(null);
+    setPaidTrxId('');
+    setCollectMode(order.collect_mode);
+    void isCollectModeReady().then(setPayLaterReady);
     // stockFor changes identity with the product list; the draft is only
     // rebuilt when the sheet opens, never under Naeem's fingers.
   }, [isOpen, order]);
@@ -60,6 +79,13 @@ export function EditOrderSheet({ order, isOpen, isAdmin, onClose, onSaved }: Edi
   }, [query, options]);
 
   if (!order) return null;
+
+  const alreadyPaid = payments ? summarizePayments(order.total, payments).paid : 0;
+  const plan = totals
+    ? planPayment({ total: totals.total, paidNowInput, mode: collectMode, alreadyPaid, formatMoney: formatTaka })
+    : null;
+  const methodMissing = plan !== null && plan.paidNow > 0 && paidMethod === null;
+  const paymentReady = payments !== null;
 
   const update = (patch: Partial<EditDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const updateItem = (key: string, patch: Partial<EditDraft['items'][number]>) =>
@@ -119,25 +145,47 @@ export function EditOrderSheet({ order, isOpen, isAdmin, onClose, onSaved }: Edi
     Number.isFinite(Number(draft.deliveryFee)) &&
     Number(draft.deliveryFee) >= 0 &&
     Number.isFinite(Number(draft.discount)) &&
-    Number(draft.discount) >= 0;
+    Number(draft.discount) >= 0 &&
+    (plan === null || plan.error === null) &&
+    !methodMissing;
 
   const save = async () => {
     if (!draft || !canSave) return;
     const changes = buildOrderChanges(order, draft);
-    if (Object.keys(changes).length === 0) {
+    const modeChanged = collectMode !== order.collect_mode;
+    const paidNow = plan?.paidNow ?? 0;
+    if (Object.keys(changes).length === 0 && !modeChanged && paidNow <= 0) {
       showToast('Nothing changed');
       onClose();
       return;
     }
     setIsSaving(true);
     setError(null);
-    const result = await adminEditOrder(order.id, changes);
-    setIsSaving(false);
-    if (result.error) {
-      setError(result.error);
-      showToast(result.error, 'error');
-      return;
+    const fail = (message: string) => {
+      setIsSaving(false);
+      setError(message);
+      showToast(message, 'error');
+    };
+    if (Object.keys(changes).length > 0) {
+      const result = await adminEditOrder(order.id, changes);
+      if (result.error) return fail(result.error);
     }
+    if (modeChanged) {
+      const result = await adminSetCollectMode(order.id, collectMode);
+      if (result.error) return fail(result.error);
+    }
+    if (paidNow > 0 && paidMethod) {
+      const result = await addOrderPayment(order.id, {
+        amount: paidNow,
+        method: paidMethod,
+        trxId: paidTrxId,
+        paidAt: null,
+        note: '',
+        kind: 'payment',
+      });
+      if (result.error) return fail(result.error);
+    }
+    setIsSaving(false);
     showToast('Order updated');
     await onSaved();
   };
@@ -350,6 +398,29 @@ export function EditOrderSheet({ order, isOpen, isAdmin, onClose, onSaved }: Edi
               onChange={(e) => update({ courierNote: e.target.value })}
             />
           </div>
+
+          {paymentReady && plan && (
+            <>
+              <h3 className="edit-order__heading">Payment</h3>
+              <PaymentSection
+                idPrefix="edit-order"
+                total={totals.total}
+                plan={plan}
+                alreadyPaid={alreadyPaid}
+                canAddPayment={canAddPayment}
+                paidNowInput={paidNowInput}
+                onPaidNowInput={setPaidNowInput}
+                method={paidMethod}
+                onMethod={setPaidMethod}
+                trxId={paidTrxId}
+                onTrxId={setPaidTrxId}
+                mode={collectMode}
+                onMode={setCollectMode}
+                payLaterAvailable={payLaterReady}
+                methodMissing={methodMissing}
+              />
+            </>
+          )}
 
           <div className="checkout-summary-card edit-order__totals">
             <div className="checkout-summary-card__row">

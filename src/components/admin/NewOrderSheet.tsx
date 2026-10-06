@@ -20,7 +20,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   MANUAL_ORDER_SOURCES,
   DISCOUNT_REASONS,
-  MANUAL_PAYMENT_METHODS,
   computeManualOrderTotals,
   lineNeedsReason,
   type StockWarning,
@@ -30,7 +29,11 @@ import { looksLikePhone } from '../../lib/phone';
 import { FraudCheckCard } from './FraudCheckCard';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import type { DeliveryAddress } from '../../features/checkout/types';
-import type { DiscountReason, OrderPaymentMethod, OrderSource } from '../../types';
+import { PaymentSection } from './PaymentSection';
+import { legacyPaymentMethod, planPayment, type CollectMode } from '../../lib/paymentPlan';
+import { isCollectModeReady } from '../../lib/orders';
+import type { PaymentMethodId } from '../../lib/payments';
+import type { DiscountReason, OrderSource } from '../../types';
 
 interface NewOrderSheetProps {
   isOpen: boolean;
@@ -115,9 +118,12 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
   const [discountReason, setDiscountReason] = useState<DiscountReason | null>(null);
   const [discountNote, setDiscountNote] = useState('');
 
-  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>('cod');
-  const [bkashTrxId, setBkashTrxId] = useState('');
-  const [bkashSender, setBkashSender] = useState('');
+  // Batch 32 Part 1: Paid now, then what happens to the rest.
+  const [paidNowInput, setPaidNowInput] = useState('');
+  const [paidMethod, setPaidMethod] = useState<PaymentMethodId | null>(null);
+  const [paidTrxId, setPaidTrxId] = useState('');
+  const [collectMode, setCollectMode] = useState<CollectMode>('cod');
+  const [payLaterReady, setPayLaterReady] = useState(true);
   const [markDelivered, setMarkDelivered] = useState(false);
   const [adminNote, setAdminNote] = useState('');
 
@@ -146,9 +152,11 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     setOrderDiscountInput('0');
     setDiscountReason(null);
     setDiscountNote('');
-    setPaymentMethod('cod');
-    setBkashTrxId('');
-    setBkashSender('');
+    setPaidNowInput('');
+    setPaidMethod(null);
+    setPaidTrxId('');
+    setCollectMode('cod');
+    void isCollectModeReady().then(setPayLaterReady);
     setMarkDelivered(false);
     setAdminNote('');
     setPendingWarnings(null);
@@ -350,9 +358,6 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     setCustomerResults([]);
   };
 
-  const isPaidNow =
-    paymentMethod === 'cash' || (paymentMethod === 'bkash' && bkashTrxId.trim() !== '');
-
   const deliveryFee = zone === 'hand_delivered' ? 0 : Math.max(0, Number(feeInput) || 0);
   const orderDiscount = Math.max(0, Number(orderDiscountInput) || 0);
 
@@ -366,7 +371,14 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     [lines, orderDiscount, deliveryFee]
   );
 
+  const plan = planPayment({ total: totals.total, paidNowInput, mode: collectMode, formatMoney: formatTaka });
+  const methodMissing = plan.paidNow > 0 && paidMethod === null;
+  // "Mark as delivered right away" only for a hand-delivered order paid in full.
+  const isPaidNow = totals.total > 0 && plan.paidNow >= totals.total;
+
   const canSave =
+    plan.error === null &&
+    !methodMissing &&
     source !== null &&
     lines.length > 0 &&
     address.fullName.trim() !== '' &&
@@ -394,9 +406,11 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
     orderDiscount,
     discountReason: orderDiscount > 0 ? discountReason ?? 'other' : null,
     discountNote: discountNote.trim() || null,
-    paymentMethod,
-    bkashTrxId: paymentMethod === 'bkash' ? bkashTrxId.trim() || null : null,
-    bkashSender: paymentMethod === 'bkash' ? bkashSender.trim() || null : null,
+    paymentMethod: legacyPaymentMethod({ total: totals.total, paidNow: plan.paidNow, method: paidMethod, mode: collectMode }),
+    paidNow: plan.paidNow,
+    paidMethod,
+    paidTrxId: paidTrxId.trim() || null,
+    collectMode: plan.remaining > 0 ? collectMode : 'cod',
     linkedCustomerId: null,
     markDelivered: zone === 'hand_delivered' && isPaidNow && markDelivered,
     adminNote: adminNote.trim() || null,
@@ -740,36 +754,21 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
 
         <div className="form-field">
           <span className="form-label">Payment</span>
-          <div className="chip-group" role="group" aria-label="Payment method">
-            {MANUAL_PAYMENT_METHODS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`chip-select${paymentMethod === opt.id ? ' chip-select--on' : ''}`}
-                onClick={() => setPaymentMethod(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {paymentMethod === 'bkash' && (
-            <div className="form-row" style={{ marginTop: 8 }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="TrxID (optional)"
-                value={bkashTrxId}
-                onChange={(e) => setBkashTrxId(e.target.value)}
-              />
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Sender number (optional)"
-                value={bkashSender}
-                onChange={(e) => setBkashSender(e.target.value)}
-              />
-            </div>
-          )}
+          <PaymentSection
+            idPrefix="manual-order"
+            total={totals.total}
+            plan={plan}
+            paidNowInput={paidNowInput}
+            onPaidNowInput={setPaidNowInput}
+            method={paidMethod}
+            onMethod={setPaidMethod}
+            trxId={paidTrxId}
+            onTrxId={setPaidTrxId}
+            mode={collectMode}
+            onMode={setCollectMode}
+            payLaterAvailable={payLaterReady}
+            methodMissing={methodMissing}
+          />
         </div>
 
         {zone === 'hand_delivered' && isPaidNow && (

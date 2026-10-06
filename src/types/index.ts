@@ -554,6 +554,9 @@ export interface Order {
   steadfast_cod_amount: number | null;
   /** Details Steadfast still has the old version of. */
   steadfast_outdated: string[];
+  /** Batch 32 (migration-035): 'pay_later' = the courier collects ৳0 and
+   *  the rest stays due. 'cod' until it is run (the old behaviour). */
+  collect_mode: 'cod' | 'pay_later';
   created_at: string;
   updated_at: string;
 }
