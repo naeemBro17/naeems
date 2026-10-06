@@ -30,6 +30,23 @@ body {
   overflow-x: hidden;
 }
 
+/* Batch 31 Part 7: feels like an app when installed — no pull-to-refresh
+   bounce of the whole page (inner lists still scroll normally). */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* No accidental text selection when a button is pressed and held. */
+button,
+[role='button'],
+.button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 img {
   max-width: 100%;
   display: block;

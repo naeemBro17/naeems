@@ -42,3 +42,12 @@ createRoot(rootElement).render(
 // Then, once the first page is up and the phone is idle, the other shop
 // pages (product page first) so every tap opens at once.
 preloadShopPages();
+
+// Batch 31 Part 7: the offline helper (service worker) and quick, safe app
+// updates — registered after the page has loaded, never before first paint.
+const startUpdates = () =>
+  void import('./lib/appUpdateStart')
+    .then(({ startAppUpdates }) => startAppUpdates((onChange) => appHistory.listen(() => onChange())))
+    .catch(() => undefined);
+if (document.readyState === 'complete') startUpdates();
+else window.addEventListener('load', startUpdates, { once: true });
