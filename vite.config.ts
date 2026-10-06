@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -15,10 +16,17 @@ function buildCommit(): string {
   }
 }
 
+/** Batch 32 Part 2: the version lives in ONE place — package.json
+ *  "version" (each batch N sets it to 1.N.0). */
+function appVersion(): string {
+  const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version?: string };
+  return pkg.version ?? '0.0.0';
+}
+
 export default defineConfig({
   define: {
     __APP_COMMIT__: JSON.stringify(buildCommit()),
-    __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+    __APP_VERSION__: JSON.stringify(appVersion()),
   },
   build: {
     // flag-icons ships ~540 country SVGs, nearly all under Vite's default 4kB

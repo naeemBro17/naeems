@@ -470,7 +470,9 @@ test('Part 7: manifest, theme colours, the offline helper and the version in Set
 
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=settings');
-  await expect(page.getByTestId('app-version')).toHaveText(/^Version \d{1,2} \w{3} \d{4}, \d{2}:\d{2} · ([0-9a-f]{7}|local)$/, { timeout: 15_000 });
+  // Batch 32 Part 2: "Version 1.N.0" with "Build <commit>" under it (no date).
+  await expect(page.getByTestId('app-version')).toHaveText(/^Version \d+\.\d+\.\d+$/, { timeout: 15_000 });
+  await expect(page.getByTestId('app-build')).toHaveText(/^Build ([0-9a-f]{7}|local)$/);
 });
 
 /* ---------------------------------------------------------------- Part 8 */

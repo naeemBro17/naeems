@@ -67,6 +67,7 @@ Therefore:
 - `npm run build` must pass with **zero errors** at the end of every session.
 - No TypeScript `any` types.
 - No pseudo-code, no placeholder comments, no `// TODO`.
+- Each batch N sets package.json version to 1.N.0.
 - Before every commit, run `npm run build`, `npx vitest run` and `npm run test:e2e`. All must pass. Any visual/navigation fix must be verified with frame captures, not just code review.
 - Use `npm run verify` / `npm run verify:3`. Read only the summary; open full logs only for failures. Read only the parts of files you need. (`verify` runs the build, vitest and every e2e test and prints one summary line when all pass; on failure it prints only the failing tests with their error and file:line. Full logs: `.verify/`.)
 
