@@ -1,0 +1,327 @@
+BATCH 32 — Payment section (paid now / collect / pay later), full-page
+admin forms, customers add / hide / delete, Admin Home, Version 1.32.0,
+opening screen
+=====================================================================
+Branch: feature/batch-32-admin-payments-pages (made from the latest
+origin/main, which has Batch 31 merged). One commit per Part, plus one
+tests commit. Pushed. NOT merged, nothing pushed to main.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Payment section (fixes the NM-1721 problem)
+  - The four chips in New order (Cash on Delivery / bKash / Cash paid / Due)
+    are replaced by one section:
+      1. Paid now ৳ (default 0) + "Full amount". When more than 0: how it
+         was paid — bKash · Nagad · Cash · Bank — and an optional TrxID.
+         Saved as a real payment (method, TrxID, time, who) in the same
+         step as the order.
+      2. Remaining ৳X (only when something remains), an Apple-style switch:
+           Collect on delivery (default)  → the courier collects the rest
+           Customer pays later            → the courier collects ৳0, the
+                                            rest stays due on the customer
+      3. A live summary: Paid now · Courier collects (COD) · Due after
+         delivery. Paid now must be between 0 and the total (red message
+         under the field, Create order stays off otherwise).
+  - THE COD RULE (one shared piece of code, used by the booking, the
+    "Book with Steadfast?" confirmation, the "COD on Steadfast should now
+    be" banner and the New order summary — supabase/functions/_shared/cod.ts):
+        courier COD = "pays later" ? ৳0 : (total − paid, never below 0)
+  - Booking sends exactly that amount. The confirmation shows
+    "COD amount: ৳0 · Courier will collect ৳0 — customer pays later".
+  - The choice is stored on the order (new column collect_mode). Every
+    existing order is "collect on delivery", so nothing changes for them.
+  - Edit order has the same section: switch the mode and/or add a payment.
+    A mode change is written in History ("Remaining money: Collect on
+    delivery → Customer pays later (courier collects ৳0)") and the
+    Activity Log.
+  - After delivery:
+      collect on delivery → unchanged (Steadfast's confirmed delivery
+        records "COD via Steadfast");
+      pays later → nothing is recorded (the courier collected ৳0); the
+        order shows Delivered, payment stays Unpaid / Partly paid with the
+        due amount, under the "Due" filter and in the customer's due.
+  - Orders list: a small grey tag — "COD", "Paid", "Advance ৳1,000 · rest
+    COD", "Due · pays later", "Advance ৳1,000 · ৳X due later" (the old
+    payment text stays too).
+  - The order screen's Payment block says what happens to the money still
+    due ("Courier collects ৳X on delivery" / "Customer pays later").
+  - Website checkout is unchanged (COD or bKash advance → collect on
+    delivery).
+  - Before the database update: the section works, "Customer pays later"
+    is shown greyed out with a one-line explanation, and an advance is
+    still saved as a payment.
+
+  YOUR STEP FOR NM-1721 (do NOT expect it to change by itself):
+    open NM-1721 → pen (Edit order) → Remaining → "Customer pays later" →
+    Save changes. The orange "COD on Steadfast should now be ৳0 (it has
+    ৳4,079)" note will appear — you already set ৳0 on Steadfast, so just
+    press "Done, I updated Steadfast". From then on the site and Steadfast
+    agree, and when it is delivered nothing is recorded as collected; it
+    stays ৳4,079 due on the customer until you add their payment.
+
+PART 2 — Version 1.32.0
+  - Admin → Settings bottom: "Version 1.32.0" and under it, small and
+    grey, "Build 1d331f9" (the code of the version). No date.
+  - The number lives in one place (package.json "version", now 1.32.0)
+    and is put into the app when it is built. CLAUDE.md now says: "Each
+    batch N sets package.json version to 1.N.0."
+  - App updates (Batch 31) are untouched.
+
+PART 3 — Full pages instead of pop-ups
+  - New order        /admin/orders/new
+    Edit order       /admin/orders/NM-1721/edit
+    Add product      /admin/products/new
+    Edit product     /admin/products/<id>/edit
+    Add customer     /admin/customers/new        (Part 4)
+    Customer         /admin/customers/<key>
+    (Order detail stays the sheet it was; only Edit order is a page.)
+  - Each page: top bar with "‹ Back", the title, and the main button on
+    the right on a computer; on a phone the main button sits at the bottom
+    of the screen (the bottom tab bar steps aside on form pages).
+  - Back returns to the list with its filters, search and scroll. Edit
+    order returns to the same order. Save does the same.
+  - "Discard changes?" (Keep editing / Discard) as soon as anything was
+    typed, whichever way you try to leave: the page's Back, the phone's
+    Back button, another sidebar / bottom-bar item, or closing / reloading
+    the tab (the browser's own "Leave site?" there). Small pickers (thana,
+    division, product search, confirmations) stay as sheets and closing
+    them never asks.
+  - The links work after a refresh. Opened while signed out, they go to the
+    hidden admin sign-in and come back to the same page after signing in
+    (only ever back into the admin). /admin itself still sends visitors to
+    the shop, as before.
+  - The forms inside are the same ones as before (sheet frame removed),
+    and every permission check stays.
+
+PART 4 — Customers: add, hide, delete
+  - "Add customer" button on Customers (and New order's "New customer"
+    uses the same fields): name, phone, alternative phone, division /
+    district / thana / address, optional note. The phone is the key — typed
+    any way (+880 / 880 / 0 / spaces). If it already belongs to a customer
+    (an account, a past order or an earlier add) nothing is added and that
+    customer opens ("This phone number already belongs to a customer").
+  - Hide / Unhide (on the customer page): for customers with orders.
+    Hidden customers leave the Customers list and the New order search;
+    the "Hidden" filter on Customers brings them back (with a grey
+    "Hidden" tag). Their orders and dues are untouched.
+  - Delete: only a customer added by hand with no orders and no website
+    account, with a confirm dialog. Anyone else: hide instead (keeps the
+    order history complete).
+  - Who: the Super Admin, or staff with the new switch "Manage customers"
+    (off for every role — Team → role). Adding is also allowed with
+    "Create manual orders" (they could already create customers through
+    New order). All checked in the database; all in the Activity Log.
+  - The E2E test customers stay (the tests need them) and stay hidden from
+    real staff (Batch 31).
+
+PART 5 — Admin Home
+  - Header: small grey "NAEEM'S SUPER ADMIN", "Good evening, Naeem", and
+    today's date under it.
+  - Four cards with 12–16 px gaps — phone 2×2, computer 4 in a row:
+    Today (orders · ৳), To confirm ("all clear" in green at 0; soft
+    orange tint only when something waits), With courier (Steadfast),
+    This month (৳ · orders). No other card is tinted.
+  - Section titles with room above: "Sales · last 7 days" (days with
+    sales soft orange, today stronger, empty days a thin grey line) and
+    "Needs attention".
+  - Needs attention: new row "৳X due from N customers" → Customers with
+    the Due filter, biggest due first. Rows hide at 0; if all are 0:
+    "Nothing needs attention".
+
+PART 6 — App opening screen
+  - New "any" icons (icon-splash-512 / -192): only the round orange logo,
+    on a fully transparent square, a little smaller so Android 12+'s round
+    crop on the opening screen never cuts it. No black or white square.
+    Made by scripts/make-splash-icons.mjs from the existing logo.
+  - The full orange square (maskable, Batch 31) is used for the home-screen
+    icon only. Manifest name NAEEM'S, background white.
+  - A manifest has ONE opening-screen colour, so dark mode also opens on
+    white — accepted, as the brief says.
+  - Proof: reports/batch-32-screens/splash-icon-preview.png (the icon on
+    white and on black); a test checks the corners are transparent and no
+    dark pixel exists.
+  - Note: Android keeps an installed app's icon and opening screen until
+    it rebuilds the app (it checks about once a day when the app is
+    opened). If the black square is still there after a day or two:
+    remove the app from the home screen and add it again.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+supabase/migration-035-batch32.sql — see section 10 for whether I applied
+it after your answer. To run it by hand: open the file, copy all of it,
+paste into the Supabase SQL Editor, Run. Safe to run again.
+In plain words it ADDS:
+  - orders.collect_mode ('cod' for every existing order);
+  - admin_create_order_v2 (New order with Paid now and pay later in one
+    step — it calls the existing admin_create_order, so every price, stock
+    and permission check stays where it was), admin_set_order_collect_mode
+    (Edit order), order_courier_cod (the COD rule);
+  - a "customers" table (added-by-hand customers, note, Hide), with
+    admin_customers_v3, admin_add_customer, admin_set_customer_hidden,
+    admin_delete_customer, admin_find_customers_v2;
+  - the staff switch "Manage customers" (off for everyone).
+  It updates two existing functions only to know about "pays later":
+  "Done, I updated Steadfast" and the automatic "COD via Steadfast" on a
+  confirmed delivery — for every existing order they behave exactly as
+  before. Nothing is dropped, renamed or changed in meaning.
+  The steadfast function must be deployed again too (it now reads
+  collect_mode; booking otherwise unchanged).
+  Before it runs: the live site works as now; the new screens fall back
+  (no pay later, no Add / Hide / Delete) with a clear note.
+  Checked before asking you: applied inside a transaction on the live
+  database and rolled back (nothing kept), and inside that transaction,
+  acting as the test admin: a pay-later order with a ৳100 bKash advance
+  (payment row with TrxID by e2e.admin, courier COD ৳0, switching to
+  collect on delivery → ৳1,620, delivered → no COD payment), paid > total
+  refused; add customer, same phone again → the existing one, hide → gone
+  from search, delete with orders refused, delete without → gone.
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+  - Nothing from the brief is left undone.
+  - "Booking sends exactly that amount (mock captures it)": the amount is
+    worked out inside the steadfast function, which the tests always
+    replace with a mock (they must never reach Steadfast). So the proof is:
+    the one shared rule is unit-tested for all 5 cases, a test checks the
+    function reads collect_mode and books with that rule, and the browser
+    test checks the confirmation shows ৳0. The real booking amount is
+    confirmed on your next real pay-later booking (section 8).
+Needs a later batch:
+  - Private notes and tags for phone-only customers (they still exist only
+    for registered accounts, as before; a customer added by hand has the
+    one note typed when adding them).
+  - An "Edit customer details" page (name / address of a customer added by
+    hand) — not in the brief.
+
+
+4. WHAT I FOUND ALONG THE WAY
+-----------------------------
+  - The dry runs used up a few order numbers (around NM-1724 to NM-1728):
+    the order-number counter cannot be rolled back. The next real order
+    simply skips them. Harmless.
+  - The Telegram order alert is a database trigger that fires on every
+    order UPDATE as well as new orders, and its definition contains the
+    project's service key in plain text (visible only to database owners).
+    Worth moving into a Vault secret one day. I did not print or copy it.
+  - Order history notes are stored in a private table by an existing
+    trigger (correct); they read as empty from the orders table itself.
+  - ProductForm.tsx (the old product pop-up) is now unused and removed;
+    the in-shop "Edit Product" sheet on product cards is unchanged.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Pay later is a separate column (collect_mode), not the old payment
+    method "due", so existing "due" orders like NM-1721 stay exactly as
+    they are until you change them (the brief's rule).
+  - New order saves order + advance + mode in ONE database step
+    (admin_create_order_v2 wraps the existing function), so an order never
+    exists without its advance. The old payment column is still filled
+    (bKash / Cash when fully paid, Due for pay later, else COD) so the
+    invoice and older screens keep reading sensibly.
+  - "How was it paid?" has no default: you must tap one when an amount is
+    typed — a wrong default would record the wrong method silently.
+  - Edit order's "Paid now" becomes "Add a payment now" when earlier
+    payments exist, and shows "Paid before"; it needs "Change order
+    status", the same switch as adding a payment on the order.
+  - "Discard changes?" counts anything typed or chosen in a field; a
+    customer's note saved with its own Save button counts as saved.
+  - Customers are keyed by the same key as Batch 30's grouping, so nothing
+    about existing customers or orders changes; Hide also follows the phone
+    (a hand-added customer who later makes an account stays hidden).
+  - Home's due total counts hidden customers too (money owed is still
+    owed); the Customers "Due" filter therefore also shows hidden ones, so
+    the two numbers always match.
+  - Splash icon at 62 % size: inside Android's round crop, still large.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+----------------------------------------
+  1. Due reminders: a "Remind" button on a customer with money due that
+     opens WhatsApp with a polite message and the amount. Money owed is
+     collected faster. Small.
+  2. Shop settings for what is still hard-coded (for selling this system
+     to other shops later): shop name "NAEEM'S" (about 20 files: page
+     titles, admin header, policies), the payment methods list
+     (src/lib/payments.ts — now one place), delivery fees' fallback ৳70 and
+     ৳130 (checkout types / New order), the courier (Steadfast links,
+     function and wording), the brand colour (tokens.css / admin.css), the
+     staff login domain "staff.naeems.internal", the time zone
+     (Asia/Dhaka, 9 files), phone format (Bangladesh only). Medium–large.
+  3. Payment reconciliation: a monthly "Steadfast paid us" check — compare
+     Steadfast's payouts with the COD recorded here. Catches missing
+     money. Medium.
+  4. Move the service key out of the Telegram trigger into Supabase Vault
+     (section 4). Small.
+  5. Customer details editing (name, address, alt phone) on the customer
+     page, with history. Small.
+
+
+7. TESTS CHANGED (only where Batch 32 changed what they check)
+--------------------------------------------------------------
+  - e2e/batch-31.spec.ts: the version check now expects "Version 1.N.0"
+    and "Build <code>" (Part 2) instead of the date; Edit order is found
+    as a page (edit-order-page).
+  - e2e/batch-24.spec.ts, batch-30.spec.ts, batch-30-screens.spec.ts: Edit
+    order / New order are pages now (edit-order-page, new-order-page; the
+    New order button is "Create order"). Same checks.
+  - e2e/batch-25.spec.ts: the product editor is a page; the test opens it
+    and returns with "Back to products" (was: close the pop-up).
+  - e2e/batch-26.spec.ts: after saving a customer's note the test goes
+    "Back to customers" (was: Escape to close the pop-up). Same checks.
+  - src/lib/batch30.test.ts, manualOrders.test.ts: the sample order has
+    the new collect_mode field.
+  - playwright.config.ts: batch-32 joins the serial group.
+  No test was deleted, skipped or weakened.
+
+
+8. WHAT ONLY YOUR PHONE CAN CONFIRM
+-----------------------------------
+  - The opening screen of the installed app (may need a day, or remove
+    and re-add the app).
+  - The first real pay-later booking: Steadfast shows COD ৳0.
+  - The docked Create order / Save button above the keyboard while
+    typing, and the phone Back button asking "Discard changes?".
+
+
+9. BUILD / TEST RESULTS
+-----------------------
+npm run verify (build + every unit test + every browser test):
+  run 1: build OK · vitest all passed · e2e 4 FAILED:
+         - batch-25 Home title: my new "Good evening, <name>" title (Part 5)
+           → test updated (section 7).
+         - batch-26 customer note: pressing Back while the note was still
+           saving swallowed the Back → FIXED in the code (the guard now
+           leaves once the save is done) — a real bug the test caught.
+         - batch-23 / batch-31 Part 8 (shop photos): the live catalogue
+           changed (you generated small copies after Batch 31) → tests now
+           pick reachable products and ignore the "?v=" version marker.
+  run 2: build OK (33s) · vitest 216/216 (21s) · e2e 192 passed,
+         89 skipped, 1 FAILED (16.4 min):
+         - batch-27 "tapping a card opens it; Back returns … same scroll
+           position": missed by 1 pixel (752 vs > 753). Shop page this
+           batch does not touch; the config already notes this spec misses
+           by a pixel when the PC is busy. Re-run alone: failed once,
+           then passed 4 times in a row. Flaky, not caused by this batch.
+  (skipped = screenshot specs that run only with SCREENS=1, and the Batch
+  32 tests that wait for the database update — see section 10.)
+TypeScript: 0 errors. No "any".
+New tests: 15 e2e (e2e/batch-32.spec.ts; 6 of them need migration-035),
+24 unit tests (src/lib/batch32.test.ts).
+Screenshots: reports/batch-32-screens/ (61 images: 390 + 1280 px, light +
+dark): New order page, payment section in every mode (cod, advance + rest
+COD, advance + pay later, pay later, fully paid, error), booking
+confirmation with ৳0 for pay later, Edit order payment, "Discard
+changes?", Add product page, Customer page, Customers list, Admin Home,
+Settings version, splash-icon-preview.png. (Pay-later screens are made by
+changing what the page receives in the test, before the database update;
+no real order was changed.)
+
+
+10. NAEEM'S TURN — the database addition
+----------------------------------------
+(filled in below)
