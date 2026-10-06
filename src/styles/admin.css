@@ -1808,6 +1808,7 @@
 }
 
 .adm .sheet-close,
+.adm .sheet-icon-button,
 .adm .modal-close {
   position: relative;
   background: var(--adm-card-2);
@@ -1815,6 +1816,7 @@
 }
 
 .adm .sheet-close::after,
+.adm .sheet-icon-button::after,
 .adm .modal-close::after {
   content: '';
   position: absolute;

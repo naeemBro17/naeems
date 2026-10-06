@@ -51,11 +51,20 @@ function childList(row: Record<string, unknown>): Record<string, unknown>[] | nu
   return null;
 }
 
+/**
+ * Batch 31 Part 3: Steadfast's live list contains a row "test thana"
+ * (Bagerhat) — their own test data, not ours. Names like that are never
+ * shown to customers. No real thana / upazila name contains these words.
+ */
+export function isPlaceholderPlaceName(name: string): boolean {
+  return /\b(test|testing|dummy|demo|sample|e2e)\b/i.test(name);
+}
+
 export function parsePoliceStations(body: unknown): PoliceStation[] {
   const seen = new Set<string>();
   const out: PoliceStation[] = [];
   const add = (name: string, district: string) => {
-    if (name === '') return;
+    if (name === '' || isPlaceholderPlaceName(name)) return;
     const key = `${district.toLowerCase()}|${name.toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);

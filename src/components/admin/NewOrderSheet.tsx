@@ -28,6 +28,7 @@ import {
 import { findCustomers, linkOrderCustomer, type CustomerSearchResult } from '../../lib/customers';
 import { looksLikePhone } from '../../lib/phone';
 import { FraudCheckCard } from './FraudCheckCard';
+import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { DiscountReason, OrderPaymentMethod, OrderSource } from '../../types';
 
@@ -83,7 +84,8 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
   // Batch 24: custom prices, "Free" and order discounts are money changes —
   // Super Admin only. A moderator's manual order is always at the real
   // price (admin_create_order() refuses anything else from them).
-  const { isAdmin } = useAuth();
+  const { isAdmin, staff } = useAuth();
+  const hideTestCustomers = !isTestViewer(staff);
   const { products, variantsFor, settings } = useProducts();
   const { showToast } = useToast();
 
@@ -478,7 +480,7 @@ export function NewOrderSheet({ isOpen, onClose, onCreated }: NewOrderSheetProps
               </div>
               {customerQuery.trim().length >= 2 && (
                 <ul className="picker-sheet__list customer-pick__results" data-testid="customer-results">
-                  {customerResults.map((c) => (
+                  {customerResults.filter((c) => !hideTestCustomers || !isTestCustomer({ name: c.fullName })).map((c) => (
                     <li key={c.key}>
                       <button type="button" className="picker-sheet__row" onClick={() => handlePickCustomer(c)}>
                         <span className="picker-sheet__row-label customer-pick__row">

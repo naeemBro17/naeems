@@ -40,7 +40,7 @@ export function ThanaPickerSheet({ isOpen, onClose, district, selectedThana, onP
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={close} title="Select thana / upazila">
+    <BottomSheet isOpen={isOpen} onClose={close} title="Select thana / upazila" panelClassName="sheet-panel--fixed-height">
       <div className="picker-sheet thana-picker">
         <div className="search-bar picker-sheet__search">
           <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
