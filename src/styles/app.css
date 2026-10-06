@@ -10486,6 +10486,13 @@ html.vt-fade::view-transition-new(root) {
   min-height: 0;
 }
 
+/* The search box keeps its own height (the shared search-bar style grows
+   with flex: 1, which in this column would stretch it); the list takes
+   the rest of the sheet. */
+.sheet-panel--fixed-height .picker-sheet__search {
+  flex: 0 0 auto;
+}
+
 .thana-picker__list {
   padding-bottom: var(--space-4);
 }
