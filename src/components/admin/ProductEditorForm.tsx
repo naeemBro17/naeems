@@ -11,7 +11,7 @@ import { slugify } from '../../lib/format';
 import { uniqueProductSlug } from '../../lib/slugify';
 import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
-import { productImages, generateCardThumb } from '../../lib/productImages';
+import { productImages, generateCardThumb, isSmallCopy } from '../../lib/productImages';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -272,7 +272,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
       const fullList = productImages(product);
       const thumbList = product.image_urls_thumb ?? [];
       fullList.forEach((url, i) => {
-        if (thumbList[i]) existingThumbByUrl.set(url, thumbList[i]);
+        // Batch 31 Part 8: only a real small copy is reused; the full photo
+        // saved in the small slot (older failed copies) is made again.
+        if (isSmallCopy(url, thumbList[i])) existingThumbByUrl.set(url, thumbList[i]);
       });
     }
 

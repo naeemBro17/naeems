@@ -4,6 +4,9 @@ import { groupThanas } from './thanas';
 import { isTestCustomer, isTestViewer } from './testData';
 import { telHref, whatsAppChatUrl, whatsAppNumber } from './phone';
 import { whatsAppUrl } from './expertLinks';
+import { cardImage, isSmallCopy, productNeedsSmallCopies } from './productImages';
+import { categoryCircleImage } from './smallImages';
+import type { Product } from '../types';
 
 describe('Batch 31 Part 3: test data never reaches customers or staff lists', () => {
   it("drops Steadfast's own \"test thana\" from their list", () => {
@@ -64,5 +67,38 @@ describe('Batch 31 Part 5: WhatsApp and phone links always carry the country cod
     expect(whatsAppUrl('01560040012')).toBe('https://wa.me/8801560040012');
     expect(whatsAppUrl('https://wa.me/8801560040012')).toBe('https://wa.me/8801560040012');
     expect(whatsAppUrl('  ')).toBeNull();
+  });
+});
+
+describe('Batch 31 Part 8: small copies are real copies, with the full photo as fallback', () => {
+  const base = 'https://x.supabase.co/storage/v1/object/public/product-images';
+  const full = `${base}/products/a.webp`;
+  const small = `${base}/products/thumb/a.webp?v=1`;
+
+  it('only a file in a thumb/ folder counts as a small copy', () => {
+    expect(isSmallCopy(full, small)).toBe(true);
+    expect(isSmallCopy(full, full)).toBe(false);
+    expect(isSmallCopy(full, null)).toBe(false);
+    expect(isSmallCopy(full, 'https://elsewhere.com/thumb/a.webp')).toBe(false);
+  });
+
+  it('a product whose "small" slot holds the full photo still needs one', () => {
+    const product = { image_urls: [full], image_url: full, image_urls_thumb: [full] } as unknown as Product;
+    expect(productNeedsSmallCopies(product)).toBe(true);
+    expect(productNeedsSmallCopies({ ...product, image_urls_thumb: [small] } as Product)).toBe(false);
+  });
+
+  it('cards use the small copy when present, the full photo otherwise', () => {
+    expect(cardImage({ image_urls: [full], image_url: full, image_urls_thumb: [small] } as unknown as Product)).toBe(small);
+    expect(cardImage({ image_urls: [full], image_url: full, image_urls_thumb: [] } as unknown as Product)).toBe(full);
+  });
+
+  it('Browse circles: small copy when present, full photo otherwise, nothing when no photo', () => {
+    const cat = `${base}/categories/c.webp?v=5`;
+    const catSmall = `${base}/categories/thumb/c.webp?v=6`;
+    expect(categoryCircleImage({ image_url: cat, image_url_thumb: catSmall })).toBe(catSmall);
+    expect(categoryCircleImage({ image_url: cat, image_url_thumb: null })).toBe(cat);
+    expect(categoryCircleImage({ image_url: cat })).toBe(cat);
+    expect(categoryCircleImage({ image_url: null, image_url_thumb: catSmall })).toBeNull();
   });
 });

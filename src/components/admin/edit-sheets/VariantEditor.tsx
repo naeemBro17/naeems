@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { saveVariantSmallCopy } from '../../../lib/smallImages';
 import { supabase } from '../../../lib/supabase';
 import { useProducts } from '../../../contexts/ProductContext';
 import { useToast } from '../../../hooks/useToast';
@@ -270,6 +271,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
       image_url: form.image_url,
       note: form.note.trim() === '' ? null : form.note.trim(),
     };
+    const previousImage = editingId ? variants.find((v) => v.id === editingId)?.image_url ?? null : null;
     const { error } = editingId
       ? await supabase.from('product_variants').update(payload).eq('id', editingId)
       : await supabase
@@ -280,6 +282,12 @@ export function VariantEditor({ productId }: VariantEditorProps) {
       setIsSaving(false);
       showToast('Could not save the variant', 'error');
       return;
+    }
+    // Batch 31 Part 8: a new / changed photo gets its small card copy (best
+    // effort; before migration-034 there is nowhere to keep it yet).
+    if (form.image_url !== previousImage) {
+      const savedId = editingId ?? newVariantId;
+      if (savedId) await saveVariantSmallCopy(savedId, form.image_url);
     }
     await reloadVariants();
     setIsSaving(false);

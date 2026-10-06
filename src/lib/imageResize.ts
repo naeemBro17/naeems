@@ -73,3 +73,9 @@ export function resizeImage(file: Blob): Promise<Blob> {
 export function resizeImageCard(file: Blob): Promise<Blob> {
   return resizeToWidth(file, CARD_IMAGE_WIDTH, CARD_WEBP_QUALITY);
 }
+
+/** Batch 31 Part 8: Browse circle version — max 160px wide, WebP, 0.8 quality. */
+export const CIRCLE_IMAGE_WIDTH = 160;
+export function resizeImageCircle(file: Blob): Promise<Blob> {
+  return resizeToWidth(file, CIRCLE_IMAGE_WIDTH, CARD_WEBP_QUALITY);
+}
