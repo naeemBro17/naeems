@@ -1,0 +1,357 @@
+BATCH 31 — Daily backups, fraud check, thana picker fix, one Edit,
+WhatsApp fix, NAEEM'S name, app updates, small images
+=====================================================================
+Branch: feature/batch-31-backup-cleanup (made from the latest origin/main,
+which has Batch 30 merged). One commit per Part, plus one tests commit.
+Pushed. NOT merged, nothing pushed to main.
+
+Steadfast's API guide PDF was read from your Desktop in a temporary folder
+with every key-like string blanked out. No key was copied, printed, logged
+or committed.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Automatic daily backup (free)
+  - Where: a PRIVATE GitHub repo, naeemBro17/naeems-backups.
+      db/2026-10-07.dump.gpg   one file per night (the whole database:
+                               orders, payments, customers, products,
+                               brands, settings, staff, logins)
+      storage/files/...        copy of every image, logo and video
+      storage/files.tsv        list of every Storage file (path, size, date)
+      last-check.txt           the last restore test, table by table
+  - When: every night at 03:00 Bangladesh time (21:00 UTC), plus a
+    "Run workflow" button (GitHub → naeems → Actions → Nightly backup).
+  - Kept: the newest 30 nights + the first backup of each of the last 12
+    months; older ones are deleted automatically. The repo keeps only ONE
+    commit (each night replaces it), so deleted backups really disappear
+    and the repo never grows past what is kept (~3 MB per night today).
+  - Safe: each file is encrypted (gpg, AES-256) with BACKUP_PASSWORD. The
+    job refuses to save if the backups repo ever becomes public. Your
+    main repo is public, so its Action logs are public too: the job prints
+    only pass/fail lines and table names — never data or row counts (those
+    are in last-check.txt inside the private repo).
+  - Every night it proves the backup: decrypts it again (same bytes),
+    checks the main tables are in it (orders, order_items, order_payments,
+    products, product_variants, profiles, brands, categories, staff,
+    logins, storage list), restores it into a throw-away Postgres 17
+    INSIDE the job (never the live database) and compares every table's
+    row count with the backup. Any difference = the job fails.
+  - Storage: CHOSEN = full copy every Sunday. Today: 375 files, 31 MB
+    (product-images 238 files / 13.9 MB, brand-media 137 files / 17.5 MB).
+    Unchanged files are not downloaded again. If it ever passes 300 MB it
+    switches to saving only the list (files.tsv).
+  - Alerts: backup failed → Telegram "Backup failed on <date> — check
+    GitHub Actions" (same bot and chat as order alerts). Sundays: one
+    quiet line "Backups OK — last 7 days saved." Success otherwise = no
+    message. GitHub also e-mails you when a scheduled run fails.
+  - How the alert reaches Telegram: a small new Supabase function
+    "backup-alert". It can send only those two fixed messages and needs its
+    own secret (BACKUP_ALERT_SECRET), so even a leaked secret can't send
+    anything else.
+  - Access to the backups repo: a "deploy key" (an SSH key that can write
+    to naeems-backups and NOTHING else), stored as the secret
+    BACKUP_DEPLOY_KEY. Chosen over a personal token because it is limited
+    to one repo, never expires, and I can set it up without you clicking.
+  - Cost: nothing. GitHub Actions is free (unlimited minutes for a public
+    repo, ~5 min per night), a private repo is free, Supabase free plan.
+  - docs/RESTORE.md: step by step, in plain English: download, unlock,
+    restore into a NEW test Supabase project (with the warning never to
+    restore over the live shop without help), images and videos.
+  - Restore test result: see section 10 (first real run).
+  Proof: actionlint (workflow) + shellcheck (script) clean; unit tests
+  for the keep-30-plus-12-monthly rule; e2e "Part 1" checks the workflow.
+
+PART 2 — Fraud check before confirming (staff only)
+  - New steadfast function action "fraud_check" (GET
+    /fraud_check/score/{phone}). Only staff with "View orders"; customers
+    and visitors are refused before Steadfast is asked.
+  - IMPORTANT, Steadfast changed this: the old answer with exact counts
+    (delivered / returned) stopped on 27 Sept 2026. The new answer gives:
+    the parcel count as merchants see it ("7", "10+", "25+", "50+",
+    "100+"), the delivered % and the returned %, and how many times other
+    merchants reported the number. So the card shows:
+        Parcels 50+ · Delivered 92% · Returned 7%
+    (exact totals are no longer available from Steadfast).
+  - Colours: delivered ≥ 80 % green, 50–79 % amber, < 50 % red with
+    "High return risk — consider an advance payment". No history → "No
+    courier history yet" (grey, not red — Steadfast says a number with no
+    history must not be shown as clean OR as bad).
+  - Shown in the order detail (right under Call / WhatsApp / Invoice) and
+    in New order as soon as a full mobile number is typed or picked.
+  - Cached 24 h per number (one Steadfast call per number per day) in a
+    new staff-only table steadfast_fraud_cache; "Refresh" asks again (never
+    within a minute). Phone typed any way (+880 / 880 / 0 / spaces).
+  - If the action fails or isn't deployed: nothing is shown, no error.
+  Proof: 3 e2e tests (all colours, caching, refused, missing action),
+  unit tests on Steadfast's own example answer; screenshots admin-order-
+  {good,warn,risk}-*, admin-new-order-fraud-*.
+
+PART 3 — Thana picker
+  1. Keyboard closing after every letter — FOUND: the shared sheet
+     (BottomSheet) moved focus every time its parent re-drew. The thana
+     picker re-draws on every letter, so after each letter the cursor
+     jumped out of the search box (keyboard closed) and onto the first
+     button. Fixed in BottomSheet itself: focus moves only when a sheet
+     opens or closes. This fixes checkout, New order and Edit order (same
+     picker), and any other sheet with a search box.
+  2. Sheet jumping down — the sheet was as tall as its list; fewer results
+     = shorter sheet = its top moved down. The picker now has a fixed
+     height (80 % of the screen) and the list scrolls inside.
+  3. "test thana" — it came from STEADFAST'S OWN list: their
+     /police_stations answer really contains {"name":"test thana",
+     "district":"Bagerhat"}. Not from our tests or database. Names with
+     test / testing / dummy / demo / sample are now dropped when the
+     list is read AND when it is shown (so lists already cached on phones
+     are clean too). Checked against all 732 Steadfast thanas: only that
+     one row is dropped.
+  Other leaked test data — scanned the live database (read-only):
+     - products, brands, categories, promo codes, orders: NONE found.
+     - "E2E Test Customer" (the tests' customer login) and "e2e.admin"
+       (the tests' Super Admin) exist on purpose — the tests sign in with
+       them, so they can't be deleted. NEW: they (and any "E2E …"
+       customer) are hidden from the Customers page and the New order
+       customer search for real staff (you and your team). The test logins
+       themselves still see them, so the tests still work.
+     - e2e.admin is still listed on Admin → Team (on purpose: you should
+       always see every login that has Super Admin power).
+  - Tests can't write into shared lists: the thana list only comes from
+    Steadfast (read-only) or the bundled list; a typed "Other" thana is
+    saved only on that one order; the tests mock the list.
+  Proof: e2e types "Guls" / "Mirp" letter by letter at 390 px (checkout
+  and admin) and checks after EVERY letter that the search box still has
+  the cursor and the sheet top hasn't moved; I ran it with the old code
+  too — it fails there, passes now. Screenshot thana-picker-typing-*.
+
+PART 4 — One Edit only
+  - Removed: the per-item "Edit price" links and the delivery-fee "Edit".
+  - The "Edit order" text button is now a pen icon at the top right, next
+    to ✕, same size and style (label "Edit order"); it opens the same Edit
+    order sheet. Only for people allowed to edit (as before).
+  - Call / WhatsApp / Invoice unchanged.
+  Proof: e2e (no old links, pen beside ✕ same size, opens the sheet;
+  staff without "Edit orders" get no pen). Screenshots admin-order-*.
+
+PART 5 — WhatsApp didn't open
+  - One shared helper (src/lib/phone.ts) builds every WhatsApp link as
+    wa.me/8801XXXXXXXXX and every Call link as tel:+8801XXXXXXXXX, however
+    the number was typed (01…, +880…, 880…, 1…, spaces, dashes, 00880).
+  - Used by: the admin order screen, and the shop's WhatsApp setting
+    (help / expert buttons), which had the same bug for a bare 01… number.
+    The Customers page has no WhatsApp/Call buttons (nothing to change).
+  Proof: unit tests (8 formats + abroad numbers); e2e on two real test
+  orders (01712345678 and "+880 1799-990031").
+
+PART 6 — The shop is NAEEM'S
+  - Changed to NAEEM'S: link previews (og/twitter title, site name), the
+    browser tab title of every page, installed-app name, the offline page,
+    About Us text, CSV download names, DEPLOY.md.
+  - Menu: "About Naeem's Price Hub" removed (it only opened a "Coming
+    Soon" placeholder — no content lost). "About Us" is the one About.
+  - "Admin Panel" in the menu: only for signed-in staff (from the real
+    login, as before) — now covered by a test (visitor: no, customer: no,
+    staff: yes).
+  - The invoice PDF and Telegram messages never contained the shop name,
+    so nothing to rename there (see suggestions).
+  - NOT renamed (on purpose), still contain the old name: the GitHub repo
+    "naeems" (fine), package.json name "naeem-price-hub" (internal only),
+    the first line of old SQL migration files 003–033 and schema/rls/
+    seed/storage.sql (comments only), CLAUDE.md's title. Vercel project,
+    Supabase project, buckets and tables: none contain "price hub".
+  Proof: e2e (no "price hub" in head, manifest, menu or page text).
+
+PART 7 — App updates arrive quickly
+  - Before: the installed app kept running the old version until it was
+    completely closed — the new one was downloaded but never switched on.
+  - Now it checks for a new version when the app opens, when it comes back
+    to the foreground, and every 30 minutes. A new version downloads in
+    the background and is switched on (one quick reload + a small
+    "Updated" message) only at a safe moment:
+       - the app is put in the background, or
+       - the next page change, or
+       - right away if the app has only just opened and nothing was touched.
+    NEVER on the cart or checkout pages, never with a sheet or dialog open,
+    never with the cursor in a field, never after something was typed on
+    the page (e.g. admin editing — it waits for the next page change).
+  - Old app files are cleaned up; image and brand-video caches are kept.
+  - Admin → Settings, at the bottom: "Version 6 Oct 2026, 17:31 · f4f43e8"
+    (build time in Bangladesh time + short code of the version).
+  - App feel: name NAEEM'S, white theme/background; a proper "maskable"
+    icon (logo on a full orange square, so Android never cuts it or adds a
+    white ring) plus the round logo for the splash screen; the phone's
+    status bar follows the app's own Dark Mode switch; no pull-to-refresh
+    bounce when installed; buttons can't be text-selected; no tap flash
+    (already there since Batch 27).
+  Proof: 8 unit tests of the safe-moment rules (checkout, sheets, typing,
+  background, page change, check timing); e2e for manifest, colours,
+  worker registration and the version.
+
+PART 8 — Small images
+  - WHY some cards still loaded full photos: 91 of your 98 products had
+    the FULL photo's address saved as their "small copy". When making a
+    small copy failed, the old code saved the full photo in its place, so
+    the product looked done — the button stopped counting it, and editing
+    the product re-used it. The copies failed because the shop's offline
+    helper keeps product photos in an unreadable ("opaque") form once they
+    have been seen in the shop, and the generator was handed that copy
+    instead of the real photo. Only photos added since 26 Sept (7
+    products) had real small copies.
+  - Fixed: the generator downloads the photo fresh; only a real small copy
+    counts as done; a failed one is retried next time.
+  - "Generate small images" now covers products, variant photos and the
+    Browse circles (160 px copy), skips what is done, shows "N of M done"
+    and a done message. Where: Admin → Products, next to "Add" (a button
+    on PC; in the ⋮ menu on a phone), plus the existing notice on that
+    page while anything is missing.
+  - New / changed photos get their small copy automatically on save
+    (products as before; now also variants and categories).
+  - Cards and circles use the small copy when it exists, otherwise the
+    full photo — never a broken image.
+  - YOUR ONE STEP: open Admin → Products → ⋮ → Generate small images once
+    (keep the page open ~2–3 minutes). Home will then load far fewer MB.
+  Proof: unit tests; e2e checks the cards and runs the tool with Storage
+  and saves mocked (nothing written) on a product without a small copy.
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+supabase/migration-034-batch31.sql — see section 10 for whether I applied
+it after your "yes". If you ever need to run it by hand: open the file,
+copy all of it, paste into the Supabase SQL Editor, Run. Safe to run again.
+In plain words it ADDS:
+  - steadfast_fraud_cache (staff-only; the 24 h fraud-check memory);
+  - categories.image_url_thumb and product_variants.image_url_thumb (the
+    small copies), and that column at the end of product_variants_view
+    (everything else in the view stays exactly the same).
+Nothing is dropped, renamed or changed in meaning. Before it runs, the
+site works as now (fraud check remembers in memory; circles and variants
+use full photos). Dry run on the live database inside a transaction that
+was rolled back: applied cleanly; afterwards nothing remained (checked).
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+  - Nothing from the brief is left undone (see section 10 for the setup).
+Needs a later batch:
+  - Variant small copies are made and saved, but the cart thumbnail and
+    variant picker still show the full variant photo, because both are
+    part of the product page this batch must not touch. Today no variant
+    has a photo, so nothing is slower.
+  - A real "new version arrives" test needs two deployed versions; the
+    rules are unit-tested — your phone confirms it (section 8).
+
+
+4. WHAT I FOUND ALONG THE WAY
+-----------------------------
+  - The offline helper stores Supabase images even when unreadable
+    ("opaque", status 0). That's what broke small copies. Nothing else uses
+    fetch() on photos now, but it's a trap for future code.
+  - Any sheet with a search box had the same keyboard-closing bug (shared
+    BottomSheet) — all fixed at once.
+  - Steadfast's live thana list contains their own test row ("test
+    thana") — worth telling Steadfast.
+  - Old CSS for the removed inline price editor (.order-item-price*,
+    .order-admin-detail__edit) is now unused. Harmless; can be removed.
+  - adminUpdateOrderItemPrice / adminUpdateOrderDeliveryFee in
+    src/lib/orders.ts are no longer used by any screen (database functions
+    still exist and are used by nothing else). Can be removed later.
+  - placeTestOrder uses 01712345678 — the same example number Steadfast
+    uses in its guide. Harmless (Steadfast is always mocked in tests).
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Backup: deploy key instead of a personal token (one repo only, no
+    expiry, no clicking). One-commit backups repo (deleted backups really
+    go). Restore test every night, not just once (19 MB, takes seconds).
+    Logins: sessions / refresh tokens / audit log are left OUT of the
+    backup data (useless after a restore, sensitive); their structure is
+    kept. Supabase Vault (secrets) is not backed up on purpose.
+  - Telegram backup alerts through a tiny new function instead of copying
+    the bot token into GitHub (it stays only in Supabase).
+  - Fraud card: three numbers (Parcels, Delivered, Returned) — "success %"
+    is the same number as delivered % in Steadfast's new answer, so it is
+    shown once, coloured. "Reported N times by other merchants" added when
+    there are reports (from the same answer).
+  - Fraud card placed right under Call / WhatsApp — the first thing you
+    see before pressing Confirm.
+  - Test customers hidden only for real staff, not removed (the tests
+    need them); Team still shows e2e.admin (security: never hide a Super
+    Admin login from you).
+  - Page titles changed from "Naeem's" to "NAEEM'S" everywhere so the name
+    is one spelling (the header wordmark design is untouched).
+  - App updates: "prompt" mode (we choose the moment) instead of the old
+    automatic mode that never switched the running app over.
+  - Manifest colour white (= the light page background); a manifest can
+    hold one colour only, dark mode's bar colour comes from the page.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+----------------------------------------
+  1. Practise one restore into a test Supabase project with docs/
+     RESTORE.md (30 min, ideally with a developer friend). A backup that
+     has never been restored by a person is a hope, not a plan. Small.
+  2. Put the shop name, address and phone on the invoice PDF — it has none
+     today, which looks less trustworthy when sent to a customer. Small.
+  3. Fraud check on the Orders LIST (a small coloured dot per COD order)
+     so risky orders stand out before opening them. Small.
+  4. Rotate the Supabase database password once a year (then update the
+     SUPABASE_DB_URL secret). Small.
+  5. Offline helper: stop caching unreadable (opaque) image answers; it
+     can also keep a broken image for 30 days. Small–medium.
+
+
+7. TESTS CHANGED (only where Batch 31 changed what they check)
+--------------------------------------------------------------
+  - e2e/batch-24.spec.ts "Price edit recalculates the total": the inline
+    "Edit price" link is gone (Part 4), so it now edits the price through
+    the pen and the Edit order sheet. Same checks (subtotal, total,
+    History "→ ৳100", moderator refused) plus: the old link is gone.
+  - e2e/batch-26.spec.ts: the brand page title / og:title now end in
+    "— NAEEM'S" instead of "— Naeem's" (Part 6). Same check.
+  - e2e/helpers/steadfastMock.ts: an extra optional fraud_check answer.
+  - playwright.config.ts: batch-31 joins the serial group (it creates test
+    orders and a test staff login).
+  No test was deleted, skipped or weakened.
+
+
+8. WHAT ONLY YOUR PHONE CAN CONFIRM
+-----------------------------------
+  - Thana search: type several letters in a row — the keyboard stays.
+  - App updates: after this is merged, open the installed app; within a
+    minute or two (or the next time you switch back to it) it reloads once
+    and shows "Updated". Admin → Settings shows the new version.
+    The very FIRST switch to this system may need the app fully closed
+    once (the old version doesn't know the new rules yet).
+  - WhatsApp button on an order opens the chat.
+  - The fraud card on a real order (after deploy).
+  - The new app icon shape on your home screen (you may need to remove
+    and re-add the app to see a new icon — Android caches it).
+
+
+9. BUILD / TEST RESULTS
+-----------------------
+npm run verify (full suite: build + every unit test + every browser test):
+  run 1: build OK · vitest 192/192 · e2e 174 passed, 1 FAILED — a Batch 30
+         test mocks a thana called "E2E Steadfast Thana", and my first thana
+         filter also dropped names with "e2e". Fixed the filter (it now drops
+         test / testing / dummy / demo / sample only); the test unchanged.
+  run 2: build OK (25s) · vitest 192/192 (19s) · e2e 184 passed, 71 skipped
+         ALL GREEN (20.2 min)
+  (skipped = screenshot specs that run only with SCREENS=1, and tests that
+  wait for a database update, exactly as before this batch.)
+verify:3 not needed: no Part touches the product page or the animations.
+TypeScript: npm run build has 0 errors; the steadfast and backup-alert
+functions pass deno check; workflow passes actionlint, script shellcheck.
+Main shop script: 507.22 KB → 509.3 KB (+2 KB); the update code loads
+after the page, in its own 2 KB file.
+New tests: 15 e2e (e2e/batch-31.spec.ts), 25 unit tests
+(src/lib/batch31.test.ts, fraudCheck.test.ts, appUpdate.test.ts,
+scripts/backup/retention.test.mjs). Screenshots: reports/batch-31-screens/
+(28 images: 390 + 1280 px, light + dark).
+
+
+10. NAEEM'S TURN — deploy and backup setup
+------------------------------------------
+(see below)
