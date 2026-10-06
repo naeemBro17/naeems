@@ -136,10 +136,10 @@ for (const theme of ['light', 'dark'] as const) {
 
       await dialog.getByTestId('edit-order').scrollIntoViewIfNeeded();
       await dialog.getByTestId('edit-order').click();
-      await expect(page.getByTestId('edit-order-sheet')).toBeVisible();
+      await expect(page.getByTestId('edit-order-page')).toBeVisible();
       await page.waitForTimeout(400);
       await page.screenshot({ path: `${DIR}/admin-edit-order-${size.label}-${theme}.png` });
-      await page.getByTestId('edit-order-sheet').locator('.edit-order__items').scrollIntoViewIfNeeded();
+      await page.getByTestId('edit-order-page').locator('.edit-order__items').scrollIntoViewIfNeeded();
       await page.waitForTimeout(200);
       await page.screenshot({ path: `${DIR}/admin-edit-order-items-${size.label}-${theme}.png` });
     });

@@ -248,3 +248,10 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<OrderWithD
     }),
   };
 }
+
+/** Batch 32 Part 3: the order behind /admin/orders/:orderNumber/edit. */
+export async function fetchOrderIdByNumber(orderNumber: string): Promise<string | null> {
+  const { data, error } = await supabase.from('orders').select('id').eq('order_number', orderNumber).maybeSingle();
+  if (error || !data) return null;
+  return (data as { id: string }).id;
+}

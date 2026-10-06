@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { useAuth } from '../../contexts/AuthContext';
-import { BottomSheet } from '../shared/BottomSheet';
-import { fetchCustomerOrders, fetchCustomers, type CustomerOrderRow, type CustomerRow } from '../../lib/adminData';
+import { fetchCustomers, type CustomerRow } from '../../lib/adminData';
+import { adminPath } from '../../lib/adminPages';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import { formatTakaBd } from '../../lib/adminNav';
-import { formatDhakaTime } from '../../lib/staff';
-import { ORDER_STATUS_LABELS } from '../../lib/orderStatus';
 import { AdminPageHeader, AdminSearch, EmptyState, SkeletonRows } from './ui/AdminUi';
-import { AdminIcon } from './ui/AdminIcon';
-import { CustomerNotesEditor, CustomerTagChips } from './CustomerNotes';
+import { CustomerTagChips } from './CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../lib/brandAdmin';
-import type { OrderStatus } from '../../types';
 
 type SortKey = 'recent' | 'orders' | 'spent' | 'due' | 'joined' | 'name';
 const SORT_KEYS: readonly SortKey[] = ['recent', 'orders', 'spent', 'due', 'joined', 'name'];
@@ -21,18 +18,18 @@ function shortDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function isOrderStatus(value: string): value is OrderStatus {
-  return value in ORDER_STATUS_LABELS;
-}
-
 /**
  * Admin → Customers (Batch 25 Part 4). A read-only list of shopper accounts
  * with their order count, total spent and last order. Needs "View
  * customers"; the money column only appears with "See sales figures" (the
  * database leaves it out otherwise).
  */
-export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) => void }) {
-  const { can, staff } = useAuth();
+export function CustomersTab() {
+  const { staff } = useAuth();
+  const navigate = useNavigate();
+  // Batch 32 Part 3: the profile is a page of its own; Back returns here
+  // with the search, sort and scroll kept.
+  const openCustomer = (key: string) => navigate(adminPath.customer(key), { state: { fromList: true } });
   // Batch 31 Part 3: the automatic tests' own customers stay out of the
   // list for real staff (the test logins still see them).
   const hideTestCustomers = !isTestViewer(staff);
@@ -41,7 +38,6 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useUrlParam<string>('cq', '');
   const [sort, setSort] = useUrlParam<SortKey>('csort', 'recent', SORT_KEYS);
-  const [openId, setOpenId] = useState('');
   const [tagFilter, setTagFilter] = useUrlParam<string>('ctag', '');
   // Private notes and tags (Batch 26): staff only, read with "View
   // customers", changed with "Edit customer notes".
@@ -112,8 +108,6 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
     return sorted;
   }, [rows, search, sort, tagFilter, notes, hideTestCustomers]);
 
-  const open = rows.find((r) => r.key === openId) ?? null;
-
   return (
     <section aria-label="Customers" className="adm-customers">
       <AdminPageHeader title="Customers" />
@@ -169,14 +163,14 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
             <span>JOINED</span>
           </div>
           {visible.map((c) => (
-            <div key={c.key} role="listitem" className="adm-lrow adm-crow" data-testid="customer-row" onClick={() => setOpenId(c.key)}>
+            <div key={c.key} role="listitem" className="adm-lrow adm-crow" data-testid="customer-row" onClick={() => openCustomer(c.key)}>
               <div className="adm-lrow__main">
                 <button
                   type="button"
                   className="adm-lrow__open"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setOpenId(c.key);
+                    openCustomer(c.key);
                   }}
                 >
                   <span className="adm-lrow__name">{c.full_name || c.email || c.phone}</span>
@@ -215,148 +209,6 @@ export function CustomersTab({ onOpenOrder }: { onOpenOrder: (orderId: string) =
         </p>
       )}
 
-      <CustomerSheet
-        customer={open}
-        canOpenOrders={can('view_orders')}
-        note={open?.id ? (notes.get(open.id) ?? null) : null}
-        knownTags={tags}
-        canEditNotes={can('edit_customer_notes')}
-        onNoteSaved={(id, saved) =>
-          setNotes((prev) => {
-            const next = new Map(prev);
-            next.set(id, saved);
-            return next;
-          })
-        }
-        onClose={() => setOpenId('')}
-        onOpenOrder={onOpenOrder}
-      />
     </section>
-  );
-}
-
-function CustomerSheet({
-  customer,
-  canOpenOrders,
-  note,
-  knownTags: allTags,
-  canEditNotes,
-  onNoteSaved,
-  onClose,
-  onOpenOrder,
-}: {
-  customer: CustomerRow | null;
-  canOpenOrders: boolean;
-  note: CustomerNote | null;
-  knownTags: string[];
-  canEditNotes: boolean;
-  onNoteSaved: (customerId: string, note: CustomerNote) => void;
-  onClose: () => void;
-  onOpenOrder: (orderId: string) => void;
-}) {
-  const [orders, setOrders] = useState<CustomerOrderRow[] | null>(null);
-
-  useEffect(() => {
-    if (!customer) return;
-    let alive = true;
-    setOrders(null);
-    void fetchCustomerOrders(customer).then((list) => {
-      if (alive) setOrders(list);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [customer]);
-
-  return (
-    <BottomSheet isOpen={customer !== null} onClose={onClose} title={customer ? customer.full_name || customer.email || customer.phone : 'Customer'}>
-      {customer && (
-        <div className="adm-customer">
-          <ul className="adm-customer__facts">
-            {customer.id && (
-              <li>
-                <AdminIcon name="mail" />
-                <span>{customer.email || '—'}</span>
-              </li>
-            )}
-            <li>
-              <AdminIcon name="phone" />
-              <span>{customer.phone || '—'}</span>
-            </li>
-            <li>
-              <AdminIcon name="clock" />
-              <span>{customer.joined_at ? `Joined ${formatDhakaTime(customer.joined_at)}` : 'No account — orders entered by you'}</span>
-            </li>
-          </ul>
-          <div className="adm-customer__stats">
-            <div>
-              <span className="adm-kpi__label">Orders</span>
-              <span className="adm-customer__stat">{customer.order_count}</span>
-            </div>
-            {customer.total_spent !== null && (
-              <div>
-                <span className="adm-kpi__label">Total spent</span>
-                <span className="adm-customer__stat adm-price">{formatTakaBd(customer.total_spent)}</span>
-              </div>
-            )}
-            {customer.total_due !== null && (
-              <div>
-                <span className="adm-kpi__label">Due</span>
-                <span className="adm-customer__stat adm-price" data-testid="customer-sheet-due">
-                  {formatTakaBd(customer.total_due)}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {customer.id && (
-            <CustomerNotesEditor
-              key={customer.id}
-              customerId={customer.id}
-              note={note}
-              knownTags={allTags}
-              canEdit={canEditNotes}
-              onSaved={(saved) => onNoteSaved(customer.id ?? '', saved)}
-            />
-          )}
-
-          <h3 className="adm-group__title adm-customer__heading">ORDERS</h3>
-          {orders === null ? (
-            <SkeletonRows rows={3} thumb={false} />
-          ) : orders.length === 0 ? (
-            <p className="admin-panel__description">No orders yet.</p>
-          ) : (
-            <div className="adm-group__box adm-group__box--inset">
-              {orders.map((o) => {
-                const label = isOrderStatus(o.status) ? ORDER_STATUS_LABELS[o.status] : o.status;
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className="adm-row"
-                    disabled={!canOpenOrders}
-                    onClick={() => {
-                      onClose();
-                      onOpenOrder(o.id);
-                    }}
-                  >
-                    <span className="adm-row__label">
-                      <b>{o.order_number}</b>
-                      <span className="adm-row__sub">
-                        {shortDate(o.created_at)} · {o.item_count} item{o.item_count === 1 ? '' : 's'}
-                      </span>
-                    </span>
-                    <span className={`adm-status adm-status--${o.status}`}>{label}</span>
-                    {o.total !== null && <span className="adm-price">{formatTakaBd(o.total)}</span>}
-                    {o.due ? <span className="adm-customer__order-due">{formatTakaBd(o.due)} due</span> : null}
-                    {canOpenOrders && <AdminIcon name="chevron-right" className="adm-row__chevron adm-row__chevron--tight" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </BottomSheet>
   );
 }

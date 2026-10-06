@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { AdminLayout } from '../components/admin/AdminLayout';
 import { ProductList } from '../components/admin/ProductList';
@@ -34,13 +34,46 @@ import {
 } from '../lib/adminNav';
 import { useAuth } from '../contexts/AuthContext';
 import { SafetyLockBar, SafetyLockProvider } from '../contexts/SafetyLockContext';
+import { LeaveGuardProvider, useLeaveGuard } from '../components/admin/LeaveGuard';
+import { NewOrderPage } from '../components/admin/pages/NewOrderPage';
+import { EditOrderPage } from '../components/admin/pages/EditOrderPage';
+import { ProductEditPage } from '../components/admin/pages/ProductEditPage';
+import { CustomerPage } from '../components/admin/pages/CustomerPage';
+import { goBackFromSubPage } from '../components/admin/pages/subPageBack';
+import {
+  canOpenSubPage,
+  isFormSubPage,
+  parseAdminSubPage,
+  subPageFallback,
+  subPageSection,
+  type AdminSubPage,
+} from '../lib/adminPages';
 import type { WholesalerAccount, Order } from '../types';
 import '../styles/admin.css';
 
 export function AdminPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Batch 32 Part 3: /admin/orders/new, /admin/products/:id/edit, … are
+  // pages of their own inside the same admin shell.
+  const sub = parseAdminSubPage(location.pathname);
+  const fallback = sub !== null && sub !== 'unknown' ? subPageFallback(sub) : '/admin';
+  const onBack = useCallback(() => goBackFromSubPage(navigate, location, fallback), [navigate, location, fallback]);
+  if (sub === 'unknown') return <Navigate to="/admin" replace />;
+  return (
+    <SafetyLockProvider>
+      <LeaveGuardProvider key={location.pathname} onBack={onBack}>
+        <AdminPageContent sub={sub} onBack={onBack} />
+      </LeaveGuardProvider>
+    </SafetyLockProvider>
+  );
+}
+
+function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: () => void }) {
   const { isAdmin, can, staff, refreshStaff } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { requestLeave, leave } = useLeaveGuard();
   const [searchParams] = useSearchParams();
   const [roleName, setRoleName] = useState<string | null>(null);
 
@@ -55,8 +88,12 @@ export function AdminPage() {
   // link like /admin?tab=orders&order=<uuid> from the Telegram order
   // notification working — so phone Back and refresh keep your place.
   const requested = (searchParams.get('tab') ?? '') as AdminSection;
-  const active: AdminSection =
-    (ALL_SECTIONS as readonly string[]).includes(requested) && canOpenSection(requested, access) ? requested : 'home';
+  const subAllowed = sub !== null && canOpenSubPage(sub, access);
+  const active: AdminSection = sub
+    ? subPageSection(sub)
+    : (ALL_SECTIONS as readonly string[]).includes(requested) && canOpenSection(requested, access)
+      ? requested
+      : 'home';
   const orderParam = searchParams.get('order');
 
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
@@ -111,21 +148,32 @@ export function AdminPage() {
       if (section !== 'home') next.set('tab', section);
       for (const [key, value] of Object.entries(params)) next.set(key, value);
       const search = next.toString();
-      if (`?${search}` === location.search || (search === '' && location.search === '')) return;
-      navigate({ search: search === '' ? '' : `?${search}` });
-      window.scrollTo(0, 0);
-      // A moderator's permissions can change while they are signed in —
-      // re-read them whenever they change section.
-      if (!isAdmin) void refreshStaff();
+      if (!sub && (`?${search}` === location.search || (search === '' && location.search === ''))) return;
+      // Batch 32: leaving a page with typed changes asks first.
+      requestLeave(() => {
+        navigate({ pathname: '/admin', search: search === '' ? '' : `?${search}` });
+        window.scrollTo(0, 0);
+        // A moderator's permissions can change while they are signed in —
+        // re-read them whenever they change section.
+        if (!isAdmin) void refreshStaff();
+      });
     },
-    [navigate, location.search, isAdmin, refreshStaff]
+    [navigate, location.search, isAdmin, refreshStaff, sub, requestLeave]
   );
+
+  /** Opens an order's detail on the Orders list (after New / Edit order). */
+  const openOrder = useCallback(
+    (orderId: string) => leave(() => navigate(`/admin?tab=orders&order=${encodeURIComponent(orderId)}`, { replace: true })),
+    [leave, navigate]
+  );
+  const back = useCallback(() => requestLeave(onBack), [requestLeave, onBack]);
+
+  if (sub && !subAllowed) return <Navigate to="/admin" replace />;
 
   const pendingOrders = orders.filter((o) => o.status === 'pending').length;
   const title = adminTitle(isAdmin === true, roleName);
 
   return (
-    <SafetyLockProvider>
       <AdminLayout
         active={active}
         items={items}
@@ -135,7 +183,37 @@ export function AdminPage() {
         banner={isAdmin ? <SafetyLockBar /> : null}
         onNavigate={(section) => goTo(section)}
         pendingOrders={pendingOrders}
+        hideTabbar={sub !== null && isFormSubPage(sub)}
       >
+        {sub?.kind === 'new-order' && (
+          <NewOrderPage
+            onBack={back}
+            onCreated={async (orderId) => {
+              await loadOrders();
+              openOrder(orderId);
+            }}
+          />
+        )}
+        {sub?.kind === 'edit-order' && (
+          <EditOrderPage key={sub.orderNumber} orderNumber={sub.orderNumber} onBack={back} onDone={openOrder} />
+        )}
+        {(sub?.kind === 'new-product' || sub?.kind === 'edit-product') && (
+          <ProductEditPage
+            productId={sub.kind === 'edit-product' ? sub.productId : null}
+            onBack={back}
+            onDone={() => leave(onBack)}
+          />
+        )}
+        {sub?.kind === 'customer' && (
+          <CustomerPage
+            key={sub.customerKey}
+            customerKey={sub.customerKey}
+            onBack={back}
+            onOpenOrder={(id) => navigate(`/admin?tab=orders&order=${encodeURIComponent(id)}`)}
+          />
+        )}
+        {!sub && (
+        <>
         {active === 'home' && <HomeTab title={title} onOpen={goTo} />}
         {active === 'more' && <MoreTab items={more} username={staff?.username ?? null} onOpen={goTo} />}
         {active === 'products' && <ProductList />}
@@ -154,7 +232,7 @@ export function AdminPage() {
         {active === 'orders' && (
           <OrdersTab key={orderParam ?? 'list'} orders={orders} onReload={loadOrders} initialOrderId={orderParam} />
         )}
-        {active === 'customers' && <CustomersTab onOpenOrder={(id) => goTo('orders', { order: id })} />}
+        {active === 'customers' && <CustomersTab />}
         {active === 'reviews' && <ReviewsTab />}
         {active === 'bento' && <BentoTilesTab />}
         {active === 'design' && <BannerTextsTab />}
@@ -163,7 +241,8 @@ export function AdminPage() {
         {active === 'team' && <TeamTab />}
         {active === 'activity' && <ActivityLogTab />}
         {active === 'profile' && <MyProfileTab />}
+        </>
+        )}
       </AdminLayout>
-    </SafetyLockProvider>
   );
 }

@@ -3139,3 +3139,127 @@ html[data-admin] .toast--info .toast__icon {
 .adm-cell .adm-pay-tag {
   margin-top: 2px;
 }
+
+/* ---------- Batch 32 Part 3: full admin pages for the big forms ---------- */
+.adm--no-tabbar .adm-tabbar {
+  display: none;
+}
+
+.adm--no-tabbar .adm-main {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.adm-fpage__bar {
+  position: sticky;
+  top: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  margin: 0 calc(-1 * var(--adm-s4));
+  padding: var(--adm-s2) var(--adm-s4);
+  min-height: 56px;
+  background: var(--adm-nav-bg);
+  border-bottom: 1px solid var(--adm-line);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.adm-fpage__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  min-height: var(--adm-hit);
+  margin-left: calc(-1 * var(--adm-s2));
+  padding: 0 var(--adm-s2);
+  border-radius: var(--adm-r-pill);
+  font-size: var(--adm-fs-body);
+  font-weight: 600;
+  color: var(--adm-text-2);
+}
+
+.adm-fpage__back:hover {
+  background: var(--adm-card-2);
+  color: var(--adm-text);
+}
+
+.adm-fpage__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.adm-fpage__title {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-fpage__subtitle {
+  margin-top: 1px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-fpage__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  flex: none;
+}
+
+.adm-fpage__body {
+  max-width: 760px;
+  padding-top: var(--adm-s4);
+}
+
+.adm-fpage__dock-inner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  padding: var(--adm-s3) var(--adm-s4) calc(var(--adm-s3) + env(safe-area-inset-bottom));
+  background: var(--adm-nav-bg);
+  border-top: 1px solid var(--adm-line);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.adm-fpage__dock-btn {
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+}
+
+.adm-fpage__notice {
+  padding: var(--adm-s6) var(--adm-s4);
+  text-align: center;
+  color: var(--adm-muted);
+}
+
+@media (min-width: 1024px) {
+  .adm--no-tabbar .adm-main {
+    padding-bottom: 0;
+  }
+
+  .adm-fpage__bar {
+    margin: -22px -26px 0;
+    padding: 12px 26px;
+    min-height: 64px;
+  }
+
+  .adm-fpage__title {
+    font-size: var(--adm-fs-title);
+  }
+
+  .adm-fpage__body {
+    padding-top: var(--adm-s5);
+  }
+}

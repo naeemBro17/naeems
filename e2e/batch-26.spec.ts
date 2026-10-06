@@ -623,7 +623,8 @@ test('customer notes and tags: save, chips, filter; private from the customer; e
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await page.locator('[data-testid="customer-note-save"]').click();
   await expect(page.locator('[data-testid="customer-note-save"]')).toBeDisabled({ timeout: 10_000 });
-  await page.keyboard.press('Escape');
+  // Batch 32 Part 3: the customer is a page; Back returns to the list.
+  await page.getByRole('button', { name: 'Back to customers' }).click();
   await expect(row.locator('[data-testid="customer-tags"]')).toHaveText(`${TAG_VIP}${TAG_FAMILY}`);
 
   // Tag filter: only customers with that tag.

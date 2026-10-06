@@ -6,7 +6,6 @@
 // database, keeps stock right and writes every change to History and the
 // Activity Log. Prices and the discount are Super Admin only.
 import { useEffect, useMemo, useState } from 'react';
-import { BottomSheet } from '../shared/BottomSheet';
 import { AddressFormFields } from '../checkout/AddressFormFields';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
@@ -26,21 +25,29 @@ import { adminSetCollectMode, isCollectModeReady } from '../../lib/orders';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
 
-interface EditOrderSheetProps {
-  order: OrderWithDetails | null;
-  isOpen: boolean;
+interface EditOrderFormProps {
+  order: OrderWithDetails;
   isAdmin: boolean;
+  /** The page's Save changes button submits this form by id. */
+  formId: string;
+  onState: (state: { canSave: boolean; isSaving: boolean }) => void;
   /** Batch 32: the order's payments (null before migration-033) and whether
    *  this person may record one ("Change order status"). */
   payments: OrderPayment[] | null;
   canAddPayment: boolean;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
+  /** Nothing changed: leave without saving. */
+  onUnchanged: () => void;
+  onSaved: () => Promise<void> | void;
 }
 
 const emptyErrors = {};
 
-export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment, onClose, onSaved }: EditOrderSheetProps) {
+/**
+ * Batch 32 Part 3: the form of the Edit order page
+ * (/admin/orders/:orderNumber/edit) — the Batch 30 sheet's form, unchanged
+ * inside; the page around it has the Back and Save changes buttons.
+ */
+export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAddPayment, onUnchanged, onSaved }: EditOrderFormProps) {
   const { showToast } = useToast();
   const { options, stockFor } = useSellableOptions();
   const [draft, setDraft] = useState<EditDraft | null>(null);
@@ -54,9 +61,8 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
   const [collectMode, setCollectMode] = useState<CollectMode>('cod');
   const [payLaterReady, setPayLaterReady] = useState(true);
 
-  // A fresh draft every time the sheet opens on an order.
+  // A fresh draft for the order the page opened.
   useEffect(() => {
-    if (!isOpen || !order) return;
     setDraft(draftFromOrder(order, stockFor));
     setQuery('');
     setError(null);
@@ -66,10 +72,10 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
     setCollectMode(order.collect_mode);
     void isCollectModeReady().then(setPayLaterReady);
     // stockFor changes identity with the product list; the draft is only
-    // rebuilt when the sheet opens, never under Naeem's fingers.
-  }, [isOpen, order]);
+    // built when the page opens, never under Naeem's fingers.
+  }, [order]);
 
-  const holdsStock = order ? order.status !== 'cancelled' : false;
+  const holdsStock = order.status !== 'cancelled';
   const problems = useMemo(() => (draft ? stockProblems(draft, holdsStock) : new Map<string, number>()), [draft, holdsStock]);
   const totals = draft ? draftTotals(draft) : null;
   const results = useMemo(() => {
@@ -77,8 +83,6 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
     if (term === '') return [];
     return options.filter((o) => normalizeText(o.label).includes(term)).slice(0, 12);
   }, [query, options]);
-
-  if (!order) return null;
 
   const alreadyPaid = payments ? summarizePayments(order.total, payments).paid : 0;
   const plan = totals
@@ -156,7 +160,7 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
     const paidNow = plan?.paidNow ?? 0;
     if (Object.keys(changes).length === 0 && !modeChanged && paidNow <= 0) {
       showToast('Nothing changed');
-      onClose();
+      onUnchanged();
       return;
     }
     setIsSaving(true);
@@ -190,10 +194,15 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
     await onSaved();
   };
 
+  useEffect(() => {
+    onState({ canSave, isSaving });
+  }, [canSave, isSaving, onState]);
+
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={`Edit ${order.order_number}`}>
+    <>
       {draft && totals && (
         <form
+          id={formId}
           className="form edit-order"
           data-testid="edit-order-sheet"
           onSubmit={(e) => {
@@ -448,17 +457,8 @@ export function EditOrderSheet({ order, isOpen, isAdmin, payments, canAddPayment
               {error}
             </p>
           )}
-
-          <div className="edit-sheet__footer">
-            <button type="button" className="edit-sheet__cancel" onClick={onClose} disabled={isSaving}>
-              Cancel
-            </button>
-            <button type="submit" className="edit-sheet__save" disabled={!canSave}>
-              {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save changes'}
-            </button>
-          </div>
         </form>
       )}
-    </BottomSheet>
+    </>
   );
 }

@@ -7,7 +7,7 @@ import { ProductEditorForm } from '../ProductEditorForm';
  * Mounted once (in ViewerPage) and driven by AdminEditContext, so 100+ cards
  * don't each carry a form. Only the surrounding sheet chrome lives here —
  * the fields, validation and save all live in the shared ProductEditorForm,
- * the same component the /admin Products tab uses (see ProductForm.tsx).
+ * the same component the /admin Products page uses (pages/ProductEditPage.tsx).
  */
 export function ProductEditSheet() {
   const { editingProduct, closeProductEdit } = useAdminEdit();

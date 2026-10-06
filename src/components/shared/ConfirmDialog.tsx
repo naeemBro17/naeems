@@ -9,6 +9,8 @@ interface ConfirmDialogProps {
   confirmLabel?: string | null;
   cancelLabel?: string;
   danger?: boolean;
+  /** See Modal's backCloses. */
+  backCloses?: boolean;
   onConfirm: () => Promise<void> | void;
   onClose: () => void;
 }
@@ -20,6 +22,7 @@ export function ConfirmDialog({
   confirmLabel = 'Delete',
   cancelLabel = 'Cancel',
   danger = true,
+  backCloses = true,
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
@@ -35,7 +38,7 @@ export function ConfirmDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} backCloses={backCloses}>
       <p className="confirm-message">{message}</p>
       <div className="confirm-actions">
         <button type="button" className="button button--secondary" onClick={onClose}>

@@ -316,7 +316,7 @@ test('Part 4: no inline "Edit price" or fee "Edit"; the pen beside ✕ opens Edi
   // Call / WhatsApp / Invoice stay.
   for (const name of ['Call', 'WhatsApp', 'Invoice']) await expect(sheet.getByRole(name === 'Invoice' ? 'button' : 'link', { name })).toBeVisible();
   await pen.click();
-  await expect(page.getByTestId('edit-order-sheet')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('edit-order-page')).toBeVisible({ timeout: 10_000 });
 });
 
 test('Part 4: staff without "Edit orders" get no pen', async ({ page }) => {

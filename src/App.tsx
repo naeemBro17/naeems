@@ -149,8 +149,9 @@ export default function App() {
                         {/* Unlisted sign-in routes — never linked from the public UI. */}
                         <Route path="/admin-access" element={<AdminAccessPage />} />
                         <Route path="/wholesaler-access" element={<WholesalerAccessPage />} />
+                        {/* /admin and its pages (Batch 32: /admin/orders/new, …). */}
                         <Route
-                          path="/admin"
+                          path="/admin/*"
                           element={
                             <ProtectedRoute>
                               <Suspense fallback={<AdminPageFallback />}>

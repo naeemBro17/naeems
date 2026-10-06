@@ -422,8 +422,9 @@ test('Price edit recalculates the total; a moderator cannot do it', async ({ pag
   await expect(page.getByRole('button', { name: `Edit price of ${product.name}` })).toHaveCount(0, { timeout: 15_000 });
   await page.getByRole('button', { name: 'Edit order' }).click();
   await page.getByLabel(`Price of ${product.name}`).fill('100');
-  await page.getByTestId('edit-order-sheet').getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByTestId('edit-order-sheet')).toHaveCount(0, { timeout: 15_000 });
+  // Batch 32 Part 3: Edit order is a page; saving returns to the order.
+  await page.getByTestId('edit-order-page').getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByTestId('edit-order-page')).toHaveCount(0, { timeout: 15_000 });
 
   const [after] = (
     await select<{ total: number; subtotal: number }[]>(admin.accessToken, `orders?select=total,subtotal&id=eq.${order.id}`)

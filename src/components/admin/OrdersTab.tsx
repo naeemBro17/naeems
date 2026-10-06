@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { adminPath } from '../../lib/adminPages';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '../../lib/orderStatus';
@@ -8,7 +10,6 @@ import { fetchOrderItemCounts } from '../../lib/adminData';
 import { fetchAllPayments, paymentStateText, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
 import { orderPaymentTag } from '../../lib/paymentPlan';
-import { NewOrderSheet } from './NewOrderSheet';
 import { useToast } from '../../hooks/useToast';
 import { DeleteOrdersDialog } from './DeleteOrdersDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -104,7 +105,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
+  const navigate = useNavigate();
   const [itemCounts, setItemCounts] = useState<Map<string, number>>(() => new Map());
   // Batch 30: every order's payments (null until migration-033 is run —
   // the Payment column then shows the old method · status text).
@@ -247,7 +248,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         menu={menu}
         primary={
           can('create_orders') ? (
-            <button type="button" className="adm-btn adm-btn--primary" onClick={() => setIsNewOrderOpen(true)}>
+            <button
+              type="button"
+              className="adm-btn adm-btn--primary"
+              onClick={() => navigate(adminPath.newOrder(), { state: { fromList: true } })}
+            >
               <AdminIcon name="plus" />
               New order
             </button>
@@ -448,16 +453,6 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       )}
 
       <OrderDetailSheet orderId={openOrderId} onClose={() => setOpenOrderId(null)} onChanged={onReload} />
-
-      <NewOrderSheet
-        isOpen={isNewOrderOpen}
-        onClose={() => setIsNewOrderOpen(false)}
-        onCreated={async (orderId) => {
-          setIsNewOrderOpen(false);
-          await onReload();
-          setOpenOrderId(orderId);
-        }}
-      />
 
       <DeleteOrdersDialog
         isOpen={isConfirmingDelete}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
 
@@ -12,6 +12,7 @@ import { useToast } from '../../hooks/useToast';
  */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isStaff, isLoading } = useAuth();
+  const location = useLocation();
   const { showToast } = useToast();
   const hadAdminRef = useRef(false);
 
@@ -33,6 +34,13 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!isStaff) {
+    // Batch 32: an admin page's own link (/admin/orders/new, …) opened while
+    // signed out goes to the admin sign-in and comes back after it. /admin
+    // itself keeps sending visitors to the shop, as before.
+    if (location.pathname.startsWith('/admin/')) {
+      const next = `${location.pathname}${location.search}`;
+      return <Navigate to={`/admin-access?next=${encodeURIComponent(next)}`} replace />;
+    }
     return <Navigate to="/" replace />;
   }
 

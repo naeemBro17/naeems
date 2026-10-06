@@ -369,7 +369,8 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
 
   await openAdminOrder(page, order.id);
   await page.getByTestId('edit-order').click();
-  const sheet = page.getByTestId('edit-order-sheet');
+  // Batch 32 Part 3: Edit order is a page now.
+  const sheet = page.getByTestId('edit-order-page');
   await sheet.getByLabel(/Full name/).fill('E2E Edited Name');
   await sheet.getByLabel(/Phone number/).fill('01712345670');
   await sheet.getByLabel('Alternative phone (optional)').fill('01812345678');
@@ -675,11 +676,12 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
   await expect(page.locator('#manual-order-address')).toHaveValue('House 30, Road 3 (e2e)');
 
   // Save an order for them: it lands under the same customer.
-  const form = page.getByRole('dialog', { name: 'New order' });
+  // Batch 32 Part 3: New order is a page now; its button says Create order.
+  const form = page.getByTestId('new-order-page');
   await form.getByRole('button', { name: 'Phone call', exact: true }).click();
   await form.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
   await form.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
-  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await form.getByRole('button', { name: 'Create order', exact: true }).click();
   const saved = page.getByText(/Order .* saved/);
   await expect(saved).toBeVisible({ timeout: 15_000 });
   const theirs = await rpc<{ id: string }[]>(admin.accessToken, 'admin_customer_orders_v2', { p_customer_key: `ph:${PHONE_CUSTOMER}` });

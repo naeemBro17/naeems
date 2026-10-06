@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { safeAdminNext } from '../lib/adminPages';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { PasswordField } from '../components/admin/PasswordField';
@@ -43,6 +44,10 @@ function writeCooldown(value: { failures: number; until: number }): void {
 export function AdminAccessPage() {
   const { signIn, signInStaff, isStaff, isLoading } = useAuth();
   const navigate = useNavigate();
+  // Batch 32: back to the admin page whose link was opened (only ever a
+  // page inside the admin).
+  const [searchParams] = useSearchParams();
+  const next = safeAdminNext(searchParams.get('next'));
 
   const [mode, setMode] = useState<LoginMode>('admin');
   const [email, setEmail] = useState('');
@@ -52,8 +57,8 @@ export function AdminAccessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isStaff) navigate('/admin', { replace: true });
-  }, [isLoading, isStaff, navigate]);
+    if (!isLoading && isStaff) navigate(next, { replace: true });
+  }, [isLoading, isStaff, navigate, next]);
 
   const switchMode = (next: LoginMode) => {
     setMode(next);
@@ -86,7 +91,7 @@ export function AdminAccessPage() {
         return;
       }
       writeCooldown({ failures: 0, until: 0 });
-      navigate('/admin');
+      navigate(next);
       return;
     }
 
@@ -97,7 +102,7 @@ export function AdminAccessPage() {
       return;
     }
     if (profile?.role === 'admin' && profile.status === 'approved') {
-      navigate('/admin');
+      navigate(next);
     } else {
       setError('This account does not have admin access.');
     }

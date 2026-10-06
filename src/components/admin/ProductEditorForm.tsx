@@ -34,7 +34,11 @@ interface ProductEditorFormProps {
    * its Modal already has its own close (X) button, so a second Cancel
    * control would be redundant there.
    */
-  footerVariant: 'sheet' | 'modal';
+  footerVariant: 'sheet' | 'modal' | 'page';
+  /** 'page' (Batch 32): the page's own Save button submits this form by id. */
+  formId?: string;
+  /** 'page': tells the page whether its Save button can be pressed. */
+  onState?: (state: { canSave: boolean; isSaving: boolean }) => void;
 }
 
 const NOTE_MAX_LENGTH = 200;
@@ -162,7 +166,7 @@ function validate(form: ProductFormData): FieldErrors {
  * validation and the save itself, so a field added here reaches both entry
  * points automatically instead of needing to be copied by hand.
  */
-export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }: ProductEditorFormProps) {
+export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, formId, onState }: ProductEditorFormProps) {
   const { categories, products, allVariants, brands, refetch } = useProducts();
   const brandNames = useMemo(() => brands.map((b) => b.name).sort((a, b) => a.localeCompare(b)), [brands]);
   const { showToast } = useToast();
@@ -431,8 +435,13 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
   const requiredEmpty =
     form.name.trim() === '' || form.retail_price.trim() === '';
 
+  const canSave = !isSaving && !requiredEmpty && !hasBlockingErrors;
+  useEffect(() => {
+    onState?.({ canSave, isSaving });
+  }, [canSave, isSaving, onState]);
+
   return (
-    <form onSubmit={handleSubmit} className="form" noValidate>
+    <form id={formId} onSubmit={handleSubmit} className="form" noValidate>
       {product && (
         <div className="form-field">
           <span className="form-label">SKU</span>
@@ -854,7 +863,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant }:
           disabled={requiredEmpty || hasBlockingErrors}
           saveLabel={product ? 'Save Changes' : 'Add Product'}
         />
-      ) : (
+      ) : footerVariant === 'page' ? null : (
         <button
           type="submit"
           className="button button--primary button--full"
