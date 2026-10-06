@@ -23,3 +23,31 @@ export function phoneSearchCore(raw: string): string {
 export function looksLikePhone(raw: string): boolean {
   return phoneSearchCore(raw).length >= 3 && /^[\d\s+()-]+$/.test(raw.trim());
 }
+
+/**
+ * Batch 31 Part 5: the number in international form for WhatsApp, digits
+ * only, no "+": "01610981117", "+880 1610-981117", "8801610981117" and
+ * "1610981117" all become "8801610981117". WhatsApp cannot open a chat
+ * without the country code ("Couldn't look up phone number …"). A number
+ * that isn't Bangladeshi keeps its own digits (it must already carry its
+ * country code); "00" in front is dropped. Null when there are no digits.
+ */
+export function whatsAppNumber(raw: string | null | undefined): string | null {
+  const key = bdPhoneKey(raw);
+  if (!key) return null;
+  if (/^01\d{9}$/.test(key)) return `88${key}`;
+  const digits = key.replace(/^00/, '');
+  return digits === '' ? null : digits;
+}
+
+/** https://wa.me/8801… for any way the number was typed; null if none. */
+export function whatsAppChatUrl(raw: string | null | undefined): string | null {
+  const number = whatsAppNumber(raw);
+  return number ? `https://wa.me/${number}` : null;
+}
+
+/** tel:+8801… for any way the number was typed; null if none. */
+export function telHref(raw: string | null | undefined): string | null {
+  const number = whatsAppNumber(raw);
+  return number ? `tel:+${number}` : null;
+}

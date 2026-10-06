@@ -38,6 +38,7 @@ import { deriveOrderStep, fetchTracking, type TrackingAnswer } from '../../lib/o
 import { CourierTimeline, OrderSteps } from '../orders/OrderSteps';
 import { AdminIcon } from './ui/AdminIcon';
 import { FraudCheckCard } from './FraudCheckCard';
+import { telHref, whatsAppChatUrl } from '../../lib/phone';
 import { codAmountFor } from '../../../supabase/functions/_shared/cod';
 
 interface OrderDetailSheetProps {
@@ -378,12 +379,12 @@ export function OrderDetailSheet({ orderId, onClose, onChanged }: OrderDetailShe
           </div>
 
           <div className="order-admin-detail__actions-row">
-            <a className="button button--secondary button--small" href={`tel:${order.customer_phone}`}>
+            <a className="button button--secondary button--small" href={telHref(order.customer_phone) ?? undefined}>
               Call
             </a>
             <a
               className="button button--secondary button--small"
-              href={`https://wa.me/${order.customer_phone.replace(/[^\d]/g, '')}`}
+              href={whatsAppChatUrl(order.customer_phone) ?? undefined}
               target="_blank"
               rel="noopener noreferrer"
             >
