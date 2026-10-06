@@ -3263,3 +3263,38 @@ html[data-admin] .toast--info .toast__icon {
     padding-top: var(--adm-s5);
   }
 }
+
+/* ---------- Batch 32 Part 4: customers add / hide / delete ---------- */
+.adm-crow__hidden {
+  margin-left: var(--adm-s2);
+  vertical-align: middle;
+}
+
+.adm-customer__hidden-note {
+  margin-bottom: var(--adm-s3);
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card-2);
+  font-size: var(--adm-fs-label);
+  color: var(--adm-text-2);
+}
+
+.adm-customer__note {
+  margin: var(--adm-s3) 0;
+  padding: var(--adm-s3) var(--adm-s4);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-line);
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+  white-space: pre-wrap;
+}
+
+.adm-customer__manage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--adm-s2);
+  margin-top: var(--adm-s5);
+  padding-top: var(--adm-s4);
+  border-top: 1px solid var(--adm-line);
+}

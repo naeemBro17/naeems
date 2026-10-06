@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Toggle } from './edit-sheets/SheetChrome';
-import { AddressFormFields, type AddressFieldErrors } from '../checkout/AddressFormFields';
+import { type AddressFieldErrors } from '../checkout/AddressFormFields';
+import { CustomerDetailsFields } from './CustomerDetailsFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
@@ -113,6 +114,8 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   } | null>(null);
   const [lookedUpPhone, setLookedUpPhone] = useState('');
 
+  // Batch 32 Part 4: the same customer form as Add customer.
+  const [altPhone, setAltPhone] = useState('');
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
 
@@ -337,6 +340,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
       thana: customer.thana,
       fullAddress: customer.addressLine,
     });
+    setAltPhone(customer.altPhone ?? '');
     if (customer.district) handleLocationChange(customer.district, customer.thana);
   };
 
@@ -404,6 +408,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     paidMethod,
     paidTrxId: paidTrxId.trim() || null,
     collectMode: plan.remaining > 0 ? collectMode : 'cod',
+    altPhone: altPhone.trim() || null,
     linkedCustomerId: null,
     markDelivered: zone === 'hand_delivered' && isPaidNow && markDelivered,
     adminNote: adminNote.trim() || null,
@@ -546,7 +551,15 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           </div>
         </div>
 
-        <AddressFormFields form={address} errors={emptyErrors} onChange={(patch) => setAddress((c) => ({ ...c, ...patch }))} onLocationChange={handleLocationChange} idPrefix="manual-order" />
+        <CustomerDetailsFields
+          idPrefix="manual-order"
+          address={address}
+          errors={emptyErrors}
+          onAddressChange={(patch) => setAddress((c) => ({ ...c, ...patch }))}
+          onLocationChange={handleLocationChange}
+          altPhone={altPhone}
+          onAltPhoneChange={setAltPhone}
+        />
 
         <FraudCheckCard phone={address.phone} />
 

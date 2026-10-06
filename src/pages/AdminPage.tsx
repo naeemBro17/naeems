@@ -39,8 +39,10 @@ import { NewOrderPage } from '../components/admin/pages/NewOrderPage';
 import { EditOrderPage } from '../components/admin/pages/EditOrderPage';
 import { ProductEditPage } from '../components/admin/pages/ProductEditPage';
 import { CustomerPage } from '../components/admin/pages/CustomerPage';
+import { NewCustomerPage } from '../components/admin/pages/NewCustomerPage';
 import { goBackFromSubPage } from '../components/admin/pages/subPageBack';
 import {
+  adminPath,
   canOpenSubPage,
   isFormSubPage,
   parseAdminSubPage,
@@ -210,6 +212,13 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             customerKey={sub.customerKey}
             onBack={back}
             onOpenOrder={(id) => navigate(`/admin?tab=orders&order=${encodeURIComponent(id)}`)}
+            onDeleted={() => leave(onBack)}
+          />
+        )}
+        {sub?.kind === 'new-customer' && (
+          <NewCustomerPage
+            onBack={back}
+            onOpenCustomer={(key) => leave(() => navigate(adminPath.customer(key), { replace: true, state: { fromList: true } }))}
           />
         )}
         {!sub && (

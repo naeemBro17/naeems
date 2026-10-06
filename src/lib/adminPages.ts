@@ -80,7 +80,7 @@ export function canOpenSubPage(page: AdminSubPage, access: NavAccess): boolean {
     case 'edit-product':
       return can('edit_products');
     case 'new-customer':
-      return isAdmin || can('create_orders');
+      return isAdmin || can('create_orders') || can('manage_customers');
     case 'customer':
       return can('view_customers');
   }

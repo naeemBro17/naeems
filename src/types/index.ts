@@ -624,7 +624,8 @@ export type StaffPermission =
   | 'see_sales'
   | 'edit_brands'
   | 'edit_customer_notes'
-  | 'edit_orders';
+  | 'edit_orders'
+  | 'manage_customers';
 
 /** The signed-in staff member's own row (Super Admin or moderator). */
 export interface StaffMember {

@@ -2,13 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { useAuth } from '../../contexts/AuthContext';
-import { fetchCustomers, type CustomerRow } from '../../lib/adminData';
+import { fetchCustomersV3, type CustomerRow } from '../../lib/adminData';
+import { AdminIcon } from './ui/AdminIcon';
 import { adminPath } from '../../lib/adminPages';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import { formatTakaBd } from '../../lib/adminNav';
-import { AdminPageHeader, AdminSearch, EmptyState, SkeletonRows } from './ui/AdminUi';
+import { AdminPageHeader, AdminSearch, ChipRow, EmptyState, SkeletonRows } from './ui/AdminUi';
 import { CustomerTagChips } from './CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../lib/brandAdmin';
+
+// Batch 32 Part 4: hidden customers only with "Hidden"; "Due" (also from
+// Admin Home's due row) shows everyone who still owes money, hidden or not,
+// so its count matches Home's.
+type ShowFilter = 'all' | 'due' | 'hidden';
+const SHOW_FILTERS: readonly ShowFilter[] = ['all', 'due', 'hidden'];
 
 type SortKey = 'recent' | 'orders' | 'spent' | 'due' | 'joined' | 'name';
 const SORT_KEYS: readonly SortKey[] = ['recent', 'orders', 'spent', 'due', 'joined', 'name'];
@@ -25,7 +32,7 @@ function shortDate(iso: string | null): string {
  * database leaves it out otherwise).
  */
 export function CustomersTab() {
-  const { staff } = useAuth();
+  const { staff, isAdmin, can } = useAuth();
   const navigate = useNavigate();
   // Batch 32 Part 3: the profile is a page of its own; Back returns here
   // with the search, sort and scroll kept.
@@ -39,6 +46,8 @@ export function CustomersTab() {
   const [search, setSearch] = useUrlParam<string>('cq', '');
   const [sort, setSort] = useUrlParam<SortKey>('csort', 'recent', SORT_KEYS);
   const [tagFilter, setTagFilter] = useUrlParam<string>('ctag', '');
+  const [show, setShow] = useUrlParam<ShowFilter>('cshow', 'all', SHOW_FILTERS);
+  const [canManage, setCanManage] = useState(false);
   // Private notes and tags (Batch 26): staff only, read with "View
   // customers", changed with "Edit customer notes".
   const [notes, setNotes] = useState<Map<string, CustomerNote>>(() => new Map());
@@ -57,10 +66,11 @@ export function CustomersTab() {
 
   useEffect(() => {
     let alive = true;
-    void fetchCustomers().then((result) => {
+    void fetchCustomersV3().then((result) => {
       if (!alive) return;
       setRows(result.rows);
       setError(result.error);
+      setCanManage(result.canManage);
       setIsLoading(false);
     });
     return () => {
@@ -76,9 +86,12 @@ export function CustomersTab() {
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     const real = hideTestCustomers ? rows.filter((r) => !isTestCustomer({ name: r.full_name, email: r.email })) : rows;
+    const shown = real.filter((r) =>
+      show === 'hidden' ? r.hidden : show === 'due' ? (r.total_due ?? 0) > 0 : !r.hidden
+    );
     const tagged = tagFilter
-      ? real.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
-      : real;
+      ? shown.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+      : shown;
     const list = term
       ? tagged.filter(
           (r) =>
@@ -106,11 +119,32 @@ export function CustomersTab() {
       }
     });
     return sorted;
-  }, [rows, search, sort, tagFilter, notes, hideTestCustomers]);
+  }, [rows, search, sort, tagFilter, notes, hideTestCustomers, show]);
+
+  const realRows = hideTestCustomers ? rows.filter((r) => !isTestCustomer({ name: r.full_name, email: r.email })) : rows;
+  const hiddenCount = realRows.filter((r) => r.hidden).length;
+  const dueCount = realRows.filter((r) => (r.total_due ?? 0) > 0).length;
+  const canAdd = canManage && (isAdmin === true || can('create_orders') || can('manage_customers'));
 
   return (
     <section aria-label="Customers" className="adm-customers">
-      <AdminPageHeader title="Customers" />
+      <AdminPageHeader
+        title="Customers"
+        primary={
+          canAdd ? (
+            <button
+              type="button"
+              className="adm-btn adm-btn--primary"
+              onClick={() => navigate(adminPath.newCustomer(), { state: { fromList: true } })}
+              aria-label="Add customer"
+            >
+              <AdminIcon name="plus" />
+              <span className="adm-only-mobile">Add</span>
+              <span className="adm-only-desktop">Add customer</span>
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="adm-filter-row">
         <AdminSearch value={search} onChange={setSearch} placeholder="Search name, email or phone" label="Search customers" />
@@ -139,6 +173,19 @@ export function CustomersTab() {
           </select>
         )}
       </div>
+
+      {(canManage || showDue) && (
+        <ChipRow
+          label="Show customers"
+          active={show}
+          onSelect={(id) => setShow(id as ShowFilter)}
+          chips={[
+            { id: 'all', label: 'All' },
+            ...(showDue ? [{ id: 'due', label: 'Due', count: dueCount }] : []),
+            ...(canManage ? [{ id: 'hidden', label: 'Hidden', count: hiddenCount }] : []),
+          ]}
+        />
+      )}
 
       <div className="adm-spacer" />
 
@@ -174,6 +221,11 @@ export function CustomersTab() {
                   }}
                 >
                   <span className="adm-lrow__name">{c.full_name || c.email || c.phone}</span>
+                  {c.hidden && (
+                    <span className="adm-tag adm-crow__hidden" data-testid="customer-hidden-tag">
+                      Hidden
+                    </span>
+                  )}
                 </button>
                 <CustomerTagChips tags={notesFor(c)} />
                 <p className="adm-lrow__meta adm-mobile-meta">
