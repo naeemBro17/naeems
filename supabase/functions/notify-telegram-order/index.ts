@@ -8,6 +8,9 @@
 // unchanged by Part 2: it already fires on every UPDATE, not just specific
 // columns), which POSTs the standard webhook payload shape:
 //   { type: "INSERT" | "UPDATE", table: "orders", record: {...}, old_record: {...} | null }
+// Batch 34 Part 3: that webhook (which held the service key in plain text)
+// is replaced by the "order-telegram" trigger of migration-036, which sends
+// the same payload with a shared secret from Vault — see _shared/notifyAuth.ts.
 //
 // Deliberately fails soft everywhere: if the bot token/chat id secrets
 // aren't set yet, or the Telegram API call itself fails, this returns 200
@@ -23,6 +26,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { isTestOrder, parseIdList } from '../_shared/testOrders.ts';
+import { isAuthorizedNotifyCall } from '../_shared/notifyAuth.ts';
 
 interface OrderRow {
   id: string;
@@ -151,7 +155,35 @@ function buildSteadfastAttentionMessage(order: OrderRow): string {
   ].join('\n');
 }
 
+/** Batch 34 Part 3: the shared secret from Vault (migration-036), read once
+ *  per running copy of this function with its own service key. null until
+ *  migration-036 has run. */
+let cachedSecret: string | null = null;
+async function sharedSecret(): Promise<string | null> {
+  if (cachedSecret) return cachedSecret;
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data, error } = await supabase.rpc('notify_order_secret');
+  if (error || typeof data !== 'string' || data === '') return null;
+  cachedSecret = data;
+  return cachedSecret;
+}
+
+const TEST_ALERT_TEXT = 'Test alert: order alerts are connected and protected.';
+
 Deno.serve(async (req: Request) => {
+  // Batch 34 Part 3: JWT checking is off for this function (config.toml) —
+  // the caller must prove itself here instead. Refused before anything
+  // else is read; no details in the answer.
+  const authorized = isAuthorizedNotifyCall({
+    secretHeader: req.headers.get('x-notify-secret'),
+    authorization: req.headers.get('Authorization'),
+    expectedSecret: req.headers.get('x-notify-secret') ? await sharedSecret() : null,
+    serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? null,
+  });
+  if (req.method !== 'POST' || !authorized) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
+  }
+
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN');
   const chatId = Deno.env.get('TELEGRAM_CHAT_ID');
 
@@ -162,7 +194,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const payload = (await req.json()) as WebhookPayload;
+    const payload = (await req.json()) as WebhookPayload & { test?: boolean };
+    // One fixed test message (Batch 34 smoke check) — never caller text.
+    if (payload.test === true) {
+      await sendTelegramMessage(token, chatId, TEST_ALERT_TEXT);
+      return new Response(JSON.stringify({ sent: 'test' }), { status: 200 });
+    }
     if (payload.table !== 'orders' || !payload.record) {
       return new Response(JSON.stringify({ skipped: 'not an orders row' }), { status: 200 });
     }

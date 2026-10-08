@@ -13,3 +13,10 @@ verify_jwt = false
 # Supabase login. The function checks its own BACKUP_ALERT_SECRET instead.
 [functions.backup-alert]
 verify_jwt = false
+
+# Batch 34 Part 3: called by the orders trigger (migration-036), which sends
+# a random shared secret from Vault in x-notify-secret — not a Supabase
+# login token. The function checks that secret itself (constant time) and
+# refuses everything else with 401.
+[functions.notify-telegram-order]
+verify_jwt = false

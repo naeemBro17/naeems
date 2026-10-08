@@ -70,8 +70,23 @@ let gaInitialized = false;
 
 /** True on /admin and /wholesaler-access — every tracking call is a no-op
  *  there, per CLAUDE.md's "never track admin/wholesaler areas" rule. */
-function isExcludedPath(pathname: string): boolean {
+export function isExcludedPath(pathname: string): boolean {
   return pathname.startsWith('/admin') || pathname.startsWith('/wholesaler-access');
+}
+
+/** Batch 34 Part 4: a page that redirects at once (e.g. an empty cart's
+ *  checkout → /cart) is left within this time; only where the visitor lands
+ *  is counted. Short enough that nothing is lost when a page is closed. */
+export const PAGEVIEW_SETTLE_MS = 120;
+
+let gaMeasurementId = '';
+
+/** Batch 34 Part 4: Google's documented switch (window['ga-disable-<ID>'])
+ *  that stops gtag.js sending anything — including its own automatic
+ *  events — while the admin is open in a tab where the shop loaded GA. */
+export function pauseTracking(paused: boolean): void {
+  if (gaMeasurementId === '') return;
+  (window as unknown as Record<string, unknown>)[`ga-disable-${gaMeasurementId}`] = paused;
 }
 
 function initFbPixel(pixelId: string): void {
@@ -101,6 +116,7 @@ function initFbPixel(pixelId: string): void {
 function initGa(measurementId: string): void {
   if (gaInitialized || measurementId.trim() === '') return;
   gaInitialized = true;
+  gaMeasurementId = measurementId;
 
   window.dataLayer = window.dataLayer ?? [];
   window.gtag = (...args: unknown[]) => {

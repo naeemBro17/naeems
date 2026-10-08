@@ -403,7 +403,8 @@ test.describe('Part 2 with a mouse', () => {
     await page.goto('/');
     const link = page.locator('.brand-row__all').first();
     if ((await link.count()) > 0) {
-      await page.keyboard.press('Shift');
+      // Batch 34: the ring follows real focus-moving keys (Tab), not Shift.
+      await page.keyboard.press('Tab');
       await link.focus();
       const ring = await link.evaluate((el) => ({
         outline: getComputedStyle(el).outlineStyle,

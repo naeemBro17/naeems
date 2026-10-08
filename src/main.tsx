@@ -4,6 +4,7 @@ import { unstable_HistoryRouter as HistoryRouter } from 'react-router-dom';
 import App from './App';
 import { appHistory } from './lib/appHistory';
 import { pageForPath, preloadShopPages } from './lib/routePages';
+import { trackInputModality } from './lib/inputModality';
 import './styles/tokens.css';
 import './styles/app.css';
 
@@ -22,6 +23,9 @@ if (!rootElement) {
 if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
+
+// Batch 34 Part 5: keyboard or finger — decides whether focus rings show.
+trackInputModality();
 
 // Batch 29 Part 7: a direct visit to a page's link starts that page's own
 // file downloading right away, alongside the main one, instead of after it.

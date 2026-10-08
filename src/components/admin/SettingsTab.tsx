@@ -21,6 +21,7 @@ import { useProducts, type TextSettingKey } from '../../contexts/ProductContext'
 import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
 import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
+import { TwoStepCard } from './TwoStepCard';
 import { SubPages, type SubPage } from './ui/SubPages';
 
 const PASSWORD_MIN_LENGTH = 8;
@@ -988,6 +989,8 @@ export function SettingsTab() {
     { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
     { id: 'tracking', group: 'TRACKING', label: 'Facebook Pixel and Google Analytics', icon: 'chart', render: () => <AdTrackingSettingsPanel /> },
     { id: 'safety', group: 'SAFETY LOCKS', label: 'Safety Locks', icon: 'lock', render: () => <SafetyLocksPanel /> },
+    // Batch 34 Part 1.
+    { id: 'security', group: 'SECURITY', label: 'Two-step login', icon: 'shield', render: () => <TwoStepCard /> },
     { id: 'account', group: 'OTHER', label: 'Password, saved data, sign out', icon: 'profile', render: () => otherPanels },
   ];
 

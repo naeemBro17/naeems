@@ -162,9 +162,12 @@
   }
 }
 
-.adm :focus-visible {
-  outline: 2px solid var(--adm-or);
-  outline-offset: 2px;
+/* Batch 34: the admin's ring colour for the one shared focus style
+   (app.css). It used to set its own outline on every :focus-visible —
+   which a tapped text field always is — so the square input inside the
+   rounded search box got a square ring on every tap. */
+.adm {
+  --focus-ring: var(--adm-or);
 }
 
 .adm-icon {
@@ -3386,4 +3389,125 @@ html[data-admin] .toast--info .toast__icon {
     min-height: 112px;
     padding: 18px 20px;
   }
+}
+
+/* ---------- Batch 34: Settings → Security → Two-step login ---------- */
+
+.two-step-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adm-s2);
+}
+
+.two-step-card__status {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--adm-card-2);
+  color: var(--adm-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.two-step-card__status--on {
+  background: var(--adm-green-bg);
+  color: var(--adm-green-text);
+}
+
+.two-step-card__devices {
+  list-style: none;
+  margin: 0 0 var(--adm-s3);
+  padding: 0;
+  border-top: 1px solid var(--adm-line);
+}
+
+.two-step-card__device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adm-s2);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--adm-line);
+  color: var(--adm-text);
+}
+
+.two-step-card__device > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.two-step-card__added {
+  font-size: 13px;
+  color: var(--adm-muted);
+}
+
+.two-step-card__backup {
+  margin: 0 0 var(--adm-s3);
+  font-size: 14px;
+  color: var(--adm-text-2);
+}
+
+.two-step-card__setup {
+  margin-top: var(--adm-s3);
+}
+
+.two-step-card__steps {
+  margin: 0 0 var(--adm-s3);
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--adm-text-2);
+}
+
+/* The QR stays black on white in dark mode too, so every phone camera reads it. */
+.two-step-card__qr {
+  width: fit-content;
+  margin: 0 auto var(--adm-s3);
+  padding: 12px;
+  border-radius: var(--adm-r-md);
+  background: #fff;
+}
+
+.two-step-card__qr img {
+  display: block;
+  width: 176px;
+  height: 176px;
+}
+
+.two-step-card__key {
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  margin-bottom: var(--adm-s3);
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--adm-r-md);
+  background: var(--adm-card-2);
+}
+
+.two-step-card__key code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--adm-text);
+}
+
+.two-step-card__code {
+  max-width: 220px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.two-step-card__actions {
+  display: flex;
+  gap: var(--adm-s2);
+  flex-wrap: wrap;
 }

@@ -1,7 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
+
+// Only staff with an Authenticator ever see it — kept out of the shop bundle.
+const TwoStepCodeScreen = lazy(() => import('./TwoStepCodeScreen'));
 
 /**
  * Wraps /admin. Only an approved admin or an active moderator (Batch 24) may
@@ -11,7 +14,7 @@ import { useToast } from '../../hooks/useToast';
  * session disappears (expiry), shows a toast.
  */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isStaff, isLoading } = useAuth();
+  const { isStaff, isLoading, mfaPending } = useAuth();
   const location = useLocation();
   const { showToast } = useToast();
   const hadAdminRef = useRef(false);
@@ -30,6 +33,16 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       <div className="full-screen-center" aria-label="Checking sign-in status">
         <span className="spinner spinner--large" aria-hidden="true" />
       </div>
+    );
+  }
+
+  // Batch 34: password given, 6-digit code not yet — the code screen, never
+  // the admin. The database refuses admin work for such a session too.
+  if (mfaPending) {
+    return (
+      <Suspense fallback={<div className="full-screen-center"><span className="spinner spinner--large" aria-hidden="true" /></div>}>
+        <TwoStepCodeScreen />
+      </Suspense>
     );
   }
 

@@ -6,6 +6,7 @@ import { useToast } from '../../hooks/useToast';
 import { PasswordField } from './PasswordField';
 import { STAFF_PASSWORD_MIN_LENGTH, STAFF_PERMISSIONS, logStaffEvent } from '../../lib/staff';
 import { AdminPageHeader } from './ui/AdminUi';
+import { TwoStepCard } from './TwoStepCard';
 
 /** A moderator's own page (Batch 24): who they are, what they may do,
  *  change their own password, sign out. */
@@ -117,6 +118,9 @@ export function MyProfileTab() {
           </button>
         </form>
       </div>
+
+      {/* Batch 34: optional for staff — the same card as Settings → Security. */}
+      <TwoStepCard />
 
       <div className="admin-panel">
         <h3 className="admin-panel__title">Sign out</h3>

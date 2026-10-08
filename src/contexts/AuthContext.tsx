@@ -11,6 +11,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Profile, StaffMember, StaffPermission } from '../types';
 import { fetchOwnStaffMember, logStaffEvent, staffEmail } from '../lib/staff';
+import { listDevices, needsTwoStepCode, sessionHasVerifiedFactor } from '../lib/mfa';
 
 /** Result of a sign-in / sign-up attempt: an error message, or the profile. */
 export interface AuthResult {
@@ -39,6 +40,10 @@ interface AuthContextValue {
    *  Admin. Only decides what the admin panel SHOWS — the database checks
    *  the same permission again on every action (staff_can()). */
   can: (perm: StaffPermission) => boolean;
+  /** Batch 34: the account has an Authenticator but this session has only
+   *  given the password. Every admin flag above stays false until the
+   *  6-digit code is entered (the database refuses admin work too). */
+  mfaPending: boolean;
   /** "Staff login": username + password. */
   signInStaff: (username: string, password: string) => Promise<AuthResult>;
   /** Re-read the staff row (e.g. after the Super Admin changed permissions). */
@@ -159,6 +164,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // that render reads as "loaded, not admin" and a cold load of /admin
   // redirects a real admin to the homepage.
   const profileForUserRef = useRef<string | null>(null);
+  // Batch 34: whether the server lists a confirmed Authenticator for this
+  // user — catches a phone added on another device after this session
+  // started (the session's own copy of the list may be older).
+  const [serverHasFactor, setServerHasFactor] = useState<boolean | null>(null);
 
   // Track the session. onAuthStateChange also fires an initial event, but
   // getSession resolves the first paint deterministically.
@@ -189,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileForUserRef.current = null;
       setProfile(null);
       setStaff(null);
+      setServerHasFactor(null);
       setProfileChecked(true);
       return;
     }
@@ -203,8 +213,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await ensureCustomerProfile(session);
         p = await fetchProfile(userId);
       }
-      const s = p && (p.role === 'admin' || p.role === 'moderator') ? await fetchOwnStaffMember(userId) : null;
+      const isStaffRole = p !== null && (p.role === 'admin' || p.role === 'moderator');
+      const s = isStaffRole ? await fetchOwnStaffMember(userId) : null;
+      const factor = isStaffRole ? (await listDevices()).devices.length > 0 : false;
       if (!active) return;
+      setServerHasFactor(factor);
       profileForUserRef.current = userId;
       setProfile(p);
       setStaff(s);
@@ -254,7 +267,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(p);
       setStaff(s);
       setProfileChecked(true);
-      if (p?.role === 'admin' && p.status === 'approved') void logStaffEvent('staff.login');
+      // With an Authenticator, "Signed in" is logged after the 6-digit code
+      // (TwoStepCodeScreen) — the password alone is not a full sign-in.
+      if (p?.role === 'admin' && p.status === 'approved' && !sessionHasVerifiedFactor(data.session)) {
+        void logStaffEvent('staff.login');
+      }
       return { error: null, profile: p };
     },
     []
@@ -282,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(p);
       setStaff(s);
       setProfileChecked(true);
-      void logStaffEvent('staff.login');
+      if (!sessionHasVerifiedFactor(data.session)) void logStaffEvent('staff.login');
       return { error: null, profile: p };
     },
     []
@@ -389,11 +406,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [userId]
   );
 
-  const isAdmin = profile?.role === 'admin' && profile?.status === 'approved';
+  const mfaPending = needsTwoStepCode(session, serverHasFactor);
+  const isAdmin = !mfaPending && profile?.role === 'admin' && profile?.status === 'approved';
   const isWholesalerOrAdmin =
-    (profile?.role === 'wholesaler' || profile?.role === 'admin') && profile?.status === 'approved';
+    (profile?.role === 'wholesaler' || (profile?.role === 'admin' && !mfaPending)) && profile?.status === 'approved';
   const isCustomer = profile?.role === 'customer';
   const isModerator =
+    !mfaPending &&
     profile?.role === 'moderator' && profile.status === 'approved' && staff !== null && !staff.is_disabled;
   const isStaff = isAdmin === true || isModerator;
   const can = useCallback(
@@ -419,6 +438,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isModerator,
         isStaff,
         can,
+        mfaPending,
         signInStaff,
         refreshStaff,
         isLoading,

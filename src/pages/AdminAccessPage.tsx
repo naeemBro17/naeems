@@ -42,7 +42,7 @@ function writeCooldown(value: { failures: number; until: number }): void {
  * login" is username + password for moderators.
  */
 export function AdminAccessPage() {
-  const { signIn, signInStaff, isStaff, isLoading } = useAuth();
+  const { signIn, signInStaff, isStaff, isLoading, mfaPending } = useAuth();
   const navigate = useNavigate();
   // Batch 32: back to the admin page whose link was opened (only ever a
   // page inside the admin).
@@ -57,8 +57,10 @@ export function AdminAccessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isStaff) navigate(next, { replace: true });
-  }, [isLoading, isStaff, navigate, next]);
+    // Batch 34: a session still waiting for its 6-digit code goes on too —
+    // the admin shows the code screen first.
+    if (!isLoading && (isStaff || mfaPending)) navigate(next, { replace: true });
+  }, [isLoading, isStaff, mfaPending, navigate, next]);
 
   const switchMode = (next: LoginMode) => {
     setMode(next);

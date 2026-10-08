@@ -1,0 +1,345 @@
+BATCH 34 — Security: two-step login (Authenticator app), Telegram, no keys
+inside the database, Facebook Pixel PageView, the square box behind fields
+=====================================================================
+Branch: feature/batch-34-security (made from the latest origin/main, which
+has Batch 33 merged). One commit per Part, plus one tests/report commit.
+Pushed. NOT merged, nothing pushed to main. Version 1.34.0.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Two-step login with an Authenticator app
+
+  New: Admin → Settings → SECURITY → "Two-step login". (Staff see the same
+  card on their My Profile page — for them it is optional.)
+    - Shows Off / On.
+    - "Set up": shows a QR code and the same key as text (with a Copy
+      button). You scan it with Google Authenticator or Microsoft
+      Authenticator and type the 6-digit code. Status turns On.
+    - With one phone set up, a line says: "Add a second phone as a backup,
+      so you can still log in if you lose this one." and the button
+      "Add a backup phone" adds Phone 2 the same way.
+    - "Remove" next to a phone asks for a current 6-digit code first.
+      When you still have another phone, the code must come from the phone
+      you keep (this also keeps you logged in — see section 8).
+    - Each change is written to the Activity Log ("Turned on two-step
+      login (Phone 1)", "Added a backup phone…", "Removed a phone…",
+      "Turned off…"). Never a key or a code.
+
+  Signing in: after the password, an account with an Authenticator gets a
+  calm full screen "Enter your code": one field, number keyboard on the
+  phone, pasting "123 456" works, it sends itself at 6 digits. A wrong code
+  shows "That code is not right…". After 5 wrong codes: wait 60 seconds.
+  "Use a different account" signs out (no dead end).
+
+  Enforcement, in the safe order:
+    - In the website: while the code is missing, every admin flag is off.
+      The admin pages show only the code screen, never the admin.
+    - In the database: one shared check, is_mfa_satisfied(), is added to
+      is_admin(), is_staff() and staff_can(). Every admin action already
+      goes through those three (I checked: no admin function or rule checks
+      the role any other way), including the Steadfast and Team functions.
+      So role/permission changes, Safety Lock, deleting customers,
+      settings, the Steadfast key, refunds/payment deletions — all of it.
+      Rule: if this login has a confirmed Authenticator, the session must
+      have given the 6-digit code. A login WITHOUT an Authenticator passes
+      exactly as today.
+    - Nothing forces your account into this. Today no account has an
+      Authenticator (I checked: 0), so after merging everything works
+      exactly as before until you press "Set up" yourself.
+
+  Proof (tests, all on the TEST Super Admin, never your login):
+    - Without an Authenticator: logs in, opens the admin, database says
+      is_admin = yes (you are not locked out).
+    - Set up in Settings with codes made by the test from the key; a wrong
+      code is refused; status On.
+    - Log in again → code screen; wrong code → error; right code → admin.
+    - A password-only session opening /admin or /admin/orders/new sees only
+      the code screen.
+    - Second phone added; removing needs a code; wrong code changes nothing.
+    - All phones removed again at the end.
+    - The database part of the proof (is_admin = no for a password-only
+      session, yes after the code) runs once migration-036 is applied — see
+      the end of this report.
+
+PART 2 — Telegram webhook secret: NOT APPLICABLE
+  No Edge Function receives messages from Telegram. The order alerts and
+  backup alerts only SEND to Telegram (there are no buttons that call back
+  into the shop). There is nothing listening for Telegram, so there is
+  nothing to protect. Skipped as the batch says.
+
+PART 3 — No keys written inside the database
+  I searched every database function, every trigger and every scheduled
+  (cron) job for anything that looks like a key, token or password.
+  Found (names only, never the values):
+    - Trigger "order-telegram" on the orders table (made earlier in the
+      Supabase dashboard as a "Database Webhook"). It held the SERVICE KEY
+      (the master key) in plain text.
+    - Cron job "steadfast-refresh-all": looked suspicious, but it already
+      reads its secret from Supabase Vault. Nothing in plain text. OK.
+    - Nothing else.
+
+  What replaces it (migration-036):
+    - A new random shared secret, made inside the database and kept only in
+      Supabase Vault (the database's locked safe). Nobody has to type or
+      copy it.
+    - The "order-telegram" trigger is swapped for one with the same name
+      that sends exactly the same message (new order, cancelled, Steadfast
+      needs attention), at the same moment, with that shared secret instead
+      of the master key.
+    - The notify-telegram-order function now refuses (401, nothing done,
+      no details) anything that does not carry the right secret (compared
+      in constant time). Before, anyone with the public website key could
+      have asked it to send you a fake alert.
+    - It still accepts the old webhook's master key for the few minutes
+      between putting the new function live and running the database
+      update, so no alert is lost in between.
+
+PART 4 — Facebook Pixel PageView
+  - Found: the first PageView could be counted twice whenever the tracker
+    IDs were already known when the app started (one effect counted the
+    first page, a second effect counted it again). Also: a page that
+    redirects at once (open checkout with an empty cart → cart) counted
+    two pages, and on an admin page opened straight from a link the
+    trackers were still loaded.
+  - Now: one PageView on first load, one per page change, Back included.
+    A redirect counts only the page you land on. Admin pages (and
+    /wholesaler-access) never load the trackers, and if you go from the
+    shop to the admin in the same tab, Google Analytics is paused with
+    Google's own off-switch.
+  - ViewContent / AddToCart / InitiateCheckout / Purchase: not touched.
+  - Proof (fake fbq that only records, the real Facebook is never called):
+    Home 1 → product 2 → Back 3; cart (fresh load) 1 → checkout 2 → Back 3;
+    empty-cart checkout → cart = 1; admin pages: 0 Pixel calls, 0 GA
+    events, trackers not even loaded. ViewContent and AddToCart still fire.
+
+PART 5 — The square box behind rounded fields (everywhere)
+  The real cause in the admin: the admin had its own focus rule that drew
+  an orange ring on every focused element. A text field counts as
+  "focused by keyboard" even when you tap it, so every tap drew that ring
+  — on the SQUARE inner input that sits inside the ROUNDED search box.
+  That is the square box you saw (I reproduced it on screen first).
+
+  Fix: ONE shared focus style for the whole site (top of app.css):
+    - A tap or click never draws an outline, on the field or around it.
+    - The ring appears only when someone uses the keyboard (Tab/arrows).
+      A tiny script remembers keyboard vs finger (typing letters does not
+      count).
+    - The ring sits on the rounded element itself and follows its corners.
+      Where the rounded box is a wrapper around a plain input (the admin
+      search), that wrapper is marked "focus-host" and gets the ring.
+    - The admin only sets its ring colour now, nothing else.
+  Every field and button gets this automatically, including new ones.
+  Which components use it: all of them (it is a site-wide rule); the admin
+  search box (AdminSearch) is the one "focus-host".
+  Proof: one test loops over a list of controls; for each it taps (no
+  outline, no new box on any square wrapper) and then uses the keyboard
+  (ring present, with rounded corners). The list is easy to extend.
+
+
+2. HOW YOU TURN ON TWO-STEP LOGIN (after merging)
+--------------------------------------------------
+First let me (or you) run the database update — see the end of this
+report. Then:
+  1. On your phone, install "Google Authenticator" (or "Microsoft
+     Authenticator") from the Play Store. Free.
+  2. On the PC (easiest) open the admin → Settings → Two-step login.
+     (Or on the phone — then use "Enter a setup key" instead of scanning.)
+  3. Press "Set up". A QR code appears.
+  4. In the Authenticator app tap "+" → "Scan a QR code" → point at it.
+  5. The app shows a 6-digit number that changes every 30 seconds. Type it
+     in the box and press Confirm. Status: On.
+  6. From now on: email + password, then the 6-digit code from the app.
+
+  Add the second (backup) phone — do this the same day:
+  7. Install the same app on a second phone (family member's, an old one).
+  8. Settings → Two-step login → "Add a backup phone" → scan → code →
+     Confirm. You now see Phone 1 and Phone 2. Either phone's code works.
+
+
+3. IF YOU LOSE YOUR PHONES
+--------------------------
+Lose ONE phone: log in with the other phone's code, then Settings →
+Two-step login → Remove the lost one → add the new phone.
+
+Lose BOTH phones (also written in docs/RESTORE.md, "Locked out of
+two-step login"):
+  1. Go to supabase.com and sign in (your Supabase login, not the shop's).
+     Open the shop's project.
+  2. Left menu: Authentication → Users.
+  3. Click your admin email. A panel opens.
+  4. Click "Remove MFA factors" (in the panel near the bottom, or in its
+     "..." menu) and confirm.
+  5. If you cannot find that button: left menu → SQL Editor → New query,
+     paste this with your admin email between the quotes, press Run:
+        delete from auth.mfa_factors
+        where user_id = (select id from auth.users where email = 'YOUR-ADMIN-EMAIL');
+  6. Log in to the shop admin with email + password (no code asked now),
+     and set up two-step login again with your new phone(s).
+  Nothing else is touched by this — no orders, products or settings.
+
+
+4. KEYS FOUND INSIDE THE DATABASE
+---------------------------------
+  - Trigger "order-telegram" (orders table): the service (master) key, in
+    plain text. Replaced by a random shared secret in Supabase Vault.
+  - Cron job "steadfast-refresh-all": already uses Vault. Nothing to do.
+  Proof query (names only; it is also at the bottom of migration-036):
+    select 'function', p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname not in ('pg_catalog','information_schema')
+       and (p.prosrc ~ 'eyJ[A-Za-z0-9_-]{10,}' or p.prosrc ~ 'sb_secret_'
+            or p.prosrc ~ '[0-9]{8,10}:[A-Za-z0-9_-]{30,}')
+    union all
+    select 'trigger', t.tgname from pg_trigger t where not t.tgisinternal
+       and (encode(t.tgargs,'escape') ~ 'eyJ[A-Za-z0-9_-]{10,}' or encode(t.tgargs,'escape') ~ 'sb_secret_')
+    union all
+    select 'cron', j.jobname from cron.job j
+     where j.command ~ 'eyJ[A-Za-z0-9_-]{10,}' or j.command ~ 'sb_secret_';
+  Today (before the update): 1 row — trigger "order-telegram".
+  After the update: see the end of this report.
+
+
+5. TELEGRAM WEBHOOK
+-------------------
+Not applicable. Nothing in the project receives messages from Telegram;
+alerts are send-only. (The function that sends the alerts is now protected
+— Part 3.)
+
+
+6. KEY ROTATION — what it means, and why later
+----------------------------------------------
+"Rotating" a key means making a brand-new key and switching the old one
+off, like changing the lock after a copy of the key went missing. The old
+master key was readable inside the database, so to be fully safe it
+should be replaced. I did NOT do it in this batch: every part of the site
+that uses that key (the Edge Functions, the backup job on GitHub, the
+cron job's helper) must switch over at the same time, or the site breaks.
+We will do it together later, step by step, together with the Steadfast
+key rotation, when you can watch and test straight away.
+
+
+7. EVERY FIELD / BUTTON CHECKED IN PART 5
+-----------------------------------------
+Each: tap shows no outline and no box; keyboard shows a rounded ring.
+  Admin (phone 390 px unless said)
+    Orders search ................................. OK
+    Orders filter chips ........................... OK
+    Orders source filter (dropdown) ............... OK
+    Products search ............................... OK
+    Customers search .............................. OK
+    Activity Log person filter .................... OK
+    Activity Log date field ....................... OK
+    Team segmented control ........................ OK
+    New order → product search .................... OK
+    New order → customer search ................... OK
+    Thana picker search (New order) ............... OK
+    Settings field ................................ OK
+    Settings → Security button .................... OK
+    Page menu (three dots) ........................ OK
+    Order sheet Close button ...................... OK
+    Bottom bar .................................... OK
+    Sidebar (PC 1280 px) .......................... OK
+    Orders search (PC 1280 px) .................... OK
+    Login field ................................... OK
+    Two-step code field ........................... OK
+    "Use a different account" ..................... OK
+  Shop
+    Home search ................................... OK
+    Search page field ............................. OK
+    Brand page search ......................... none exists
+    Category chips (brand page) ................... OK
+    "See all" link ................................ OK
+    Bottom nav .................................... OK
+    Cart quantity stepper ......................... OK
+    Checkout field ................................ OK
+    Promo code field .............................. OK
+    Wholesaler login field ........................ OK
+  Screenshots of each admin search field tapped (390 + 1280, light + dark)
+  and of the Security card / QR (blurred) / code screen are in
+  reports/batch-34-screens/.
+
+
+8. DECISIONS I MADE
+-------------------
+  - "Trust this device for 30 days": skipped, as asked. Every new login
+    asks for the code; your phone stays logged in anyway, so in practice
+    you type it rarely.
+  - No backup codes: Supabase has none, so the backup is a second phone.
+  - The code can come from either phone at login (no need to choose).
+  - Removing a phone while you have another one: the code must come from
+    the phone you KEEP. Reason: Supabase drops the session back to
+    "password only" when a phone is removed; with a code from a kept phone
+    the shop restores the full session at once, so the admin does not jump
+    to the code screen.
+  - A phone added on another device is noticed when the admin loads (the
+    shop asks Supabase, not only its own copy).
+  - Staff: same card on their My Profile page, optional. "Require
+    two-step login for all staff" — later, not built.
+  - Telegram test: a fixed "Test alert" message can be triggered only with
+    the shared secret (for the smoke check). It can never send other text.
+  - The notify function's JWT check is switched off in config.toml (like
+    steadfast-refresh-all and backup-alert) because the trigger sends the
+    shared secret, not a login token; the function checks it itself.
+
+  Only your phone / PC can confirm:
+    - Scanning the QR with your real Authenticator app and the code being
+      accepted (tests make codes from the key the same way the app does).
+    - That the square box is gone on your phone and PC after updating the
+      app (tests check the styles on a phone-sized Chrome and at PC size).
+    - A real new web order still sends the Telegram alert (after the update).
+
+  Needs a later batch:
+    - Rotate the master (service) key and the Steadfast key — together.
+    - Optional: "Require two-step login for all staff" switch.
+    - Optional: show "two-step on/off" per staff member on the Team page.
+
+
+9. BUILD / TEST RESULTS
+-----------------------
+  npm run verify (final run): build OK · vitest 233/233 · e2e 222 passed,
+  86 skipped, 0 failed — ALL GREEN.
+  (Skipped = tests that wait for a database update that has not been run
+  yet, from this and earlier batches; e.g. the Batch 34 test "a
+  password-only session is refused by the database" waits for
+  migration-036.)
+  The first full run had 1 failure: the Batch 33 test "the keyboard ring
+  is rounded on plain links". It pressed Shift to mean "keyboard user".
+  The new shared focus style only counts keys that move focus (Tab,
+  arrows) — otherwise typing a capital letter in a tapped field would bring
+  the ring back. TEST CHANGED: it now presses Tab; it still checks the same
+  solid ring with 8px rounded corners. Passed 3/3 alone, then the full run.
+  New: e2e/batch-34.spec.ts (Parts 1, 3, 4, 5 + screenshots),
+  src/lib/batch34.test.ts (14 unit tests), e2e/helpers/totp.ts.
+  No other existing test was changed or removed.
+
+
+10. APPLIED ON THE LIVE SITE (after Naeem said yes)
+----------------------------------------------------
+Done in this order, so no alert could be lost:
+  1. notify-telegram-order put live (new version). A call without the
+     secret → 401. (It still accepts the old webhook during the switch.)
+  2. migration-036 run on the live database. No error.
+  3. Checks (read-only):
+     - Key search query (section 4): 0 rows. Before: 1 row.
+     - Trigger "order-telegram" now runs notify_telegram_order (Vault
+       secret), not the old webhook with the master key.
+     - Vault secret "notify_telegram_order_secret" exists (64 characters,
+       never printed).
+     - is_mfa_satisfied() exists. Accounts with an Authenticator: 0 — so
+       your login works exactly as before until you press "Set up".
+  4. One test Telegram message sent through the protected function:
+     "Test alert: order alerts are connected and protected." → 200.
+     Same call with a wrong secret → 401.
+  5. Real path checked with one TEST order (E2E customer): the database
+     trigger called the function with the Vault secret and it was
+     accepted (200, "skipped: e2e test order" — test orders never alert).
+     The test order was removed by the test clean-up (0 left).
+  6. e2e/batch-34.spec.ts run again with the update applied: 15 passed,
+     0 skipped (now including "a password-only session is refused by the
+     database": is_admin = no before the code, yes after it).
+
+  SQL Naeem must run in Supabase: NONE — already applied.
+  What you should see: the Test alert message in your Telegram, and the
+  next real web order alerts exactly as before.
+  Still to do later, together: rotate the master key and the Steadfast key.
