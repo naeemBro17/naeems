@@ -312,3 +312,34 @@ Each: tap shows no outline and no box; keyboard shows a rounded ring.
   New: e2e/batch-34.spec.ts (Parts 1, 3, 4, 5 + screenshots),
   src/lib/batch34.test.ts (14 unit tests), e2e/helpers/totp.ts.
   No other existing test was changed or removed.
+
+
+10. APPLIED ON THE LIVE SITE (after Naeem said yes)
+----------------------------------------------------
+Done in this order, so no alert could be lost:
+  1. notify-telegram-order put live (new version). A call without the
+     secret → 401. (It still accepts the old webhook during the switch.)
+  2. migration-036 run on the live database. No error.
+  3. Checks (read-only):
+     - Key search query (section 4): 0 rows. Before: 1 row.
+     - Trigger "order-telegram" now runs notify_telegram_order (Vault
+       secret), not the old webhook with the master key.
+     - Vault secret "notify_telegram_order_secret" exists (64 characters,
+       never printed).
+     - is_mfa_satisfied() exists. Accounts with an Authenticator: 0 — so
+       your login works exactly as before until you press "Set up".
+  4. One test Telegram message sent through the protected function:
+     "Test alert: order alerts are connected and protected." → 200.
+     Same call with a wrong secret → 401.
+  5. Real path checked with one TEST order (E2E customer): the database
+     trigger called the function with the Vault secret and it was
+     accepted (200, "skipped: e2e test order" — test orders never alert).
+     The test order was removed by the test clean-up (0 left).
+  6. e2e/batch-34.spec.ts run again with the update applied: 15 passed,
+     0 skipped (now including "a password-only session is refused by the
+     database": is_admin = no before the code, yes after it).
+
+  SQL Naeem must run in Supabase: NONE — already applied.
+  What you should see: the Test alert message in your Telegram, and the
+  next real web order alerts exactly as before.
+  Still to do later, together: rotate the master key and the Steadfast key.
