@@ -91,3 +91,34 @@ backup-alert) with their secrets, the orders Database Webhook and the 3-hourly S
 - "bad passphrase" in Step 3 → wrong backup password.
 - "server version mismatch" → you installed tools older than version 17; install version 17.
 - "could not connect" → check the connection string and that `[YOUR-PASSWORD]` was replaced.
+
+## Locked out of two-step login
+
+Use this only if you lost **every** phone that has the Authenticator app
+for Naeem's (and so cannot type the 6-digit code). Your password still
+works; this removes the phones from your account so you can log in with the
+password alone, then set up two-step login again.
+
+You need your Supabase login (the one for supabase.com, not the shop's
+admin login). It works from a phone browser too.
+
+1. Open **supabase.com** and sign in. Open the shop's project.
+2. Left menu: **Authentication** → **Users**.
+3. Find your admin email in the list and tap/click it. A panel opens.
+4. Look for **Remove MFA factors** (in the panel, near the bottom, or in
+   its "..." menu). Click it and confirm. Done — go to step 7.
+5. If that button is not there: left menu → **SQL Editor** → **New query**.
+   Paste this, put your admin email between the quotes, and press **Run**:
+
+       delete from auth.mfa_factors
+       where user_id = (select id from auth.users where email = 'YOUR-ADMIN-EMAIL');
+
+   It should say a number of rows was deleted (1 for each phone).
+6. Nothing else is touched — no orders, products or settings.
+7. Open the shop's admin login page and sign in with your email and
+   password. No code is asked now.
+8. Admin → Settings → Security → **Set up** again on your new phone, and
+   add a second phone as a backup straight away.
+
+If a staff member loses their phone, you can do the same for their login
+(their email ends with @staff.naeems.internal in the Users list).
