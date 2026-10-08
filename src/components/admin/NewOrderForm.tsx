@@ -422,7 +422,20 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     setIsSaving(false);
 
     if (result.stockWarnings) {
-      setPendingWarnings(result.stockWarnings);
+      // Batch 33: someone may have bought the last units since a line was
+      // added — the line itself now says how many are really left (it stays
+      // after "Go back"), next to the "continue anyway?" question.
+      const warnings = result.stockWarnings;
+      setLines((prev) =>
+        prev.map((line) => {
+          const sameName = warnings.filter((w) => w.product_name === line.productName);
+          const match =
+            sameName.find((w) => (w.variant_label ?? null) === (line.variantLabel ?? null)) ??
+            (sameName.length === 1 ? sameName[0] : undefined);
+          return match ? { ...line, stockQuantity: match.available } : line;
+        })
+      );
+      setPendingWarnings(warnings);
       return;
     }
     if (result.error || !result.orderId) {
@@ -636,8 +649,13 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                   <span className="checkout-cart__name">{line.productName}</span>
                   {line.variantLabel && <span className="checkout-cart__variant">{line.variantLabel}</span>}
                   {line.stockQuantity !== null && line.stockQuantity < line.quantity && (
-                    <span className="checkout-cart__variant" style={{ color: 'var(--color-danger, #d33)' }}>
-                      Only {line.stockQuantity} in stock
+                    <span
+                      className="checkout-cart__variant"
+                      style={{ color: 'var(--color-danger, #d33)' }}
+                      role="alert"
+                      data-testid="line-stock-error"
+                    >
+                      {line.stockQuantity <= 0 ? 'Sold out — none left in stock' : `Only ${line.stockQuantity} in stock`}
                     </span>
                   )}
                   {!isAdmin ? (

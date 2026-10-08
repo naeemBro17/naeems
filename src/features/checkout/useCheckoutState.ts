@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useCart } from '../../contexts/CartContext';
+import { computePromoDiscount } from '../../lib/promoCodes';
 import { useProducts } from '../../contexts/ProductContext';
 import type { AppSettings } from '../../types';
 import {
@@ -164,7 +165,10 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       : base;
   }, [zoneId, settings]);
 
-  const discount = promo?.computedDiscount ?? 0;
+  // Batch 33: follows the cart — when a sold-out line is removed or a
+  // quantity lowered, a percent code's discount shrinks with it (the
+  // database computes it the same way when the order is placed).
+  const discount = promo ? computePromoDiscount(promo, subtotal) : 0;
   const total = Math.max(0, subtotal + zone.fee - discount);
 
   const finalizeOrder = useCallback(

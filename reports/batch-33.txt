@@ -1,0 +1,226 @@
+BATCH 33 — Bug fixes: product photos break + drag-to-reorder (phone and
+PC), square box behind rounded controls, "just sold out" at checkout
+=====================================================================
+Branch: feature/batch-33-bugfixes (made from the latest origin/main, which
+has Batch 32 merged). One commit per Part, plus one tests/report commit.
+Pushed. NOT merged, nothing pushed to main. Version 1.33.0.
+
+
+1. WHAT I DID
+-------------
+
+PART 1 — Product photos break; reordering was rough on the phone and
+impossible on PC
+
+  THE REAL CAUSES OF THE BROKEN PHOTOS (there were two):
+
+  a) The photo editor threw away every preview each time the list changed.
+     A photo you just picked from the gallery is shown from a temporary
+     in-browser link (a "blob:" link). The old code deleted ALL of these
+     links and made new ones whenever anything in the list changed: adding
+     a photo, removing one, and every reorder. For a moment the thumbnails
+     pointed at links that no longer existed. On a phone with big camera
+     photos, Chrome is often still loading a photo when that happens, or
+     has to load it again after you come back from the gallery app. The
+     photo then fails, and you see the white box with "Product image 1".
+     Now each thumbnail keeps its own link for as long as it is on screen.
+     The link is released only when you remove that photo or leave the
+     editor (after saving).
+
+  b) The app's offline photo store (the "service worker") could keep a
+     broken answer for 30 days. When the browser asks for a photo, the
+     worker could not see whether the answer was a real photo or an error.
+     Supabase answers "400" for a missing file. So a missing file, or a
+     passing hiccup on a slow connection, was stored as if it were the
+     photo and shown broken again and again. I checked that Supabase allows
+     the safer way of asking (CORS) for our photos. The worker now asks
+     that way, sees the real answer, and keeps only real photos. It uses a
+     new store name, and the app deletes the old store when it starts, so
+     nothing stored the old way is ever shown again.
+
+  Also: saved photos in the editor now show the small copy first (lighter
+  on the phone), then the full photo. If neither loads, you see a calm
+  grey box with a Retry button, never the browser's broken-image icon.
+
+  REORDERING, rebuilt with one standard library (dnd-kit, widely used and
+  well maintained):
+    - Phone: hold a photo for about 0.2 seconds, then drag. A quick swipe
+      still scrolls the row, so scrolling and dragging don't fight.
+    - PC: just drag with the mouse. (It was impossible before, partly
+      because the browser started its own "drag the picture" action.
+      That is now switched off for these thumbnails.)
+    - Keyboard: Tab to a photo, Space, arrow keys, Space.
+    - The other photos slide aside smoothly, with no gaps or overlaps. The
+      row scrolls by itself when you drag near its edge.
+    - The first photo has a small "Main" label (it used to say "Cover",
+      on top of the drag handle). A short hint under the row says "Hold
+      and drag a photo to reorder. The first one is the main photo."
+    - Dragging photo files in from the PC desktop still works as before.
+    - Saving keeps the new order exactly, and each small copy stays with
+      its own photo (checked by the tests).
+  This photo editor is the only one with several photos. Option (variant)
+  photos use a separate one-photo picker that has no reordering, so it
+  didn't need this change.
+
+PART 2 — Square box behind rounded controls
+
+  Cause: the pale orange glow around the shop's search field was drawn on
+  an invisible box around the field, and that box has square corners. So
+  every tap on the search field drew a square pale-orange box around the
+  rounded one.
+  Fixed site-wide (shop and admin):
+    - The glow now sits on the rounded field itself.
+    - The focus ring shows only for keyboard users (":focus-visible").
+      A tap or a click never draws an outline.
+    - Plain links and buttons that have no rounded corners of their own
+      (like "See all") get softly rounded corners while the keyboard ring
+      shows, so the ring is never a hard square.
+    - The blue/grey flash on tap was already off for the whole site
+      (Batch 27); the tests now check that it stays off.
+  Keyboard users still get a clear, rounded orange ring (accessibility).
+
+PART 3 — "Just sold out" at checkout
+
+  A cart doesn't hold stock (the normal rule: whoever orders first gets
+  it). The database already refuses an order when stock is short. Now the
+  second customer sees a calm message instead of an error:
+      "Sorry, CeraVe Foaming Cleanser just sold out. We've updated your cart."
+      "Only 1 left of CeraVe Foaming Cleanser — we've updated the quantity."
+  - The cart corrects itself in one step: sold-out lines are removed,
+    quantities are lowered to what's left, and totals update (a percent
+    promo code also shrinks with the new subtotal, exactly as the database
+    calculates it). Everything else stays, so the customer can carry on.
+  - The check also runs when the cart page opens and when the order
+    summary opens (just before the last step), so it is usually caught
+    early.
+  - The customer never sees the database's own wording. If an order is
+    refused for stock but the live check finds nothing to fix, they see
+    "Something in your cart just changed. Please check your cart and try
+    again."
+  - Admin New order: the existing "Low stock — continue anyway?" question
+    stays (you sometimes oversell on purpose). The affected line now also
+    shows "Sold out — none left in stock" or "Only N in stock" in red, and
+    this stays after you press "Go back".
+
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------
+None needed. No database changes in this batch. (I checked the live
+database: every column the new stock check reads is there and readable.)
+
+
+3. WHAT I COULD NOT FINISH
+--------------------------
+Everything asked was done. The phone/PC checks below can only be
+confirmed on your own devices.
+
+WHAT ONLY YOUR PHONE / PC CAN CONFIRM:
+  - Phone, Edit product: add a photo from the gallery, add another, then
+    reorder. None should turn into a white box. Hold about 0.2 s, then
+    drag; a quick swipe should still scroll the row.
+  - The first time you open the app after this update, the old offline
+    photo store is cleared. Photos may load from the internet once, then
+    they are stored again.
+  - PC: drag photos with the mouse; also drop a file from the desktop.
+  - Tap the search field: no square box, only the rounded orange edge.
+
+
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+-----------------------------------------
+  - The old six-dot drag handle and the "Cover" label sat in the same
+    corner and covered each other. That is gone with the new design.
+  - The other drag lists (brands, home tiles) still use the older
+    hand-made drag code (useDragReorder). They weren't reported broken, so
+    I left them alone. They could move to dnd-kit later for the same
+    smoothness and PC mouse support.
+  - The promo discount used to stay at the amount worked out when the code
+    was applied, even if the cart changed afterwards. The order was always
+    charged correctly (the database recalculates), but the summary could
+    show a different number. It now always matches.
+
+
+5. DESIGN DECISIONS
+-------------------
+  - Touch hold of 200 ms (the brief asked for about that). A finger that
+    moves more than 8 px during the hold counts as a scroll, not a drag.
+  - Mouse drag starts after 6 px, so a plain click (for example on the X)
+    is never mistaken for a drag.
+  - The lifted photo grows slightly (4%) and gets a soft shadow. It moves
+    only with transform (smooth on mid-range phones). Users who turn off
+    animations get no grow effect.
+  - The "just sold out" message is neutral grey with a line icon, with no
+    orange (orange stays for the one main action, Checkout). It has a
+    close button and also disappears once an order is placed.
+  - The photo editor tries the small copy before the full photo: faster on
+    a slow connection, and the full photo is the fallback.
+
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+-----------------------------
+  1. Show "Only N left" on the product page and cards when stock is low
+     (for example 3 or fewer). Why: it is honest urgency that lifts sales,
+     and it warns buyers before checkout, so fewer "just sold out"
+     surprises. Size: small.
+  2. "Notify me when back in stock" for sold-out products. Why: it turns a
+     lost sale into a returning customer. Size: medium (needs a table and
+     a message).
+  3. Move the brands and home-tiles drag lists to the same dnd-kit setup.
+     Why: one way of dragging everywhere, with PC mouse and keyboard
+     support. Size: small–medium.
+
+
+7. BUILD AND TESTS
+------------------
+New: e2e/batch-33.spec.ts (runs in the one-at-a-time group because it
+places test orders). It uses its own test products only; they, their
+uploaded photos and their test orders are deleted afterwards.
+  Part 1: add 2 photos then a 3rd, and all three show real images; "Main"
+          on the first; mouse drag (PC size) reorders and saves; keyboard
+          reorder; touch long-press drag (phone) reorders and saves, while
+          a quick swipe does not; each small copy stays linked to its own
+          photo; a missing photo shows the grey box with Retry, never a
+          broken image.
+  Part 2: keyboard focus puts the ring on the rounded field itself (13 px
+          corners) and nothing on the square wrapper; a tap draws no
+          outline and no box; the tap flash is transparent; a mouse click
+          on a button draws no outline; plain links get a rounded keyboard
+          ring.
+  Part 3: last unit bought by someone else, then "just sold out", the line
+          is removed, the total drops and no database wording is shown;
+          "Only 1 left" lowers the quantity (cart page check on open);
+          admin New order shows the inline "Sold out" on the line.
+New unit tests: src/lib/batch33.test.ts (stock changes, stock error check).
+Changed config: playwright.config.ts adds 'batch-33' to the one-at-a-time
+group.
+
+EXISTING TESTS I CHANGED (none weakened — each still checks what it was
+meant to check; they broke because of new real data, not code):
+  - e2e/batch-25.spec.ts "no emoji anywhere in the rendered admin": it
+    found 😭 inside a real customer's review text (from 27 Aug). What a
+    customer writes is their own text, so review quotes are left out;
+    every word the admin itself shows is still checked.
+  - e2e/batch-32.spec.ts "existing and website orders stay collect on
+    delivery": it assumed no real order would ever be "pays later". You
+    now have two (NM-1972, NM-1979). It now checks that every website
+    order from the test customer is "collect on delivery", which is what
+    it was meant to prove.
+  - e2e/batch-32.spec.ts "Settings shows Version …": it was fixed to
+    1.32.0. It now checks that Settings shows the same version as
+    package.json (1.33.0 now), in the 1.N.0 form.
+
+Screenshots: reports/batch-33-screens/ (20 images: 390 + 1280 px, light +
+dark): photos row with "Main", while dragging, search field focused by
+keyboard and tapped, the "just sold out" message.
+
+Results: see section 8.
+
+
+8. RESULTS
+----------
+  npm run verify (final run):
+    build OK · vitest 219/219 · e2e 209 passed, 84 skipped · ALL GREEN
+  Earlier full runs each had a single different timing failure: a slow
+  admin page load once, and a phone "back" animation once. Both pass when
+  run on their own (the animation file passed 3 times in a row, 70/70).
+  They happened while the computer was low on memory; one run was even
+  stopped for that reason. Nothing in this batch touches those animations.

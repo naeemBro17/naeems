@@ -73,10 +73,26 @@ textarea {
   font-size: 16px; /* prevents iOS zoom-on-focus */
 }
 
-/* Custom focus outline on all focusable elements */
+/* Custom focus outline on all focusable elements. Batch 33: the ring is
+   for keyboard users only (:focus-visible) and follows the element's own
+   rounded corners — the outline takes the element's border-radius. */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* A tap or click focuses some controls without a keyboard; older browsers
+   then drew their own square outline. Never for a mouse or finger. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Text links and plain buttons that have no corners of their own (e.g.
+   "See all") get softly rounded ones while the keyboard ring shows, so the
+   ring is never a hard square. Zero specificity: any element's own
+   border-radius always wins. */
+:where(a, button, [role='button'], [tabindex]):focus-visible {
+  border-radius: 8px;
 }
 
 .visually-hidden {
@@ -1947,19 +1963,15 @@ textarea {
   color: var(--color-text-muted);
 }
 
-/* A horizontal scrolling row, not a wrapping grid — same shape as the
-   product edit sheet's own ImageStrip, and for the same reason: hold-to-
-   drag reorder (useDragReorder, 'move' mode) resolves a drop target along
-   one axis, which a multi-row wrapping grid can't give it. This used to
-   wrap with no reordering at all; matching ImageStrip's own layout lets it
-   reuse that already-working drag mechanism exactly rather than inventing
-   separate 2D hit-testing for a grid. */
+/* A horizontal scrolling row (Batch 33: reordered with dnd-kit's
+   horizontal list strategy). The small top/side padding keeps the remove
+   button and the lifted photo from being clipped by the scroll box. */
 .image-uploader__grid {
   list-style: none;
   display: flex;
   gap: var(--space-3);
   overflow-x: auto;
-  padding-bottom: var(--space-2);
+  padding: 8px 6px var(--space-2);
 }
 
 /* A visible track is the only affordance a mouse user has that more images
@@ -1990,76 +2002,102 @@ textarea {
   flex: 0 0 auto;
   width: 84px;
   height: 84px;
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  border-radius: var(--radius-sm);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* Batch 33: a quick swipe scrolls the row; only a held finger (dnd-kit's
+     200 ms touch delay) lifts a photo. */
+  touch-action: manipulation;
+  cursor: grab;
 }
 
+.image-uploader__item--add {
+  cursor: default;
+}
+
+/* The lifted photo: above its neighbours, a soft shadow and a small lift.
+   Only transform and opacity move (dnd-kit sets the transform). */
 .image-uploader__item--dragging {
   z-index: 5;
+  cursor: grabbing;
+}
+
+.image-uploader__item--dragging .image-uploader__thumb,
+.image-uploader__item--dragging .image-uploader__placeholder {
   box-shadow: var(--shadow-lg);
+  transform: scale(1.04);
 }
 
-.image-uploader__item--live {
-  transition: none;
+.image-uploader__thumb,
+.image-uploader__placeholder {
+  transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Six-dot handle, bottom-left — matches ImageStrip's own handle exactly.
-   Only a hold on this lifts the thumbnail; a plain tap still does nothing
-   (there's no click-to-open here), so it can't be mistaken for a tap on
-   the image itself. */
-.image-uploader__handle {
-  position: absolute;
-  bottom: 2px;
-  left: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: #fff;
-  cursor: grab;
-  touch-action: none;
-}
-
-.image-uploader__handle::before {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.image-uploader__handle svg {
-  position: relative;
-  width: 14px;
-  height: 14px;
+@media (prefers-reduced-motion: reduce) {
+  .image-uploader__thumb,
+  .image-uploader__placeholder {
+    transition: none;
+  }
 }
 
 .image-uploader__thumb {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg-secondary);
+  pointer-events: none;
 }
 
-.image-uploader__cover-tag {
+/* Shown instead of the browser's broken-image icon. */
+.image-uploader__placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-uploader__retry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.image-uploader__retry svg {
+  width: 20px;
+  height: 20px;
+}
+
+.image-uploader__main-tag {
   position: absolute;
-  bottom: var(--space-1);
+  top: var(--space-1);
   left: var(--space-1);
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
   padding: 2px 6px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   pointer-events: none;
+}
+
+.image-uploader__order-hint {
+  margin-top: var(--space-1);
+  text-align: left;
 }
 
 .image-uploader__remove {
@@ -5677,11 +5715,19 @@ html.vt-fade::view-transition-new(root) {
 
 /* ---------- Search focus ---------- */
 
-.search-bar {
+/* Batch 33: the soft ring belongs on the rounded field itself. It used to
+   sit on the .search-bar wrapper, which has no rounded corners, so tapping
+   the search field drew a square pale-orange box around the rounded one. */
+.search-bar__input {
   transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
-.search-bar:focus-within {
+.search-bar__input:focus {
+  box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.12);
+}
+
+.search-bar--entry:focus-visible {
+  outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.12);
 }
@@ -10620,4 +10666,58 @@ html.vt-fade::view-transition-new(root) {
   margin: var(--space-2) 0 0;
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+/* ---------- Batch 33: "just sold out" message (cart + order summary) ---------- */
+
+.stock-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.stock-notice__icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--color-text-secondary);
+}
+
+.stock-notice__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.stock-notice__line + .stock-notice__line {
+  margin-top: 4px;
+}
+
+.stock-notice__line strong {
+  font-weight: 700;
+}
+
+.stock-notice__close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px 0 0;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+}
+
+.stock-notice__close svg {
+  width: 16px;
+  height: 16px;
 }

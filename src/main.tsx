@@ -29,6 +29,12 @@ void pageForPath(window.location.pathname)
   ?.preload()
   .catch(() => undefined);
 
+// Batch 33: the old photo cache could hold broken answers it could not see
+// (see vite.config.ts) — the worker now uses a new one, so drop the old.
+if (typeof caches !== 'undefined') {
+  void caches.delete('supabase-storage-images').catch(() => undefined);
+}
+
 createRoot(rootElement).render(
   <StrictMode>
     {/* Same as BrowserRouter, but on a history object this app owns — see

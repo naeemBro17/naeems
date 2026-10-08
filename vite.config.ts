@@ -125,12 +125,31 @@ export default defineConfig({
           },
           {
             // Supabase Storage images: CacheFirst, 150 entries, 30 days.
+            // Batch 33: an <img> asks in "no-cors" mode, so the worker got an
+            // opaque answer (status 0) it could not read — a missing file or
+            // a passing error (Storage answers 400) looked the same as a real
+            // photo and was kept for 30 days, showing a broken image. Storage
+            // allows CORS, so the worker now asks in CORS mode, sees the real
+            // status and keeps only real 200 photos. If a CORS request ever
+            // fails it falls back to the original request. New cache name so
+            // anything stored the old way is never served again (the app
+            // deletes the old cache on start).
             urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'supabase-storage-images',
+              cacheName: 'supabase-storage-images-v2',
               expiration: { maxEntries: 150, maxAgeSeconds: 2592000 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
+              plugins: [
+                {
+                  requestWillFetch: async ({ request }: { request: Request }) =>
+                    request.mode === 'no-cors'
+                      ? new Request(request.url, { mode: 'cors', credentials: 'omit' })
+                      : request,
+                  handlerDidError: async ({ request }: { request: Request }) =>
+                    fetch(request.url, { mode: 'no-cors' }),
+                },
+              ],
             },
           },
           {

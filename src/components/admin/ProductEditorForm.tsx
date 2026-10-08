@@ -85,10 +85,12 @@ let nextImageKey = 0;
 
 function existingImages(product: Product | null): FormImage[] {
   if (!product) return [];
-  return productImages(product).map((url) => ({
+  const thumbs = product.image_urls_thumb ?? [];
+  return productImages(product).map((url, i) => ({
     id: `existing-${nextImageKey++}`,
     url,
     file: null,
+    thumbUrl: isSmallCopy(url, thumbs[i]) ? thumbs[i] : null,
   }));
 }
 

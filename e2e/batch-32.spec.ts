@@ -284,9 +284,14 @@ test('Part 1: pay-later order delivered by Steadfast records no COD payment and 
 test('Part 1: existing and website orders stay "collect on delivery"; Edit order switches the mode (History + Activity Log)', async ({ page }) => {
   test.skip(!ready, NEEDS_035);
   test.setTimeout(90_000);
-  const all = await select<{ collect_mode: string }[]>(admin.accessToken, 'orders?select=collect_mode&collect_mode=neq.cod');
-  // Only orders this test file created are anything but 'cod'.
-  expect((all.data ?? []).length).toBeLessThanOrEqual(payLaterOrderId ? 1 : 0);
+  // Batch 33: real orders may now be "pays later" (Naeem uses it), so only
+  // the test customer's website orders are checked — none may be anything
+  // but 'cod'. The admin-made pay-later test order is the one exception.
+  const all = await select<{ id: string }[]>(
+    admin.accessToken,
+    `orders?select=id&collect_mode=neq.cod&customer_id=eq.${customer.userId}${payLaterOrderId ? `&id=neq.${payLaterOrderId}` : ''}`
+  );
+  expect(all.data ?? []).toHaveLength(0);
 
   const web = await placeTestOrder(customer.accessToken, product.id, 1);
   createdOrderIds.push(web.id);
@@ -343,10 +348,11 @@ test('Part 1: the database refuses paid > total and staff without the switches',
 
 test('Part 2: Settings shows Version 1.32.0 and the build, no date', async ({ page }) => {
   const version = JSON.parse(readFileSync('package.json', 'utf8')).version as string;
-  expect(version).toBe('1.32.0');
+  // Batch 33: each batch N sets 1.N.0, so this follows package.json.
+  expect(version).toMatch(/^1\.\d+\.0$/);
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=settings');
-  await expect(page.getByTestId('app-version')).toHaveText('Version 1.32.0', { timeout: 15_000 });
+  await expect(page.getByTestId('app-version')).toHaveText(`Version ${version}`, { timeout: 15_000 });
   await expect(page.getByTestId('app-build')).toHaveText(/^Build ([0-9a-f]{7}|local)$/);
   await expect(page.locator('.adm-app-version')).not.toContainText(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{2}:\d{2}/);
 });

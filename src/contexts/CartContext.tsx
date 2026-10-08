@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { StockChange } from '../lib/cartStock';
 
 /** One line item: a product id, how many, and the unit price it was added at.
  *  variantId is null for a product with no variants; two lines for the same
@@ -65,6 +66,14 @@ interface CartContextValue {
    *  session (null = the product itself), or undefined when none was — lets
    *  a card's stepper follow the option the shopper just picked. */
   lastVariantFor: (productId: string) => string | null | undefined;
+  /** Batch 33: lowers lines to what is left and removes sold-out ones in
+   *  one step (no Undo — the shop changed them, not the shopper), and keeps
+   *  the changes for the "just sold out" message. */
+  applyStockChanges: (changes: StockChange[]) => void;
+  /** The last stock changes, until the message is closed or an order is
+   *  placed. Shown on the cart and order summary. */
+  stockNotice: StockChange[] | null;
+  dismissStockNotice: () => void;
   /** Total units across all line items. */
   itemCount: number;
   subtotal: number;
@@ -130,6 +139,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadCart);
   const [lastVariants, setLastVariants] = useState<Record<string, string | null>>({});
   const [lastRemoved, setLastRemoved] = useState<RemovedCartLine | null>(null);
+  const [stockNotice, setStockNotice] = useState<StockChange[] | null>(null);
   // The cart as last rendered — read (outside any state updater, which
   // StrictMode runs twice) to remember a line just before it's removed.
   const itemsRef = useRef(items);
@@ -222,7 +232,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = useCallback(() => {
     setItems([]);
     setLastRemoved(null);
+    setStockNotice(null);
   }, []);
+
+  const applyStockChanges = useCallback((changes: StockChange[]) => {
+    if (changes.length === 0) return;
+    setItems((prev) =>
+      prev
+        .map((item) => {
+          const change = changes.find((c) => sameLine(item, c.productId, c.variantId));
+          return change ? { ...item, quantity: Math.min(item.quantity, change.available) } : item;
+        })
+        .filter((item) => item.quantity > 0)
+    );
+    setLastRemoved(null);
+    setStockNotice(changes);
+  }, []);
+
+  const dismissStockNotice = useCallback(() => setStockNotice(null), []);
 
   const lastVariantFor = useCallback(
     (productId: string) => (productId in lastVariants ? lastVariants[productId] : undefined),
@@ -249,6 +276,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       undoRemove,
       dismissRemoved,
       lastVariantFor,
+      applyStockChanges,
+      stockNotice,
+      dismissStockNotice,
       itemCount,
       subtotal,
     }),
@@ -262,6 +292,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       undoRemove,
       dismissRemoved,
       lastVariantFor,
+      applyStockChanges,
+      stockNotice,
+      dismissStockNotice,
       itemCount,
       subtotal,
     ]
