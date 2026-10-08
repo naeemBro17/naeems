@@ -73,10 +73,26 @@ textarea {
   font-size: 16px; /* prevents iOS zoom-on-focus */
 }
 
-/* Custom focus outline on all focusable elements */
+/* Custom focus outline on all focusable elements. Batch 33: the ring is
+   for keyboard users only (:focus-visible) and follows the element's own
+   rounded corners — the outline takes the element's border-radius. */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* A tap or click focuses some controls without a keyboard; older browsers
+   then drew their own square outline. Never for a mouse or finger. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Text links and plain buttons that have no corners of their own (e.g.
+   "See all") get softly rounded ones while the keyboard ring shows, so the
+   ring is never a hard square. Zero specificity: any element's own
+   border-radius always wins. */
+:where(a, button, [role='button'], [tabindex]):focus-visible {
+  border-radius: 8px;
 }
 
 .visually-hidden {
@@ -5699,11 +5715,19 @@ html.vt-fade::view-transition-new(root) {
 
 /* ---------- Search focus ---------- */
 
-.search-bar {
+/* Batch 33: the soft ring belongs on the rounded field itself. It used to
+   sit on the .search-bar wrapper, which has no rounded corners, so tapping
+   the search field drew a square pale-orange box around the rounded one. */
+.search-bar__input {
   transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
-.search-bar:focus-within {
+.search-bar__input:focus {
+  box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.12);
+}
+
+.search-bar--entry:focus-visible {
+  outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.12);
 }
