@@ -411,7 +411,16 @@ test('no emoji anywhere in the rendered admin', async ({ page }) => {
     await page.goto(`/admin${p.query}`);
     await expect(page.locator('.adm-page-header').first()).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(400);
-    const text = await page.locator('.adm').innerText();
+    // Batch 33: what customers wrote (review quotes) is their own text and
+    // may hold emoji; only the admin's own words are checked.
+    const text = await page.locator('.adm').first().evaluate((el) => {
+      const copy = el.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('.review-admin__quote').forEach((q) => q.remove());
+      document.body.appendChild(copy);
+      const out = copy.innerText;
+      copy.remove();
+      return out;
+    });
     const found = text.match(EMOJI);
     expect(found, `emoji on ${p.query || 'Home'}: ${found?.[0] ?? ''}`).toBeNull();
   }
