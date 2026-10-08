@@ -216,7 +216,7 @@ export function AdminSearch({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="adm-search">
+    <div className="adm-search focus-host">
       <AdminIcon name="search" className="adm-search__icon" />
       <input
         type="search"

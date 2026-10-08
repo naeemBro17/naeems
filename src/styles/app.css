@@ -73,17 +73,35 @@ textarea {
   font-size: 16px; /* prevents iOS zoom-on-focus */
 }
 
-/* Custom focus outline on all focusable elements. Batch 33: the ring is
-   for keyboard users only (:focus-visible) and follows the element's own
-   rounded corners — the outline takes the element's border-radius. */
-:focus-visible {
-  outline: 2px solid var(--color-primary);
+/* ONE shared focus style for the whole site, shop and admin (Batch 34
+   Part 5; Batch 33 started it). Every new field and button gets it
+   automatically:
+   - A tap or click never draws an outline, on the element or around it.
+     (A text field counts as :focus-visible even when tapped, so the ring
+     waits for real keyboard use: <html data-input="keyboard">, set by
+     lib/inputModality.ts.)
+   - With the keyboard, the ring sits on the focused element itself. An
+     outline follows the element's own border-radius, so a rounded field
+     gets a rounded ring.
+   - Controls whose visible rounded box is a wrapper around a borderless
+     input (.focus-host, e.g. the admin search) show the ring on that
+     wrapper instead, never on the square input inside it.
+   --focus-ring is the colour; the admin sets its own. */
+:focus {
+  outline: none;
+}
+
+html[data-input='keyboard'] :focus-visible {
+  outline: 2px solid var(--focus-ring, var(--color-primary));
   outline-offset: 2px;
 }
 
-/* A tap or click focuses some controls without a keyboard; older browsers
-   then drew their own square outline. Never for a mouse or finger. */
-:focus:not(:focus-visible) {
+html[data-input='keyboard'] .focus-host:focus-within {
+  outline: 2px solid var(--focus-ring, var(--color-primary));
+  outline-offset: 2px;
+}
+
+html[data-input='keyboard'] .focus-host :focus-visible {
   outline: none;
 }
 
@@ -499,9 +517,9 @@ textarea {
   transition: border-color var(--transition-base);
 }
 
+/* Tap: the field's own border turns orange. The keyboard ring comes from
+   the shared focus style above. */
 .form-input:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
   border-color: var(--color-primary);
 }
 

@@ -162,9 +162,12 @@
   }
 }
 
-.adm :focus-visible {
-  outline: 2px solid var(--adm-or);
-  outline-offset: 2px;
+/* Batch 34: the admin's ring colour for the one shared focus style
+   (app.css). It used to set its own outline on every :focus-visible —
+   which a tapped text field always is — so the square input inside the
+   rounded search box got a square ring on every tap. */
+.adm {
+  --focus-ring: var(--adm-or);
 }
 
 .adm-icon {
