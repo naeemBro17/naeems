@@ -386,6 +386,9 @@ export interface FormImage {
   url: string | null;
   /** File chosen this session, not yet uploaded; null for existing images. */
   file: File | null;
+  /** Saved image's small copy, when one exists — the editor shows it first
+   *  (lighter on a phone) and falls back to the full photo. */
+  thumbUrl?: string | null;
 }
 
 export type ToastType = 'success' | 'error' | 'info';
