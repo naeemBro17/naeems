@@ -16,6 +16,9 @@ import { cardImage } from '../../lib/productImages';
 import { formatTaka } from '../../lib/format';
 import { computePromoDiscount, findValidPromoCode } from '../../lib/promoCodes';
 import { placeOrder } from '../../lib/orders';
+import { isStockError } from '../../lib/cartStock';
+import { StockNotice } from '../../components/checkout/StockNotice';
+import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import type { OrderPaymentMethod } from './types';
@@ -57,6 +60,9 @@ export function OrderSummaryPage() {
   const [fieldErrors, setFieldErrors] = useState<{ trxId?: string; sender?: string }>({});
   const [placeError, setPlaceError] = useState<string | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
+  // Batch 33: stock is checked again before this last step, and after an
+  // order is refused because someone else just bought the last one.
+  const { recheck } = useCartStockCheck();
 
   const bkashAvailable = settings.shop_bkash_number.trim() !== '';
 
@@ -131,6 +137,17 @@ export function OrderSummaryPage() {
       promoCode: promo?.code ?? null,
     });
 
+    if (result.error && isStockError(result.error)) {
+      // Never the database's own words: correct the cart to what is left
+      // and show the calm "just sold out" message instead.
+      const changed = await recheck();
+      setIsPlacing(false);
+      setPlaceError(
+        changed ? null : 'Something in your cart just changed. Please check your cart and try again.'
+      );
+      return;
+    }
+
     setIsPlacing(false);
 
     if (result.error || !result.orderId || !result.orderNumber) {
@@ -159,6 +176,7 @@ export function OrderSummaryPage() {
       <CheckoutProgressBar currentStep={3} />
 
       <main className="detail-main">
+        <StockNotice />
         <div className="checkout-summary-card">
           <h2 className="checkout-summary-card__title">My Order</h2>
 

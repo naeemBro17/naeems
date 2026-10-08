@@ -21,6 +21,8 @@ import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { stockLimitMessage } from '../../hooks/useCartLine';
 import { stockLimit } from '../../lib/stockStatus';
+import { StockNotice } from '../../components/checkout/StockNotice';
+import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import type { CartItem } from './types';
 
 export function CartPage() {
@@ -31,6 +33,8 @@ export function CartPage() {
   const { variantsFor } = useProducts();
   const { showToast } = useToast();
   const [showLoginSheet, setShowLoginSheet] = useState(false);
+  // Batch 33: catch a line that sold out while it sat in the cart.
+  useCartStockCheck();
 
   const handleCheckout = () => {
     trackInitiateCheckout(
@@ -86,6 +90,7 @@ export function CartPage() {
       <CheckoutProgressBar currentStep={1} />
 
       <main className="detail-main">
+        <StockNotice />
         {items.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state__icon" aria-hidden="true">
