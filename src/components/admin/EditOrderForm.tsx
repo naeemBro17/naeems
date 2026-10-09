@@ -6,6 +6,7 @@
 // database, keeps stock right and writes every change to History and the
 // Activity Log. Prices and the discount are Super Admin only.
 import { useEffect, useMemo, useState } from 'react';
+import { MoneyInput } from '../shared/MoneyInput';
 import { AddressFormFields } from '../checkout/AddressFormFields';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
@@ -255,11 +256,9 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                     {isAdmin ? (
                       <label className="edit-order__price">
                         <span className="edit-order__item-sub">Price ৳</span>
-                        <input
-                          type="number"
+                        <MoneyInput
                           min="0"
-                          inputMode="decimal"
-                          className="form-input edit-order__price-input"
+                          className="edit-order__price-input"
                           value={item.unitPrice}
                           aria-label={`Price of ${item.productName}`}
                           onChange={(e) => {
@@ -353,12 +352,9 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
               <label className="form-label" htmlFor="edit-order-fee">
                 Delivery fee (৳)
               </label>
-              <input
+              <MoneyInput
                 id="edit-order-fee"
-                type="number"
                 min="0"
-                inputMode="decimal"
-                className="form-input"
                 value={draft.deliveryFee}
                 onChange={(e) => update({ deliveryFee: e.target.value })}
               />
@@ -368,12 +364,9 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                 <label className="form-label" htmlFor="edit-order-discount">
                   Order discount (৳)
                 </label>
-                <input
+                <MoneyInput
                   id="edit-order-discount"
-                  type="number"
                   min="0"
-                  inputMode="decimal"
-                  className="form-input"
                   value={draft.discount}
                   onChange={(e) => update({ discount: e.target.value })}
                 />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { MoneyInput } from '../shared/MoneyInput';
 import {
   supabase,
   STORAGE_BUCKET,
@@ -636,22 +637,17 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           <label className="form-label" htmlFor="pf-retail">
             Retail Price ৳ <span className="form-required" aria-hidden="true">*</span>
           </label>
-          <div className="form-input-prefix-wrap">
-            <span className="form-input-prefix" aria-hidden="true">৳</span>
-            <input
+          <MoneyInput
               id="pf-retail"
-              type="number"
               min="0"
               step="0.01"
-              inputMode="decimal"
-              className={`form-input form-input--prefixed${fieldError('retail_price') ? ' form-input--error' : ''}`}
+              className={fieldError('retail_price') ? 'form-input--error' : undefined}
               value={form.retail_price}
               onChange={(e) => setField('retail_price', e.target.value)}
               onBlur={() => markTouched('retail_price')}
               required
               aria-required="true"
             />
-          </div>
           {fieldError('retail_price') && (
             <p className="form-error" role="alert">
               {fieldError('retail_price')}
@@ -663,20 +659,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           <label className="form-label" htmlFor="pf-wholesale">
             Wholesale Price ৳
           </label>
-          <div className="form-input-prefix-wrap">
-            <span className="form-input-prefix" aria-hidden="true">৳</span>
-            <input
+          <MoneyInput
               id="pf-wholesale"
-              type="number"
               min="0"
               step="0.01"
-              inputMode="decimal"
-              className={`form-input form-input--prefixed${fieldError('wholesale_price') ? ' form-input--error' : ''}`}
+              className={fieldError('wholesale_price') ? 'form-input--error' : undefined}
               value={form.wholesale_price}
               onChange={(e) => setField('wholesale_price', e.target.value)}
               onBlur={() => markTouched('wholesale_price')}
             />
-          </div>
           {fieldError('wholesale_price') && (
             <p className="form-error" role="alert">
               {fieldError('wholesale_price')}
@@ -689,20 +680,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
         <label className="form-label" htmlFor="pf-offer">
           Offer Price ৳ (optional)
         </label>
-        <div className="form-input-prefix-wrap">
-          <span className="form-input-prefix" aria-hidden="true">৳</span>
-          <input
-            id="pf-offer"
-            type="number"
+        <MoneyInput
+              id="pf-offer"
             min="0"
             step="0.01"
-            inputMode="decimal"
-            className={`form-input form-input--prefixed${fieldError('offer_price') ? ' form-input--error' : ''}`}
+            className={fieldError('offer_price') ? 'form-input--error' : undefined}
             value={form.offer_price}
             onChange={(e) => setField('offer_price', e.target.value)}
             onBlur={() => markTouched('offer_price')}
-          />
-        </div>
+            />
         <p className="form-helper">
           Leave blank for no offer. Must be lower than the retail price.
         </p>

@@ -7,6 +7,7 @@
 // The numbers come from lib/paymentPlan.ts; the COD rule itself is the one
 // shared with the steadfast function (supabase/functions/_shared/cod.ts).
 import { formatTaka } from '../../lib/format';
+import { MoneyInput } from '../shared/MoneyInput';
 import { PAID_NOW_METHODS, PAYMENT_METHOD_NAMES, type PaymentMethodId } from '../../lib/payments';
 import { COLLECT_MODE_LABELS, type CollectMode, type PaymentPlan } from '../../lib/paymentPlan';
 
@@ -64,13 +65,11 @@ export function PaymentSection({
             {paidLabel} (৳)
           </label>
           <div className="pay-section__amount-row">
-            <input
+            <MoneyInput
               id={`${idPrefix}-paid-now`}
-              type="number"
               min="0"
               step="any"
-              inputMode="decimal"
-              className={`form-input pay-section__amount${plan.error ? ' form-input--error' : ''}`}
+              className={`pay-section__amount${plan.error ? ' form-input--error' : ''}`}
               value={paidNowInput}
               placeholder="0"
               onChange={(e) => onPaidNowInput(e.target.value)}

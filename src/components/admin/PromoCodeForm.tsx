@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react';
+import { MoneyInput } from '../shared/MoneyInput';
 import type { PromoCodeFormData, PromoDiscountType } from '../../types';
 
 interface PromoCodeFormProps {
@@ -49,12 +50,11 @@ export function PromoCodeForm({
           <label className="form-label" htmlFor="promo-discount-amount">
             Discount amount <span className="form-required" aria-hidden="true">*</span>
           </label>
-          <input
+          <MoneyInput
             id="promo-discount-amount"
-            type="number"
+            sign={form.discount_type === 'percent' ? '%' : '৳'}
             min="0"
             step="0.01"
-            className="form-input"
             placeholder="100"
             value={form.discount_amount}
             onChange={(e) => onChange({ discount_amount: e.target.value })}

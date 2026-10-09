@@ -6,6 +6,7 @@
 // every price/stock check happens in the database, never trusted from this
 // form; this component only shapes the input and shows a live preview.
 import { useEffect, useMemo, useState } from 'react';
+import { MoneyInput } from '../shared/MoneyInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Toggle } from './edit-sheets/SheetChrome';
 import { type AddressFieldErrors } from '../checkout/AddressFormFields';
@@ -665,10 +666,9 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                     {line.soldPrice !== line.listPrice && (
                       <span className="manual-order-line__list-price">{formatTaka(line.listPrice)}</span>
                     )}
-                    <input
-                      type="number"
+                    <MoneyInput
                       min="0"
-                      className="form-input manual-order-line__price-input"
+                      className="manual-order-line__price-input"
                       value={line.soldPriceInput}
                       onChange={(e) => setLineSoldPrice(line.key, e.target.value)}
                     />
@@ -716,11 +716,9 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
         <div className="form-row">
           <div className="form-field">
             <label className="form-label" htmlFor="manual-order-discount">Order discount (৳)</label>
-            <input
+            <MoneyInput
               id="manual-order-discount"
-              type="number"
               min="0"
-              className="form-input"
               value={orderDiscountInput}
               onChange={(e) => setOrderDiscountInput(e.target.value)}
             />
@@ -770,10 +768,8 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
             </button>
           </div>
           {zone !== 'hand_delivered' && (
-            <input
-              type="number"
+            <MoneyInput
               min="0"
-              className="form-input"
               style={{ marginTop: 8 }}
               value={feeInput}
               onChange={(e) => setFeeInput(e.target.value)}
