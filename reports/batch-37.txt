@@ -264,3 +264,18 @@ Without it everything still prints; only the "Printed" mark and the
     advance-cod, long-order (page1 + page2), bengali-name, not-booked —
     each as .pdf and .png; screenshots of the invoice window and print
     mode at phone width.
+
+DATABASE ADDITION — APPLIED (Naeem said yes in advance)
+  - migration-039-batch37-invoice.sql was dry-run first inside a
+    transaction that was rolled back (no errors, nothing kept), then
+    applied to the live database on 10 Oct 2026. You do NOT need to run
+    the SQL in section 2 yourself (running it again is harmless).
+  - Read-only check afterwards: 7 invoice settings rows (all blank = the
+    defaults, community box "true"); table order_invoice_prints exists
+    with row security on and one read rule; nobody can insert into it
+    directly; the record function runs with owner rights and anonymous
+    visitors cannot call it.
+  - Browser tests run again against it: 3 passed, 0 skipped (Printed mark,
+    "Invoice printed" in History, printed orders leave "booked today, not
+    printed yet"). Test orders and their print rows were deleted
+    afterwards (0 left).
