@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { Mark, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { DOMParser as PMDOMParser, Slice } from '@tiptap/pm/model';
+import type { Transaction } from '@tiptap/pm/state';
 import {
   RT_BOX_LABELS,
   RT_COLOR_LABELS,
@@ -9,6 +11,7 @@ import {
   RT_HIGHLIGHTS,
   RT_TEXT_COLORS,
   isEmptyRichHtml,
+  plainToEditorHtml,
   safeLinkHref,
   toEditorHtml,
   sanitizePastedHtml,
@@ -34,6 +37,7 @@ declare module '@tiptap/core' {
     };
     rtBox: {
       toggleRtBox: (box: RtBox) => ReturnType;
+      unsetRtBox: () => ReturnType;
     };
   }
 }
@@ -124,21 +128,69 @@ const RtBoxNode = Node.create({
     return {
       toggleRtBox:
         (box: RtBox) =>
-        ({ state, commands }) => {
-          // Inside a box already: the same kind takes it away, another kind
-          // changes it; otherwise the paragraph goes into a new box.
+        ({ state, tr, commands }) => {
+          // Inside a box already: the same kind takes the box away, another
+          // kind changes it; otherwise exactly the selected lines (or the
+          // line the cursor is on) go into a new box.
           const { $from } = state.selection;
           for (let depth = $from.depth; depth > 0; depth -= 1) {
             const node = $from.node(depth);
             if (node.type.name === this.name) {
-              return node.attrs.box === box ? commands.lift(this.name) : commands.updateAttributes(this.name, { box });
+              return node.attrs.box === box ? commands.unsetRtBox() : commands.updateAttributes(this.name, { box });
             }
           }
+          splitSelectedLines(tr);
           return commands.wrapIn(this.name, { box });
+        },
+      unsetRtBox:
+        () =>
+        ({ state, tr, dispatch }) => {
+          // The whole box goes; its text stays exactly as it is.
+          const { $from } = state.selection;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const node = $from.node(depth);
+            if (node.type.name === this.name) {
+              if (dispatch) {
+                const pos = $from.before(depth);
+                tr.replaceWith(pos, pos + node.nodeSize, node.content);
+              }
+              return true;
+            }
+          }
+          return false;
         },
     };
   },
 });
+
+/**
+ * Fix (rich-text editor) Part 2: a paragraph with line breaks (Shift+Enter)
+ * is split where the selected lines start and end, so a box or Justify takes
+ * exactly those lines and not the whole paragraph.
+ */
+function splitSelectedLines(tr: Transaction): void {
+  // The end first, so the start does not move.
+  const to = tr.selection.to;
+  const $to = tr.doc.resolve(to);
+  if ($to.parent.isTextblock) {
+    let endBreak = -1;
+    $to.parent.forEach((child, offset) => {
+      const pos = $to.start() + offset;
+      if (endBreak < 0 && child.type.name === 'hardBreak' && pos >= to) endBreak = pos;
+    });
+    if (endBreak >= 0) tr.delete(endBreak, endBreak + 1).split(endBreak);
+  }
+  const from = tr.selection.from;
+  const $from = tr.doc.resolve(from);
+  if ($from.parent.isTextblock) {
+    let startBreak = -1;
+    $from.parent.forEach((child, offset) => {
+      const pos = $from.start() + offset;
+      if (child.type.name === 'hardBreak' && pos + 1 <= from) startBreak = pos;
+    });
+    if (startBreak >= 0) tr.delete(startBreak, startBreak + 1).split(startBreak);
+  }
+}
 
 /** Everything the editor knows. Anything else (pasted Word styles, fonts,
  *  sizes, tables) is dropped by the editor itself, then by the allow-list. */
@@ -195,6 +247,12 @@ const ICONS: Record<string, ReactNode> = {
   ),
   tip: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   benefits: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
+  unbox: (
+    <>
+      <rect x="4" y="5" width="16" height="14" rx="3" strokeDasharray="3 2.5" />
+      <path d="M9.5 9.5l5 5M14.5 9.5l-5 5" />
+    </>
+  ),
   link: (
     <>
       <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" />
@@ -265,6 +323,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       warning: e.isActive('rtBox', { box: 'warning' }),
       tip: e.isActive('rtBox', { box: 'tip' }),
       benefits: e.isActive('rtBox', { box: 'benefits' }),
+      inBox: e.isActive('rtBox'),
       link: e.isActive('link'),
       colour: e.isActive('rtColor') || e.isActive('rtHighlight'),
       canUndo: e.can().undo(),
@@ -308,6 +367,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         <ToolButton label={RT_BOX_LABELS.warning} icon="warning" active={state.warning} onClick={() => chain().toggleRtBox('warning').run()} testId="rt-warning" />
         <ToolButton label={RT_BOX_LABELS.tip} icon="tip" active={state.tip} onClick={() => chain().toggleRtBox('tip').run()} testId="rt-tip" />
         <ToolButton label={RT_BOX_LABELS.benefits} icon="benefits" active={state.benefits} onClick={() => chain().toggleRtBox('benefits').run()} testId="rt-benefits" />
+        <ToolButton label="Remove box" icon="unbox" disabled={!state.inBox} onClick={() => chain().unsetRtBox().run()} testId="rt-unbox" />
         <ToolButton label="Link" icon="link" active={state.link || panel === 'link'} onClick={openLink} testId="rt-link" />
         <span className="rt-toolbar__sep" aria-hidden="true" />
         <ToolButton label="Undo" icon="undo" disabled={!state.canUndo} onClick={() => chain().undo().run()} testId="rt-undo" />
@@ -441,6 +501,14 @@ export default function RichTextEditor({ id, value, onChange, placeholder, label
       },
       // Pasting from Word / Google Docs / WhatsApp: only allowed formatting.
       transformPastedHTML: (html) => sanitizePastedHtml(html),
+      // Fix Part 2: pasted plain text (WhatsApp, Notes): every line is its
+      // own line and blank lines are kept, as they would be in the old text.
+      clipboardTextParser: (text, $context, _plain, view) => {
+        const dom = document.createElement('div');
+        dom.innerHTML = plainToEditorHtml(text);
+        const parsed = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, { preserveWhitespace: true, context: $context });
+        return Slice.maxOpen(parsed.content);
+      },
     },
     onUpdate: ({ editor: e }) => {
       typedRef.current = true;

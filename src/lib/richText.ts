@@ -122,27 +122,69 @@ export function sanitizeRichHtml(html: string): string {
  */
 export function sanitizePastedHtml(html: string): string {
   addHooks();
-  return DOMPurify.sanitize(html, {
+  const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [...ALLOWED_ATTR, 'style'],
     ALLOW_DATA_ATTR: false,
     KEEP_CONTENT: true,
   });
+  // Fix Part 2: each pasted line becomes its own line (paragraph).
+  return splitLineBreaks(clean);
 }
 
-/** Old plain text → the same paragraphs the editor would make (only used
- *  when an old value is opened in the editor). */
+/** Old plain text → one paragraph per line and an empty paragraph for each
+ *  blank line (used when an old value is opened in the editor, and for
+ *  pasted plain text). Paragraphs have no gap between them, so it looks
+ *  exactly like the old text. */
 export function plainToEditorHtml(text: string): string {
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return text
-    .split(/\n{2,}/)
-    .map((block) => `<p>${block.split('\n').map(escape).join('<br>')}</p>`)
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => (line === '' ? '<p></p>' : `<p>${escape(line)}</p>`))
     .join('');
+}
+
+/**
+ * Fix (rich-text editor) Part 2: every line break inside a paragraph
+ * becomes its own paragraph, keeping the formatting around it (bold that
+ * runs over a break is closed and reopened). A break that ends a paragraph
+ * shows nothing on screen, so it is dropped. Used for pasted HTML and for
+ * old saved text opened in the editor — the database is unchanged until
+ * Naeem saves.
+ */
+export function splitLineBreaks(html: string): string {
+  if (!/<br/i.test(html)) return html;
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  for (const p of Array.from(root.querySelectorAll('p'))) {
+    const breaks = p.querySelectorAll('br');
+    const finalBreak = breaks.length > 0 ? breaks[breaks.length - 1] : null;
+    if (finalBreak) {
+      const after = document.createRange();
+      after.setStartAfter(finalBreak);
+      after.setEnd(p, p.childNodes.length);
+      if (after.toString() === '') finalBreak.remove();
+    }
+    let br = p.querySelector('br');
+    while (br) {
+      const before = document.createRange();
+      before.setStart(p, 0);
+      before.setEndBefore(br);
+      const line = document.createElement('p');
+      for (const attr of Array.from(p.attributes)) line.setAttribute(attr.name, attr.value);
+      line.appendChild(before.extractContents());
+      p.before(line);
+      br.remove();
+      br = p.querySelector('br');
+    }
+  }
+  return root.innerHTML;
 }
 
 /** What the editor opens with for a saved value (old plain text or rich). */
 export function toEditorHtml(value: string): string {
-  return isRichText(value) ? sanitizeRichHtml(value) : plainToEditorHtml(value);
+  return isRichText(value) ? splitLineBreaks(sanitizeRichHtml(value)) : plainToEditorHtml(value);
 }
 
 /** An editor value with no visible text ("<p></p>") counts as empty. */

@@ -153,8 +153,11 @@ describe('old plain text keeps working', () => {
     expect(host.innerHTML).not.toContain('onclick');
   });
 
-  it('opening old text in the editor makes the same paragraphs', () => {
-    expect(plainToEditorHtml('a\nb\n\nc <d>')).toBe('<p>a<br>b</p><p>c &lt;d&gt;</p>');
+  // Changed by the rich-text editor fix (Parts 2 and 5): one paragraph per
+  // line and an empty paragraph per blank line, now that paragraphs have no
+  // gap between them.
+  it('opening old text in the editor makes the same lines', () => {
+    expect(plainToEditorHtml('a\nb\n\nc <d>')).toBe('<p>a</p><p>b</p><p></p><p>c &lt;d&gt;</p>');
   });
 
   it('meta description / link previews use plain text', () => {
