@@ -209,7 +209,9 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             key={sub.kind === 'edit-product' ? sub.productId : 'new'}
             productId={sub.kind === 'edit-product' ? sub.productId : null}
             onBack={back}
-            onDone={() => leave(onBack)}
+            onCreated={(id) =>
+              leave(() => navigate(adminPath.editProduct(id), { replace: true, state: location.state as unknown }))
+            }
           />
         )}
         {sub?.kind === 'customer' && (

@@ -28,8 +28,8 @@ import type { Product, ProductFormData, FormImage } from '../../types';
 interface ProductEditorFormProps {
   /** null = create mode; a product = edit mode. */
   product: Product | null;
-  /** Called after a successful save. */
-  onSaved: () => void;
+  /** Called after a successful save, with the product's id. */
+  onSaved: (productId: string) => void;
   onCancel: () => void;
   /**
    * 'sheet' renders the Cancel/Save footer used by every other bottom
@@ -224,12 +224,16 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   );
   const loadingText = readyTexts.size < LONG_TEXTS.length;
   const [emptiedConfirm, setEmptiedConfirm] = useState<string[] | null>(null);
+  // The long texts as last saved — the page stays open after Save (Fix
+  // Part 3), so the "delete this text?" check compares with these.
+  const [savedTexts, setSavedTexts] = useState<Pick<Product, 'description' | 'how_to_use' | 'key_ingredients'> | null>(product);
 
   // A fresh form for whichever product this instance was mounted to edit
   // (or a blank one in create mode).
   useEffect(() => {
     setForm(product ? formFromProduct(product) : emptyForm());
     setImages(existingImages(product));
+    setSavedTexts(product);
     setTouched({});
     setUploadError(null);
     setShowNewCategory(false);
@@ -390,7 +394,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       stock_quantity: true,
     });
     if (hasBlockingErrors) return;
-    const emptied = emptiedLongTexts(product, form);
+    const emptied = emptiedLongTexts(savedTexts, form);
     if (emptied.length > 0) {
       setEmptiedConfirm(emptied);
       return;
@@ -454,7 +458,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       is_active: form.is_active,
     };
 
-    let result;
+    let result: { error: { code?: string } | null };
+    let savedId: string | null = product?.id ?? null;
     if (product) {
       result = await supabase
         .from('products')
@@ -468,7 +473,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       result = { error: null } as { error: { code?: string } | null };
       for (let attempt = 0; attempt < SKU_ATTEMPTS; attempt += 1) {
         const sku = await nextSku(supabase, categoryName);
-        result = await supabase.from('products').insert({ ...payload, sku });
+        const inserted = await supabase.from('products').insert({ ...payload, sku }).select('id').single();
+        result = inserted;
+        savedId = inserted.data?.id ?? null;
         if (!result.error || result.error.code !== UNIQUE_VIOLATION) break;
       }
     }
@@ -479,9 +486,21 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       return;
     }
 
+    // The photos are now saved addresses: a second Save must not upload
+    // the same files again.
+    setImages(
+      imageUrls.map((url, i) => ({
+        id: `existing-${nextImageKey++}`,
+        url,
+        file: null,
+        thumbUrl: isSmallCopy(url, imageThumbUrls[i]) ? imageThumbUrls[i] : null,
+      }))
+    );
+    setSavedTexts({ description: payload.description, how_to_use: payload.how_to_use, key_ingredients: payload.key_ingredients });
+
     await refetch();
-    showToast(product ? 'Product updated' : 'Product added');
-    onSaved();
+    showToast(footerVariant === 'page' ? 'Saved ✓' : product ? 'Product updated' : 'Product added');
+    if (savedId) onSaved(savedId);
   };
 
   const requiredEmpty =

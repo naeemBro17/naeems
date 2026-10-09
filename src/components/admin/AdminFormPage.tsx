@@ -12,6 +12,31 @@ export interface PagePrimaryAction {
   busy?: boolean;
 }
 
+/** A link next to the main action (e.g. "View on site", new tab). */
+export interface PageSecondaryLink {
+  label: string;
+  href: string;
+  testId?: string;
+}
+
+function SecondaryLink({ link, className }: { link: PageSecondaryLink; className: string }) {
+  return (
+    <a
+      className={`adm-btn adm-btn--ghost ${className}`}
+      href={link.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-testid={link.testId}
+    >
+      {link.label}
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M7 17L17 7M9 7h8v8" />
+      </svg>
+      <span className="visually-hidden"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
 interface AdminFormPageProps {
   title: string;
   /** Small grey line under the title (e.g. "Last updated by …"). */
@@ -19,6 +44,7 @@ interface AdminFormPageProps {
   backLabel: string;
   onBack: () => void;
   primary?: PagePrimaryAction;
+  secondary?: PageSecondaryLink;
   testId: string;
   /** Batch 35: small buttons always shown at the top right (the order
    *  page's pen). */
@@ -58,6 +84,7 @@ export function AdminFormPage({
   backLabel,
   onBack,
   primary,
+  secondary,
   testId,
   headerExtra,
   guard = true,
@@ -86,6 +113,11 @@ export function AdminFormPage({
             <AdminThemeButton variant="ghost" />
           </span>
           {headerExtra}
+          {secondary && (
+            <span className="adm-only-desktop">
+              <SecondaryLink link={secondary} className="adm-fpage__secondary" />
+            </span>
+          )}
           {primary && (
             <span className="adm-only-desktop">
               <PrimaryButton action={primary} className="adm-fpage__primary" />
@@ -99,6 +131,7 @@ export function AdminFormPage({
       {primary && (
         <div className="adm-fpage__dock adm-only-mobile">
           <div className="adm-fpage__dock-inner">
+            {secondary && <SecondaryLink link={secondary} className="adm-fpage__dock-secondary" />}
             <PrimaryButton action={primary} className="adm-fpage__dock-btn" />
           </div>
         </div>

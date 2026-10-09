@@ -189,7 +189,10 @@ async function expectAllLoaded(page: Page, count: number): Promise<void> {
 
 async function saveAndRead(page: Page): Promise<{ urls: string[]; thumbs: string[] }> {
   await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, { timeout: 30_000 });
+  // Rich-text editor fix Part 3: Save now stays on the Edit page and says
+  // "Saved ✓" (it used to go back to the list).
+  await expect(page.getByText('Saved ✓')).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/edit$/);
   const row = await select<{ image_urls: string[]; image_urls_thumb: string[] }[]>(
     admin.accessToken,
     `products?select=image_urls,image_urls_thumb&id=eq.${imageProductId}`

@@ -3241,6 +3241,31 @@ html[data-admin] .toast--info .toast__icon {
   font-size: 15px;
 }
 
+/* Fix (rich-text editor) Part 3: "View on site ↗" beside Save. */
+.adm-fpage__dock-inner:has(.adm-fpage__dock-secondary) {
+  display: flex;
+  gap: var(--adm-s2, 8px);
+}
+
+.adm-fpage__dock-inner:has(.adm-fpage__dock-secondary) .adm-fpage__dock-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.adm-fpage__dock-secondary,
+.adm-fpage__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.adm-fpage__dock-secondary {
+  flex: none;
+  min-height: 48px;
+}
+
 .adm-fpage__notice {
   padding: var(--adm-s6) var(--adm-s4);
   text-align: center;
