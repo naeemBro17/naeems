@@ -20,6 +20,7 @@ import { MoreTab } from '../components/admin/MoreTab';
 import { CustomersTab } from '../components/admin/CustomersTab';
 import { BannerTextsTab } from '../components/admin/BannerTextsTab';
 import { BrandsTab } from '../components/admin/BrandsTab';
+import { PayoutsTab } from '../components/admin/PayoutsTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
 import { fetchOwnRoleName } from '../lib/staff';
@@ -41,6 +42,7 @@ import { OrderPage } from '../components/admin/pages/OrderPage';
 import { ProductEditPage } from '../components/admin/pages/ProductEditPage';
 import { CustomerPage } from '../components/admin/pages/CustomerPage';
 import { NewCustomerPage } from '../components/admin/pages/NewCustomerPage';
+import { PayoutPage } from '../components/admin/pages/PayoutPage';
 import { goBackFromSubPage } from '../components/admin/pages/subPageBack';
 import {
   adminPath,
@@ -218,6 +220,14 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onDeleted={() => leave(() => navigate('/admin?tab=customers', { replace: true }))}
           />
         )}
+        {sub?.kind === 'payout' && (
+          <PayoutPage
+            key={sub.payoutId}
+            payoutId={sub.payoutId}
+            onBack={back}
+            onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
+          />
+        )}
         {sub?.kind === 'new-customer' && (
           <NewCustomerPage
             onBack={back}
@@ -245,6 +255,12 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         )}
         {active === 'orders' && (
           <OrdersTab key={orderParam ?? 'list'} orders={orders} onReload={loadOrders} initialOrderId={orderParam} />
+        )}
+        {active === 'payouts' && (
+          <PayoutsTab
+            onOpenPayout={(id) => navigate(adminPath.payout(id), { state: { fromList: true } })}
+            onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
+          />
         )}
         {active === 'customers' && <CustomersTab />}
         {active === 'reviews' && <ReviewsTab />}

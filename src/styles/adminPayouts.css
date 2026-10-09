@@ -1,0 +1,256 @@
+/* Batch 36 Part 1: Steadfast payouts (mockup screens 1–2). Neutral, money
+   in near-black; green / amber only for the match pills and the alert. */
+
+.adm-payouts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.adm-payouts__label {
+  margin: 0;
+  font-size: var(--adm-fs-label);
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__big {
+  margin: 4px 0 6px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--adm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-payouts__alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-amber-bg);
+  color: var(--adm-text);
+}
+
+.adm-payouts__alert-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--adm-amber-text);
+  margin-top: 1px;
+}
+
+.adm-payouts__alert-title {
+  margin: 0;
+  font-size: var(--adm-fs-body);
+  font-weight: 700;
+}
+
+.adm-payouts__alert-orders {
+  margin: 2px 0 0;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.adm-payouts__month-select {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--adm-fs-label);
+  color: var(--adm-text-2);
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: right;
+}
+
+.adm-payouts__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-payouts__line span:last-child {
+  color: var(--adm-text);
+}
+
+.adm-payouts__line--total {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--adm-divider);
+  font-weight: 700;
+  color: var(--adm-text);
+  font-size: var(--adm-fs-section);
+}
+
+.adm-payouts__section {
+  margin: 8px 0 0;
+  font-size: var(--adm-fs-label);
+  font-weight: 600;
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__list {
+  background: var(--adm-card);
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-lg);
+  overflow: hidden;
+}
+
+.adm-payouts__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--adm-row-line);
+  background: none;
+  font: inherit;
+  color: var(--adm-text);
+  text-align: left;
+  cursor: pointer;
+  min-height: var(--adm-hit);
+}
+
+.adm-payouts__row:last-child {
+  border-bottom: 0;
+}
+
+.adm-payouts__row-main,
+.adm-payouts__row-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.adm-payouts__row-side {
+  align-items: flex-end;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-payouts__row-title {
+  font-size: var(--adm-fs-body);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-payouts__row-sub {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: var(--adm-r-pill);
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.adm-payouts__pill--green {
+  background: var(--adm-green-bg);
+  color: var(--adm-green-text);
+}
+
+.adm-payouts__pill--amber {
+  background: var(--adm-amber-bg);
+  color: var(--adm-amber-text);
+}
+
+.adm-payouts__table-card {
+  padding: 6px 14px 14px;
+}
+
+.adm-payouts__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--adm-fs-body);
+  font-variant-numeric: tabular-nums;
+  color: var(--adm-text);
+}
+
+.adm-payouts__table th,
+.adm-payouts__table td {
+  padding: 10px 0 10px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--adm-row-line);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.adm-payouts__table th:first-child,
+.adm-payouts__table td:first-child {
+  text-align: left;
+  padding-left: 0;
+  white-space: normal;
+}
+
+.adm-payouts__table thead th {
+  font-size: var(--adm-fs-small);
+  font-weight: 500;
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__table tbody td:nth-child(3) {
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__table tfoot th,
+.adm-payouts__table tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+  font-size: var(--adm-fs-section);
+  padding-top: 12px;
+}
+
+.adm-payouts__table tr.is-check td:first-child {
+  box-shadow: inset 3px 0 0 var(--adm-amber-text);
+  padding-left: 8px;
+}
+
+.adm-payouts__reason {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-amber-text);
+}
+
+.adm-payouts__note {
+  margin: 10px 0 0;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+  line-height: 1.5;
+}
+
+.adm-payouts__paid {
+  margin: 6px 0 0;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+}
+
+.adm-payouts__paid--none {
+  color: var(--adm-text-2);
+}

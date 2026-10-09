@@ -44,6 +44,14 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
       <path d="M5 9.5V20a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V9.5" />
     </>
   ),
+  payouts: (
+    <>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M7 15h4" />
+      <path d="M16 3l2 3M8 3L6 6" />
+    </>
+  ),
   orders: (
     <>
       <rect x="4" y="3" width="16" height="18" rx="2" />

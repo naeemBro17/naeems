@@ -43,6 +43,7 @@ import {
   extractSteadfastError,
   checkSteadfastStatus,
   meansDelivered,
+  steadfastReadOnlyGet,
   type SteadfastStatusResponse,
 } from '../_shared/steadfast.ts';
 import { parseTrackingResponse, type TrackingEvent } from '../_shared/steadfastSteps.ts';
@@ -57,6 +58,8 @@ import {
 import { parsePoliceStations, type PoliceStation } from '../_shared/policeStations.ts';
 import { codAmountFor } from '../_shared/cod.ts';
 import { parseFraudCheck, type FraudCheckResult } from '../_shared/fraudCheck.ts';
+import { syncSteadfastPayouts } from '../_shared/steadfastPayouts.ts';
+import { supabasePayoutStore } from '../_shared/payoutStoreSupabase.ts';
 
 // Unlike notify-telegram-order (only ever invoked server-side by a database
 // webhook), this function is called directly from the admin's browser via
@@ -121,7 +124,7 @@ interface OrderRow {
 }
 
 interface RequestBody {
-  action?: 'create' | 'status' | 'tracking' | 'police_stations' | 'fraud_check';
+  action?: 'create' | 'status' | 'tracking' | 'police_stations' | 'fraud_check' | 'payouts_sync';
   orderId?: string;
   /** fraud_check only */
   phone?: string;
@@ -538,6 +541,20 @@ async function handleFraudCheck(
   return json({ ok: true, result, fetchedAt, cached: false });
 }
 
+/** Batch 36 Part 1: the payouts page's Refresh button. */
+async function handlePayoutsSync(userClient: SupabaseUserClient, apiKey: string, secretKey: string): Promise<Response> {
+  const { data: can, error: canErr } = await userClient.rpc('staff_can', { p_perm: 'view_profit_costs' });
+  if (canErr || can !== true) return json({ ok: false, error: 'Not authorized.' });
+  const serviceClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  try {
+    const result = await syncSteadfastPayouts(steadfastReadOnlyGet(apiKey, secretKey), supabasePayoutStore(serviceClient));
+    return json({ ...result });
+  } catch (err) {
+    console.error('payouts_sync failed:', err);
+    return json({ ok: false, error: 'Could not save the payouts. Has the Batch 36 database step been run?' });
+  }
+}
+
 async function handleStatus(
   order: OrderRow,
   userClient: SupabaseUserClient,
@@ -603,6 +620,18 @@ Deno.serve(async (req: Request) => {
       req.headers.get('Authorization') ?? ''
     );
     return await handleFraudCheck(requestBody, fraudClient, apiKey, secretKey);
+  }
+
+  // Batch 36 Part 1: read Steadfast's balance and payouts (GET only) and
+  // store them. Only people with "View profit & costs" (the Super Admin
+  // always) — the tables refuse everyone else anyway.
+  if (requestBody.action === 'payouts_sync') {
+    const payoutClient = userClientFor(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      req.headers.get('Authorization') ?? ''
+    );
+    return await handlePayoutsSync(payoutClient, apiKey, secretKey);
   }
 
   const knownActions = ['create', 'status', 'tracking'];

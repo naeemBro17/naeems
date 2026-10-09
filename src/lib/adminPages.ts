@@ -10,6 +10,7 @@ import type { AdminSection, NavAccess } from './adminNav';
  *   /admin/products/:id/edit          Edit product
  *   /admin/customers/new              Add customer
  *   /admin/customers/:key             Customer profile
+ *   /admin/payouts/:id                One Steadfast payout (Batch 36)
  * Everything else under /admin is the section list (?tab=...), as before.
  */
 export type AdminSubPage =
@@ -19,7 +20,8 @@ export type AdminSubPage =
   | { kind: 'new-product' }
   | { kind: 'edit-product'; productId: string }
   | { kind: 'new-customer' }
-  | { kind: 'customer'; customerKey: string };
+  | { kind: 'customer'; customerKey: string }
+  | { kind: 'payout'; payoutId: string };
 
 function decode(part: string): string | null {
   try {
@@ -54,6 +56,10 @@ export function parseAdminSubPage(pathname: string): AdminSubPage | null | 'unkn
     const customerKey = decode(second);
     if (customerKey) return { kind: 'customer', customerKey };
   }
+  if (section === 'payouts' && parts.length === 2) {
+    const payoutId = decode(second);
+    if (payoutId) return { kind: 'payout', payoutId };
+  }
   return 'unknown';
 }
 
@@ -67,6 +73,8 @@ export function subPageSection(page: AdminSubPage): AdminSection {
     case 'new-product':
     case 'edit-product':
       return 'products';
+    case 'payout':
+      return 'payouts';
     default:
       return 'customers';
   }
@@ -90,13 +98,15 @@ export function canOpenSubPage(page: AdminSubPage, access: NavAccess): boolean {
       return isAdmin || can('create_orders') || can('manage_customers');
     case 'customer':
       return can('view_customers');
+    case 'payout':
+      return can('view_profit_costs');
   }
 }
 
 /** Pages that are a form with one Save button (it docks at the bottom on a
  *  phone, so the bottom tab bar steps aside). */
 export function isFormSubPage(page: AdminSubPage): boolean {
-  return page.kind !== 'customer';
+  return page.kind !== 'customer' && page.kind !== 'payout';
 }
 
 /** Where each page's Back goes when there is no list to return to (a link
@@ -113,6 +123,7 @@ export const adminPath = {
   editProduct: (id: string) => `/admin/products/${encodeURIComponent(id)}/edit`,
   newCustomer: () => '/admin/customers/new',
   customer: (key: string) => `/admin/customers/${encodeURIComponent(key)}`,
+  payout: (id: string) => `/admin/payouts/${encodeURIComponent(id)}`,
 };
 
 /** A "next" link after signing in may only lead back into the admin. */
