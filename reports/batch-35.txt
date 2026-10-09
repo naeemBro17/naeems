@@ -311,3 +311,28 @@ PART 9 — Saving product photos
   landed in the "Part 1" commit instead of "Part 3". The branch as a whole
   is correct and was fully tested; only that single commit on its own
   would not build. I did not rewrite the pushed branch over this.
+
+============================================================
+7. YOUR ANSWER: "Apply the database addition now?" → YES
+============================================================
+  Done on the live project:
+  - migration-037 applied. Checked: table order_tracking_events exists
+    with its staff-only read rule; customer_order_updates and
+    order_latest_tracking_steps exist; show_rider_phone = false (Off).
+  - Redeployed: steadfast, steadfast-refresh-all, notify-telegram-order.
+  Read-only smoke check (nothing booked, cancelled or changed on
+  Steadfast):
+  - Two real parcels (NM-1979, NM-1972) were read through the new
+    function: 7 updates each, status delivered_approval_pending.
+  - Saved: 14 rows, 14 unique (no duplicates). Customer wording read
+    back: Handed to Steadfast | Picked up by Steadfast | On the way to
+    the Mirpur sorting centre | On the way to Pallabi delivery hub |
+    Arrived at Pallabi delivery hub | Out for delivery with a rider |
+    Delivered. No internal text (COD edits, "By User", IDs) in any of it.
+  - A visitor who isn't signed in asking for an order's updates is
+    refused (401). An outside call to the Telegram function is refused
+    (401).
+  Clean-up: four leftover TEST orders (NM-2259, NM-2260, NM-2261 —
+  "E2E Test Customer" — and NM-2309 "E2E B32 Pay Later") were left by a
+  test run I stopped part-way. They were deleted with the test admin
+  account. No real order, customer or product was touched.
