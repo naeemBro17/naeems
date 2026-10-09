@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import {
   supabase,
@@ -19,6 +19,7 @@ import { useToast } from '../../hooks/useToast';
 import { distinctRegions } from '../../lib/variants';
 import { ImageUploader } from './ImageUploader';
 import { RichTextField } from './RichTextField';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { cleanLongText } from '../../lib/richText';
 import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
@@ -41,8 +42,36 @@ interface ProductEditorFormProps {
   /** 'page' (Batch 32): the page's own Save button submits this form by id. */
   formId?: string;
   /** 'page': tells the page whether its Save button can be pressed. */
-  onState?: (state: { canSave: boolean; isSaving: boolean }) => void;
+  onState?: (state: ProductFormState) => void;
 }
+
+export interface ProductFormState {
+  canSave: boolean;
+  isSaving: boolean;
+  /** The long texts' editors are still opening — Save waits for them. */
+  loadingText: boolean;
+}
+
+/** The three long texts, in the order they appear on the form. */
+const LONG_TEXTS = [
+  { key: 'description', id: 'pf-description', label: 'Description' },
+  { key: 'how_to_use', id: 'pf-how-to-use', label: 'How to Use' },
+  { key: 'key_ingredients', id: 'pf-key-ingredients', label: 'Key Ingredients' },
+] as const;
+
+/** Long texts that had words when the product was opened and would now be
+ *  saved empty. */
+export function emptiedLongTexts(
+  saved: Partial<Record<(typeof LONG_TEXTS)[number]['key'], string | null>> | null,
+  form: Record<(typeof LONG_TEXTS)[number]['key'], string>
+): string[] {
+  if (!saved) return [];
+  return LONG_TEXTS.filter(({ key }) => cleanLongText(saved[key] ?? '') !== null && cleanLongText(form[key]) === null).map(
+    ({ label }) => label
+  );
+}
+
+export const LOADING_TEXT_LABEL = 'Loading text…';
 
 const NOTE_MAX_LENGTH = 200;
 const CREATE_CATEGORY_VALUE = '__create__';
@@ -186,6 +215,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  // Fix (rich-text editor) Part 1: Save waits until every long-text editor
+  // shows the product's text, and asks before wiping one.
+  const [readyTexts, setReadyTexts] = useState<ReadonlySet<string>>(() => new Set());
+  const markTextReady = useCallback(
+    (id: string) => setReadyTexts((prev) => (prev.has(id) ? prev : new Set(prev).add(id))),
+    []
+  );
+  const loadingText = readyTexts.size < LONG_TEXTS.length;
+  const [emptiedConfirm, setEmptiedConfirm] = useState<string[] | null>(null);
 
   // A fresh form for whichever product this instance was mounted to edit
   // (or a blank one in create mode).
@@ -341,8 +379,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
     }
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (loadingText) return;
     setTouched({
       name: true,
       retail_price: true,
@@ -351,7 +390,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       stock_quantity: true,
     });
     if (hasBlockingErrors) return;
+    const emptied = emptiedLongTexts(product, form);
+    if (emptied.length > 0) {
+      setEmptiedConfirm(emptied);
+      return;
+    }
+    void save();
+  };
 
+  const save = async () => {
     setIsSaving(true);
     setUploadError(null);
 
@@ -440,10 +487,11 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   const requiredEmpty =
     form.name.trim() === '' || form.retail_price.trim() === '';
 
-  const canSave = !isSaving && !requiredEmpty && !hasBlockingErrors;
+  const canSave = !isSaving && !requiredEmpty && !hasBlockingErrors && !loadingText;
   useEffect(() => {
-    onState?.({ canSave, isSaving });
-  }, [canSave, isSaving, onState]);
+    onState?.({ canSave, isSaving, loadingText });
+  }, [canSave, isSaving, loadingText, onState]);
+  const saveLabel = loadingText ? LOADING_TEXT_LABEL : product ? 'Save Changes' : 'Add Product';
 
   return (
     <form id={formId} onSubmit={handleSubmit} className="form" noValidate>
@@ -505,6 +553,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       {/* Batch 36 Part 2: the three long texts use the Word-like editor. */}
       <RichTextField
         id="pf-description"
+        resetKey={product?.id ?? 'new'}
+        onReady={markTextReady}
         label="Description"
         value={form.description}
         onChange={(html) => setField('description', html)}
@@ -514,6 +564,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
 
       <RichTextField
         id="pf-how-to-use"
+        resetKey={product?.id ?? 'new'}
+        onReady={markTextReady}
         label="How to Use"
         value={form.how_to_use}
         onChange={(html) => setField('how_to_use', html)}
@@ -523,6 +575,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
 
       <RichTextField
         id="pf-key-ingredients"
+        resetKey={product?.id ?? 'new'}
+        onReady={markTextReady}
         label="Key Ingredients"
         value={form.key_ingredients}
         onChange={(html) => setField('key_ingredients', html)}
@@ -827,24 +881,31 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
         <SheetFooter
           onCancel={onCancel}
           isSaving={isSaving}
-          disabled={requiredEmpty || hasBlockingErrors}
-          saveLabel={product ? 'Save Changes' : 'Add Product'}
+          disabled={requiredEmpty || hasBlockingErrors || loadingText}
+          saveLabel={saveLabel}
         />
       ) : footerVariant === 'page' ? null : (
         <button
           type="submit"
           className="button button--primary button--full"
-          disabled={isSaving || requiredEmpty || hasBlockingErrors}
+          disabled={isSaving || requiredEmpty || hasBlockingErrors || loadingText}
         >
-          {isSaving ? (
-            <span className="spinner" aria-hidden="true" />
-          ) : product ? (
-            'Save Changes'
-          ) : (
-            'Add Product'
-          )}
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : saveLabel}
         </button>
       )}
+
+      <ConfirmDialog
+        isOpen={emptiedConfirm !== null}
+        title="Delete this text?"
+        message={`This will delete the ${(emptiedConfirm ?? []).join(' and ')} text. Save anyway?`}
+        confirmLabel="Save"
+        cancelLabel="Keep text"
+        onClose={() => setEmptiedConfirm(null)}
+        onConfirm={() => {
+          setEmptiedConfirm(null);
+          void save();
+        }}
+      />
     </form>
   );
 }

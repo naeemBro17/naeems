@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AdminFormPage } from '../AdminFormPage';
-import { ProductEditorForm } from '../ProductEditorForm';
+import { LOADING_TEXT_LABEL, ProductEditorForm, type ProductFormState } from '../ProductEditorForm';
 import { useProducts } from '../../../contexts/ProductContext';
 import { fetchProductEditInfo, formatDhakaTime, type ProductEditInfo } from '../../../lib/staff';
 import type { Product } from '../../../types';
@@ -24,8 +24,8 @@ export function ProductEditPage({ productId, onBack, onDone }: ProductEditPagePr
   // list must never swap it under the person typing.
   const [product, setProduct] = useState<Product | null>(null);
   const [editInfo, setEditInfo] = useState<ProductEditInfo | null>(null);
-  const [state, setState] = useState({ canSave: false, isSaving: false });
-  const onState = useCallback((next: { canSave: boolean; isSaving: boolean }) => setState(next), []);
+  const [state, setState] = useState<ProductFormState>({ canSave: false, isSaving: false, loadingText: true });
+  const onState = useCallback((next: ProductFormState) => setState(next), []);
 
   useEffect(() => {
     if (productId === null || product !== null) return;
@@ -59,7 +59,7 @@ export function ProductEditPage({ productId, onBack, onDone }: ProductEditPagePr
       testId="product-page"
       primary={
         ready
-          ? { label: isNew ? 'Add product' : 'Save changes', formId: FORM_ID, disabled: !state.canSave, busy: state.isSaving }
+          ? { label: state.loadingText ? LOADING_TEXT_LABEL : isNew ? 'Add product' : 'Save changes', formId: FORM_ID, disabled: !state.canSave, busy: state.isSaving }
           : undefined
       }
     >

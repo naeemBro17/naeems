@@ -140,6 +140,11 @@ export function plainToEditorHtml(text: string): string {
     .join('');
 }
 
+/** What the editor opens with for a saved value (old plain text or rich). */
+export function toEditorHtml(value: string): string {
+  return isRichText(value) ? sanitizeRichHtml(value) : plainToEditorHtml(value);
+}
+
 /** An editor value with no visible text ("<p></p>") counts as empty. */
 export function isEmptyRichHtml(html: string): boolean {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '';

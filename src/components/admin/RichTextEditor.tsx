@@ -9,9 +9,8 @@ import {
   RT_HIGHLIGHTS,
   RT_TEXT_COLORS,
   isEmptyRichHtml,
-  isRichText,
-  plainToEditorHtml,
   safeLinkHref,
+  toEditorHtml,
   sanitizePastedHtml,
   sanitizeRichHtml,
   type RtBox,
@@ -401,6 +400,11 @@ export interface RichTextEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   labelledBy?: string;
+  /** Which record the text belongs to (the product id). A new key always
+   *  loads the new value, even over typing. */
+  resetKey?: string;
+  /** Called once the editor exists and shows the value. */
+  onReady?: () => void;
 }
 
 /**
@@ -408,14 +412,24 @@ export interface RichTextEditorProps {
  * text opens as paragraphs but is only saved as rich text once it is
  * actually edited — opening and leaving changes nothing.
  */
-export default function RichTextEditor({ id, value, onChange, placeholder, labelledBy }: RichTextEditorProps) {
+export default function RichTextEditor({ id, value, onChange, placeholder, labelledBy, resetKey, onReady }: RichTextEditorProps) {
   const { markDirty } = useLeaveGuard();
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  // The value the editor shows right now (loaded or typed), so a value
+  // coming from outside (the product arriving after the editor opened) can
+  // be told apart from the editor's own echo.
+  const shownValueRef = useRef(value);
+  const resetKeyRef = useRef(resetKey);
+  const typedRef = useRef(false);
+  // Empty state class for the placeholder.
+  const [empty, setEmpty] = useState(value.trim() === '');
 
   const editor = useEditor({
     extensions: richTextExtensions(),
-    content: isRichText(value) ? sanitizeRichHtml(value) : plainToEditorHtml(value),
+    content: toEditorHtml(value),
     editorProps: {
       attributes: {
         id,
@@ -429,14 +443,35 @@ export default function RichTextEditor({ id, value, onChange, placeholder, label
       transformPastedHTML: (html) => sanitizePastedHtml(html),
     },
     onUpdate: ({ editor: e }) => {
+      typedRef.current = true;
       markDirty();
       const html = e.getHTML();
-      onChangeRef.current(isEmptyRichHtml(html) ? '' : sanitizeRichHtml(html));
+      const next = isEmptyRichHtml(html) ? '' : sanitizeRichHtml(html);
+      shownValueRef.current = next;
+      onChangeRef.current(next);
     },
   });
 
-  // Empty state class for the placeholder.
-  const [empty, setEmpty] = useState(value.trim() === '');
+  // Fix (rich-text editor) Part 1: Tiptap only reads `content` when it is
+  // created, so text that arrives later (the product loading after the
+  // editor opened) is put in here — never as an undo step, never marking
+  // the form as changed, and never over what is being typed (unless it is
+  // another product).
+  useEffect(() => {
+    if (!editor) return;
+    const keyChanged = resetKeyRef.current !== resetKey;
+    resetKeyRef.current = resetKey;
+    if (keyChanged) typedRef.current = false;
+    if (!keyChanged && (value === shownValueRef.current || typedRef.current)) return;
+    shownValueRef.current = value;
+    editor.chain().setMeta('addToHistory', false).setContent(toEditorHtml(value), { emitUpdate: false }).run();
+    setEmpty(editor.isEmpty);
+  }, [editor, value, resetKey]);
+
+  useEffect(() => {
+    if (editor) onReadyRef.current?.();
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
     const update = () => setEmpty(editor.isEmpty);

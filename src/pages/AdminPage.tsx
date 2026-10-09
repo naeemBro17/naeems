@@ -206,6 +206,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         )}
         {(sub?.kind === 'new-product' || sub?.kind === 'edit-product') && (
           <ProductEditPage
+            key={sub.kind === 'edit-product' ? sub.productId : 'new'}
             productId={sub.kind === 'edit-product' ? sub.productId : null}
             onBack={back}
             onDone={() => leave(onBack)}
