@@ -306,3 +306,8 @@ PART 9 — Saving product photos
   The database addition was dry-run on the live database inside a
   transaction that was rolled back: table and functions were created,
   then nothing kept (checked afterwards).
+
+  Git note: the removal of the old order pop-up file was staged early and
+  landed in the "Part 1" commit instead of "Part 3". The branch as a whole
+  is correct and was fully tested; only that single commit on its own
+  would not build. I did not rewrite the pushed branch over this.
