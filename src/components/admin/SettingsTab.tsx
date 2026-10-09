@@ -23,6 +23,7 @@ import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
 import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
 import { TwoStepCard } from './TwoStepCard';
+import { InvoiceSettingsPanel } from './InvoiceSettingsPanel';
 import { SubPages, type SubPage } from './ui/SubPages';
 
 const PASSWORD_MIN_LENGTH = 8;
@@ -1035,6 +1036,8 @@ export function SettingsTab() {
     { id: 'payment', group: 'ORDERS', label: 'Delivery fees and bKash', icon: 'orders', render: () => <OrderPaymentSettingsPanel /> },
     { id: 'low-stock', group: 'ORDERS', label: 'Low-stock alert', icon: 'low-stock', render: () => <LowStockPanel /> },
     { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
+    // Batch 37.
+    { id: 'invoice', group: 'ORDERS', label: 'Invoice', icon: 'receipt', render: () => <InvoiceSettingsPanel /> },
     { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
     { id: 'delivery', group: 'DELIVERY', label: "Rider's phone for customers", icon: 'truck', render: () => <DeliveryTrackingPanel /> },
     { id: 'tracking', group: 'TRACKING', label: 'Facebook Pixel and Google Analytics', icon: 'chart', render: () => <AdTrackingSettingsPanel /> },

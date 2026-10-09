@@ -106,6 +106,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   text_trust_cod: '',
   text_trust_delivery: '',
   low_stock_threshold: '5',
+
+  invoice_shop_phone: '',
+  invoice_shop_city: '',
+  invoice_community_link: '',
+  invoice_community_title: '',
+  invoice_community_line1: '',
+  invoice_community_line2: '',
+  invoice_show_community: 'true',
 };
 
 /**
@@ -154,6 +162,13 @@ const TEXT_SETTING_KEYS = [
   'text_trust_cod',
   'text_trust_delivery',
   'low_stock_threshold',
+  'invoice_shop_phone',
+  'invoice_shop_city',
+  'invoice_community_link',
+  'invoice_community_title',
+  'invoice_community_line1',
+  'invoice_community_line2',
+  'invoice_show_community',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];

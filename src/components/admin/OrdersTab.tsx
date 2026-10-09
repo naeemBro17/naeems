@@ -1,11 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminPath } from '../../lib/adminPages';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
 import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus } from '../../lib/orders';
-import { fetchOrderNumberById } from '../../lib/adminData';
+import { fetchAdminOrderDetail, fetchOrderNumberById } from '../../lib/adminData';
 import { fetchAllPayments, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
 import { normalizeCollectMode } from '../../lib/paymentPlan';
@@ -13,6 +13,9 @@ import { TRACK_STATUS, fetchLatestSteps, savedTrack, type TrackStatus } from '..
 import { phoneSearchCore } from '../../lib/phone';
 import { useToast } from '../../hooks/useToast';
 import { DeleteOrdersDialog } from './DeleteOrdersDialog';
+import { InvoiceDialog } from './InvoiceDialog';
+import { invoiceFromOrder } from '../../lib/invoice/invoiceData';
+import { byOrderNumber, fetchInvoicePrints, fetchShippedToday, pickBookedToday } from '../../lib/invoice/invoicePrints';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafetyLock } from '../../contexts/SafetyLockContext';
 import { AdminPageHeader, AdminSearch, BulkBar, ChipRow, EmptyState, type MenuItem } from './ui/AdminUi';
@@ -110,6 +113,24 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   // Batch 30: every order's payments (null until migration-033 is run —
   // the Payment column then shows the old method · status text).
   const [payments, setPayments] = useState<Map<string, OrderPayment[]> | null>(null);
+  // Batch 37: "Print invoices" — its own selection (any order can be
+  // printed), when each invoice was last printed (null before
+  // migration-039) and which orders were booked today.
+  const [printMode, setPrintMode] = useState(false);
+  const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
+  const [printedAt, setPrintedAt] = useState<Map<string, string> | null>(null);
+  const [shippedToday, setShippedToday] = useState<Map<string, string>>(() => new Map());
+  // The orders being printed, fixed when Print is tapped (lowest number first).
+  const [printJob, setPrintJob] = useState<Order[] | null>(null);
+  const printedJob = useRef(false);
+
+  const loadPrints = useCallback(() => {
+    void fetchInvoicePrints().then(setPrintedAt);
+  }, []);
+
+  useEffect(() => {
+    loadPrints();
+  }, [orders, loadPrints]);
 
   useEffect(() => {
     let alive = true;
@@ -250,6 +271,62 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
 
   const selectedOrders = orders.filter((o) => selectedForDelete.has(o.id) && canDeleteNow(o));
 
+  const startPrinting = () => {
+    setPrintMode(true);
+    setSelectedForPrint(new Set());
+    void fetchShippedToday().then(setShippedToday);
+  };
+
+  const stopPrinting = () => {
+    setPrintMode(false);
+    setSelectedForPrint(new Set());
+  };
+
+  const togglePrint = (orderId: string) => {
+    setSelectedForPrint((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const bookedToday = pickBookedToday(orders, shippedToday, printedAt ?? new Map<string, string>(), new Date());
+
+  // Reads today's bookings again first, so a quick tap never misses one.
+  const selectBookedToday = async () => {
+    const [shipped, printed] = await Promise.all([fetchShippedToday(), fetchInvoicePrints()]);
+    setShippedToday(shipped);
+    setPrintedAt(printed);
+    const picked = pickBookedToday(orders, shipped, printed ?? new Map<string, string>(), new Date());
+    if (picked.length === 0) {
+      showToast('Nothing booked today is waiting to be printed.');
+      return;
+    }
+    setSelectedForPrint(new Set(picked.map((o) => o.id)));
+  };
+
+  const openPrintJob = () => {
+    printedJob.current = false;
+    setPrintJob(orders.filter((o) => selectedForPrint.has(o.id)).sort(byOrderNumber));
+  };
+
+  const closePrintJob = () => {
+    setPrintJob(null);
+    if (printedJob.current) stopPrinting();
+  };
+
+  const buildInvoices = useCallback(async () => {
+    const job = printJob ?? [];
+    const details = await Promise.all(job.map((o) => fetchAdminOrderDetail(o.id)));
+    const ready = details.filter((d): d is NonNullable<typeof d> => d !== null);
+    if (ready.length < job.length) throw new Error('Some orders could not be loaded.');
+    return {
+      invoices: ready.map((d) => invoiceFromOrder(d, payments ? (payments.get(d.id) ?? []) : null)),
+      orderIds: ready.map((d) => d.id),
+    };
+  }, [printJob, payments]);
+
   const handleDeleteSelected = async () => {
     const { results, error } = await adminDeleteOrders(selectedOrders.map((o) => o.id));
     setIsConfirmingDelete(false);
@@ -281,7 +358,12 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     });
   }
 
-  const anyDeletable = filtered.some(canDeleteNow);
+  if (!printMode && orders.length > 0) {
+    menu.push({ label: 'Print invoices', icon: 'receipt', onSelect: startPrinting });
+  }
+
+  const anyDeletable = !printMode && filtered.some(canDeleteNow);
+  const showChecks = printMode || anyDeletable;
 
   return (
     <section aria-label="Orders" className="adm-orders">
@@ -335,6 +417,18 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         </select>
       </div>
 
+      {printMode && (
+        <div className="adm-orders__print-bar" data-testid="print-bar">
+          <p>Tick the orders to print. Each order gets its own A4 page.</p>
+          <button type="button" className="adm-btn adm-btn--sm" onClick={() => void selectBookedToday()} data-testid="print-booked-today">
+            All booked today, not printed yet ({bookedToday.length})
+          </button>
+          <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={stopPrinting}>
+            Cancel
+          </button>
+        </div>
+      )}
+
       <ChipRow
         label="Common filters"
         active={statusFilter}
@@ -355,7 +449,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           hint={orders.length === 0 ? 'New orders from the shop appear here.' : 'Try another status or search.'}
         />
       ) : (
-        <div className={`adm-list adm-olist2${anyDeletable ? ' adm-olist2--checks' : ''}`} role="list" aria-label="Orders">
+        <div className={`adm-list adm-olist2${showChecks ? ' adm-olist2--checks' : ''}`} role="list" aria-label="Orders">
           {filtered.map((order) => {
             // Batch 35 Part 4: one status pill, and a money pill only when
             // something is still owed.
@@ -371,6 +465,18 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                 data-testid="order-row"
                 onClick={() => openOrder(order)}
               >
+                {printMode && (
+                  <span className="adm-orow2__check" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="adm-check"
+                      checked={selectedForPrint.has(order.id)}
+                      onChange={() => togglePrint(order.id)}
+                      aria-label={`Select order ${order.order_number} to print`}
+                      data-testid="print-check"
+                    />
+                  </span>
+                )}
                 {anyDeletable && (
                   <span className="adm-orow2__check" onClick={(e) => e.stopPropagation()}>
                     {canDeleteNow(order) && (
@@ -409,6 +515,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                   {owed && (
                     <span className="adm-orow2__money" data-testid="order-money-pill">
                       {owed}
+                    </span>
+                  )}
+                  {printedAt?.has(order.id) && (
+                    <span className="adm-orow2__printed" data-testid="order-printed-mark">
+                      Printed
                     </span>
                   )}
                 </button>
@@ -459,7 +570,27 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         </div>
       </div>
 
-      {selectedOrders.length > 0 && (
+      {printMode && selectedForPrint.size > 0 && (
+        <BulkBar count={selectedForPrint.size} onClear={() => setSelectedForPrint(new Set())}>
+          <button type="button" className="adm-btn adm-btn--primary adm-btn--sm" onClick={openPrintJob} data-testid="print-selected">
+            Print {selectedForPrint.size} invoice{selectedForPrint.size === 1 ? '' : 's'}
+          </button>
+        </BulkBar>
+      )}
+
+      <InvoiceDialog
+        isOpen={printJob !== null}
+        onClose={closePrintJob}
+        title={`Print ${printJob?.length ?? 0} invoice${printJob?.length === 1 ? '' : 's'}`}
+        fileName={`Invoices-${printJob?.length ?? 0}.pdf`}
+        build={buildInvoices}
+        onPrinted={() => {
+          printedJob.current = true;
+          loadPrints();
+        }}
+      />
+
+      {!printMode && selectedOrders.length > 0 && (
         <BulkBar count={selectedOrders.length} onClear={() => setSelectedForDelete(new Set())}>
           <button type="button" className="adm-btn adm-btn--danger adm-btn--sm" onClick={() => setIsConfirmingDelete(true)}>
             Delete selected ({selectedOrders.length})

@@ -6,11 +6,13 @@
 // just a receipt, "what happens next", and a way to the order's own page
 // or back to shopping. Promo usage is committed server-side inside
 // place_order() now, not here.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatTaka } from '../../lib/format';
-import { buildOrderPdf } from '../../lib/orderExport';
+import { invoiceFromSnapshot } from '../../lib/invoice/invoiceData';
+import { downloadInvoice, makeInvoiceFile } from '../../lib/invoice/invoiceOutput';
+import { useProducts } from '../../contexts/ProductContext';
 import { trackPurchase } from '../../lib/analytics';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
@@ -18,6 +20,9 @@ import { CheckoutProgressBar } from './CheckoutProgressBar';
 export function OrderSuccessPage() {
   useDocumentTitle("Order Placed — NAEEM'S");
   const { lastOrder } = useCheckoutState();
+  const { settings } = useProducts();
+  const [isMakingInvoice, setIsMakingInvoice] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(false);
   const navigate = useNavigate();
 
   // The order number is passed as both trackers' event/transaction id, so
@@ -32,9 +37,18 @@ export function OrderSuccessPage() {
     return <Navigate to="/cart" replace />;
   }
 
+  // Batch 37: the same A4 invoice the shop prints (the customer's copy).
   const handleDownloadInvoice = async () => {
-    const doc = await buildOrderPdf(lastOrder);
-    doc.save(`${lastOrder.orderNumber}.pdf`);
+    setIsMakingInvoice(true);
+    setInvoiceError(false);
+    try {
+      const file = await makeInvoiceFile([invoiceFromSnapshot(lastOrder)], settings, `Invoice-${lastOrder.orderNumber}.pdf`);
+      downloadInvoice(file);
+    } catch {
+      setInvoiceError(true);
+    } finally {
+      setIsMakingInvoice(false);
+    }
   };
 
   return (
@@ -88,9 +102,19 @@ export function OrderSuccessPage() {
         </div>
 
         <div className="checkout-success__actions">
-          <button type="button" className="button button--secondary" onClick={handleDownloadInvoice}>
-            Download invoice
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => void handleDownloadInvoice()}
+            disabled={isMakingInvoice}
+          >
+            {isMakingInvoice ? <span className="spinner" aria-hidden="true" /> : 'Download invoice'}
           </button>
+          {invoiceError && (
+            <p className="form-error" role="alert">
+              Could not make the invoice. Check your connection and try again.
+            </p>
+          )}
           <button
             type="button"
             className="button button--primary"
