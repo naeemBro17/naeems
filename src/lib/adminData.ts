@@ -303,6 +303,13 @@ export async function fetchAdminOrderDetail(orderId: string): Promise<OrderWithD
 }
 
 /** Batch 32 Part 3: the order behind /admin/orders/:orderNumber/edit. */
+/** Batch 35: the order number for an old ?order=<id> link (Telegram). */
+export async function fetchOrderNumberById(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('orders').select('order_number').eq('id', orderId).maybeSingle();
+  if (error || !data) return null;
+  return (data as { order_number: string }).order_number;
+}
+
 export async function fetchOrderIdByNumber(orderNumber: string): Promise<string | null> {
   const { data, error } = await supabase.from('orders').select('id').eq('order_number', orderNumber).maybeSingle();
   if (error || !data) return null;

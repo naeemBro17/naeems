@@ -37,6 +37,7 @@ import { SafetyLockBar, SafetyLockProvider } from '../contexts/SafetyLockContext
 import { LeaveGuardProvider, useLeaveGuard } from '../components/admin/LeaveGuard';
 import { NewOrderPage } from '../components/admin/pages/NewOrderPage';
 import { EditOrderPage } from '../components/admin/pages/EditOrderPage';
+import { OrderPage } from '../components/admin/pages/OrderPage';
 import { ProductEditPage } from '../components/admin/pages/ProductEditPage';
 import { CustomerPage } from '../components/admin/pages/CustomerPage';
 import { NewCustomerPage } from '../components/admin/pages/NewCustomerPage';
@@ -52,6 +53,7 @@ import {
 } from '../lib/adminPages';
 import type { WholesalerAccount, Order } from '../types';
 import '../styles/admin.css';
+import '../styles/adminOrders.css';
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -163,7 +165,8 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
     [navigate, location.search, isAdmin, refreshStaff, sub, requestLeave]
   );
 
-  /** Opens an order's detail on the Orders list (after New / Edit order). */
+  /** Opens an order (after New / Edit order) — the Orders list turns the
+   *  ?order= link into the order's own page (Batch 35). */
   const openOrder = useCallback(
     (orderId: string) => leave(() => navigate(`/admin?tab=orders&order=${encodeURIComponent(orderId)}`, { replace: true })),
     [leave, navigate]
@@ -193,6 +196,9 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onCreated={(orderId) => openOrder(orderId)}
           />
         )}
+        {sub?.kind === 'order' && (
+          <OrderPage key={sub.orderNumber} orderNumber={sub.orderNumber} onBack={back} onChanged={() => void loadOrders()} />
+        )}
         {sub?.kind === 'edit-order' && (
           <EditOrderPage key={sub.orderNumber} orderNumber={sub.orderNumber} onBack={back} onDone={openOrder} />
         )}
@@ -208,7 +214,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             key={sub.customerKey}
             customerKey={sub.customerKey}
             onBack={back}
-            onOpenOrder={(id) => navigate(`/admin?tab=orders&order=${encodeURIComponent(id)}`)}
+            onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
             onDeleted={() => leave(() => navigate('/admin?tab=customers', { replace: true }))}
           />
         )}

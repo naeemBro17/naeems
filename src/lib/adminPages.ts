@@ -4,6 +4,7 @@ import type { AdminSection, NavAccess } from './adminNav';
  * Batch 32 Part 3: the big admin forms are full pages with their own link
  * (not pop-ups a stray tap can close):
  *   /admin/orders/new                 New order
+ *   /admin/orders/:orderNumber        The order (Batch 35: no pop-up)
  *   /admin/orders/:orderNumber/edit   Edit order
  *   /admin/products/new               Add product
  *   /admin/products/:id/edit          Edit product
@@ -14,6 +15,7 @@ import type { AdminSection, NavAccess } from './adminNav';
 export type AdminSubPage =
   | { kind: 'new-order' }
   | { kind: 'edit-order'; orderNumber: string }
+  | { kind: 'order'; orderNumber: string }
   | { kind: 'new-product' }
   | { kind: 'edit-product'; productId: string }
   | { kind: 'new-customer' }
@@ -37,6 +39,8 @@ export function parseAdminSubPage(pathname: string): AdminSubPage | null | 'unkn
   const [section, second, third] = parts;
   if (section === 'orders') {
     if (parts.length === 2 && second === 'new') return { kind: 'new-order' };
+    const shown = parts.length === 2 ? decode(second) : null;
+    if (shown) return { kind: 'order', orderNumber: shown };
     const orderNumber = parts.length === 3 && third === 'edit' ? decode(second) : null;
     if (orderNumber) return { kind: 'edit-order', orderNumber };
   }
@@ -58,6 +62,7 @@ export function subPageSection(page: AdminSubPage): AdminSection {
   switch (page.kind) {
     case 'new-order':
     case 'edit-order':
+    case 'order':
       return 'orders';
     case 'new-product':
     case 'edit-product':
@@ -76,6 +81,8 @@ export function canOpenSubPage(page: AdminSubPage, access: NavAccess): boolean {
       return can('create_orders');
     case 'edit-order':
       return can('edit_orders');
+    case 'order':
+      return can('view_orders');
     case 'new-product':
     case 'edit-product':
       return can('edit_products');
@@ -100,6 +107,7 @@ export function subPageFallback(page: AdminSubPage): string {
 
 export const adminPath = {
   newOrder: () => '/admin/orders/new',
+  order: (orderNumber: string) => `/admin/orders/${encodeURIComponent(orderNumber)}`,
   editOrder: (orderNumber: string) => `/admin/orders/${encodeURIComponent(orderNumber)}/edit`,
   newProduct: () => '/admin/products/new',
   editProduct: (id: string) => `/admin/products/${encodeURIComponent(id)}/edit`,
