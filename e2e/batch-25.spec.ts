@@ -196,7 +196,7 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
   await expect(page.locator('.adm-sidebar__brand')).toHaveText("NAEEM'S SUPER ADMIN");
   expect(await page.locator('.adm-sidebar__heading').allInnerTexts()).toEqual(['CATALOG', 'SALES', 'STORE DESIGN', 'ADMIN']);
   expect((await page.locator('.adm-sidebar__label').allInnerTexts()).map((t) => t.trim())).toEqual([
-    'Home', 'Orders', 'Customers',
+    'Home', 'Orders', 'Steadfast payouts', 'Customers',
     'Products', 'Categories', 'Brands', 'Import / Export',
     'Promo Codes', 'Wholesalers', 'Reviews',
     'Bento Tiles', 'Banner & Texts',

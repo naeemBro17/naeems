@@ -440,6 +440,11 @@ export interface SyncResult {
 /** How many list pages the first run may walk back through. */
 export const MAX_PAYMENT_PAGES = 60;
 
+/** ৳3,799.00 */
+function moneyText(paisa: number): string {
+  return `৳${fromPaisa(paisa).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function payoutItemRow(payoutId: string, m: MatchedItem): PayoutItemRow {
   return {
     payout_id: payoutId,
@@ -457,7 +462,7 @@ export function payoutItemRow(payoutId: string, m: MatchedItem): PayoutItemRow {
     match_status: m.status,
     match_reason: m.reason,
     note: m.reason === 'cod_differs' && m.expectedCodPaisa !== null
-      ? `Expected ৳${fromPaisa(m.expectedCodPaisa).toFixed(2)}, Steadfast collected ৳${fromPaisa(m.codPaisa).toFixed(2)}`
+      ? `Expected ${moneyText(m.expectedCodPaisa)}, Steadfast collected ${moneyText(m.codPaisa)}`
       : m.reason
         ? MATCH_REASON_TEXT[m.reason]
         : null,
