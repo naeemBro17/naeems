@@ -1,0 +1,161 @@
+FIX — Rich-text product editor + Bengali font (version 1.37.1)
+Branch: fix/rich-text-editor (from main after Batch 36 + 37). Not merged.
+Screenshots: reports/fix-rich-text-editor-screens/
+
+1. WHAT I DID
+
+PART 1 — Text missing until refresh (could have deleted text)
+  Cause: the editor is downloaded a moment after the page opens, and it
+  only read the text once, when it was created. If the editor was already
+  there before the product's text arrived (for example the second time
+  you open a product), it stayed empty. A second bug: going straight from
+  one product's Edit page to another kept the first product's details.
+  Fixed: text that arrives later is now put into the editor (it does not
+  count as a change and cannot be "undone" away). Each product's Edit page
+  is now its own page, so another product always shows its own text.
+  Safety net: while the editors are still opening, the Save button says
+  "Loading text…" and cannot be pressed. If a text had words and would now
+  be saved empty, it asks: "This will delete the Description text. Save
+  anyway?" (Keep text / Save).
+
+PART 2 — Boxes wrapped too much
+  Cause: old and pasted text was one big paragraph with line breaks
+  inside, so a box took all of it.
+  Fixed: a box now takes exactly the lines you selected (no selection =
+  the line the cursor is on). Pasted text and old saved text are turned
+  into one line per paragraph when they go into the editor. The database
+  only changes when you press Save. New toolbar button "Remove box"
+  (dotted square with an x): with the cursor in a box, it removes the box
+  and keeps the text. Pressing the same box button again inside that box
+  also removes it.
+
+PART 3 — Save stays on the page
+  Save now keeps you on the Edit page and shows "Saved ✓". After saving,
+  Back does not ask "Discard changes?". "View on site ↗" sits next to Save
+  and opens the product page in a new tab. Adding a new product: after the
+  first Save the address changes to that product's Edit page. After a
+  save the photos count as saved, so pressing Save again does not upload
+  them again.
+
+PART 4 — Justify
+  Two new toolbar buttons: Align left (normal) and Justify. They act only
+  on the selected lines. The product page shows justified text the same
+  way. Only this one value is allowed through the safety filter.
+
+PART 5 — Enter adds no gap ("No Spacing")
+  Lines now have no space between them, in the editor and on the product
+  page, with the old text's line height. Enter goes to the next line;
+  Enter twice leaves one empty line, which is saved and shows on the
+  product page. Rich text on the product page now uses the old text's
+  size and colour, so a saved text looks like the old one. Highlighting a
+  word no longer pushes the words next to it sideways. Headings, lists and
+  boxes keep their small spacing.
+
+PART 6 — Noto Sans Bengali
+  The site now loads Noto Sans Bengali instead of Hind Siliguri, in the
+  same way as before (Google Fonts, weights 400/600/700, swap). Font order:
+  Plus Jakarta Sans first, then Noto Sans Bengali. Plus Jakarta Sans has
+  no ৳ and no Bengali letters, so exactly those come from Noto, and phones
+  never download Noto's English files. This covers prices, money boxes,
+  product text and the admin.
+  Invoice PDF: Noto Sans Bengali is embedded (Regular to ExtraBold, with
+  its free licence file). Important: Noto places vowel signs and joined
+  letters with small position shifts, and the PDF library ignored those
+  shifts, so names like "শ্রাবন্তী" came out broken. The invoice now draws
+  Bengali one letter-shape at a time, each in its correct place. See
+  invoice-bengali-noto.png. The Hind Siliguri files are removed (nothing
+  else used them).
+
+PART 7 — Calm description text
+  On the product page (About this product, How to use, Key ingredients)
+  and in the admin editor, normal text is the site's grey "secondary"
+  colour (#6E6E73 light / #98989D dark) at regular weight, 13.5px with the
+  old line height, as before Batch 36. Bold, headings and the
+  warning/tip/key-benefits boxes stay bright; colours you pick keep their
+  colour (bold inside a colour keeps that colour too). Product name, price
+  and buttons stay the strongest things on the page. Noto Sans Bengali at
+  regular weight looks as light as the old text, so I did not make it
+  smaller.
+  Before (main, bright and heavier): customer-rich-before-light/dark.png
+  After: part7-product-page-after-light/dark.png and
+         customer-rich-part7-after-light/dark.png
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+  None needed. No database change. No real product's text was changed.
+
+3. WHAT I COULD NOT FINISH
+  Nothing left undone.
+
+4. WHAT I FOUND ALONG THE WAY
+  - Two live products already use the new editor format: "Beauty of
+    Joseon Red Bean Refreshing Pore Mask 140ml" and "Adaferin Gel 15 gm".
+    They were saved during Batch 36, when every paragraph had a gap under
+    it. With "No Spacing" those gaps are gone, so their sections now sit
+    closer together (compare customer-rich-before/after-*.png). The other
+    111 products are plain text and keep their blank lines exactly. To get
+    a gap back on those two: open each one, press Enter where you want an
+    empty line, and Save. I did not change their text myself.
+  - On the plain-text product, before/after differ only because of the
+    font: this PC drew Bengali in its own Windows font before, and now
+    uses Noto. Line breaks and blank lines are the same. Most Android
+    phones already use Noto for Bengali, so customers should see little
+    change. Prices: the digits are now Plus Jakarta Sans (as the task asked
+    for Latin text); before, they were drawn by Hind Siliguri.
+  - Tests changed (none were weakened):
+    · src/lib/batch36.richtext.test.ts — "opening old text in the editor":
+      it now expects one paragraph per line plus an empty paragraph for
+      the blank line (the new conversion from Parts 2 and 5).
+    · e2e/batch-33.spec.ts saveAndRead — it waited for Save to leave the
+      Edit page. It now waits for "Saved ✓" and checks that it stayed on
+      the page (Part 3).
+    · e2e/batch-32.spec.ts version check — it only allowed versions like
+      1.37.0. This task sets 1.37.1, so it now allows a fix number. It
+      still checks that Settings shows exactly the package version.
+
+5. DESIGN DECISIONS
+  - Justify is stored as data-align="justify" (a named value, not a
+    style), the same way colours are stored by name.
+  - Only Justify lights up in the toolbar when it is on. Left does not
+    stay lit, so the editor does not carry a permanent orange button.
+  - "View on site" is a grey outline button; Save stays the one orange
+    button. On a phone both sit in the bottom bar.
+  - The rich text on the product page now uses the old text's grey colour
+    and 13.5px size, so old and new texts look the same.
+  - Highlight side padding is drawn as a shadow, so it looks the same as
+    before but takes up no space.
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+  - (small) Self-host the two web fonts instead of loading them from
+    Google. This saves one connection on a slow 3G phone and keeps working
+    if Google is slow or blocked.
+  - (small) Show an "unsaved changes" dot next to the page title, so it is
+    clear whether the latest edits have been saved.
+  - (medium) Product text revision history (the last few saved versions
+    with a Restore button). After the Part 1 scare, this is the real
+    safety net for long descriptions.
+
+WHAT TO CHECK ON YOUR PHONE
+  1. Admin → Products → tap a product: Description, How to Use and Key
+     Ingredients show their text right away. Save says "Loading text…"
+     for a moment on a slow connection.
+  2. Tap inside one line and tap the warning (triangle) button: only that
+     line goes into the box. Tap "Remove box": the box goes, the text stays.
+  3. Type a line, press Enter, type another: no gap between them. Press
+     Enter twice: one empty line. Save → "Saved ✓", you stay on the page.
+     Tap "View on site" and check the product page looks the same.
+  4. Look at a price (৳) and a Bengali description: the new font.
+  5. Orders → print one invoice with a Bengali name: the joined letters
+     look right.
+  6. The two products in section 4: add blank lines if you want gaps back.
+
+BUILD / TEST RESULTS
+  Full npm run verify (Parts 1–6): build OK, vitest 375/375, e2e 263
+  passed, 2 failed:
+    - batch-32 version check: it expected 1.N.0 (fixed, see section 4).
+    - batch-25 "no emoji in the admin": the page never loaded, because the
+      preview server I had started earlier was stopped by a time limit
+      during the run. It passed on re-run.
+  After Part 7 and the test fix: npm run build OK; vitest 375/375; e2e
+  fix-rich-text-editor + batch-25 + batch-32 re-run: 28/28 passed.
+  The final full verify was not repeated after Part 7 (CSS only), to keep
+  your usage low.
