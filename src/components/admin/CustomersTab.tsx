@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { phoneSearchCore } from '../../lib/phone';
 import { useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,10 +21,10 @@ const SHOW_FILTERS: readonly ShowFilter[] = ['all', 'due', 'hidden'];
 type SortKey = 'recent' | 'orders' | 'spent' | 'due' | 'joined' | 'name';
 const SORT_KEYS: readonly SortKey[] = ['recent', 'orders', 'spent', 'due', 'joined', 'name'];
 
-function shortDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short', year: 'numeric' });
+function dayMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short' });
 }
+
 
 /**
  * Admin → Customers (Batch 25 Part 4). A read-only list of shopper accounts
@@ -97,7 +98,8 @@ export function CustomersTab() {
           (r) =>
             r.full_name.toLowerCase().includes(term) ||
             r.email.toLowerCase().includes(term) ||
-            r.phone.replace(/\s/g, '').includes(term.replace(/\s/g, ''))
+            r.phone.replace(/\s/g, '').includes(term.replace(/\s/g, '')) ||
+            (phoneSearchCore(term).length >= 3 && phoneSearchCore(r.phone).includes(phoneSearchCore(term)))
         )
       : tagged;
     const sorted = [...list];
@@ -147,7 +149,7 @@ export function CustomersTab() {
       />
 
       <div className="adm-filter-row">
-        <AdminSearch value={search} onChange={setSearch} placeholder="Search name, email or phone" label="Search customers" />
+        <AdminSearch value={search} onChange={setSearch} placeholder="Search name or phone" label="Search customers" />
         <select className="adm-select" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort customers">
           <option value="recent">Last order</option>
           <option value="orders">Most orders</option>
@@ -198,59 +200,44 @@ export function CustomersTab() {
       ) : visible.length === 0 ? (
         <EmptyState icon="search" title={tagFilter ? 'No customer has that tag' : 'No customer matches that search'} />
       ) : (
-        <div className={`adm-list adm-clist${showMoney ? ' adm-clist--money' : ''}${showDue ? ' adm-clist--due' : ''}`} role="list" aria-label="Customers">
-          <div className="adm-thead" aria-hidden="true">
-            <span>NAME</span>
-            <span>EMAIL</span>
-            <span>PHONE</span>
-            <span>ORDERS</span>
-            {showMoney && <span>TOTAL SPENT</span>}
-            {showDue && <span>DUE</span>}
-            <span>LAST ORDER</span>
-            <span>JOINED</span>
-          </div>
+        <div className="adm-list adm-clist2" role="list" aria-label="Customers">
           {visible.map((c) => (
-            <div key={c.key} role="listitem" className="adm-lrow adm-crow" data-testid="customer-row" onClick={() => openCustomer(c.key)}>
-              <div className="adm-lrow__main">
-                <button
-                  type="button"
-                  className="adm-lrow__open"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openCustomer(c.key);
-                  }}
-                >
-                  <span className="adm-lrow__name">{c.full_name || c.email || c.phone}</span>
-                  {c.hidden && (
-                    <span className="adm-tag adm-crow__hidden" data-testid="customer-hidden-tag">
-                      Hidden
-                    </span>
-                  )}
-                </button>
-                <CustomerTagChips tags={notesFor(c)} />
-                <p className="adm-lrow__meta adm-mobile-meta">
-                  <span>{c.phone || c.email}</span>
-                  <span>
-                    {c.order_count} order{c.order_count === 1 ? '' : 's'}
+            // Batch 35 Part 4: name and total spent; "1 order, last 8 Oct";
+            // a small due pill only when owed. The phone lives on the
+            // customer page (search still finds it).
+            <div key={c.key} role="listitem" className="adm-lrow adm-crow2" data-testid="customer-row" onClick={() => openCustomer(c.key)}>
+              <button
+                type="button"
+                className="adm-lrow__open adm-crow2__open"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openCustomer(c.key);
+                }}
+              >
+                <span className="adm-orow2__line">
+                  <span className="adm-orow2__name">
+                    {c.full_name || c.email || c.phone}
+                    {c.hidden && (
+                      <span className="adm-tag adm-crow__hidden" data-testid="customer-hidden-tag">
+                        Hidden
+                      </span>
+                    )}
                   </span>
-                  {c.last_order_at && <span>last {shortDate(c.last_order_at)}</span>}
-                  {c.total_due ? <span className="adm-crow__due">{formatTakaBd(c.total_due)} due</span> : null}
-                </p>
-              </div>
-              <span className="adm-crow__spent adm-price adm-mobile-meta">
-                {c.total_spent !== null ? formatTakaBd(c.total_spent) : ''}
-              </span>
-              <span className="adm-cell adm-cell--muted">{c.email}</span>
-              <span className="adm-cell">{c.phone || '—'}</span>
-              <span className="adm-cell">{c.order_count}</span>
-              {showMoney && <span className="adm-cell adm-price">{c.total_spent !== null ? formatTakaBd(c.total_spent) : '—'}</span>}
-              {showDue && (
-                <span className="adm-cell adm-price" data-testid="customer-due">
-                  {c.total_due ? formatTakaBd(c.total_due) : '—'}
+                  {showMoney && c.total_spent !== null && <span className="adm-orow2__total adm-price">{formatTakaBd(c.total_spent)}</span>}
                 </span>
-              )}
-              <span className="adm-cell adm-cell--muted">{shortDate(c.last_order_at)}</span>
-              <span className="adm-cell adm-cell--muted">{shortDate(c.joined_at)}</span>
+                <span className="adm-orow2__line">
+                  <span className="adm-orow2__sub">
+                    {c.order_count} order{c.order_count === 1 ? '' : 's'}
+                    {c.last_order_at ? `, last ${dayMonth(c.last_order_at)}` : ''}
+                  </span>
+                </span>
+                {showDue && c.total_due ? (
+                  <span className="adm-orow2__money" data-testid="customer-due">
+                    {formatTakaBd(c.total_due)} due
+                  </span>
+                ) : null}
+              </button>
+              <CustomerTagChips tags={notesFor(c)} />
             </div>
           ))}
         </div>
