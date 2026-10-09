@@ -37,6 +37,8 @@ import { VariantSelector } from '../components/viewer/VariantSelector';
 import { VideoReview } from '../components/viewer/VideoReview';
 import { extractYouTubeId } from '../lib/youtube';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
+import { RichTextView } from '../components/shared/RichTextView';
+import { richTextToPlain } from '../lib/richTextPlain';
 import type { Product, ProductVariant, VariantOption } from '../types';
 
 /** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
@@ -84,7 +86,8 @@ function setProductJsonLd(product: Product, price: number, inStock: boolean): vo
     '@type': 'Product',
     name: product.name,
     image: coverImage(product) ?? undefined,
-    description: product.description ?? product.note ?? undefined,
+    // Batch 36 Part 2: search engines get the plain-text version.
+    description: (product.description ? richTextToPlain(product.description) : '') || product.note || undefined,
     brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
     offers: {
       '@type': 'Offer',
@@ -600,17 +603,17 @@ function DetailContent({
           <Accordion>
             {about !== '' && (
               <AccordionItem title="About this product" defaultOpen>
-                <p className="accordion__text">{about}</p>
+                <RichTextView value={about} testId="pdp-about" />
               </AccordionItem>
             )}
             {howToUse !== '' && (
               <AccordionItem title="How to use" defaultOpen={about === ''}>
-                <p className="accordion__text">{howToUse}</p>
+                <RichTextView value={howToUse} testId="pdp-how-to-use" />
               </AccordionItem>
             )}
             {keyIngredients !== '' && (
               <AccordionItem title="Key ingredients">
-                <p className="accordion__text">{keyIngredients}</p>
+                <RichTextView value={keyIngredients} testId="pdp-key-ingredients" />
               </AccordionItem>
             )}
             {youtubeUrl !== '' && (
