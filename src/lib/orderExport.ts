@@ -43,7 +43,7 @@ export async function buildOrderPdf(order: OrderSnapshot) {
   };
 
   writeLine(`Order ${order.orderNumber}`, true, 18);
-  writeLine(new Date(order.placedAt).toLocaleString('en-GB'), false, 10);
+  writeLine(new Date(order.placedAt).toLocaleString('en-GB', { timeZone: 'Asia/Dhaka' }), false, 10);
   y += lineHeight * 0.5;
 
   writeLine(`Name: ${order.address.fullName}`);

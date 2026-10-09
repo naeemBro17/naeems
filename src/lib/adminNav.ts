@@ -189,7 +189,9 @@ export function greeting(now: Date = new Date()): string {
   const hour = dhakaHour(now);
   if (hour >= 5 && hour < 12) return 'Good morning';
   if (hour >= 12 && hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour >= 17) return 'Good evening';
+  // Batch 35 Part 5: 00:00–04:59 is neither evening nor morning.
+  return 'Hello';
 }
 
 /** First name for the greeting: the first word of the full name, else the

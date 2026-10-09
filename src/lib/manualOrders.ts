@@ -192,8 +192,10 @@ function emptySourceCounts(): Record<OrderSource, number> {
  *  Cancelled orders are excluded, matching the spec ("cancelled orders
  *  excluded"). */
 export function computeMonthlySummary(orders: Order[], now: Date = new Date()): MonthlySummary {
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  // Batch 35 Part 5: "this month" is the month in Bangladesh (UTC+6).
+  const dhaka = (d: Date) => new Date(d.getTime() + 6 * 60 * 60 * 1000);
+  const year = dhaka(now).getUTCFullYear();
+  const month = dhaka(now).getUTCMonth();
   const bySource = emptySourceCounts();
 
   let orderCount = 0;
@@ -203,8 +205,8 @@ export function computeMonthlySummary(orders: Order[], now: Date = new Date()): 
 
   for (const order of orders) {
     if (order.status === 'cancelled') continue;
-    const placedAt = new Date(order.created_at);
-    if (placedAt.getFullYear() !== year || placedAt.getMonth() !== month) continue;
+    const placedAt = dhaka(new Date(order.created_at));
+    if (placedAt.getUTCFullYear() !== year || placedAt.getUTCMonth() !== month) continue;
 
     orderCount += 1;
     totalSales += order.total;
