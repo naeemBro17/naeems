@@ -28,7 +28,7 @@ const STATUS_META: Record<ProfileStatus, { label: string; className: string }> =
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function WholesalerList({ accounts, onReload, readOnly = false }: WholesalerListProps) {

@@ -1,4 +1,5 @@
 import { appBuild, appVersionNumber } from '../../lib/appVersion';
+import { MoneyInput } from '../shared/MoneyInput';
 import {
   useEffect,
   useRef,
@@ -379,6 +380,58 @@ function ShopWhatsAppPanel() {
   );
 }
 
+/** Batch 35 Part 6: "Show rider's phone to customers" — default Off. It
+ *  only ever matters while an order is Out for delivery and Steadfast names
+ *  the rider. app_settings can only be changed by the Super Admin (checked
+ *  in the database) and every change is written to the Activity Log. */
+function DeliveryTrackingPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+  const isOn = settings.show_rider_phone === 'true';
+
+  const handleToggle = async () => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert([{ key: 'show_rider_phone', value: isOn ? 'false' : 'true' }], { onConflict: 'key' });
+    setIsSaving(false);
+    if (error) {
+      console.error('Rider phone setting save failed:', error);
+      showToast('Could not save. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast(isOn ? "Rider's phone hidden from customers" : "Rider's phone shown to customers");
+  };
+
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Delivery</h3>
+      <div className="form-field form-field--toggle settings-switch-row">
+        <span className="settings-switch-row__text">
+          <span className="toggle-label" id="settings-rider-phone-label">
+            Show rider&apos;s phone to customers
+          </span>
+          <span className="admin-panel__description settings-switch-row__hint">Only while the order is Out for delivery.</span>
+        </span>
+        <button
+          type="button"
+          className={`toggle${isOn ? ' toggle--on' : ''}`}
+          onClick={() => void handleToggle()}
+          role="switch"
+          aria-checked={isOn}
+          aria-labelledby="settings-rider-phone-label"
+          disabled={isSaving}
+          data-testid="rider-phone-switch"
+        >
+          <span className="toggle__thumb" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** bKash advance-payment number + the two delivery zone fees (Batch 18) —
  *  the same app_settings rows place_order() reads server-side
  *  (migration-021), so a change here takes effect for both what the
@@ -451,11 +504,9 @@ function OrderPaymentSettingsPanel() {
             <label className="form-label" htmlFor="settings-fee-inside">
               Inside Dhaka fee (৳)
             </label>
-            <input
+            <MoneyInput
               id="settings-fee-inside"
-              type="number"
               min="0"
-              className="form-input"
               value={feeInsideDhaka}
               onChange={(e) => setFeeInsideDhaka(e.target.value)}
             />
@@ -464,11 +515,9 @@ function OrderPaymentSettingsPanel() {
             <label className="form-label" htmlFor="settings-fee-outside">
               Outside Dhaka fee (৳)
             </label>
-            <input
+            <MoneyInput
               id="settings-fee-outside"
-              type="number"
               min="0"
-              className="form-input"
               value={feeOutsideDhaka}
               onChange={(e) => setFeeOutsideDhaka(e.target.value)}
             />
@@ -987,6 +1036,7 @@ export function SettingsTab() {
     { id: 'low-stock', group: 'ORDERS', label: 'Low-stock alert', icon: 'low-stock', render: () => <LowStockPanel /> },
     { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
     { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
+    { id: 'delivery', group: 'DELIVERY', label: "Rider's phone for customers", icon: 'truck', render: () => <DeliveryTrackingPanel /> },
     { id: 'tracking', group: 'TRACKING', label: 'Facebook Pixel and Google Analytics', icon: 'chart', render: () => <AdTrackingSettingsPanel /> },
     { id: 'safety', group: 'SAFETY LOCKS', label: 'Safety Locks', icon: 'lock', render: () => <SafetyLocksPanel /> },
     // Batch 34 Part 1.

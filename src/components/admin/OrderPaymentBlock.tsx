@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MoneyInput } from '../shared/MoneyInput';
 import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useToast } from '../../hooks/useToast';
@@ -303,13 +304,10 @@ export function OrderPaymentBlock({
                 <label className="form-label" htmlFor="pay-amount">
                   Amount (৳)
                 </label>
-                <input
+                <MoneyInput
                   id="pay-amount"
-                  type="number"
                   min="0"
                   step="0.01"
-                  inputMode="decimal"
-                  className="form-input"
                   value={form.amount}
                   onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />

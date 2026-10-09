@@ -221,9 +221,11 @@ test('Part 1: pay later + bKash advance — one step, a real payment row, ৳0 t
   await form.getByRole('radio', { name: 'Customer pays later' }).click();
   await form.getByRole('button', { name: 'Create order' }).click();
   await expect(page.getByText(/Order .* saved/)).toBeVisible({ timeout: 15_000 });
-  // Lands on the new order's detail on the Orders list.
-  await expect(page).toHaveURL(/\/admin\?tab=orders&order=/, { timeout: 15_000 });
-  payLaterOrderId = new URL(page.url()).searchParams.get('order')!;
+  // Lands on the new order's own page (Batch 35: /admin/orders/NM-…).
+  await expect(page).toHaveURL(/\/admin\/orders\/[^/]+$/, { timeout: 15_000 });
+  const newNumber = decodeURIComponent(new URL(page.url()).pathname.split('/admin/orders/')[1]);
+  const found = await select<{ id: string }[]>(admin.accessToken, `orders?select=id&order_number=eq.${encodeURIComponent(newNumber)}`);
+  payLaterOrderId = found.data![0].id;
   createdOrderIds.push(payLaterOrderId);
 
   const row = await orderRow(payLaterOrderId);
@@ -238,18 +240,19 @@ test('Part 1: pay later + bKash advance — one step, a real payment row, ৳0 t
   expect((await historyNotes(payLaterOrderId)).some((n) => n.startsWith('Customer pays later'))).toBe(true);
 
   // The booking confirmation says the courier collects ৳0.
-  const dialog = page.getByRole('dialog').first();
+  const dialog = page.getByTestId('admin-order-page');
   await expect(dialog.getByTestId('payment-collect-mode')).toHaveText(`Customer pays later · courier collects ${taka(0)}`, { timeout: 15_000 });
-  await dialog.getByRole('button', { name: 'Send to Steadfast' }).click();
+  await page.getByRole('button', { name: 'Book with Steadfast' }).click();
   const confirm = page.getByRole('dialog', { name: 'Book with Steadfast?' });
   await expect(confirm).toContainText(`COD amount: ${taka(0)}`);
   await expect(confirm).toContainText(`Courier will collect ${taka(0)} — customer pays later`);
   await confirm.getByRole('button', { name: 'Cancel' }).click();
 
-  // The list tag.
+  // The list's money pill (Batch 35: one small pill, only when owed).
   await page.goto('/admin?tab=orders');
   const listRow = page.getByTestId('order-row').filter({ hasText: String(row.order_number) });
-  await expect(listRow.getByTestId('order-pay-tag-mobile')).toHaveText(`Advance ৳100 · ${takaBd(total - 100)} due later`, { timeout: 15_000 });
+  await expect(listRow.getByTestId('order-money-pill')).toHaveText('Due, pays later', { timeout: 15_000 });
+  expect(total).toBeGreaterThan(100);
 });
 
 test('Part 1: pay-later order delivered by Steadfast records no COD payment and stays due', async ({ page }) => {

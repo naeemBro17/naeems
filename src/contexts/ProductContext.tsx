@@ -96,6 +96,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   delivery_fee_inside_dhaka: '70',
   delivery_fee_outside_dhaka: '130',
   shop_bkash_number: '',
+  show_rider_phone: 'false',
 
   fb_pixel_id: '',
   ga_measurement_id: '',
@@ -144,6 +145,7 @@ const TEXT_SETTING_KEYS = [
   'delivery_fee_inside_dhaka',
   'delivery_fee_outside_dhaka',
   'shop_bkash_number',
+  'show_rider_phone',
   'fb_pixel_id',
   'ga_measurement_id',
   'text_checkout_signin_title',

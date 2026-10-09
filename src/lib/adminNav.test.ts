@@ -79,7 +79,7 @@ describe('titles and greeting', () => {
     expect(greeting(new Date('2026-10-01T02:00:00Z'))).toBe('Good morning'); // 08:00 Dhaka
     expect(greeting(new Date('2026-10-01T08:00:00Z'))).toBe('Good afternoon'); // 14:00
     expect(greeting(new Date('2026-10-01T14:00:00Z'))).toBe('Good evening'); // 20:00
-    expect(greeting(new Date('2026-09-30T20:30:00Z'))).toBe('Good evening'); // 02:30
+    expect(greeting(new Date('2026-09-30T20:30:00Z'))).toBe('Hello'); // 02:30 (Batch 35: night is Hello)
   });
 
   it('uses the first name, else the username', () => {

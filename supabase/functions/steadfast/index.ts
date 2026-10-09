@@ -45,7 +45,15 @@ import {
   meansDelivered,
   type SteadfastStatusResponse,
 } from '../_shared/steadfast.ts';
-import { customerSafeText, parseTrackingResponse, type TrackingEvent } from '../_shared/steadfastSteps.ts';
+import { parseTrackingResponse, type TrackingEvent } from '../_shared/steadfastSteps.ts';
+import {
+  customerUpdateText,
+  latestRider,
+  trackOrder,
+  trackingEventRows,
+  type RiderInfo,
+  type SavedOrderStatus,
+} from '../_shared/orderTracking.ts';
 import { parsePoliceStations, type PoliceStation } from '../_shared/policeStations.ts';
 import { codAmountFor } from '../_shared/cod.ts';
 import { parseFraudCheck, type FraudCheckResult } from '../_shared/fraudCheck.ts';
@@ -282,6 +290,42 @@ interface TrackingOrderRow {
 }
 
 /**
+ * Batch 35 Part 1: keeps every tracking update once in
+ * order_tracking_events (migration-037). Best effort: before migration-037
+ * (or on any error) nothing is stored and the answer is unchanged.
+ */
+async function storeTrackingEvents(
+  serviceClient: ReturnType<typeof createClient>,
+  orderId: string,
+  events: TrackingEvent[]
+): Promise<void> {
+  const rows = trackingEventRows(orderId, events, 'steadfast_on_demand');
+  if (rows.length === 0) return;
+  const { error } = await serviceClient
+    .from('order_tracking_events')
+    .upsert(rows, { onConflict: 'order_id,event_key', ignoreDuplicates: true });
+  if (error) console.error('order_tracking_events save failed:', error.message);
+}
+
+/** Batch 35 Part 6: the rider's name and phone for the customer — only
+ *  while the parcel is Out for delivery, only when Naeem's setting "Show
+ *  rider's phone to customers" is On, and only when Steadfast's own update
+ *  really names the rider (it has not so far). */
+async function riderForCustomer(
+  serviceClient: ReturnType<typeof createClient>,
+  order: TrackingOrderRow,
+  courierStatus: string | null,
+  events: TrackingEvent[]
+): Promise<RiderInfo | null> {
+  const track = trackOrder({ status: order.status as SavedOrderStatus, booked: true, courierStatus, events });
+  if (track.status !== 'out_for_delivery') return null;
+  const rider = latestRider(events);
+  if (!rider) return null;
+  const { data } = await serviceClient.from('app_settings').select('value').eq('key', 'show_rider_phone').maybeSingle();
+  return (data as { value: string } | null)?.value === 'true' ? rider : null;
+}
+
+/**
  * Batch 30 Part 5: every step the parcel went through (GET
  * /trackings_by_invoice/{invoice}) plus its current status. The caller's own
  * session reads the order, so a customer only ever gets their own order
@@ -361,6 +405,7 @@ async function handleTracking(
       return json({ ok: false, error: extractSteadfastError((trackBody ?? {}) as SteadfastStatusResponse, trackRes.status) });
     }
     events = parseTrackingResponse(trackBody);
+    await storeTrackingEvents(serviceClient, order.id, events);
 
     const status = await checkSteadfastStatus(order.steadfast_consignment_id, apiKey, secretKey);
     if (status.ok && status.courierStatus) {
@@ -388,8 +433,16 @@ async function handleTracking(
     }
   }
 
-  const shown = isStaff ? events : events.map((e) => ({ text: customerSafeText(e.text), at: e.at }));
-  return json({ ok: true, courierStatus, events: shown, fetchedAt });
+  if (isStaff) return json({ ok: true, courierStatus, events, fetchedAt });
+  // Batch 35: the customer gets the friendly words only — Naeem's own
+  // edits on Steadfast (COD, notes, addresses) and any rider name or phone
+  // are left out.
+  const shown = events.flatMap((e) => {
+    const text = customerUpdateText(e.text);
+    return text ? [{ text, at: e.at }] : [];
+  });
+  const rider = await riderForCustomer(serviceClient, order, courierStatus, events);
+  return json({ ok: true, courierStatus, events: shown, fetchedAt, rider });
 }
 
 /** Batch 30 Part 6: every thana Steadfast delivers to (GET

@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { MoneyInput } from '../../shared/MoneyInput';
 import { saveVariantSmallCopy } from '../../../lib/smallImages';
 import { supabase } from '../../../lib/supabase';
 import { useProducts } from '../../../contexts/ProductContext';
@@ -88,26 +89,20 @@ function VariantForm({
           <label className="form-label" htmlFor="vf-retail">
             Retail ৳ <span className="form-required" aria-hidden="true">*</span>
           </label>
-          <input
+          <MoneyInput
             id="vf-retail"
-            type="number"
             min="0"
             step="0.01"
-            inputMode="decimal"
-            className="form-input"
             value={form.retail_price}
             onChange={(e) => onChange({ retail_price: e.target.value })}
           />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="vf-offer">Offer ৳</label>
-          <input
+          <MoneyInput
             id="vf-offer"
-            type="number"
             min="0"
             step="0.01"
-            inputMode="decimal"
-            className="form-input"
             placeholder="None"
             value={form.offer_price}
             onChange={(e) => onChange({ offer_price: e.target.value })}
@@ -118,13 +113,10 @@ function VariantForm({
       <div className="form-row">
         <div className="form-field">
           <label className="form-label" htmlFor="vf-wholesale">Wholesale ৳</label>
-          <input
+          <MoneyInput
             id="vf-wholesale"
-            type="number"
             min="0"
             step="0.01"
-            inputMode="decimal"
-            className="form-input"
             value={form.wholesale_price}
             onChange={(e) => onChange({ wholesale_price: e.target.value })}
           />

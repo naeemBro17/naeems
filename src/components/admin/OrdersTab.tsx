@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminPath } from '../../lib/adminPages';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
-import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '../../lib/orderStatus';
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
-import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus, steadfastNeedsAttention } from '../../lib/orders';
-import { fetchOrderItemCounts } from '../../lib/adminData';
-import { fetchAllPayments, paymentStateText, summarizePayments, type OrderPayment } from '../../lib/payments';
+import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus } from '../../lib/orders';
+import { fetchOrderNumberById } from '../../lib/adminData';
+import { fetchAllPayments, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
-import { orderPaymentTag } from '../../lib/paymentPlan';
+import { normalizeCollectMode } from '../../lib/paymentPlan';
+import { TRACK_STATUS, fetchLatestSteps, savedTrack, type TrackStatus } from '../../lib/orderTracking';
+import { phoneSearchCore } from '../../lib/phone';
 import { useToast } from '../../hooks/useToast';
 import { DeleteOrdersDialog } from './DeleteOrdersDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafetyLock } from '../../contexts/SafetyLockContext';
-import { OrderDetailSheet } from './OrderDetailSheet';
 import { AdminPageHeader, AdminSearch, BulkBar, ChipRow, EmptyState, type MenuItem } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import type { Order, OrderStatus } from '../../types';
@@ -44,30 +44,31 @@ const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
   { value: 'other', label: ORDER_SOURCE_LABELS.other },
 ];
 
-/** Steadfast's own status words ("in_review") in plain English ("In review"). */
-function courierLabel(status: string | null): string | null {
-  if (!status) return null;
-  const words = status.replace(/_/g, ' ').trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : null;
+/** Batch 35 Part 4: the common filters as chips; every filter stays in
+ *  the "All statuses" menu beside the search. */
+const CHIP_FILTERS: StatusFilter[] = ['all', 'pending', 'shipped', 'due'];
+
+function orderDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short' });
 }
 
-function orderTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    timeZone: 'Asia/Dhaka',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/** The small neutral money pill — only when something is still owed. */
+function owedText(order: Order, due: number): string | null {
+  if (order.status === 'cancelled' || due <= 0) return null;
+  if (order.status === 'delivered') return `${formatTakaBd(due)} due`;
+  if (normalizeCollectMode(order.collect_mode) === 'pay_later') return 'Due, pays later';
+  return `COD ${formatTakaBd(due)}`;
 }
+
+const SCROLL_KEY = 'admin-orders-scroll';
 
 interface OrdersTabProps {
   orders: Order[];
   /** Same list AdminPage already loaded for the "to confirm" badge —
    *  re-fetched by the parent after any change. */
   onReload: () => Promise<void> | void;
-  /** Order id from the ?order= URL param (e.g. a Telegram notification
-   *  link) — opens that order's sheet immediately instead of the list. */
+  /** Order id from the ?order= URL param (a Telegram notification link,
+   *  or after New / Edit order) — Batch 35: replaced by the order's page. */
   initialOrderId?: string | null;
 }
 
@@ -101,12 +102,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     SOURCE_OPTIONS.map((opt) => opt.value)
   );
   const [search, setSearch] = useUrlParam<string>('oq', '');
-  const [openOrderId, setOpenOrderId] = useState<string | null>(initialOrderId ?? null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const navigate = useNavigate();
-  const [itemCounts, setItemCounts] = useState<Map<string, number>>(() => new Map());
+  const [latestSteps, setLatestSteps] = useState<Map<string, TrackStatus>>(() => new Map());
   // Batch 30: every order's payments (null until migration-033 is run —
   // the Payment column then shows the old method · status text).
   const [payments, setPayments] = useState<Map<string, OrderPayment[]> | null>(null);
@@ -134,13 +134,52 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
 
   useEffect(() => {
     let alive = true;
-    void fetchOrderItemCounts().then((counts) => {
-      if (alive) setItemCounts(counts);
+    void fetchLatestSteps().then((steps) => {
+      if (alive) setLatestSteps(steps);
     });
     return () => {
       alive = false;
     };
   }, [orders]);
+
+  // An old ?order=<id> link opens that order's own page instead.
+  useEffect(() => {
+    if (!initialOrderId) return;
+    let alive = true;
+    const known = orders.find((o) => o.id === initialOrderId)?.order_number;
+    void (known ? Promise.resolve(known) : fetchOrderNumberById(initialOrderId)).then((orderNumber) => {
+      if (!alive) return;
+      if (orderNumber) navigate(adminPath.order(orderNumber), { replace: true });
+      else navigate('/admin?tab=orders', { replace: true });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [initialOrderId, orders, navigate]);
+
+  // Back from an order keeps the list where it was (filters live in the
+  // URL; the scroll is put back once the rows are there).
+  const restoredScroll = useRef(false);
+  useLayoutEffect(() => {
+    if (restoredScroll.current || orders.length === 0) return;
+    restoredScroll.current = true;
+    try {
+      const saved = window.sessionStorage.getItem(SCROLL_KEY);
+      window.sessionStorage.removeItem(SCROLL_KEY);
+      if (saved !== null) window.scrollTo(0, Number(saved));
+    } catch {
+      // Storage blocked: the list simply starts at the top.
+    }
+  }, [orders.length]);
+
+  const openOrder = (order: Order) => {
+    try {
+      window.sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    } catch {
+      // Storage blocked: Back starts at the top of the list.
+    }
+    navigate(adminPath.order(order.order_number), { state: { fromList: true } });
+  };
 
   const monthlySummary = useMemo(() => computeMonthlySummary(orders), [orders]);
 
@@ -153,6 +192,8 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
+    // "+880 17…", "017…" and "17…" all find the same phone number.
+    const digits = phoneSearchCore(term);
     return orders.filter((o) => {
       if (statusFilter === 'due') {
         if (!dueOf.has(o.id)) return false;
@@ -162,6 +203,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       return (
         o.order_number.toLowerCase().includes(term) ||
         o.customer_phone.toLowerCase().includes(term) ||
+        (digits.length >= 3 && phoneSearchCore(o.customer_phone).includes(digits)) ||
         o.customer_name.toLowerCase().includes(term)
       );
     });
@@ -264,9 +306,21 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         <AdminSearch
           value={search}
           onChange={setSearch}
-          placeholder="Search orders"
-          label="Search orders by order number or phone"
+          placeholder="Search order, name or phone"
+          label="Search orders by order number, name or phone"
         />
+        <select
+          className="adm-select adm-orders__status"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          aria-label="Filter by status"
+        >
+          {STATUS_OPTIONS.filter((opt) => opt.value !== 'due' || payments !== null).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.value === 'all' ? 'All statuses' : opt.label} ({statusCounts[opt.value] ?? 0})
+            </option>
+          ))}
+        </select>
         <select
           className="adm-select adm-orders__source"
           value={sourceFilter}
@@ -282,14 +336,16 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
       </div>
 
       <ChipRow
-        label="Filter by status"
+        label="Common filters"
         active={statusFilter}
         onSelect={(id) => setStatusFilter(id as StatusFilter)}
-        chips={STATUS_OPTIONS.filter((opt) => opt.value !== 'due' || payments !== null).map((opt) => ({
-          id: opt.value,
-          label: opt.label,
-          count: statusCounts[opt.value] ?? 0,
-        }))}
+        chips={STATUS_OPTIONS.filter((opt) => CHIP_FILTERS.includes(opt.value) && (opt.value !== 'due' || payments !== null)).map(
+          (opt) => ({
+            id: opt.value,
+            label: opt.label,
+            count: statusCounts[opt.value] ?? 0,
+          })
+        )}
       />
 
       {filtered.length === 0 ? (
@@ -299,104 +355,63 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           hint={orders.length === 0 ? 'New orders from the shop appear here.' : 'Try another status or search.'}
         />
       ) : (
-        <div className={`adm-list adm-olist${anyDeletable ? ' adm-olist--checks' : ''}`} role="list" aria-label="Orders">
-          <div className="adm-thead" aria-hidden="true">
-            <span />
-            <span>ORDER</span>
-            <span>CUSTOMER</span>
-            <span>ITEMS</span>
-            <span>TOTAL</span>
-            <span>STATUS</span>
-            <span>PAYMENT</span>
-            <span>STEADFAST</span>
-          </div>
+        <div className={`adm-list adm-olist2${anyDeletable ? ' adm-olist2--checks' : ''}`} role="list" aria-label="Orders">
           {filtered.map((order) => {
-            const items = itemCounts.get(order.id);
-            // Batch 32: "COD", "Paid", "Advance ৳1,000 · rest COD", "Due · pays later"…
+            // Batch 35 Part 4: one status pill, and a money pill only when
+            // something is still owed.
             const summary = payments ? summarizePayments(order.total, payments.get(order.id) ?? []) : null;
-            const payTag = summary ? orderPaymentTag(order, summary, formatTakaBd) : null;
-            const courier = courierLabel(order.steadfast_status);
-            const attention = steadfastNeedsAttention(order.steadfast_status);
+            const due = summary ? summary.due : order.payment_status === 'paid' ? 0 : order.total;
+            const owed = owedText(order, due);
+            const info = TRACK_STATUS[savedTrack(order, { storedStep: latestSteps.get(order.id) ?? null }).status];
             return (
               <div
                 key={order.id}
                 role="listitem"
-                className="adm-lrow adm-orow"
+                className="adm-lrow adm-orow2"
                 data-testid="order-row"
-                onClick={() => setOpenOrderId(order.id)}
+                onClick={() => openOrder(order)}
               >
-                <span className="adm-orow__check" onClick={(e) => e.stopPropagation()}>
-                  {canDeleteNow(order) && (
-                    <input
-                      type="checkbox"
-                      className="adm-check admin-order-row__select"
-                      checked={selectedForDelete.has(order.id)}
-                      onChange={() => toggleSelected(order.id)}
-                      aria-label={`Select order ${order.order_number} for deletion`}
-                    />
-                  )}
-                </span>
-                <div className="adm-lrow__main">
-                  <button
-                    type="button"
-                    className="adm-lrow__open adm-orow__number"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenOrderId(order.id);
-                    }}
-                  >
-                    {order.order_number}
-                  </button>
-                  <p className="adm-lrow__sub">
-                    {orderTime(order.created_at)} · {ORDER_SOURCE_LABELS[order.source]}
-                  </p>
-                  <p className="adm-lrow__meta adm-mobile-meta">
-                    <span className="adm-orow__customer">{order.customer_name}</span>
-                    {items !== undefined && (
-                      <span>
-                        {items} item{items === 1 ? '' : 's'}
-                      </span>
+                {anyDeletable && (
+                  <span className="adm-orow2__check" onClick={(e) => e.stopPropagation()}>
+                    {canDeleteNow(order) && (
+                      <input
+                        type="checkbox"
+                        className="adm-check admin-order-row__select"
+                        checked={selectedForDelete.has(order.id)}
+                        onChange={() => toggleSelected(order.id)}
+                        aria-label={`Select order ${order.order_number} for deletion`}
+                      />
                     )}
-                    <span className="adm-price">{formatTakaBd(order.total)}</span>
-                  </p>
-                  {payTag && (
-                    <p className="adm-lrow__meta adm-mobile-meta">
-                      <span className="adm-pay-tag" data-testid="order-pay-tag-mobile">{payTag}</span>
-                    </p>
-                  )}
-                </div>
-                <span className="adm-orow__pills adm-mobile-meta">
-                  <span className={`adm-status adm-status--${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
-                  {courier && (
-                    <span className={`adm-orow__courier${attention ? ' adm-orow__courier--alert' : ''}`}>
-                      <AdminIcon name="truck" className="adm-icon--sm" />
-                      {courier}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="adm-orow2__open"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openOrder(order);
+                  }}
+                  aria-label={`Open order ${order.order_number}`}
+                >
+                  <span className="adm-orow2__line">
+                    <span className="adm-orow2__name">{order.customer_name}</span>
+                    <span className="adm-orow2__total adm-price">{formatTakaBd(order.total)}</span>
+                  </span>
+                  <span className="adm-orow2__line">
+                    <span className="adm-orow2__sub">
+                      <span className="adm-orow__number">{order.order_number}</span>, {orderDay(order.created_at)},{' '}
+                      {ORDER_SOURCE_LABELS[order.source]}
+                    </span>
+                    <span className={`track-pill track-pill--${info.tone}`} data-testid="order-status-pill">
+                      {info.admin}
+                    </span>
+                  </span>
+                  {owed && (
+                    <span className="adm-orow2__money" data-testid="order-money-pill">
+                      {owed}
                     </span>
                   )}
-                </span>
-                <span className="adm-cell">
-                  <span className="adm-orow__name">{order.customer_name}</span>
-                  <span className="adm-lrow__sub">{order.customer_phone}</span>
-                </span>
-                <span className="adm-cell">{items ?? '—'}</span>
-                <span className="adm-cell adm-price">{formatTakaBd(order.total)}</span>
-                <span className="adm-cell">
-                  <span className={`adm-status adm-status--${order.status}`}>{ORDER_STATUS_LABELS[order.status]}</span>
-                </span>
-                <span className="adm-cell adm-cell--muted" data-testid="order-payment-cell">
-                  {summary
-                    ? paymentStateText(summary, formatTakaBd)
-                    : `${PAYMENT_METHOD_LABELS[order.payment_method]} · ${PAYMENT_STATUS_LABELS[order.payment_status]}`}
-                  {payTag && (
-                    <>
-                      <br />
-                      <span className="adm-pay-tag" data-testid="order-pay-tag">{payTag}</span>
-                    </>
-                  )}
-                </span>
-                <span className={`adm-cell${attention ? ' adm-orow__courier--alert' : ' adm-cell--muted'}`}>
-                  {attention ? 'Needs attention' : (courier ?? '—')}
-                </span>
+                </button>
               </div>
             );
           })}
@@ -451,8 +466,6 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           </button>
         </BulkBar>
       )}
-
-      <OrderDetailSheet orderId={openOrderId} onClose={() => setOpenOrderId(null)} onChanged={onReload} />
 
       <DeleteOrdersDialog
         isOpen={isConfirmingDelete}

@@ -44,6 +44,8 @@ export interface MockFraudResult {
 export interface MockTracking {
   courierStatus: string | null;
   events: { text: string; at: string | null }[];
+  /** Batch 35: what the function sends a customer when allowed. */
+  rider?: { name: string; phone: string } | null;
 }
 
 /**
@@ -72,7 +74,13 @@ export async function mockSteadfast(
     calls.push(body);
     if (body.action === 'tracking') {
       return options.tracking
-        ? answer(route, { ok: true, courierStatus: options.tracking.courierStatus, events: options.tracking.events, fetchedAt: new Date().toISOString() })
+        ? answer(route, {
+            ok: true,
+            courierStatus: options.tracking.courierStatus,
+            events: options.tracking.events,
+            fetchedAt: new Date().toISOString(),
+            rider: options.tracking.rider ?? null,
+          })
         : answer(route, { ok: false, error: 'Invalid request.' });
     }
     if (body.action === 'police_stations') {

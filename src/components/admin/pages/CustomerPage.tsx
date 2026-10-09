@@ -27,7 +27,7 @@ function isOrderStatus(value: string): value is OrderStatus {
 interface CustomerPageProps {
   customerKey: string;
   onBack: () => void;
-  onOpenOrder: (orderId: string) => void;
+  onOpenOrder: (orderNumber: string) => void;
   /** After a delete: back to the list (nothing left to show). */
   onDeleted: () => void;
 }
@@ -201,7 +201,7 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
                     type="button"
                     className="adm-row"
                     disabled={!canOpenOrders}
-                    onClick={() => onOpenOrder(o.id)}
+                    onClick={() => onOpenOrder(o.order_number)}
                   >
                     <span className="adm-row__label">
                       <b>{o.order_number}</b>

@@ -1,4 +1,5 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../../lib/protectImage';
 import { useNavigate } from 'react-router-dom';
 import type { Product } from '../../types';
 import { formatTaka } from '../../lib/format';
@@ -116,7 +117,8 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
         >
           {showImage ? (
             <img
-              className="product-card__image"
+              {...protectedImageProps}
+              className={`product-card__image ${PROTECTED_IMAGE_CLASS}`}
               src={cover ?? ''}
               alt={product.name}
               loading="lazy"

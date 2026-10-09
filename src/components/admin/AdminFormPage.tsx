@@ -20,6 +20,14 @@ interface AdminFormPageProps {
   onBack: () => void;
   primary?: PagePrimaryAction;
   testId: string;
+  /** Batch 35: small buttons always shown at the top right (the order
+   *  page's pen). */
+  headerExtra?: ReactNode;
+  /** Batch 35: false for a page that is not one form (the order page saves
+   *  each field on its own), so leaving never asks "Discard changes?". */
+  guard?: boolean;
+  /** Extra class on the page (layout). */
+  className?: string;
   children: ReactNode;
 }
 
@@ -44,10 +52,26 @@ function PrimaryButton({ action, className }: { action: PagePrimaryAction; class
  * docks at the bottom of the screen. Anything typed inside marks the page
  * as changed, so leaving asks "Discard changes?" (LeaveGuard).
  */
-export function AdminFormPage({ title, subtitle, backLabel, onBack, primary, testId, children }: AdminFormPageProps) {
+export function AdminFormPage({
+  title,
+  subtitle,
+  backLabel,
+  onBack,
+  primary,
+  testId,
+  headerExtra,
+  guard = true,
+  className,
+  children,
+}: AdminFormPageProps) {
   const { markDirty } = useLeaveGuard();
+  const onEdit = guard ? markDirty : undefined;
   return (
-    <section className={`adm-fpage${primary ? ' adm-fpage--docked' : ''}`} aria-label={title} data-testid={testId}>
+    <section
+      className={`adm-fpage${primary ? ' adm-fpage--docked' : ''}${className ? ` ${className}` : ''}`}
+      aria-label={title}
+      data-testid={testId}
+    >
       <header className="adm-fpage__bar">
         <button type="button" className="adm-fpage__back" onClick={onBack} aria-label={backLabel}>
           <AdminIcon name="chevron-left" />
@@ -61,6 +85,7 @@ export function AdminFormPage({ title, subtitle, backLabel, onBack, primary, tes
           <span className="adm-only-desktop">
             <AdminThemeButton variant="ghost" />
           </span>
+          {headerExtra}
           {primary && (
             <span className="adm-only-desktop">
               <PrimaryButton action={primary} className="adm-fpage__primary" />
@@ -68,7 +93,7 @@ export function AdminFormPage({ title, subtitle, backLabel, onBack, primary, tes
           )}
         </div>
       </header>
-      <div className="adm-fpage__body" onInputCapture={markDirty} onChangeCapture={markDirty}>
+      <div className="adm-fpage__body" onInputCapture={onEdit} onChangeCapture={onEdit}>
         {children}
       </div>
       {primary && (

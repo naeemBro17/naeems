@@ -90,7 +90,8 @@ async function historyNotes(orderId: string): Promise<string[]> {
 async function openAdminOrder(page: Page, orderId: string): Promise<void> {
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${orderId}`);
-  await expect(page.getByRole('dialog').first()).toBeVisible({ timeout: 15_000 });
+  // Batch 35: the old ?order= link opens the order as its own page.
+  await expect(page.getByTestId('admin-order-page').getByTestId('order-step-label')).toBeVisible({ timeout: 15_000 });
 }
 
 async function deleteStaffAndRole(): Promise<void> {
@@ -200,23 +201,24 @@ test('Part 5: the customer sees the real steps — Booked, In Transit, Out for D
   };
 
   await show('in_review', [{ text: 'Consignment created by Sender(API).', at: '2026-10-01T07:00:00Z' }]);
-  await expect(page.getByTestId('delivery-status')).toHaveText('Booked', { timeout: 15_000 });
-  await expect(page.locator('.order-steps__step--current')).toHaveAttribute('data-step', 'booked');
+  // Batch 35: one set of names — booked on Steadfast is "In transit".
+  await expect(page.getByTestId('delivery-status')).toHaveText('In transit', { timeout: 15_000 });
+  await expect(page.locator('.order-steps__step--current')).toHaveAttribute('data-step', 'in_transit');
   await expect(page.locator('.order-steps__step--done')).toHaveCount(2);
 
   await show('pending', [
     { text: 'Consignment created by Sender(API).', at: '2026-10-01T07:00:00Z' },
     { text: 'Parcel received at Dhanmondi hub.', at: '2026-10-01T11:00:00Z' },
   ]);
-  await expect(page.getByTestId('delivery-status')).toHaveText('In Transit', { timeout: 15_000 });
-  await expect(page.getByTestId('order-step-latest')).toContainText('Parcel received at Dhanmondi hub.');
+  await expect(page.getByTestId('delivery-status')).toHaveText('In transit', { timeout: 15_000 });
+  await expect(page.getByTestId('order-step-latest')).toContainText('Arrived at Dhanmondi delivery hub');
 
   await show('pending', [
     { text: 'Parcel received at Dhanmondi hub.', at: '2026-10-01T11:00:00Z' },
     { text: 'Assigned to rider Md. Karim (01711111111)', at: '2026-10-02T09:00:00Z' },
   ]);
-  await expect(page.getByTestId('delivery-status')).toHaveText('Out for Delivery', { timeout: 15_000 });
-  await expect(page.getByTestId('order-step-latest')).toContainText('Assigned to a rider — your parcel is out for delivery.');
+  await expect(page.getByTestId('delivery-status')).toHaveText('Out for delivery', { timeout: 15_000 });
+  await expect(page.getByTestId('order-step-latest')).toContainText('Out for delivery with a rider');
   await expect(page.locator('body')).not.toContainText('01711111111');
   await expect(page.locator('body')).not.toContainText('Karim');
 
@@ -242,8 +244,9 @@ test('Part 5: admin sees the steps and the full Steadfast timeline (rider includ
     },
   });
   await openAdminOrder(page, order.id);
-  const dialog = page.getByRole('dialog').first();
-  await expect(dialog.getByTestId('order-step-label')).toHaveText('Out for Delivery', { timeout: 15_000 });
+  const dialog = page.getByTestId('admin-order-page');
+  await expect(dialog.getByTestId('order-step-label')).toHaveText('Out for delivery', { timeout: 15_000 });
+  await dialog.getByTestId('history-toggle').click();
   await expect(dialog.getByTestId('courier-timeline')).toContainText('Assigned to rider Md. Karim (01711111111)');
   await expect(dialog.getByTestId('courier-timeline')).toContainText('Parcel received at Dhanmondi hub.');
 });
@@ -256,7 +259,7 @@ test('Part 5: without the new function action, the page shows the saved status w
   page.on('pageerror', (e) => errors.push(e.message));
   await useSessionInPage(page, customer);
   await page.goto(`/orders/${order.id}`);
-  await expect(page.getByTestId('delivery-status')).toHaveText('In Transit', { timeout: 15_000 });
+  await expect(page.getByTestId('delivery-status')).toHaveText('In transit', { timeout: 15_000 });
   await expect(page.getByTestId('order-step-latest')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -413,7 +416,9 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
   expect(activity.data?.length).toBe(1);
 
   // History shows who did it; the banner lists what Steadfast still has old.
-  const dialog = page.getByRole('dialog').first();
+  // (Batch 35: the order is a page; History is folded until tapped.)
+  const dialog = page.getByTestId('admin-order-page');
+  await dialog.getByTestId('history-toggle').click();
   await expect(dialog.getByText(/Delivery fee ৳\d+ → ৳0/)).toBeVisible();
   const banner = dialog.getByTestId('steadfast-banner');
   await expect(banner).toContainText('Steadfast still has the old details: Name, Phone, Alternative phone, Address, Note');
@@ -482,7 +487,7 @@ test('Part 2: staff without "Edit orders" are refused by the database (and see n
 
   await useSessionInPage(page, staff);
   await page.goto(`/admin?tab=orders&order=${order.id}`);
-  await expect(page.getByRole('dialog').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('admin-order-page').getByTestId('order-step-label')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('edit-order')).toHaveCount(0);
 
   // With the switch on: allowed — but prices stay Super Admin only.
@@ -524,7 +529,7 @@ test('Part 3: add a partial payment, the rest, mark fully paid, edit, delete, ov
 
   // The booking confirmation offers COD = what is due, not the total.
   await mockSteadfast(page, {});
-  await page.getByRole('button', { name: 'Send to Steadfast' }).click();
+  await page.getByRole('button', { name: 'Book with Steadfast' }).click();
   const confirm = page.getByRole('dialog', { name: 'Book with Steadfast?' });
   await expect(confirm).toContainText(`COD amount: ${taka(total - 300)}`);
   await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -629,7 +634,7 @@ test('Part 3: an existing bKash advance TrxID shows as the first payment; Due fi
   await rpc(admin.accessToken, 'admin_add_order_payment', { p_order_id: due.id, p_amount: 100, p_method: 'cash' });
   await page.goto('/admin?tab=orders&ostatus=due');
   await expect(page.getByTestId('order-row').filter({ hasText: due.orderNumber })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('order-row').filter({ hasText: due.orderNumber }).getByTestId('order-payment-cell')).toContainText('Partly paid');
+  await expect(page.getByTestId('order-row').filter({ hasText: due.orderNumber }).getByTestId('order-money-pill')).toHaveText(/^COD ৳[\d,]+$/);
   await expect(page.getByTestId('order-row').filter({ hasText: placed.data![0].order_number })).toHaveCount(0);
 
   // Customers: the test customer's due across their orders.
@@ -638,7 +643,7 @@ test('Part 3: an existing bKash advance TrxID shows as the first payment; Due fi
   expect(Number(me?.total_due ?? 0)).toBeGreaterThan(0);
   await page.goto('/admin?tab=customers&csort=due');
   await expect(page.getByTestId('customer-row').first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('customer-due').first()).not.toHaveText('—');
+  await expect(page.getByTestId('customer-due').first()).toHaveText(/^৳[\d,]+ due$/);
 });
 
 /* ---------------------------------------------------------------- Part 4 */

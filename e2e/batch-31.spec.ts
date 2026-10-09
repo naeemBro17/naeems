@@ -46,7 +46,8 @@ async function newWebOrder(): Promise<{ id: string; orderNumber: string }> {
 async function openAdminOrder(page: Page, orderId: string, session: TestSession = admin): Promise<void> {
   await useSessionInPage(page, session);
   await page.goto(`/admin?tab=orders&order=${orderId}`);
-  await expect(page.getByRole('dialog').first()).toBeVisible({ timeout: 15_000 });
+  // Batch 35: the order opens as its own page.
+  await expect(page.getByTestId('admin-order-page').getByTestId('order-step-label')).toBeVisible({ timeout: 15_000 });
 }
 
 async function deleteStaffAndRole(): Promise<void> {
@@ -126,9 +127,9 @@ test('Part 2: courier history card — numbers and colour, cached on the second 
   expect(calls.filter((c) => c.action === 'fraud_check')).toHaveLength(1);
   expect(calls.find((c) => c.action === 'fraud_check')?.phone).toBe('01712345678');
 
-  // Close and open the same order again: no second call.
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Leave and open the same order again: no second call.
+  await page.getByRole('button', { name: 'Back to orders' }).click();
+  await expect(page.getByTestId('admin-order-page')).toHaveCount(0);
   await page.getByTestId('order-row').filter({ hasText: order.orderNumber }).first().click();
   await expect(page.getByTestId('fraud-card')).toBeVisible({ timeout: 15_000 });
   expect(calls.filter((c) => c.action === 'fraud_check')).toHaveLength(1);
@@ -295,26 +296,26 @@ test('Part 3: real staff never see the tests\' own customers; the test logins st
 
 /* ---------------------------------------------------------------- Part 4 */
 
-test('Part 4: no inline "Edit price" or fee "Edit"; the pen beside ✕ opens Edit order', async ({ page }) => {
+test('Part 4: no inline "Edit price" or fee "Edit"; the pen at the top opens Edit order', async ({ page }) => {
   test.setTimeout(90_000);
   const order = await newWebOrder();
   await openAdminOrder(page, order.id);
-  const sheet = page.getByRole('dialog').first();
+  const sheet = page.getByTestId('admin-order-page');
   await expect(sheet.getByRole('button', { name: /^Edit price/ })).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Edit order' })).toHaveCount(1);
-  // Text buttons are gone: the pen is an icon, sitting in the header next to Close.
-  const header = sheet.locator('.sheet-header');
+  // Text buttons are gone: the pen is an icon in the page's top bar,
+  // level with Back (Batch 35: the order is a page, there is no ✕).
+  const header = sheet.locator('.adm-fpage__bar');
   const pen = header.getByRole('button', { name: 'Edit order' });
   await expect(pen).toBeVisible();
   await expect(pen).toHaveText('');
-  const close = header.getByRole('button', { name: 'Close' });
-  const [penBox, closeBox] = [(await pen.boundingBox())!, (await close.boundingBox())!];
-  expect(Math.abs(penBox.width - closeBox.width)).toBeLessThanOrEqual(1);
-  expect(Math.abs(penBox.y - closeBox.y)).toBeLessThanOrEqual(1);
-  expect(penBox.x).toBeLessThan(closeBox.x);
+  const back = header.getByRole('button', { name: 'Back to orders' });
+  const [penBox, backBox] = [(await pen.boundingBox())!, (await back.boundingBox())!];
+  expect(Math.abs(penBox.y + penBox.height / 2 - (backBox.y + backBox.height / 2))).toBeLessThanOrEqual(4);
+  expect(penBox.x).toBeGreaterThan(backBox.x);
   // Call / WhatsApp / Invoice stay.
-  for (const name of ['Call', 'WhatsApp', 'Invoice']) await expect(sheet.getByRole(name === 'Invoice' ? 'button' : 'link', { name })).toBeVisible();
+  for (const name of ['Call', 'WhatsApp', 'Invoice']) await expect(sheet.getByRole(name === 'Invoice' ? 'button' : 'link', { name, exact: true })).toBeVisible();
   await pen.click();
   await expect(page.getByTestId('edit-order-page')).toBeVisible({ timeout: 10_000 });
 });
@@ -352,9 +353,9 @@ test('Part 5: WhatsApp and Call use 880… whatever way the phone was typed', as
   test.setTimeout(90_000);
   const web = await newWebOrder();
   await openAdminOrder(page, web.id);
-  let sheet = page.getByRole('dialog').first();
-  await expect(sheet.getByRole('link', { name: 'WhatsApp' })).toHaveAttribute('href', 'https://wa.me/8801712345678');
-  await expect(sheet.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:+8801712345678');
+  let sheet = page.getByTestId('admin-order-page');
+  await expect(sheet.getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/8801712345678');
+  await expect(sheet.getByRole('link', { name: 'Call', exact: true })).toHaveAttribute('href', 'tel:+8801712345678');
 
   const manual = await rpc<{ order_id: string }[]>(admin.accessToken, 'admin_create_order', {
     p_source: 'phone',
@@ -371,9 +372,9 @@ test('Part 5: WhatsApp and Call use 880… whatever way the phone was typed', as
   expect(manual.ok, manual.error ?? '').toBe(true);
   createdOrderIds.push(manual.data![0].order_id);
   await page.goto(`/admin?tab=orders&order=${manual.data![0].order_id}`);
-  sheet = page.getByRole('dialog').first();
-  await expect(sheet.getByRole('link', { name: 'WhatsApp' })).toHaveAttribute('href', 'https://wa.me/8801799990031', { timeout: 15_000 });
-  await expect(sheet.getByRole('link', { name: 'Call' })).toHaveAttribute('href', 'tel:+8801799990031');
+  sheet = page.getByTestId('admin-order-page');
+  await expect(sheet.getByRole('link', { name: 'WhatsApp', exact: true })).toHaveAttribute('href', 'https://wa.me/8801799990031', { timeout: 15_000 });
+  await expect(sheet.getByRole('link', { name: 'Call', exact: true })).toHaveAttribute('href', 'tel:+8801799990031');
 });
 
 /* ---------------------------------------------------------------- Part 6 */

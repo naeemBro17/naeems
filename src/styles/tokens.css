@@ -31,6 +31,14 @@
   --color-warning-bg:     #FFF4E5;
   --color-danger:         #FF3B30;   /* iOS systemRed */
   --color-danger-bg:      #FFEBEA;
+  /* Batch 35: the seven order status pills (soft tint + coloured text). */
+  --track-amber-bg:  #FFF3DF;  --track-amber-fg:  #9A5800;
+  --track-blue-bg:   #E8F0FF;  --track-blue-fg:   #1D5BC9;
+  --track-purple-bg: #F1EAFF;  --track-purple-fg: #6A3DC0;
+  --track-teal-bg:   #E1F5F4;  --track-teal-fg:   #0A736E;
+  --track-green-bg:  #E6F6EB;  --track-green-fg:  #1D7639;
+  --track-red-bg:    #FDEBEB;  --track-red-fg:    #BF2A2A;
+  --track-grey-bg:   #EFEFF2;  --track-grey-fg:   #5C5C64;
 
   /* Card stock dots — flat hues, identical in both themes. */
   --color-stock-in:       #22C55E;
@@ -162,6 +170,13 @@
   --color-success-bg:     rgba(52, 199, 89, 0.15);
   --color-warning-bg:     rgba(255, 149, 0, 0.15);
   --color-danger-bg:      rgba(255, 59, 48, 0.15);
+  --track-amber-bg:  rgba(255, 170, 60, 0.16);  --track-amber-fg:  #FFC46E;
+  --track-blue-bg:   rgba(90, 150, 255, 0.18);  --track-blue-fg:   #94BBFF;
+  --track-purple-bg: rgba(165, 125, 255, 0.2);  --track-purple-fg: #C8ADFF;
+  --track-teal-bg:   rgba(45, 200, 190, 0.18);  --track-teal-fg:   #74DDD5;
+  --track-green-bg:  rgba(52, 199, 89, 0.18);   --track-green-fg:  #84DE9C;
+  --track-red-bg:    rgba(255, 85, 75, 0.18);   --track-red-fg:    #FF8F87;
+  --track-grey-bg:   rgba(255, 255, 255, 0.1);  --track-grey-fg:   #BDBDC4;
 
   --overlay-dim:          rgba(0, 0, 0, 0.55);
   --chip-scrim:           rgba(28, 28, 30, 0.72);
@@ -233,6 +248,13 @@
     --color-success-bg:     rgba(52, 199, 89, 0.15);
     --color-warning-bg:     rgba(255, 149, 0, 0.15);
     --color-danger-bg:      rgba(255, 59, 48, 0.15);
+  --track-amber-bg:  rgba(255, 170, 60, 0.16);  --track-amber-fg:  #FFC46E;
+  --track-blue-bg:   rgba(90, 150, 255, 0.18);  --track-blue-fg:   #94BBFF;
+  --track-purple-bg: rgba(165, 125, 255, 0.2);  --track-purple-fg: #C8ADFF;
+  --track-teal-bg:   rgba(45, 200, 190, 0.18);  --track-teal-fg:   #74DDD5;
+  --track-green-bg:  rgba(52, 199, 89, 0.18);   --track-green-fg:  #84DE9C;
+  --track-red-bg:    rgba(255, 85, 75, 0.18);   --track-red-fg:    #FF8F87;
+  --track-grey-bg:   rgba(255, 255, 255, 0.1);  --track-grey-fg:   #BDBDC4;
 
     --overlay-dim:          rgba(0, 0, 0, 0.55);
     --chip-scrim:           rgba(28, 28, 30, 0.72);

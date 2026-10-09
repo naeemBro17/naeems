@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../../lib/protectImage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { extractYouTubeId, youtubeBannerUrl } from '../../lib/youtube';
 import { videoPosterUrl } from '../../lib/brandVideo';
@@ -77,7 +78,8 @@ export function BrandBanner({ brand }: { brand: Brand }) {
             {stillSrc !== null && (
               <img
                 key={stillSrc}
-                className="brand-banner__image brand-banner__still"
+                {...protectedImageProps}
+                className={`brand-banner__image brand-banner__still ${PROTECTED_IMAGE_CLASS}`}
                 src={stillSrc}
                 alt=""
                 decoding="async"
@@ -93,7 +95,7 @@ export function BrandBanner({ brand }: { brand: Brand }) {
             )}
           </>
         ) : (
-          image && <img className="brand-banner__image" src={image} alt="" decoding="async" fetchPriority="high" />
+          image && <img {...protectedImageProps} className={`brand-banner__image ${PROTECTED_IMAGE_CLASS}`} src={image} alt="" decoding="async" fetchPriority="high" />
         )}
         {video && (
           <video

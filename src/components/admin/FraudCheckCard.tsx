@@ -41,6 +41,7 @@ export function FraudCheckCard({ phone }: FraudCheckCardProps) {
   const { result } = answer;
   const tone = fraudTone(result);
   const checkedAt = new Date(answer.fetchedAt).toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

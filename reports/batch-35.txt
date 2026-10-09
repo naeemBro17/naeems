@@ -1,0 +1,338 @@
+BATCH 35 — Order tracking redesign, order as a full page, one set of status names, small fixes
+Branch: feature/batch-35-order-tracking (from main after Batch 34) · Version 1.35.0
+Screenshots: reports/batch-35-screens/ (390 px and 1280 px, light and dark)
+
+============================================================
+1. WHAT I DID
+============================================================
+
+PART 1 — One set of status names
+  - One module holds every status name, colour, icon and step:
+    supabase/functions/_shared/orderTracking.ts. The website, both
+    Steadfast functions and the Telegram alert all read it. Nothing in
+    the database was renamed; the old values are mapped (table in
+    section 3).
+  - "Shipped" is gone from every screen; it is now "In transit".
+  - Pill colours (light and dark): Processing amber, Confirmed blue,
+    In transit purple, Out for delivery teal, Delivered green,
+    Cancelled red, Returned grey.
+  - Earlier steps fill in by themselves. Example: a parcel marked
+    Delivered with no "rider" update still shows all five steps done.
+  - Tracking updates are saved in a new table, order_tracking_events,
+    by both the 3-hourly refresh and the on-demand refresh. The same
+    update twice is saved once (one key per time + text).
+  - Steadfast's messages are turned into short friendly English:
+      "Consignment created by Sender(API)."      → Handed to Steadfast
+      "…status has been updated as Pending"      → Picked up by Steadfast
+      "Consignment sent to MIRPUR WAREHOUSE…"    → On the way to the Mirpur sorting centre
+      "…received at SAVAR WAREHOUSE. By Sorter…" → Reached the Savar sorting centre
+      "Consignment sent to NIKUNJA…"             → On the way to Nikunja delivery hub
+      "…received at PALLABI."                    → Arrived at Pallabi delivery hub
+      "Assigned to rider."                       → Out for delivery with a rider
+      "…marked as delivered by rider."           → Delivered
+    Unknown messages are shown cleaned (no phone numbers, IDs or codes).
+  - IMPORTANT, found while doing this: Steadfast's update list also
+    contains YOUR OWN edits, e.g. "Changes: COD '4079' to '0'. By User
+    Naeem(1380201)", "Address change requested … by the merchant". Until
+    now the customer's order page showed these to the customer. They are
+    now hidden from customers: in the Steadfast function AND again on the
+    page, so they stay hidden even before the function is redeployed.
+  - Payments show up as updates for the customer: "Payment received —
+    ৳1,000 with bKash. Thank you!" (never the TrxID). This needs the
+    database addition (section 5).
+  Proof: 25 unit tests in src/lib/batch35.test.ts, built on the real
+  Steadfast wording. They cover every status, the auto-filled steps,
+  no duplicates, the hidden internal edits, cleaned text, payments as
+  updates and translating twice giving the same words.
+
+PART 2 — Customer order page (My orders → an order)
+  Built top to bottom as described: back + "Order NM-xxxx"; the tracking
+  card (expected date range or "Today" / delivered date, payment pill,
+  five round-icon steps, current step 48 px orange with a halo — green
+  when Delivered —, friendly sentence, latest courier update with an
+  orange dot); "See all updates" / "Hide updates" inline; "Track on
+  Steadfast" when booked; "Your items (N)" with 54 px photos and totals
+  ("Paid with bKash − ৳X" per method, then "To pay on delivery" / "Total
+  paid" / "Balance due"); "Delivering to"; the WhatsApp help card
+  ("Hi, I have a question about order NM-xxxx", shop number from
+  settings). Cancel order stays for Processing orders. My orders uses the
+  same names and pill colours.
+  Expected date rule (one place, DELIVERY_DAYS): inside Dhaka 1–2 days,
+  outside 2–4 days, from the In transit date (else Confirmed, else the
+  order date), in Dhaka days.
+  Proof: e2e Part 2 tests (Processing, Confirmed, In transit, Out for
+  delivery, Delivered, Cancelled; the rider row; See all updates; 360 px;
+  dark mode; WhatsApp link); screenshots customer-*.
+
+PART 3 — Admin: an order is a full page
+  - /admin/orders/NM-xxxx. Works after refresh, needs admin login (and
+    the two-step code when set). The old pop-up file was removed.
+  - Old links (Telegram "?tab=orders&order=…", after New / Edit order)
+    open the new page.
+  - Back returns to the list with the same filters, search and scroll.
+  - Layout: status card (pill, "Placed 8 Oct, 1:32 PM · Web", big total,
+    "Paid ৳X (bKash)" green, "Courier collects ৳X" amber or "Due · pays
+    later"); Customer (Call · WhatsApp · Profile, Copy address); the
+    courier-history check; the Steadfast warning banner (when needed);
+    Items with payments (method + last 4 of the TrxID) and the bold
+    "Courier collects"; Payments (add / edit / delete / mark fully paid,
+    unchanged); Steadfast (consignment, latest update, rider if known,
+    Track on Steadfast, Check delivery status); tracking number and
+    private note; "History and updates (N)", folded until tapped;
+    "Other actions" (Invoice, Mark In transit for another courier, Mark
+    Delivered, Cancel order, Delete order with the Safety Lock).
+  - One orange main action, docked at the bottom on a phone: Processing →
+    "Confirm order"; Confirmed → "Book with Steadfast" (same booking
+    confirmation as before); later statuses → none.
+  - PC: two columns, comfortable width.
+  Proof: e2e Part 3 tests; screenshots admin-order-*.
+
+PART 4 — Lighter lists
+  - Orders: name + total; "NM-1979, 8 Oct, Facebook" + one status pill;
+    a small grey money pill only when something is owed ("COD ৳X", "Due,
+    pays later", "৳X due"). The courier line was removed from rows.
+    Search "Search order, name or phone" — +880 / 0 / no prefix all
+    work. Chips: All · To confirm · With courier · Due. Every other
+    filter is still in the "All statuses" menu, and the source menu stays.
+  - Customers: name + total spent; "1 order, last 8 Oct"; "৳X due" pill
+    only when owed. The phone is no longer on the row but search finds
+    it ("Search name or phone"). All / Due / Hidden chips and sorting
+    kept.
+  Proof: e2e Part 4 test; screenshots admin-orders-list-*,
+  admin-customers-list-*.
+
+PART 5 — Greeting and Bangladesh time
+  - The greeting already used Dhaka time. The real bug: midnight to
+    4:59 AM fell through to "Good evening". Now 05:00–11:59 Good morning,
+    12:00–16:59 Good afternoon, 17:00–23:59 Good evening, 00:00–04:59
+    "Hello, Naeem".
+  - Dates fixed to Dhaka time: My orders list date, the customer order
+    page (all times), the admin order page (placed time, history), the
+    courier check card time, the two-step login dates, the wholesaler
+    dates, the invoice PDF date, and the Orders "This month" box (it
+    counted by the phone's own month).
+  Proof: unit + e2e tests at 04:00 / 09:00 / 14:00 / 20:00 Dhaka.
+
+PART 6 — "Show rider's phone to customers"
+  Settings → DELIVERY → "Rider's phone for customers": a switch with
+  "Only while the order is Out for delivery.", default Off. Stored as the
+  app_settings row show_rider_phone. Only the Super Admin can change
+  app_settings (database rule is_admin()), and every change goes to the
+  Activity Log through the existing app_settings trigger.
+  Proof: e2e Part 6 (Off by default; the test customer is refused by
+  the database); screenshot admin-settings-rider-*.
+
+PART 7 — ৳ over the first digit
+  Cause: the admin style ".adm .form-input { padding: 8px 12px }"
+  overrode the extra left space the ৳ needed. One shared field
+  (src/components/shared/MoneyInput.tsx) now keeps that space with a
+  stronger rule. Used for: product Retail / Wholesale / Offer, option
+  prices, Edit order item price + delivery fee + discount, New order line
+  price + discount + delivery fee, Paid now, Add / Edit payment amount,
+  Settings delivery fees, promo amount (shows % for a percent promo).
+  Proof: e2e Part 7 measures every field (the number starts at least
+  2 px right of the sign); screenshots money-*.
+
+PART 8 — Product photo cut by the sheet
+  The photo area is now the square plus 24 px. The sheet covers only
+  that strip, so the whole square photo is always visible. The sheet
+  still overlaps by exactly 24 px; the morph and the glass buttons are
+  unchanged.
+  Extra fix (your follow-up): with the sheet fully below the photo, its
+  rounded corners showed the photo area's own background, which was
+  hard-coded WHITE (#fff). In dark mode that meant white corners around
+  the black sheet. In light mode the sheet's rounded shape disappeared.
+  Now:
+    - Behind the photo, the whole photo area (square + 24 px) is filled
+      with a blurred (24 px), slightly zoomed (×1.15) copy of the photo
+      on screen. That colour fills the extra 24 px and shows behind both
+      rounded corners, in light and dark mode.
+    - It is the same file the slide already loaded, so nothing extra is
+      downloaded. Only photos you have already swiped to get a copy.
+    - Swiping to another photo crossfades the blurred layer (300 ms,
+      instant with reduced motion).
+    - The real photo stays a full square on top (object-fit: contain,
+      nothing cut), from the top of the photo area.
+    - The photo area's own base colour is now the page colour (dark in
+      dark mode), never white. I found no other white surface on the
+      dark product page.
+    - Morph, crystal buttons, photo counter and swipe are unchanged.
+      The morph lands on the same box as before (square + 24 px), and
+      the Batch 27/28 morph and sheet tests still pass.
+  Reading of the measurement: "photo bottom = sheet top + 24 px" is taken
+  as the PHOTO AREA's bottom = sheet top + 24 px. The square photo itself
+  ends exactly at the sheet top, so it is never cut.
+  Proof: e2e Part 8 at 360 / 390 / 430 / 1280 px, light and dark. The
+  square photo ends at the sheet top, the overlap is exactly 24 px, the
+  pixel at BOTH rounded corners is not the page colour (and not white in
+  dark mode), and the dark page background is dark. A further test checks
+  the blurred layer follows a swipe to photo 2. Screenshots
+  product-photo-* retaken.
+
+PART 9 — Saving product photos
+  Shop photos (cards, product gallery, brand banner, search thumbnails):
+  no long-press "Save image", no right-click menu, no selection, no
+  dragging. Swipes, taps and pinch-zoom still work. Admin photos are
+  untouched (drag-to-reorder still works). Note: a screenshot can never
+  be blocked. This only stops casual saving.
+  Proof: e2e Part 9.
+
+============================================================
+2. WHAT STEADFAST REALLY GIVES US
+============================================================
+  I read the existing function code and, read-only, the real tracking
+  answers saved in our own database (no new Steadfast call):
+  - /status_by_cid → one status word (in_review, pending, hold,
+    delivered, delivered_approval_pending, partial_delivered, cancelled,
+    exceptional, unknown …).
+  - /trackings_by_invoice → a list of short English texts with a time
+    (examples in Part 1).
+  - "Assign to rider" DOES come through: the text "Assigned to rider."
+    (or "Assigned to rider by self-scan at the hub."). That fills Out
+    for delivery for real.
+  - The rider's NAME and PHONE do NOT come through. No text I saw
+    contained them, and the API has no rider field. So the rider row is
+    built and switchable, but it will stay hidden until Steadfast sends
+    a name and number. Nothing is faked.
+  How each step fills:
+    Order placed — the order exists (time = order time)
+    Confirmed — you confirmed it (time from History)
+    In transit — booked on Steadfast or marked by hand (time from History)
+    Out for delivery — newest courier update is "Assigned to rider"
+      (a later "received at hub" moves it back to In transit)
+    Delivered — Steadfast says delivered / delivered_approval_pending /
+      partial, or you marked it delivered
+  Cancelled = cancelled on the site. Returned = Steadfast cancelled*
+  (the parcel comes back). Hold / exceptional stay In transit with a
+  calm note.
+
+============================================================
+3. STATUS MAPPING (old → new name)
+============================================================
+  Saved order status      Steadfast state                  Admin name        Customer sees
+  pending                 —                                Processing        Order placed
+  confirmed               not booked                       Confirmed         Confirmed
+  shipped                 in_review / pending / none       In transit        In transit
+  shipped                 + "Assigned to rider" update     Out for delivery  Out for delivery
+  shipped                 hold / exceptional / unknown     In transit        In transit (+ note)
+  shipped / delivered     delivered, delivered_approval_*, Delivered         Delivered
+                          partial_delivered*
+  shipped                 cancelled* (return)              Returned          Returned
+  delivered               —                                Delivered         Delivered
+  cancelled               —                                Cancelled         Cancelled
+
+============================================================
+4. DECISIONS, PHONE CHECKS, LATER
+============================================================
+  Decisions
+  - The friendly words are stored too, so the customer never needs
+    Steadfast's own (possibly internal) text.
+  - A late parcel's expected window never shows a past date. It moves
+    forward to start today.
+  - Admin "Other actions" are visible buttons, not hidden in a ⋯ menu,
+    so nothing needs an extra tap to find.
+  - History on the admin order page shows newest first.
+  - Delivered orders that still owe money read "Balance due", never
+    "Pay on delivery".
+  - TrxID on the admin page is shortened to its last 4 characters in the
+    items card. The full TrxID is still in the Payments block.
+  - The order list no longer shows the item count column.
+  Only your phone / PC can confirm
+  - Long-press on a product photo on iPhone and Android: no "Save image".
+  - How the order page feels with the bottom "Confirm order" button.
+  Needs a later batch
+  - A rider row will only appear if Steadfast starts sending rider
+    details. If they offer a webhook with rider info, that is the path.
+  - Old delivered orders get their stored updates the first time their
+    page is opened (the 3-hourly job only refreshes parcels on the way).
+
+============================================================
+5. THE DATABASE ADDITION (plain words)
+============================================================
+  File: supabase/migration-037-batch35-order-tracking.sql. Additive only.
+  - New table order_tracking_events (the saved courier updates; staff
+    can read everything; customers only get the friendly text of their
+    own order through a safe function).
+  - Two read functions: customer_order_updates (one order's friendly
+    updates + payments, only the owner or staff) and
+    order_latest_tracking_steps (for the lists).
+  - One settings row: show_rider_phone = false.
+  Until it runs, the site keeps working: the pages use the live
+  Steadfast answer, and payments simply don't appear as updates yet.
+  The two Steadfast functions and the Telegram function also need
+  redeploying (to hide your internal Steadfast edits on the server and
+  to save updates).
+
+  SQL Naeem must run in Supabase: the whole file
+  supabase/migration-037-batch35-order-tracking.sql (paste-ready, safe
+  to run twice).
+
+============================================================
+6. BUILD / TEST RESULTS
+============================================================
+  npm run verify (final, after the Part 8 follow-up):
+    build OK · vitest 257/257 · e2e 251 passed, 96 skipped · ALL GREEN
+  (Skipped = screenshot-only specs and tests waiting for a database
+  step; nothing I changed is skipped.)
+  New: src/lib/batch35.test.ts (25 unit tests), e2e/batch-35.spec.ts
+  (Parts 2–9), e2e/batch-35-screens.spec.ts (screenshots only).
+
+  Older tests I changed, and why (none weakened):
+  - batch-24, batch-30 (customer steps): "Booked"/"In Transit"/"Out for
+    Delivery" → the new names; the 6th step "Booked" is gone, so
+    "reached" counts drop by one; "Last update" → the current step's
+    time; latest-update text → the friendly words.
+  - batch-25, batch-30, batch-31, batch-32, batch-30-screens,
+    batch-32-screens: the order pop-up → the order page (same checks on
+    the page; History is opened first because it is folded now); "Send
+    to Steadfast" → "Book with Steadfast"; Escape/✕ → Back.
+  - batch-30, batch-32: the old list payment column / tag → the new
+    money pill ("COD ৳X", "Due, pays later"); customer due "—" → the
+    "৳X due" pill.
+  - batch-32: after New order the page is /admin/orders/NM-…, so the
+    test reads the new order's id from its number.
+  - batch-26: the customer row shows the name, not the email (email
+    search still checked).
+  - batch-31: the pen sits in the page's top bar beside Back (no ✕).
+  - batch-34: the focus-style check uses the order page's Back button
+    instead of the pop-up's ✕.
+  - batch-25 "Telegram": this one was already failing on main after
+    Batch 34. Since Batch 34 the live function correctly refuses any
+    caller without the secret (401), so it can no longer answer
+    "skipped" to an outside test. It now checks that an outside caller
+    is refused and nothing is sent. The test-order rule itself is still
+    covered by src/lib/testOrders.test.ts.
+
+  The database addition was dry-run on the live database inside a
+  transaction that was rolled back: table and functions were created,
+  then nothing kept (checked afterwards).
+
+  Git note: the removal of the old order pop-up file was staged early and
+  landed in the "Part 1" commit instead of "Part 3". The branch as a whole
+  is correct and was fully tested; only that single commit on its own
+  would not build. I did not rewrite the pushed branch over this.
+
+============================================================
+7. YOUR ANSWER: "Apply the database addition now?" → YES
+============================================================
+  Done on the live project:
+  - migration-037 applied. Checked: table order_tracking_events exists
+    with its staff-only read rule; customer_order_updates and
+    order_latest_tracking_steps exist; show_rider_phone = false (Off).
+  - Redeployed: steadfast, steadfast-refresh-all, notify-telegram-order.
+  Read-only smoke check (nothing booked, cancelled or changed on
+  Steadfast):
+  - Two real parcels (NM-1979, NM-1972) were read through the new
+    function: 7 updates each, status delivered_approval_pending.
+  - Saved: 14 rows, 14 unique (no duplicates). Customer wording read
+    back: Handed to Steadfast | Picked up by Steadfast | On the way to
+    the Mirpur sorting centre | On the way to Pallabi delivery hub |
+    Arrived at Pallabi delivery hub | Out for delivery with a rider |
+    Delivered. No internal text (COD edits, "By User", IDs) in any of it.
+  - A visitor who isn't signed in asking for an order's updates is
+    refused (401). An outside call to the Telegram function is refused
+    (401).
+  Clean-up: four leftover TEST orders (NM-2259, NM-2260, NM-2261 —
+  "E2E Test Customer" — and NM-2309 "E2E B32 Pay Later") were left by a
+  test run I stopped part-way. They were deleted with the test admin
+  account. No real order, customer or product was touched.

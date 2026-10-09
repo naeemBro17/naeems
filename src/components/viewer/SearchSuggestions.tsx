@@ -1,4 +1,5 @@
 import type { Product } from '../../types';
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../../lib/protectImage';
 import type { SearchState } from '../../hooks/useSearch';
 import { cardImage } from '../../lib/productImages';
 
@@ -24,7 +25,7 @@ function SuggestionRow({
         onClick={onSelect}
       >
         {image ? (
-          <img className="search-suggestion__thumb" src={image} alt="" loading="lazy" />
+          <img {...protectedImageProps} className={`search-suggestion__thumb ${PROTECTED_IMAGE_CLASS}`} src={image} alt="" loading="lazy" />
         ) : (
           <span className="search-suggestion__thumb search-suggestion__thumb--empty" aria-hidden="true" />
         )}

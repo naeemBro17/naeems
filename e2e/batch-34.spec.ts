@@ -559,13 +559,14 @@ test('Part 5: admin — every field and button: tap shows no box, keyboard shows
     ...ADMIN_CONTROLS,
     { name: 'Admin: bottom bar', open: goto('/admin?tab=orders', (p) => p.locator('.adm-tabbar__tab--on').first()) },
     {
-      // A real order's sheet is only opened and closed — nothing is changed.
-      name: 'Admin: order sheet Close button',
+      // A real order's page is only opened and left — nothing is changed.
+      // (Batch 35: the order is a page; its Back button replaces ✕.)
+      name: 'Admin: order page Back button',
       leaves: true,
       open: async (p) => {
         await p.goto('/admin?tab=orders');
         await p.locator('.adm-orow__number').first().click();
-        return p.getByRole('dialog').first().getByRole('button', { name: /^close$/i }).first();
+        return p.getByRole('button', { name: 'Back to orders' }).first();
       },
     },
   ];

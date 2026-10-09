@@ -21,7 +21,7 @@ type Mode =
   | { kind: 'remove'; device: TwoStepDevice };
 
 function formatAdded(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** One 6-digit field: numbers only, paste works, Enter or 6 digits sends. */
