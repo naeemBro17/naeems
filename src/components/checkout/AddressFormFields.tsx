@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { BD_DIVISIONS, BD_DISTRICTS } from '../../data/bangladeshGeo';
 import { PickerSheet, type PickerOption } from '../shared/PickerSheet';
 import { ThanaPickerSheet } from './ThanaPickerSheet';
@@ -46,6 +46,9 @@ interface AddressFormFieldsProps {
    *  Optional — the account page's edit sheet has no zone to update. */
   onLocationChange?: (district: string, thana: string) => void;
   idPrefix: string;
+  /** Batch 36: shown under the thana picker (New order's Smart paste
+   *  chips). */
+  thanaExtra?: ReactNode;
 }
 
 /** The Full name / Phone / Division / District / Thana / Address fields,
@@ -58,6 +61,7 @@ export function AddressFormFields({
   onChange,
   onLocationChange,
   idPrefix,
+  thanaExtra,
 }: AddressFormFieldsProps) {
   const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 
@@ -192,6 +196,7 @@ export function AddressFormFields({
               {errors.thana}
             </p>
           )}
+          {thanaExtra}
         </div>
       </div>
 

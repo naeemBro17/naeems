@@ -28,6 +28,9 @@ import {
 import { findCustomers, linkOrderCustomer, type CustomerSearchResult } from '../../lib/customers';
 import { looksLikePhone } from '../../lib/phone';
 import { FraudCheckCard } from './FraudCheckCard';
+import { SmartPasteCard, placeFor, type SmartPastePatch } from './SmartPasteCard';
+import type { ParsedOrderMessage, ThanaOption } from '../../lib/smartPaste';
+import { bdPhoneKey } from '../../lib/phone';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import { PaymentSection } from './PaymentSection';
@@ -136,6 +139,19 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   const [payLaterReady, setPayLaterReady] = useState(true);
   const [markDelivered, setMarkDelivered] = useState(false);
   const [adminNote, setAdminNote] = useState('');
+
+  // Batch 36 Part 3: Smart paste — what it filled, which fields were
+  // guesses (orange outline), the form before it (Undo fill) and a saved
+  // customer with the same phone.
+  const [smart, setSmart] = useState<ParsedOrderMessage | null>(null);
+  const [guesses, setGuesses] = useState<{ name: boolean; address: boolean; thana: boolean }>({ name: false, address: false, thana: false });
+  const [beforeFill, setBeforeFill] = useState<{
+    address: DeliveryAddress;
+    altPhone: string;
+    pickedCustomer: CustomerSearchResult | 'new' | null;
+    customerQuery: string;
+  } | null>(null);
+  const [savedMatch, setSavedMatch] = useState<CustomerSearchResult | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [pendingWarnings, setPendingWarnings] = useState<StockWarning[] | null>(null);
@@ -345,6 +361,77 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     if (customer.district) handleLocationChange(customer.district, customer.thana);
   };
 
+  const handleSmartStart = () => {
+    setBeforeFill({ address, altPhone, pickedCustomer, customerQuery });
+    setSmart(null);
+    setSavedMatch(null);
+    setGuesses({ name: false, address: false, thana: false });
+    setPickedCustomer('new');
+  };
+
+  const handleSmartPatch = (patch: SmartPastePatch) => {
+    const { altPhone: alt, ...fields } = patch;
+    setAddress((current) => ({ ...current, ...fields }));
+    if (alt !== undefined) setAltPhone(alt);
+  };
+
+  const handleSmartFilled = (parsed: ParsedOrderMessage) => {
+    setSmart(parsed);
+    setGuesses({ name: parsed.name !== null, address: parsed.address !== '', thana: parsed.thana !== null });
+    if (parsed.thana) {
+      const place = placeFor(parsed.thana);
+      handleLocationChange(place.district, place.thana);
+    } else if (parsed.district) {
+      handleLocationChange(parsed.district, '');
+    }
+    // A saved customer with this phone? Offer their details (never applied
+    // by itself).
+    const key = parsed.phone ? bdPhoneKey(parsed.phone) : null;
+    if (key) {
+      void findCustomers(parsed.phone ?? '').then((rows) => {
+        const match = (rows ?? []).find((c) => bdPhoneKey(c.phone) === key) ?? null;
+        setSavedMatch(match);
+      });
+    }
+  };
+
+  const handleSmartUndo = () => {
+    if (beforeFill) {
+      setAddress(beforeFill.address);
+      setAltPhone(beforeFill.altPhone);
+      setPickedCustomer(beforeFill.pickedCustomer);
+      setCustomerQuery(beforeFill.customerQuery);
+    }
+    setBeforeFill(null);
+    setSmart(null);
+    setSavedMatch(null);
+    setGuesses({ name: false, address: false, thana: false });
+  };
+
+  const handleUseSaved = () => {
+    if (!savedMatch) return;
+    handlePickCustomer(savedMatch);
+    setGuesses({ name: false, address: false, thana: false });
+    setSavedMatch(null);
+  };
+
+  const handlePickThanaChip = (option: ThanaOption) => {
+    const place = placeFor(option);
+    setAddress((current) => ({ ...current, ...place }));
+    handleLocationChange(place.district, place.thana);
+    setGuesses((g) => ({ ...g, thana: false }));
+  };
+
+  /** Typing in a guessed field (or picking a thana) confirms it. */
+  const handleAddressEdit = (patch: Partial<DeliveryAddress>) => {
+    setAddress((c) => ({ ...c, ...patch }));
+    setGuesses((g) => ({
+      name: g.name && patch.fullName === undefined,
+      address: g.address && patch.fullAddress === undefined,
+      thana: g.thana && patch.thana === undefined && patch.district === undefined && patch.division === undefined,
+    }));
+  };
+
   const handleNewCustomer = () => {
     const typed = customerQuery.trim();
     setPickedCustomer('new');
@@ -475,6 +562,27 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           void handleSave(false);
         }}
       >
+        <SmartPasteCard
+          onStart={handleSmartStart}
+          onPatch={handleSmartPatch}
+          onFilled={handleSmartFilled}
+          onUndo={handleSmartUndo}
+          savedCustomer={
+            savedMatch
+              ? { name: savedMatch.fullName || savedMatch.phone, place: [savedMatch.thana, savedMatch.district].filter(Boolean).join(', ') }
+              : null
+          }
+          onUseSaved={handleUseSaved}
+        />
+        {smart && (smart.codHint || smart.productHint) && (
+          <p className="smart-paste__hints" data-testid="smart-paste-hints">
+            In the message (not added):{' '}
+            {[smart.codHint ? `COD ${smart.codHint}` : null, smart.productHint ? `Product: ${smart.productHint}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
+
         <div className="form-field customer-pick">
           <label className="form-label" htmlFor="manual-order-customer">
             Customer
@@ -565,15 +673,48 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           </div>
         </div>
 
-        <CustomerDetailsFields
-          idPrefix="manual-order"
-          address={address}
-          errors={emptyErrors}
-          onAddressChange={(patch) => setAddress((c) => ({ ...c, ...patch }))}
-          onLocationChange={handleLocationChange}
-          altPhone={altPhone}
-          onAltPhoneChange={setAltPhone}
-        />
+        <div
+          className="smart-guess"
+          data-guess-name={guesses.name ? '' : undefined}
+          data-guess-address={guesses.address ? '' : undefined}
+          data-guess-thana={guesses.thana ? '' : undefined}
+        >
+          <CustomerDetailsFields
+            idPrefix="manual-order"
+            address={address}
+            errors={emptyErrors}
+            onAddressChange={handleAddressEdit}
+            onLocationChange={handleLocationChange}
+            altPhone={altPhone}
+            onAltPhoneChange={setAltPhone}
+            thanaExtra={
+              smart && smart.thanaChoices.length > 0 ? (
+                <div className="smart-thana" data-testid="smart-thana">
+                  {smart.thanaMatchedText && (
+                    <p className="smart-thana__matched">matched “{smart.thanaMatchedText}”</p>
+                  )}
+                  <div className="smart-thana__chips" role="group" aria-label="Thana suggestions">
+                    {smart.thanaChoices.map((option) => {
+                      const on = address.thana === option.name && address.district === placeFor(option).district;
+                      return (
+                        <button
+                          key={`${option.name}|${option.district}`}
+                          type="button"
+                          className={`smart-thana__chip${on ? ' is-on' : ''}`}
+                          aria-pressed={on}
+                          onClick={() => handlePickThanaChip(option)}
+                        >
+                          {option.name}
+                          {smart.thanaChoices.some((o) => o !== option && o.name === option.name) ? `, ${option.district}` : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null
+            }
+          />
+        </div>
 
         <FraudCheckCard phone={address.phone} />
 

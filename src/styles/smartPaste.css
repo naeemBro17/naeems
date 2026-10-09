@@ -1,0 +1,126 @@
+/* Batch 36 Part 3: Smart paste (mockup screens 3–4). Calm card; the one
+   orange element is the Fill button (then the guessed-field outlines). */
+
+.smart-paste {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid var(--adm-line, #e3e3e8);
+  border-radius: 16px;
+  background: var(--adm-card, #fff);
+}
+
+.smart-paste__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.smart-paste__titles {
+  min-width: 0;
+}
+
+.smart-paste__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--adm-text, #16161a);
+}
+
+.smart-paste__subtitle {
+  margin: 1px 0 0;
+  font-size: 12.5px;
+  color: var(--adm-muted, #6e6e76);
+}
+
+.smart-paste__reading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.smart-paste__text {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.smart-paste__fill {
+  width: 100%;
+  min-height: 44px;
+}
+
+.smart-paste__after {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--adm-text, #16161a);
+}
+
+.smart-paste__saved {
+  margin: 0;
+}
+
+.smart-paste__link {
+  padding: 0;
+  min-height: 28px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--adm-text, #16161a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Guessed fields: a soft orange outline until edited or confirmed. */
+.smart-guess[data-guess-name] #manual-order-name,
+.smart-guess[data-guess-address] #manual-order-address,
+.smart-guess[data-guess-thana] #manual-order-thana {
+  border-color: var(--adm-or, #f2592a);
+  box-shadow: 0 0 0 1px var(--adm-or-line, rgba(242, 89, 42, 0.5));
+}
+
+.smart-thana {
+  margin-top: 8px;
+}
+
+.smart-thana__matched {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--adm-or, #f2592a);
+}
+
+.smart-thana__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.smart-thana__chip {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--adm-line, #e3e3e8);
+  border-radius: 999px;
+  background: var(--adm-card, #fff);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--adm-text, #16161a);
+  cursor: pointer;
+}
+
+.smart-thana__chip.is-on {
+  border-color: var(--adm-or, #f2592a);
+  color: var(--adm-or, #f2592a);
+}
+
+.smart-paste__hints {
+  margin: 0;
+  font-size: 12px;
+  color: var(--adm-muted, #6e6e76);
+}
