@@ -431,7 +431,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         <ToolButton label="Heading" icon="heading" active={state.heading} onClick={() => chain().toggleHeading({ level: 3 }).run()} testId="rt-heading" />
         <ToolButton label="Bullet list" icon="bullet" active={state.bullet} onClick={() => chain().toggleBulletList().run()} testId="rt-bullet" />
         <ToolButton label="Numbered list" icon="numbered" active={state.numbered} onClick={() => chain().toggleOrderedList().run()} testId="rt-numbered" />
-        <ToolButton label="Align left" icon="alignLeft" active={!state.justify} onClick={() => chain().setRtAlign('left').run()} testId="rt-align-left" />
+        <ToolButton label="Align left" icon="alignLeft" onClick={() => chain().setRtAlign('left').run()} testId="rt-align-left" />
         <ToolButton label="Justify" icon="justify" active={state.justify} onClick={() => chain().setRtAlign('justify').run()} testId="rt-justify" />
         <span className="rt-toolbar__sep" aria-hidden="true" />
         <ToolButton label="Text colour and highlight" icon="colour" active={state.colour || panel === 'colour'} onClick={() => setPanel(panel === 'colour' ? null : 'colour')} testId="rt-colour" />
