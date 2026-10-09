@@ -211,3 +211,22 @@ export function cleanLongText(value: string): string | null {
   const clean = sanitizeRichHtml(trimmed).replace(/(<p>(<br>)?<\/p>)+$/, '');
   return isEmptyRichHtml(clean) ? null : clean;
 }
+
+/** The three long texts, in the order they appear on the form. */
+export const LONG_TEXTS = [
+  { key: 'description', id: 'pf-description', label: 'Description' },
+  { key: 'how_to_use', id: 'pf-how-to-use', label: 'How to Use' },
+  { key: 'key_ingredients', id: 'pf-key-ingredients', label: 'Key Ingredients' },
+] as const;
+
+/** Long texts that had words when the product was opened and would now be
+ *  saved empty. */
+export function emptiedLongTexts(
+  saved: Partial<Record<(typeof LONG_TEXTS)[number]['key'], string | null>> | null,
+  form: Record<(typeof LONG_TEXTS)[number]['key'], string>
+): string[] {
+  if (!saved) return [];
+  return LONG_TEXTS.filter(({ key }) => cleanLongText(saved[key] ?? '') !== null && cleanLongText(form[key]) === null).map(
+    ({ label }) => label
+  );
+}

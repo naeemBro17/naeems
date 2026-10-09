@@ -20,7 +20,7 @@ import { distinctRegions } from '../../lib/variants';
 import { ImageUploader } from './ImageUploader';
 import { RichTextField } from './RichTextField';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
-import { cleanLongText } from '../../lib/richText';
+import { LONG_TEXTS, cleanLongText, emptiedLongTexts } from '../../lib/richText';
 import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
 import type { Product, ProductFormData, FormImage } from '../../types';
@@ -50,25 +50,6 @@ export interface ProductFormState {
   isSaving: boolean;
   /** The long texts' editors are still opening — Save waits for them. */
   loadingText: boolean;
-}
-
-/** The three long texts, in the order they appear on the form. */
-const LONG_TEXTS = [
-  { key: 'description', id: 'pf-description', label: 'Description' },
-  { key: 'how_to_use', id: 'pf-how-to-use', label: 'How to Use' },
-  { key: 'key_ingredients', id: 'pf-key-ingredients', label: 'Key Ingredients' },
-] as const;
-
-/** Long texts that had words when the product was opened and would now be
- *  saved empty. */
-export function emptiedLongTexts(
-  saved: Partial<Record<(typeof LONG_TEXTS)[number]['key'], string | null>> | null,
-  form: Record<(typeof LONG_TEXTS)[number]['key'], string>
-): string[] {
-  if (!saved) return [];
-  return LONG_TEXTS.filter(({ key }) => cleanLongText(saved[key] ?? '') !== null && cleanLongText(form[key]) === null).map(
-    ({ label }) => label
-  );
 }
 
 export const LOADING_TEXT_LABEL = 'Loading text…';

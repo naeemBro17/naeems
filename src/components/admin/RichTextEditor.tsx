@@ -3,7 +3,8 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { DOMParser as PMDOMParser, Slice } from '@tiptap/pm/model';
-import type { Transaction } from '@tiptap/pm/state';
+import { TextSelection, type Transaction } from '@tiptap/pm/state';
+import { findWrapping } from '@tiptap/pm/transform';
 import {
   RT_BOX_LABELS,
   RT_COLOR_LABELS,
@@ -132,7 +133,7 @@ const RtBoxNode = Node.create({
     return {
       toggleRtBox:
         (box: RtBox) =>
-        ({ state, tr, commands }) => {
+        ({ state, tr, dispatch, commands }) => {
           // Inside a box already: the same kind takes the box away, another
           // kind changes it; otherwise exactly the selected lines (or the
           // line the cursor is on) go into a new box.
@@ -143,8 +144,15 @@ const RtBoxNode = Node.create({
               return node.attrs.box === box ? commands.unsetRtBox() : commands.updateAttributes(this.name, { box });
             }
           }
+          // Wrapped here on the transaction itself: a nested command would
+          // still see the selection from before the lines were split.
+          if (!dispatch) return true;
           splitSelectedLines(tr);
-          return commands.wrapIn(this.name, { box });
+          const range = tr.selection.$from.blockRange(tr.selection.$to);
+          const wrapping = range ? findWrapping(range, this.type, { box }) : null;
+          if (!range || !wrapping) return false;
+          tr.wrap(range, wrapping).scrollIntoView();
+          return true;
         },
       unsetRtBox:
         () =>
@@ -173,8 +181,10 @@ const RtBoxNode = Node.create({
  * exactly those lines and not the whole paragraph.
  */
 function splitSelectedLines(tr: Transaction): void {
-  // The end first, so the start does not move.
-  const to = tr.selection.to;
+  let { from, to } = tr.selection;
+  let changed = false;
+  // The end first, so the start does not move. The selection stays before
+  // the new end split and after the new start split.
   const $to = tr.doc.resolve(to);
   if ($to.parent.isTextblock) {
     let endBreak = -1;
@@ -182,9 +192,15 @@ function splitSelectedLines(tr: Transaction): void {
       const pos = $to.start() + offset;
       if (endBreak < 0 && child.type.name === 'hardBreak' && pos >= to) endBreak = pos;
     });
-    if (endBreak >= 0) tr.delete(endBreak, endBreak + 1).split(endBreak);
+    if (endBreak >= 0) {
+      const step = tr.steps.length;
+      tr.delete(endBreak, endBreak + 1).split(endBreak);
+      const mapping = tr.mapping.slice(step);
+      from = mapping.map(from, -1);
+      to = mapping.map(to, -1);
+      changed = true;
+    }
   }
-  const from = tr.selection.from;
   const $from = tr.doc.resolve(from);
   if ($from.parent.isTextblock) {
     let startBreak = -1;
@@ -192,8 +208,16 @@ function splitSelectedLines(tr: Transaction): void {
       const pos = $from.start() + offset;
       if (child.type.name === 'hardBreak' && pos + 1 <= from) startBreak = pos;
     });
-    if (startBreak >= 0) tr.delete(startBreak, startBreak + 1).split(startBreak);
+    if (startBreak >= 0) {
+      const step = tr.steps.length;
+      tr.delete(startBreak, startBreak + 1).split(startBreak);
+      const mapping = tr.mapping.slice(step);
+      from = mapping.map(from, 1);
+      to = mapping.map(to, 1);
+      changed = true;
+    }
   }
+  if (changed) tr.setSelection(TextSelection.create(tr.doc, from, to));
 }
 
 /** Fix Part 4: Left (normal) or Justify, stored as data-align="justify". */
@@ -217,11 +241,16 @@ const RtAlign = Extension.create({
     return {
       setRtAlign:
         (align: 'left' | 'justify') =>
-        ({ tr, commands }) => {
+        ({ tr, dispatch }) => {
+          if (!dispatch) return true;
           splitSelectedLines(tr);
           const value = align === 'justify' ? RT_JUSTIFY : null;
-          commands.updateAttributes('paragraph', { align: value });
-          commands.updateAttributes('heading', { align: value });
+          const { from, to } = tr.selection;
+          tr.doc.nodesBetween(from, to, (node, pos) => {
+            if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+              tr.setNodeMarkup(pos, undefined, { ...node.attrs, align: value });
+            }
+          });
           return true;
         },
     };
