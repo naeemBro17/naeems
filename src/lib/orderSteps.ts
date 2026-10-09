@@ -21,6 +21,9 @@ export interface TrackingAnswer {
   courierStatus: string | null;
   events: TrackingEvent[];
   fetchedAt: string | null;
+  /** Batch 35: only for a customer, only while Out for delivery, only when
+   *  Naeem's "Show rider's phone" is On and Steadfast names the rider. */
+  rider?: { name: string; phone: string } | null;
 }
 
 /** Steadfast caches answers 60 s, so asking sooner tells nothing new. */
@@ -58,12 +61,22 @@ export async function fetchTracking(orderId: string): Promise<TrackingAnswer | n
   try {
     const { data, error } = await supabase.functions.invoke('steadfast', { body: { action: 'tracking', orderId } });
     if (error) return null;
-    const body = data as { ok?: boolean; courierStatus?: string | null; events?: TrackingEvent[]; fetchedAt?: string | null };
+    const body = data as {
+      ok?: boolean;
+      courierStatus?: string | null;
+      events?: TrackingEvent[];
+      fetchedAt?: string | null;
+      rider?: { name?: unknown; phone?: unknown } | null;
+    };
     if (!body?.ok || !Array.isArray(body.events)) return null;
     const answer: TrackingAnswer = {
       courierStatus: body.courierStatus ?? null,
       events: body.events,
       fetchedAt: body.fetchedAt ?? null,
+      rider:
+        body.rider && typeof body.rider.name === 'string' && typeof body.rider.phone === 'string'
+          ? { name: body.rider.name, phone: body.rider.phone }
+          : null,
     };
     const entry = { at: now, answer };
     memory.set(orderId, entry);

@@ -27,6 +27,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { STEADFAST_BASE_URL, checkSteadfastStatus, steadfastHeaders } from '../_shared/steadfast.ts';
 import { parseTrackingResponse } from '../_shared/steadfastSteps.ts';
+import { trackingEventRows } from '../_shared/orderTracking.ts';
 
 interface ShippedOrder {
   id: string;
@@ -57,6 +58,15 @@ async function refreshTracking(
     });
     if (!res.ok) return false;
     const events = parseTrackingResponse(await res.json());
+    // Batch 35 Part 1: every update kept once in order_tracking_events
+    // (migration-037); before it is run this simply fails quietly.
+    const rows = trackingEventRows(order.id, events, 'steadfast_refresh');
+    if (rows.length > 0) {
+      const { error: eventsErr } = await serviceClient
+        .from('order_tracking_events')
+        .upsert(rows, { onConflict: 'order_id,event_key', ignoreDuplicates: true });
+      if (eventsErr) console.error(`steadfast-refresh-all: storing updates failed for order ${order.id}:`, eventsErr.message);
+    }
     const { error } = await serviceClient.from('steadfast_tracking_cache').upsert({
       order_id: order.id,
       delivery_status: courierStatus,

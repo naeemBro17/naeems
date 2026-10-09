@@ -27,6 +27,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { isTestOrder, parseIdList } from '../_shared/testOrders.ts';
 import { isAuthorizedNotifyCall } from '../_shared/notifyAuth.ts';
+import { trackStatusName, type SavedOrderStatus } from '../_shared/orderTracking.ts';
 
 interface OrderRow {
   id: string;
@@ -149,7 +150,8 @@ function buildSteadfastAttentionMessage(order: OrderRow): string {
     '',
     `Order: ${order.order_number}`,
     `👤 ${order.customer_name} · 📞 ${order.customer_phone}`,
-    `📦 Courier status: ${order.steadfast_status}`,
+    // Batch 35: the same status names as the admin, Steadfast's word after.
+    `📦 ${trackStatusName(order.status as SavedOrderStatus, true, order.steadfast_status)} (Steadfast: ${order.steadfast_status})`,
     '',
     `🔗 ${adminOrderUrl(order.id)}`,
   ].join('\n');
