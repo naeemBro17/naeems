@@ -14,6 +14,9 @@ export const RT_TEXT_COLORS = ['orange', 'red', 'green', 'blue', 'purple', 'teal
 export const RT_HIGHLIGHTS = ['peach', 'yellow', 'mint'] as const;
 export const RT_BOXES = ['warning', 'tip', 'benefits'] as const;
 
+/** Fix Part 4: the one alignment value besides normal (left). */
+export const RT_JUSTIFY = 'justify';
+
 export type RtTextColor = (typeof RT_TEXT_COLORS)[number];
 export type RtHighlight = (typeof RT_HIGHLIGHTS)[number];
 export type RtBox = (typeof RT_BOXES)[number];
@@ -41,7 +44,7 @@ export const RT_BOX_LABELS: Record<RtBox, string> = {
 
 // b / i are what Word and older pages use for bold / italic.
 const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h3', 'ul', 'ol', 'li', 'a', 'span', 'mark', 'div'];
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'data-color', 'data-hl', 'data-box'];
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'data-color', 'data-hl', 'data-box', 'data-align'];
 
 export const LINK_REL = 'noopener noreferrer nofollow';
 
@@ -91,6 +94,11 @@ function addHooks(): void {
     if (hl !== null && !(tag === 'mark' && (RT_HIGHLIGHTS as readonly string[]).includes(hl))) {
       el.removeAttribute('data-hl');
     }
+    // Only data-align="justify", only on a paragraph or heading.
+    const align = el.getAttribute('data-align');
+    if (align !== null && !((tag === 'p' || tag === 'h3') && align === RT_JUSTIFY)) {
+      el.removeAttribute('data-align');
+    }
     const box = el.getAttribute('data-box');
     if (box !== null && !(tag === 'div' && (RT_BOXES as readonly string[]).includes(box))) {
       el.removeAttribute('data-box');
@@ -122,22 +130,69 @@ export function sanitizeRichHtml(html: string): string {
  */
 export function sanitizePastedHtml(html: string): string {
   addHooks();
-  return DOMPurify.sanitize(html, {
+  const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [...ALLOWED_ATTR, 'style'],
     ALLOW_DATA_ATTR: false,
     KEEP_CONTENT: true,
   });
+  // Fix Part 2: each pasted line becomes its own line (paragraph).
+  return splitLineBreaks(clean);
 }
 
-/** Old plain text → the same paragraphs the editor would make (only used
- *  when an old value is opened in the editor). */
+/** Old plain text → one paragraph per line and an empty paragraph for each
+ *  blank line (used when an old value is opened in the editor, and for
+ *  pasted plain text). Paragraphs have no gap between them, so it looks
+ *  exactly like the old text. */
 export function plainToEditorHtml(text: string): string {
   const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return text
-    .split(/\n{2,}/)
-    .map((block) => `<p>${block.split('\n').map(escape).join('<br>')}</p>`)
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => (line === '' ? '<p></p>' : `<p>${escape(line)}</p>`))
     .join('');
+}
+
+/**
+ * Fix (rich-text editor) Part 2: every line break inside a paragraph
+ * becomes its own paragraph, keeping the formatting around it (bold that
+ * runs over a break is closed and reopened). A break that ends a paragraph
+ * shows nothing on screen, so it is dropped. Used for pasted HTML and for
+ * old saved text opened in the editor — the database is unchanged until
+ * Naeem saves.
+ */
+export function splitLineBreaks(html: string): string {
+  if (!/<br/i.test(html)) return html;
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  for (const p of Array.from(root.querySelectorAll('p'))) {
+    const breaks = p.querySelectorAll('br');
+    const finalBreak = breaks.length > 0 ? breaks[breaks.length - 1] : null;
+    if (finalBreak) {
+      const after = document.createRange();
+      after.setStartAfter(finalBreak);
+      after.setEnd(p, p.childNodes.length);
+      if (after.toString() === '') finalBreak.remove();
+    }
+    let br = p.querySelector('br');
+    while (br) {
+      const before = document.createRange();
+      before.setStart(p, 0);
+      before.setEndBefore(br);
+      const line = document.createElement('p');
+      for (const attr of Array.from(p.attributes)) line.setAttribute(attr.name, attr.value);
+      line.appendChild(before.extractContents());
+      p.before(line);
+      br.remove();
+      br = p.querySelector('br');
+    }
+  }
+  return root.innerHTML;
+}
+
+/** What the editor opens with for a saved value (old plain text or rich). */
+export function toEditorHtml(value: string): string {
+  return isRichText(value) ? splitLineBreaks(sanitizeRichHtml(value)) : plainToEditorHtml(value);
 }
 
 /** An editor value with no visible text ("<p></p>") counts as empty. */
@@ -155,4 +210,23 @@ export function cleanLongText(value: string): string | null {
   // it is not saved.
   const clean = sanitizeRichHtml(trimmed).replace(/(<p>(<br>)?<\/p>)+$/, '');
   return isEmptyRichHtml(clean) ? null : clean;
+}
+
+/** The three long texts, in the order they appear on the form. */
+export const LONG_TEXTS = [
+  { key: 'description', id: 'pf-description', label: 'Description' },
+  { key: 'how_to_use', id: 'pf-how-to-use', label: 'How to Use' },
+  { key: 'key_ingredients', id: 'pf-key-ingredients', label: 'Key Ingredients' },
+] as const;
+
+/** Long texts that had words when the product was opened and would now be
+ *  saved empty. */
+export function emptiedLongTexts(
+  saved: Partial<Record<(typeof LONG_TEXTS)[number]['key'], string | null>> | null,
+  form: Record<(typeof LONG_TEXTS)[number]['key'], string>
+): string[] {
+  if (!saved) return [];
+  return LONG_TEXTS.filter(({ key }) => cleanLongText(saved[key] ?? '') !== null && cleanLongText(form[key]) === null).map(
+    ({ label }) => label
+  );
 }

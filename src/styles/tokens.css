@@ -83,9 +83,11 @@
   --radius-xl:     28px;
   --radius-pill:   999px;
 
-  --font-sans:     'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  /* Renders the Bengali taka sign (৳) correctly — used on every price. */
-  --font-price:    'Hind Siliguri', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-sans:     'Plus Jakarta Sans', 'Noto Sans Bengali', system-ui, -apple-system, sans-serif;
+  /* Prices: digits in Plus Jakarta Sans; the taka sign (৳) and Bengali
+     digits have no glyph there, so they come from Noto Sans Bengali
+     (Bengali subset only — Latin never downloads it). */
+  --font-price:    'Plus Jakarta Sans', 'Noto Sans Bengali', system-ui, sans-serif;
 
   --transition-fast: 100ms ease;
   --transition-base: 150ms ease;

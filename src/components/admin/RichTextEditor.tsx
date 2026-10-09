@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { Mark, Node, mergeAttributes } from '@tiptap/core';
+import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { DOMParser as PMDOMParser, Slice } from '@tiptap/pm/model';
+import { TextSelection, type Transaction } from '@tiptap/pm/state';
+import { findWrapping } from '@tiptap/pm/transform';
 import {
   RT_BOX_LABELS,
   RT_COLOR_LABELS,
   RT_HIGHLIGHT_LABELS,
   RT_HIGHLIGHTS,
+  RT_JUSTIFY,
   RT_TEXT_COLORS,
   isEmptyRichHtml,
-  isRichText,
   plainToEditorHtml,
   safeLinkHref,
+  toEditorHtml,
   sanitizePastedHtml,
   sanitizeRichHtml,
   type RtBox,
@@ -35,6 +39,10 @@ declare module '@tiptap/core' {
     };
     rtBox: {
       toggleRtBox: (box: RtBox) => ReturnType;
+      unsetRtBox: () => ReturnType;
+    };
+    rtAlign: {
+      setRtAlign: (align: 'left' | 'justify') => ReturnType;
     };
   }
 }
@@ -125,17 +133,125 @@ const RtBoxNode = Node.create({
     return {
       toggleRtBox:
         (box: RtBox) =>
-        ({ state, commands }) => {
-          // Inside a box already: the same kind takes it away, another kind
-          // changes it; otherwise the paragraph goes into a new box.
+        ({ state, tr, dispatch, commands }) => {
+          // Inside a box already: the same kind takes the box away, another
+          // kind changes it; otherwise exactly the selected lines (or the
+          // line the cursor is on) go into a new box.
           const { $from } = state.selection;
           for (let depth = $from.depth; depth > 0; depth -= 1) {
             const node = $from.node(depth);
             if (node.type.name === this.name) {
-              return node.attrs.box === box ? commands.lift(this.name) : commands.updateAttributes(this.name, { box });
+              return node.attrs.box === box ? commands.unsetRtBox() : commands.updateAttributes(this.name, { box });
             }
           }
-          return commands.wrapIn(this.name, { box });
+          // Wrapped here on the transaction itself: a nested command would
+          // still see the selection from before the lines were split.
+          if (!dispatch) return true;
+          splitSelectedLines(tr);
+          const range = tr.selection.$from.blockRange(tr.selection.$to);
+          const wrapping = range ? findWrapping(range, this.type, { box }) : null;
+          if (!range || !wrapping) return false;
+          tr.wrap(range, wrapping).scrollIntoView();
+          return true;
+        },
+      unsetRtBox:
+        () =>
+        ({ state, tr, dispatch }) => {
+          // The whole box goes; its text stays exactly as it is.
+          const { $from } = state.selection;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const node = $from.node(depth);
+            if (node.type.name === this.name) {
+              if (dispatch) {
+                const pos = $from.before(depth);
+                tr.replaceWith(pos, pos + node.nodeSize, node.content);
+              }
+              return true;
+            }
+          }
+          return false;
+        },
+    };
+  },
+});
+
+/**
+ * Fix (rich-text editor) Part 2: a paragraph with line breaks (Shift+Enter)
+ * is split where the selected lines start and end, so a box or Justify takes
+ * exactly those lines and not the whole paragraph.
+ */
+function splitSelectedLines(tr: Transaction): void {
+  let { from, to } = tr.selection;
+  let changed = false;
+  // The end first, so the start does not move. The selection stays before
+  // the new end split and after the new start split.
+  const $to = tr.doc.resolve(to);
+  if ($to.parent.isTextblock) {
+    let endBreak = -1;
+    $to.parent.forEach((child, offset) => {
+      const pos = $to.start() + offset;
+      if (endBreak < 0 && child.type.name === 'hardBreak' && pos >= to) endBreak = pos;
+    });
+    if (endBreak >= 0) {
+      const step = tr.steps.length;
+      tr.delete(endBreak, endBreak + 1).split(endBreak);
+      const mapping = tr.mapping.slice(step);
+      from = mapping.map(from, -1);
+      to = mapping.map(to, -1);
+      changed = true;
+    }
+  }
+  const $from = tr.doc.resolve(from);
+  if ($from.parent.isTextblock) {
+    let startBreak = -1;
+    $from.parent.forEach((child, offset) => {
+      const pos = $from.start() + offset;
+      if (child.type.name === 'hardBreak' && pos + 1 <= from) startBreak = pos;
+    });
+    if (startBreak >= 0) {
+      const step = tr.steps.length;
+      tr.delete(startBreak, startBreak + 1).split(startBreak);
+      const mapping = tr.mapping.slice(step);
+      from = mapping.map(from, 1);
+      to = mapping.map(to, 1);
+      changed = true;
+    }
+  }
+  if (changed) tr.setSelection(TextSelection.create(tr.doc, from, to));
+}
+
+/** Fix Part 4: Left (normal) or Justify, stored as data-align="justify". */
+const RtAlign = Extension.create({
+  name: 'rtAlign',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          align: {
+            default: null,
+            parseHTML: (el: HTMLElement) => (el.getAttribute('data-align') === RT_JUSTIFY ? RT_JUSTIFY : null),
+            renderHTML: (attrs: { align?: string | null }) => (attrs.align === RT_JUSTIFY ? { 'data-align': RT_JUSTIFY } : {}),
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setRtAlign:
+        (align: 'left' | 'justify') =>
+        ({ tr, dispatch }) => {
+          if (!dispatch) return true;
+          splitSelectedLines(tr);
+          const value = align === 'justify' ? RT_JUSTIFY : null;
+          const { from, to } = tr.selection;
+          tr.doc.nodesBetween(from, to, (node, pos) => {
+            if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+              tr.setNodeMarkup(pos, undefined, { ...node.attrs, align: value });
+            }
+          });
+          return true;
         },
     };
   },
@@ -164,6 +280,7 @@ export function richTextExtensions() {
     RtColor,
     RtHighlightMark,
     RtBoxNode,
+    RtAlign,
   ];
 }
 
@@ -183,6 +300,8 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   numbered: <path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v5M4 13.5a1.5 1.5 0 113 0L4 17h3" />,
+  alignLeft: <path d="M4 6h16M4 10h10M4 14h16M4 18h10" />,
+  justify: <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />,
   colour: (
     <>
       <path d="M6 19l6-14 6 14M8.5 13h7" />
@@ -196,6 +315,12 @@ const ICONS: Record<string, ReactNode> = {
   ),
   tip: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   benefits: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
+  unbox: (
+    <>
+      <rect x="4" y="5" width="16" height="14" rx="3" strokeDasharray="3 2.5" />
+      <path d="M9.5 9.5l5 5M14.5 9.5l-5 5" />
+    </>
+  ),
   link: (
     <>
       <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" />
@@ -266,6 +391,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       warning: e.isActive('rtBox', { box: 'warning' }),
       tip: e.isActive('rtBox', { box: 'tip' }),
       benefits: e.isActive('rtBox', { box: 'benefits' }),
+      inBox: e.isActive('rtBox'),
+      justify: e.isActive({ align: RT_JUSTIFY }),
       link: e.isActive('link'),
       colour: e.isActive('rtColor') || e.isActive('rtHighlight'),
       canUndo: e.can().undo(),
@@ -304,11 +431,14 @@ function Toolbar({ editor }: { editor: Editor }) {
         <ToolButton label="Heading" icon="heading" active={state.heading} onClick={() => chain().toggleHeading({ level: 3 }).run()} testId="rt-heading" />
         <ToolButton label="Bullet list" icon="bullet" active={state.bullet} onClick={() => chain().toggleBulletList().run()} testId="rt-bullet" />
         <ToolButton label="Numbered list" icon="numbered" active={state.numbered} onClick={() => chain().toggleOrderedList().run()} testId="rt-numbered" />
+        <ToolButton label="Align left" icon="alignLeft" onClick={() => chain().setRtAlign('left').run()} testId="rt-align-left" />
+        <ToolButton label="Justify" icon="justify" active={state.justify} onClick={() => chain().setRtAlign('justify').run()} testId="rt-justify" />
         <span className="rt-toolbar__sep" aria-hidden="true" />
         <ToolButton label="Text colour and highlight" icon="colour" active={state.colour || panel === 'colour'} onClick={() => setPanel(panel === 'colour' ? null : 'colour')} testId="rt-colour" />
         <ToolButton label={RT_BOX_LABELS.warning} icon="warning" active={state.warning} onClick={() => chain().toggleRtBox('warning').run()} testId="rt-warning" />
         <ToolButton label={RT_BOX_LABELS.tip} icon="tip" active={state.tip} onClick={() => chain().toggleRtBox('tip').run()} testId="rt-tip" />
         <ToolButton label={RT_BOX_LABELS.benefits} icon="benefits" active={state.benefits} onClick={() => chain().toggleRtBox('benefits').run()} testId="rt-benefits" />
+        <ToolButton label="Remove box" icon="unbox" disabled={!state.inBox} onClick={() => chain().unsetRtBox().run()} testId="rt-unbox" />
         <ToolButton label="Link" icon="link" active={state.link || panel === 'link'} onClick={openLink} testId="rt-link" />
         <span className="rt-toolbar__sep" aria-hidden="true" />
         <ToolButton label="Undo" icon="undo" disabled={!state.canUndo} onClick={() => chain().undo().run()} testId="rt-undo" />
@@ -401,6 +531,11 @@ export interface RichTextEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   labelledBy?: string;
+  /** Which record the text belongs to (the product id). A new key always
+   *  loads the new value, even over typing. */
+  resetKey?: string;
+  /** Called once the editor exists and shows the value. */
+  onReady?: () => void;
 }
 
 /**
@@ -408,14 +543,24 @@ export interface RichTextEditorProps {
  * text opens as paragraphs but is only saved as rich text once it is
  * actually edited — opening and leaving changes nothing.
  */
-export default function RichTextEditor({ id, value, onChange, placeholder, labelledBy }: RichTextEditorProps) {
+export default function RichTextEditor({ id, value, onChange, placeholder, labelledBy, resetKey, onReady }: RichTextEditorProps) {
   const { markDirty } = useLeaveGuard();
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  // The value the editor shows right now (loaded or typed), so a value
+  // coming from outside (the product arriving after the editor opened) can
+  // be told apart from the editor's own echo.
+  const shownValueRef = useRef(value);
+  const resetKeyRef = useRef(resetKey);
+  const typedRef = useRef(false);
+  // Empty state class for the placeholder.
+  const [empty, setEmpty] = useState(value.trim() === '');
 
   const editor = useEditor({
     extensions: richTextExtensions(),
-    content: isRichText(value) ? sanitizeRichHtml(value) : plainToEditorHtml(value),
+    content: toEditorHtml(value),
     editorProps: {
       attributes: {
         id,
@@ -427,16 +572,45 @@ export default function RichTextEditor({ id, value, onChange, placeholder, label
       },
       // Pasting from Word / Google Docs / WhatsApp: only allowed formatting.
       transformPastedHTML: (html) => sanitizePastedHtml(html),
+      // Fix Part 2: pasted plain text (WhatsApp, Notes): every line is its
+      // own line and blank lines are kept, as they would be in the old text.
+      clipboardTextParser: (text, $context, _plain, view) => {
+        const dom = document.createElement('div');
+        dom.innerHTML = plainToEditorHtml(text);
+        const parsed = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, { preserveWhitespace: true, context: $context });
+        return Slice.maxOpen(parsed.content);
+      },
     },
     onUpdate: ({ editor: e }) => {
+      typedRef.current = true;
       markDirty();
       const html = e.getHTML();
-      onChangeRef.current(isEmptyRichHtml(html) ? '' : sanitizeRichHtml(html));
+      const next = isEmptyRichHtml(html) ? '' : sanitizeRichHtml(html);
+      shownValueRef.current = next;
+      onChangeRef.current(next);
     },
   });
 
-  // Empty state class for the placeholder.
-  const [empty, setEmpty] = useState(value.trim() === '');
+  // Fix (rich-text editor) Part 1: Tiptap only reads `content` when it is
+  // created, so text that arrives later (the product loading after the
+  // editor opened) is put in here — never as an undo step, never marking
+  // the form as changed, and never over what is being typed (unless it is
+  // another product).
+  useEffect(() => {
+    if (!editor) return;
+    const keyChanged = resetKeyRef.current !== resetKey;
+    resetKeyRef.current = resetKey;
+    if (keyChanged) typedRef.current = false;
+    if (!keyChanged && (value === shownValueRef.current || typedRef.current)) return;
+    shownValueRef.current = value;
+    editor.chain().setMeta('addToHistory', false).setContent(toEditorHtml(value), { emitUpdate: false }).run();
+    setEmpty(editor.isEmpty);
+  }, [editor, value, resetKey]);
+
+  useEffect(() => {
+    if (editor) onReadyRef.current?.();
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
     const update = () => setEmpty(editor.isEmpty);

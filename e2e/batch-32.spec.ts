@@ -351,8 +351,9 @@ test('Part 1: the database refuses paid > total and staff without the switches',
 
 test('Part 2: Settings shows Version 1.32.0 and the build, no date', async ({ page }) => {
   const version = JSON.parse(readFileSync('package.json', 'utf8')).version as string;
-  // Batch 33: each batch N sets 1.N.0, so this follows package.json.
-  expect(version).toMatch(/^1\.\d+\.0$/);
+  // Batch 33: each batch N sets 1.N.0, so this follows package.json. A fix
+  // between batches sets 1.N.1 (rich-text editor fix: 1.37.1).
+  expect(version).toMatch(/^1\.\d+\.\d+$/);
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=settings');
   await expect(page.getByTestId('app-version')).toHaveText(`Version ${version}`, { timeout: 15_000 });

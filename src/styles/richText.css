@@ -72,9 +72,10 @@
 /* ---------- The text itself ---------- */
 
 .rich-text {
-  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Bengali', system-ui, sans-serif;
   font-size: 15px;
-  line-height: 1.75;
+  /* Fix (rich-text editor) Part 5: the old plain text's line height. */
+  line-height: 1.7;
   color: var(--color-text-primary);
   text-align: left;
   overflow-wrap: anywhere;
@@ -88,8 +89,15 @@
   margin-bottom: 0;
 }
 
+/* Fix Part 5 ("No Spacing", like MS Word): Enter goes to the next line
+   with no gap; Enter twice leaves one empty line, which keeps its height
+   (an empty saved paragraph would otherwise collapse to nothing). */
 .rich-text p {
-  margin: 0 0 10px;
+  margin: 0;
+}
+
+.rich-text p:empty::before {
+  content: '\200b';
 }
 
 .rich-text h3 {
@@ -116,17 +124,21 @@
 .rich-text span[data-color='purple'] { color: var(--rt-purple); }
 .rich-text span[data-color='teal'] { color: var(--rt-teal); }
 
+/* The highlight's side padding is drawn with shadows, so highlighting a
+   word never moves the words around it (Fix Part 5). */
 .rich-text mark {
   color: var(--rt-hl-text);
-  padding: 1px 3px;
+  background: var(--rt-hl);
+  box-shadow: -3px 0 0 var(--rt-hl), 3px 0 0 var(--rt-hl);
+  padding: 1px 0;
   border-radius: 4px;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
 
-.rich-text mark[data-hl='peach'] { background: var(--rt-hl-peach); }
-.rich-text mark[data-hl='yellow'] { background: var(--rt-hl-yellow); }
-.rich-text mark[data-hl='mint'] { background: var(--rt-hl-mint); }
+.rich-text mark[data-hl='peach'] { --rt-hl: var(--rt-hl-peach); }
+.rich-text mark[data-hl='yellow'] { --rt-hl: var(--rt-hl-yellow); }
+.rich-text mark[data-hl='mint'] { --rt-hl: var(--rt-hl-mint); }
 
 /* Bullet list */
 .rich-text ul {
@@ -428,7 +440,45 @@
 
 /* ---------- On the product page ---------- */
 
+/* Fix Part 5: the same size, line height and colour as the old plain text
+   (.accordion__text), so a text saved by the editor looks exactly as it
+   did before. */
 .accordion__rich {
-  font-size: 14.5px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+/* Fix (rich-text editor) Part 4: Justify (the editor and the product page). */
+.rich-text p[data-align='justify'],
+.rich-text h3[data-align='justify'] {
+  text-align: justify;
+}
+
+/* Fix (rich-text editor) Part 7: calm body text. Ordinary text is the
+   site's secondary grey at regular weight, as the description was before
+   Batch 36, in the editor and on the product page alike. Bold, headings
+   and the boxes stay in the primary colour; the named colours keep their
+   own. The product name, price and buttons stay the strongest things. */
+.accordion__rich,
+.rt-editor__content.rich-text {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.accordion__rich strong,
+.accordion__rich b,
+.accordion__rich h3,
+.accordion__rich div[data-box],
+.rt-editor__content.rich-text strong,
+.rt-editor__content.rich-text b,
+.rt-editor__content.rich-text h3,
+.rt-editor__content.rich-text div[data-box] {
   color: var(--color-text-primary);
+}
+
+/* Bold inside a named colour keeps that colour. */
+.accordion__rich span[data-color] :is(strong, b),
+.rt-editor__content.rich-text span[data-color] :is(strong, b) {
+  color: inherit;
 }

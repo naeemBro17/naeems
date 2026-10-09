@@ -2,13 +2,26 @@
 // NAEEMS_Invoice_v2.pdf). Top third = parcel label, the rest = invoice;
 // fold the lower two-thirds back and the label stays on top.
 //
-// Plus Jakarta Sans for Latin text, Hind Siliguri for ৳ and any Bengali —
+// Plus Jakarta Sans for Latin text, Noto Sans Bengali for ৳ and any Bengali —
 // both embedded (subset), so it prints the same on every printer. fontkit
 // shapes Bengali properly (vowel signs and joined letters); its Indic
-// shaper needs regenerator-runtime loaded first.
+// shaper needs regenerator-runtime loaded first. Noto Sans Bengali places
+// vowel signs and joined letters with small offsets that pdf-lib's own
+// drawText ignores, so Bengali is drawn glyph by glyph at its shaped
+// position (Writer.drawShaped).
 import 'regenerator-runtime/runtime.js';
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, PrintScaling, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFHexString,
+  PrintScaling,
+  degrees,
+  drawText as drawTextOperators,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+  type RGB,
+} from 'pdf-lib';
 import { encode as encodeQr } from 'uqr';
 import { code128Widths } from './code128';
 import { fullAddress, invoiceMoney, type InvoiceData } from './invoiceData';
@@ -73,6 +86,9 @@ const NEUTRAL_CHAR = /[\s,.\-/()]/u;
 interface Face {
   font: PDFFont;
   chars: Set<number>;
+  /** Bengali: the same font file, laid out by fontkit for the glyph
+   *  positions (offsets) pdf-lib does not apply by itself. */
+  shaper: ReturnType<typeof fontkit.create> | null;
 }
 
 interface Run {
@@ -129,10 +145,49 @@ class Writer {
     return runs;
   }
 
+  /** One run's width — Bengali from its shaped positions, exactly as drawn. */
+  private runWidth(run: Run, size: number): number {
+    const shaper = run.face.shaper;
+    if (!shaper) return run.face.font.widthOfTextAtSize(run.text, size);
+    const { positions } = shaper.layout(run.text);
+    return (positions.reduce((sum, p) => sum + p.xAdvance, 0) * size) / shaper.unitsPerEm;
+  }
+
+  /** Draws a Bengali run glyph by glyph, each at its shaped position, so
+   *  vowel signs and joined letters sit where the font puts them. */
+  private drawShaped(page: PDFPage, run: Run, x: number, y: number, size: number, color: RGB): void {
+    const shaper = run.face.shaper;
+    const { font } = run.face;
+    const hex = font.encodeText(run.text).asString();
+    const positions = shaper ? shaper.layout(run.text).positions : [];
+    if (!shaper || hex.length !== positions.length * 4) {
+      page.drawText(run.text, { x, y, size, font, color });
+      return;
+    }
+    const key = page.node.newFontDictionary(font.name, font.ref);
+    const scale = size / shaper.unitsPerEm;
+    let pen = x;
+    positions.forEach((p, i) => {
+      page.pushOperators(
+        ...drawTextOperators(PDFHexString.of(hex.slice(i * 4, i * 4 + 4)), {
+          color,
+          font: key,
+          size,
+          rotate: degrees(0),
+          xSkew: degrees(0),
+          ySkew: degrees(0),
+          x: pen + p.xOffset * scale,
+          y: y + p.yOffset * scale,
+        })
+      );
+      pen += p.xAdvance * scale;
+    });
+  }
+
   width(text: string, opts: TextOptions): number {
     const weight = opts.weight ?? 'regular';
     let w = 0;
-    for (const run of this.runs(text, weight)) w += run.face.font.widthOfTextAtSize(run.text, opts.size);
+    for (const run of this.runs(text, weight)) w += this.runWidth(run, opts.size);
     return w + (opts.spacing ?? 0) * Array.from(text).length;
   }
 
@@ -150,6 +205,9 @@ class Writer {
           page.drawText(ch, { x: cx, y, size: opts.size, font: run.face.font, color });
           cx += run.face.font.widthOfTextAtSize(ch, opts.size) + opts.spacing;
         }
+      } else if (run.face.shaper) {
+        this.drawShaped(page, run, cx, y, opts.size, color);
+        cx += this.runWidth(run, opts.size);
       } else {
         page.drawText(run.text, { x: cx, y, size: opts.size, font: run.face.font, color });
         cx += run.face.font.widthOfTextAtSize(run.text, opts.size);
@@ -576,10 +634,14 @@ export async function buildInvoicePdf(
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const embedded = new Map<Uint8Array, Promise<Face>>();
-  const face = (bytes: Uint8Array): Promise<Face> => {
+  const face = (bytes: Uint8Array, shaped: boolean): Promise<Face> => {
     let found = embedded.get(bytes);
     if (!found) {
-      found = doc.embedFont(bytes, { subset: true }).then((font) => ({ font, chars: new Set(font.getCharacterSet()) }));
+      found = doc.embedFont(bytes, { subset: true }).then((font) => ({
+        font,
+        chars: new Set(font.getCharacterSet()),
+        shaper: shaped ? fontkit.create(bytes) : null,
+      }));
       embedded.set(bytes, found);
     }
     return found;
@@ -587,7 +649,7 @@ export async function buildInvoicePdf(
   const weights: InvoiceWeight[] = ['regular', 'medium', 'semibold', 'bold', 'extrabold'];
   const faces = { latin: {}, bengali: {} } as Record<'latin' | 'bengali', Record<InvoiceWeight, Face>>;
   for (const family of ['latin', 'bengali'] as const) {
-    for (const weight of weights) faces[family][weight] = await face(files[family][weight]);
+    for (const weight of weights) faces[family][weight] = await face(files[family][weight], family === 'bengali');
   }
   const writer = new Writer(faces);
   for (const inv of invoices) drawInvoice(doc, writer, inv, shop);

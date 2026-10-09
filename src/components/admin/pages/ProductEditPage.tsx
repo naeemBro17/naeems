@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AdminFormPage } from '../AdminFormPage';
-import { ProductEditorForm } from '../ProductEditorForm';
+import { LOADING_TEXT_LABEL, ProductEditorForm, type ProductFormState } from '../ProductEditorForm';
 import { useProducts } from '../../../contexts/ProductContext';
+import { useLeaveGuard } from '../LeaveGuard';
+import { productPath } from '../../../lib/slugify';
 import { fetchProductEditInfo, formatDhakaTime, type ProductEditInfo } from '../../../lib/staff';
 import type { Product } from '../../../types';
 
@@ -11,21 +13,22 @@ interface ProductEditPageProps {
   /** null = Add product. */
   productId: string | null;
   onBack: () => void;
-  /** After saving: back to the products list. */
-  onDone: () => void;
+  /** After the first Save of a new product: open its Edit page. */
+  onCreated: (productId: string) => void;
 }
 
 /** Batch 32 Part 3: /admin/products/new and /admin/products/:id/edit — the
  *  same product editor the Products tab always used, as a page. */
-export function ProductEditPage({ productId, onBack, onDone }: ProductEditPageProps) {
+export function ProductEditPage({ productId, onBack, onCreated }: ProductEditPageProps) {
   const { products, isLoading } = useProducts();
+  const { markClean } = useLeaveGuard();
   // The product as it was when the page opened. The editor starts a fresh
   // form whenever its product changes, so a later refresh of the product
   // list must never swap it under the person typing.
   const [product, setProduct] = useState<Product | null>(null);
   const [editInfo, setEditInfo] = useState<ProductEditInfo | null>(null);
-  const [state, setState] = useState({ canSave: false, isSaving: false });
-  const onState = useCallback((next: { canSave: boolean; isSaving: boolean }) => setState(next), []);
+  const [state, setState] = useState<ProductFormState>({ canSave: false, isSaving: false, loadingText: true });
+  const onState = useCallback((next: ProductFormState) => setState(next), []);
 
   useEffect(() => {
     if (productId === null || product !== null) return;
@@ -57,9 +60,10 @@ export function ProductEditPage({ productId, onBack, onDone }: ProductEditPagePr
       backLabel="Back to products"
       onBack={onBack}
       testId="product-page"
+      secondary={product ? { label: 'View on site', href: productPath(product), testId: 'product-view-on-site' } : undefined}
       primary={
         ready
-          ? { label: isNew ? 'Add product' : 'Save changes', formId: FORM_ID, disabled: !state.canSave, busy: state.isSaving }
+          ? { label: state.loadingText ? LOADING_TEXT_LABEL : isNew ? 'Add product' : 'Save changes', formId: FORM_ID, disabled: !state.canSave, busy: state.isSaving }
           : undefined
       }
     >
@@ -72,7 +76,11 @@ export function ProductEditPage({ productId, onBack, onDone }: ProductEditPagePr
       {ready && (
         <ProductEditorForm
           product={product}
-          onSaved={onDone}
+          onSaved={(savedId) => {
+            // Fix Part 3: Save keeps the page open; leaving is only via Back.
+            if (isNew) onCreated(savedId);
+            else markClean();
+          }}
           onCancel={onBack}
           footerVariant="page"
           formId={FORM_ID}
