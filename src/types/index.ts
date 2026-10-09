@@ -263,6 +263,19 @@ export interface AppSettings {
   text_trust_authentic: string;
   text_trust_cod: string;
   text_trust_delivery: string;
+
+  /* --- Invoice (Batch 37) — blank means "use the default" --- */
+  /** Phone / WhatsApp printed on the invoice; blank uses shop_whatsapp_number. */
+  invoice_shop_phone: string;
+  /** "Dhaka, Bangladesh" by default. */
+  invoice_shop_city: string;
+  /** The link the community QR code opens (the Facebook group by default). */
+  invoice_community_link: string;
+  invoice_community_title: string;
+  invoice_community_line1: string;
+  invoice_community_line2: string;
+  /** 'false' hides the community box; anything else (or missing) shows it. */
+  invoice_show_community: string;
 }
 
 /**

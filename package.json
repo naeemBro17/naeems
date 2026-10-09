@@ -1,7 +1,7 @@
 {
   "name": "naeem-price-hub",
   "private": true,
-  "version": "1.36.0",
+  "version": "1.37.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@remix-run/router": "1.23.3",
     "@supabase/supabase-js": "^2.45.4",
     "@tiptap/core": "^3.31.4",
@@ -28,18 +29,24 @@
     "fuse.js": "^7.5.0",
     "jspdf": "^4.2.1",
     "papaparse": "^5.4.1",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2"
+    "react-router-dom": "^6.26.2",
+    "regenerator-runtime": "^0.14.1",
+    "uqr": "^0.1.3"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.10",
     "@playwright/test": "^1.63.0",
     "@types/papaparse": "^5.3.14",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "@zxing/library": "^0.23.0",
     "jsdom": "^30.1.0",
+    "pdfjs-dist": "^6.4.299",
     "pngjs": "^7.0.0",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
