@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { Mark, Node, mergeAttributes } from '@tiptap/core';
+import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { DOMParser as PMDOMParser, Slice } from '@tiptap/pm/model';
 import type { Transaction } from '@tiptap/pm/state';
@@ -9,6 +9,7 @@ import {
   RT_COLOR_LABELS,
   RT_HIGHLIGHT_LABELS,
   RT_HIGHLIGHTS,
+  RT_JUSTIFY,
   RT_TEXT_COLORS,
   isEmptyRichHtml,
   plainToEditorHtml,
@@ -38,6 +39,9 @@ declare module '@tiptap/core' {
     rtBox: {
       toggleRtBox: (box: RtBox) => ReturnType;
       unsetRtBox: () => ReturnType;
+    };
+    rtAlign: {
+      setRtAlign: (align: 'left' | 'justify') => ReturnType;
     };
   }
 }
@@ -192,6 +196,38 @@ function splitSelectedLines(tr: Transaction): void {
   }
 }
 
+/** Fix Part 4: Left (normal) or Justify, stored as data-align="justify". */
+const RtAlign = Extension.create({
+  name: 'rtAlign',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          align: {
+            default: null,
+            parseHTML: (el: HTMLElement) => (el.getAttribute('data-align') === RT_JUSTIFY ? RT_JUSTIFY : null),
+            renderHTML: (attrs: { align?: string | null }) => (attrs.align === RT_JUSTIFY ? { 'data-align': RT_JUSTIFY } : {}),
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setRtAlign:
+        (align: 'left' | 'justify') =>
+        ({ tr, commands }) => {
+          splitSelectedLines(tr);
+          const value = align === 'justify' ? RT_JUSTIFY : null;
+          commands.updateAttributes('paragraph', { align: value });
+          commands.updateAttributes('heading', { align: value });
+          return true;
+        },
+    };
+  },
+});
+
 /** Everything the editor knows. Anything else (pasted Word styles, fonts,
  *  sizes, tables) is dropped by the editor itself, then by the allow-list. */
 export function richTextExtensions() {
@@ -215,6 +251,7 @@ export function richTextExtensions() {
     RtColor,
     RtHighlightMark,
     RtBoxNode,
+    RtAlign,
   ];
 }
 
@@ -234,6 +271,8 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   numbered: <path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v5M4 13.5a1.5 1.5 0 113 0L4 17h3" />,
+  alignLeft: <path d="M4 6h16M4 10h10M4 14h16M4 18h10" />,
+  justify: <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />,
   colour: (
     <>
       <path d="M6 19l6-14 6 14M8.5 13h7" />
@@ -324,6 +363,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       tip: e.isActive('rtBox', { box: 'tip' }),
       benefits: e.isActive('rtBox', { box: 'benefits' }),
       inBox: e.isActive('rtBox'),
+      justify: e.isActive({ align: RT_JUSTIFY }),
       link: e.isActive('link'),
       colour: e.isActive('rtColor') || e.isActive('rtHighlight'),
       canUndo: e.can().undo(),
@@ -362,6 +402,8 @@ function Toolbar({ editor }: { editor: Editor }) {
         <ToolButton label="Heading" icon="heading" active={state.heading} onClick={() => chain().toggleHeading({ level: 3 }).run()} testId="rt-heading" />
         <ToolButton label="Bullet list" icon="bullet" active={state.bullet} onClick={() => chain().toggleBulletList().run()} testId="rt-bullet" />
         <ToolButton label="Numbered list" icon="numbered" active={state.numbered} onClick={() => chain().toggleOrderedList().run()} testId="rt-numbered" />
+        <ToolButton label="Align left" icon="alignLeft" active={!state.justify} onClick={() => chain().setRtAlign('left').run()} testId="rt-align-left" />
+        <ToolButton label="Justify" icon="justify" active={state.justify} onClick={() => chain().setRtAlign('justify').run()} testId="rt-justify" />
         <span className="rt-toolbar__sep" aria-hidden="true" />
         <ToolButton label="Text colour and highlight" icon="colour" active={state.colour || panel === 'colour'} onClick={() => setPanel(panel === 'colour' ? null : 'colour')} testId="rt-colour" />
         <ToolButton label={RT_BOX_LABELS.warning} icon="warning" active={state.warning} onClick={() => chain().toggleRtBox('warning').run()} testId="rt-warning" />

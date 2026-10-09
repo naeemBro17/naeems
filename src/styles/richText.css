@@ -432,3 +432,9 @@
   font-size: 14.5px;
   color: var(--color-text-primary);
 }
+
+/* Fix (rich-text editor) Part 4: Justify (the editor and the product page). */
+.rich-text p[data-align='justify'],
+.rich-text h3[data-align='justify'] {
+  text-align: justify;
+}

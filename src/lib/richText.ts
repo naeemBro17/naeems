@@ -14,6 +14,9 @@ export const RT_TEXT_COLORS = ['orange', 'red', 'green', 'blue', 'purple', 'teal
 export const RT_HIGHLIGHTS = ['peach', 'yellow', 'mint'] as const;
 export const RT_BOXES = ['warning', 'tip', 'benefits'] as const;
 
+/** Fix Part 4: the one alignment value besides normal (left). */
+export const RT_JUSTIFY = 'justify';
+
 export type RtTextColor = (typeof RT_TEXT_COLORS)[number];
 export type RtHighlight = (typeof RT_HIGHLIGHTS)[number];
 export type RtBox = (typeof RT_BOXES)[number];
@@ -41,7 +44,7 @@ export const RT_BOX_LABELS: Record<RtBox, string> = {
 
 // b / i are what Word and older pages use for bold / italic.
 const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h3', 'ul', 'ol', 'li', 'a', 'span', 'mark', 'div'];
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'data-color', 'data-hl', 'data-box'];
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'data-color', 'data-hl', 'data-box', 'data-align'];
 
 export const LINK_REL = 'noopener noreferrer nofollow';
 
@@ -90,6 +93,11 @@ function addHooks(): void {
     const hl = el.getAttribute('data-hl');
     if (hl !== null && !(tag === 'mark' && (RT_HIGHLIGHTS as readonly string[]).includes(hl))) {
       el.removeAttribute('data-hl');
+    }
+    // Only data-align="justify", only on a paragraph or heading.
+    const align = el.getAttribute('data-align');
+    if (align !== null && !((tag === 'p' || tag === 'h3') && align === RT_JUSTIFY)) {
+      el.removeAttribute('data-align');
     }
     const box = el.getAttribute('data-box');
     if (box !== null && !(tag === 'div' && (RT_BOXES as readonly string[]).includes(box))) {
