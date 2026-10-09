@@ -151,9 +151,8 @@
 .adm-payouts__row-title {
   font-size: var(--adm-fs-body);
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* The whole payout number ("SFC-32326633"), wrapping on a phone. */
+  overflow-wrap: anywhere;
 }
 
 .adm-payouts__row-sub {
@@ -253,4 +252,15 @@
 
 .adm-payouts__paid--none {
   color: var(--adm-text-2);
+}
+
+/* Parcels booked directly on Steadfast's website: not orders of this site,
+   shown in grey, never "to check". */
+.adm-payouts__reason--outside {
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__pill--grey {
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   fetchPayout,
+  isOutsideParcel,
   itemFeesPaisa,
   payoutPill,
   reasonText,
@@ -101,10 +102,11 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
           </thead>
           <tbody>
             {payout.items.map((item) => {
-              const label = item.invoice ?? item.consignment_id ?? '—';
+              const outside = isOutsideParcel(item);
+              const label = item.invoice ?? (item.consignment_id ? `Parcel ${item.consignment_id}` : '—');
               const reason = reasonText(item);
               return (
-                <tr key={item.id} className={item.match_status === 'to_check' ? 'is-check' : undefined}>
+                <tr key={item.id} className={item.match_status === 'to_check' && !outside ? 'is-check' : undefined}>
                   <td>
                     {item.order_id && item.invoice ? (
                       <button type="button" className="adm-payouts__link" onClick={() => onOpenOrder(item.invoice ?? '')}>
@@ -114,8 +116,11 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
                       <span>{label}</span>
                     )}
                     {reason && (
-                      <span className="adm-payouts__reason" data-testid="payout-reason">
-                        To check: {reason}
+                      <span
+                        className={`adm-payouts__reason${outside ? ' adm-payouts__reason--outside' : ''}`}
+                        data-testid="payout-reason"
+                      >
+                        {outside ? reason : `To check: ${reason}`}
                       </span>
                     )}
                   </td>
@@ -139,7 +144,8 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
         </table>
         <p className="adm-payouts__note">
           Fees = delivery charge + 1% COD fee{anyOther ? ' + anything else Steadfast kept (for example a return charge)' : ''}.
-          Each order page now shows “Steadfast paid ৳… on …”.
+          Steadfast reports these fees for the whole payout; each order’s share is worked out from them, so the
+          total is exact. Each order page now shows “Steadfast paid ৳… on …”.
         </p>
       </div>
     </>

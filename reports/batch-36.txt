@@ -124,28 +124,41 @@ PART 4 — Photo corner seam
 ============================================================
 2. WHAT STEADFAST'S PAYOUT DATA CONTAINS
 ============================================================
-  Steadfast's API guide lists the three read calls (GET /get_balance,
-  GET /payments, GET /payments/{payment_id}) but does not spell out every
-  field of the two payment answers, and the guide PDF is not in the
-  project. So the reader accepts the field names Steadfast is known to
-  use:
-    payment: id / payment_id; date (created_at / paid_at / date);
-             amount (amount / total_amount / paid_amount / net_amount)
-    parcel:  consignment_id, invoice (= our order number), cod_amount,
-             delivery_charge, cod_charge, and the net if given
-             (payable_amount / net_amount …)
-  It also keeps Steadfast's whole answer next to each payout and parcel
-  ("raw"), so nothing is lost if a field is named differently.
-  If Steadfast does not send the COD fee, it is worked out as 1% and
-  marked as worked out. If it sends the net it paid, that is the truth,
-  and anything not explained by the charge and the fee shows as "other"
-  (for example a return charge).
-  How far back: as far as Steadfast's list goes (every page, up to 60
-  pages). The real names and the real history are checked in the final
-  read-only check, after your yes (see section 8).
-  Not matched: a parcel whose invoice is not one of our order numbers
-  (an order typed straight into Steadfast) shows as "To check — Order not
-  found".
+  Read live (after your yes), so these are the REAL fields:
+    One payout (GET /payments, a list of 10 per page, OLDEST first, with
+    no page count — the sync keeps asking for the next page until a page
+    brings nothing new):
+      payment_id   "SFC-29776606"
+      paid_at      the date and time it was paid (Dhaka time)
+      amount       COD collected in that payout          e.g. ৳2,390
+      charges      the COD fees for the whole payout      e.g. ৳22
+      due_bills    the delivery charges for the payout   e.g. ৳230
+      total        what reached you                      e.g. ৳2,138
+                   (2,390 − 22 − 230 = 2,138, exactly)
+      method       "Bkash" · status_label "paid" · paid_bills (a third
+                   amount, ৳425 in the example — its meaning isn't
+                   documented; kept in the raw answer, not used)
+    One parcel inside a payout (GET /payments/{id}):
+      consignment_id, invoice, cod_amount, recipient name / phone /
+      address, status, tracking_code, dates. NO delivery charge and NO
+      COD fee per parcel.
+  So: the payout totals are exact (all 26 payouts add up to the paisa).
+  Each ORDER'S share of the fees is worked out from the payout totals:
+  the COD fee is split by each order's COD, and the delivery charges by
+  each order's own delivery fee (inside/outside Dhaka) where it is our
+  order, otherwise equally. They are marked as estimates. Per order it is
+  close, not to the paisa; per payout and per month it is exact.
+  How far back: 26 payouts, 14 Jan 2026 – 3 Oct 2026 (everything
+  Steadfast lists).
+  Not matched: all 142 parcels in those payouts were booked by hand on
+  Steadfast's website. Your first booking from the site was on 5 Oct,
+  after the newest payout (3 Oct), so none of your site orders has been
+  paid yet. The ৳3,445 balance is waiting for them. Parcels whose invoice
+  is not one of our order numbers (empty, "N/A" or Steadfast's own code)
+  are labelled "Booked directly on Steadfast, not from this site" in
+  grey. They never count as "to check" and their payout gets a grey
+  "Booked on Steadfast" pill. Only parcels with one of our NM- numbers
+  can be Matched or To check.
 
 ============================================================
 3. THE MONEY RULE IN PLAIN WORDS
@@ -294,4 +307,30 @@ PART 4 — Photo corner seam
 ============================================================
 8. LIVE DATABASE AND FUNCTIONS
 ============================================================
-  Not applied yet: waiting for Naeem's yes (asked once, at the end).
+  You said yes. Done:
+  - migration-038 applied. Checked: 4 tables, 4 read rules, the
+    steadfast_unpaid_orders function, view_profit_costs in the switch
+    list, and nobody (no role, no person) has it.
+  - Redeployed: steadfast and steadfast-refresh-all.
+  Read-only check (only GETs to Steadfast; nothing booked, cancelled or
+  changed):
+  - First real read showed Steadfast's real field names (section 2)
+    were different from the guesses: the payout's "amount" is the COD,
+    not what you received, and the list is oldest first with no page
+    count, so only the first 10 payouts had been read. I fixed both in
+    the code (and in the tests), deleted the 10 rows that first read had
+    stored (rows created minutes earlier by the check itself — none of
+    your orders, customers or payments were touched), redeployed and
+    read again.
+  - Now: balance ৳3,445; 26 payouts (14 Jan – 3 Oct) with 142 parcels;
+    every payout's parcels add up exactly to what Steadfast paid. A
+    second read stored nothing new and asked Steadfast only for the
+    list (no parcel details again).
+  - A visitor (not signed in) is refused by the function ("Not
+    authorized") and by the database (permission denied).
+  - e2e/batch-36.spec.ts run again with the database in place: 18/18
+    passed, including the database half of the staff test (staff
+    without the switch get nothing; staff with it see what you see).
+    Unit tests after the fixes: 339/339.
+  - Screenshot with your real data: live-payouts-390-light.png and
+    live-payout-detail-390-light.png.

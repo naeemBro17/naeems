@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { formatTakaBd } from './adminNav';
 import { formatDhakaDateTime } from '../../supabase/functions/_shared/orderTracking';
-import { MATCH_REASON_TEXT, toPaisa, type MatchReason } from '../../supabase/functions/_shared/steadfastPayouts';
+import { MATCH_REASON_TEXT, bookedOutsideSite, toPaisa, type MatchReason } from '../../supabase/functions/_shared/steadfastPayouts';
 
 /**
  * Batch 36 Part 1: Steadfast payouts on the admin side. Every read goes
@@ -201,15 +201,22 @@ export function payoutFeesPaisa(payout: Pick<Payout, 'items'>): number {
   return payout.items.reduce((sum, i) => sum + itemFeesPaisa(i), 0);
 }
 
+/** Parcels booked directly on Steadfast's website (no invoice) are not
+ *  orders of this site — they never count as "to check". */
+export function isOutsideParcel(i: Pick<PayoutItem, 'match_reason' | 'invoice'>): boolean {
+  return bookedOutsideSite({ reason: i.match_reason, invoice: i.invoice });
+}
+
 export function payoutToCheck(payout: Pick<Payout, 'items'>): number {
-  return payout.items.filter((i) => i.match_status === 'to_check').length;
+  return payout.items.filter((i) => i.match_status === 'to_check' && !isOutsideParcel(i)).length;
 }
 
 /** The pill on a payout row / the detail page. */
-export function payoutPill(payout: Pick<Payout, 'items'>): { tone: 'green' | 'amber'; text: string } {
+export function payoutPill(payout: Pick<Payout, 'items'>): { tone: 'green' | 'amber' | 'grey'; text: string } {
   const open = payoutToCheck(payout);
-  if (open === 0) return { tone: 'green', text: 'Matched' };
-  return { tone: 'amber', text: `${open} to check` };
+  if (open > 0) return { tone: 'amber', text: `${open} to check` };
+  if (payout.items.length > 0 && payout.items.every(isOutsideParcel)) return { tone: 'grey', text: 'Booked on Steadfast' };
+  return { tone: 'green', text: 'Matched' };
 }
 
 /** "2026-10" in Dhaka time. */
@@ -297,7 +304,8 @@ export function updatedAgo(iso: string | null, now: Date = new Date()): string {
   return `updated ${shortDhakaDate(iso)}`;
 }
 
-export function reasonText(item: Pick<PayoutItem, 'match_reason' | 'note'>): string | null {
+export function reasonText(item: Pick<PayoutItem, 'match_reason' | 'note' | 'invoice'>): string | null {
   if (!item.match_reason) return null;
+  if (isOutsideParcel(item)) return 'Booked directly on Steadfast, not from this site';
   return item.note ?? MATCH_REASON_TEXT[item.match_reason];
 }

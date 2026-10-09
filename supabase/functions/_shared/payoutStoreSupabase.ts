@@ -21,6 +21,7 @@ interface OrderRow {
   collect_mode: string | null;
   steadfast_consignment_id: string | null;
   steadfast_cod_amount: number | string | null;
+  delivery_fee: number | string | null;
 }
 
 interface PaymentRow {
@@ -52,7 +53,10 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
           .from('steadfast_payout_items')
           .select('payout_id')
           .in('payout_id', ids)
-          .eq('match_status', 'to_check');
+          .eq('match_status', 'to_check')
+          // Parcels booked directly on Steadfast (not an NM- invoice)
+          // will never match — they don't make the payout read again.
+          .or('match_reason.neq.order_not_found,invoice.ilike.NM-*');
         if (openErr) fail('Reading payout items', openErr.message);
         for (const r of (open ?? []) as { payout_id: string }[]) toCheck.add(r.payout_id);
       }
@@ -78,7 +82,7 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
     },
 
     async findOrders(invoices: string[], consignmentIds: string[]): Promise<OrderForMatch[]> {
-      const columns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount';
+      const columns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount, delivery_fee';
       const found = new Map<string, OrderRow>();
       if (invoices.length > 0) {
         const { data, error } = await db.from('orders').select(columns).in('order_number', invoices);
@@ -110,6 +114,7 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
         steadfast_consignment_id: o.steadfast_consignment_id,
         steadfast_cod_amount: o.steadfast_cod_amount === null ? null : Number(o.steadfast_cod_amount),
         paid_before_courier: Math.round((paid.get(o.id) ?? 0) * 100) / 100,
+        delivery_fee: o.delivery_fee === null ? null : Number(o.delivery_fee),
       }));
     },
 

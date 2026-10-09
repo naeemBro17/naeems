@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allocatePayoutTotals,
+  bookedOutsideSite,
   matchItems,
   parseBalance,
   parsePaymentDetail,
   parsePaymentsList,
   readPayoutItem,
+  splitExactly,
   syncSteadfastPayouts,
   toPaisa,
   type CourierCostRow,
@@ -20,6 +23,7 @@ import {
   overdueOrders,
   payoutFeesPaisa,
   payoutPill,
+  reasonText,
   takaExact,
   takaWhole,
   type Payout,
@@ -291,5 +295,92 @@ describe('the payouts page numbers', () => {
     expect(overdueOrders(rows, now).map((r) => r.order_number)).toEqual(['NM-1450']);
     // Paid (no longer returned by the database) → the alert is gone.
     expect(overdueOrders(rows.slice(1), now)).toEqual([]);
+  });
+});
+
+/* ---- Steadfast's real answers (read live after migration-038) ---- */
+
+describe("Steadfast's real payout shape", () => {
+  // Real fields: amount = COD collected, charges = COD fees, due_bills =
+  // delivery charges, total = what was paid. Parcels carry only cod_amount.
+  const REAL_PAYOUT = {
+    amount: 2390,
+    charges: 22,
+    created_at: '2026-05-20 03:08:11',
+    due_bills: 230,
+    method: 'Bkash',
+    paid_at: '2026-05-20 11:17:59',
+    paid_bills: 425,
+    payment_id: 'SFC-29776606',
+    status_label: 'paid',
+    total: 2138,
+  };
+
+  it('the payout: "total" is what reached Naeem; amount / charges / due_bills are the totals', () => {
+    const [p] = parsePaymentsList([REAL_PAYOUT]).payouts;
+    expect(p).toMatchObject({
+      paymentId: 'SFC-29776606',
+      amountPaisa: 213800,
+      codTotalPaisa: 239000,
+      feeTotalPaisa: 2200,
+      deliveryTotalPaisa: 23000,
+      paidAt: '2026-05-20T05:17:59.000Z',
+      steadfastStatus: 'paid',
+    });
+  });
+
+  it('payout-level fees are split per order and still add up exactly', () => {
+    const parcels = [1630, 0, 760].map((cod, i) =>
+      readPayoutItem({ consignment_id: 100 + i, invoice: '', cod_amount: cod, status: 'delivered' })
+    ).filter((x) => x !== null);
+    const [p] = parsePaymentsList([{ ...REAL_PAYOUT, amount: 2390, total: 2138 }]).payouts;
+    const split = allocatePayoutTotals(parcels, p, [130, 70, null]);
+    expect(split.reduce((t, i) => t + i.codFeePaisa, 0)).toBe(2200);
+    expect(split.reduce((t, i) => t + i.deliveryChargePaisa, 0)).toBe(23000);
+    expect(split.reduce((t, i) => t + i.netPaisa, 0)).toBe(213800);
+    // Delivery by our own delivery fee (130 : 70 : average 100).
+    // ৳230 × 130/300, 70/300, 100/300 = ৳99.67 / ৳53.67 / ৳76.67, rounded to
+    // whole paisa so they add up to exactly ৳230.
+    expect(split.map((i) => i.deliveryChargePaisa)).toEqual([9966, 5367, 7667]);
+    expect(split.every((i) => i.feeEstimated)).toBe(true);
+    expect(splitExactly(100, [1, 1, 1])).toEqual([34, 33, 33]);
+  });
+
+  it('an oldest-first list without page numbers is walked until a page brings nothing new', async () => {
+    const pages: Record<string, unknown> = {
+      '/payments': [{ ...REAL_PAYOUT, payment_id: 'SFC-1' }, { ...REAL_PAYOUT, payment_id: 'SFC-2' }],
+      '/payments?page=2': [{ ...REAL_PAYOUT, payment_id: 'SFC-3' }],
+      '/payments?page=3': [],
+    };
+    const calls: string[] = [];
+    const get = async (path: string): Promise<FetchAnswer> => {
+      calls.push(path);
+      if (path === '/get_balance') return { ok: true, status: 200, body: { current_balance: 3445 } };
+      if (path in pages) return { ok: true, status: 200, body: pages[path] };
+      return { ok: true, status: 200, body: { data: { consignments: [] } } };
+    };
+    const result = await syncSteadfastPayouts(get, new MemoryStore());
+    expect(result.payoutsSeen).toBe(3);
+    expect(calls).toContain('/payments?page=3');
+    expect(calls).not.toContain('/payments?page=4');
+  });
+
+  it('parcels booked directly on Steadfast (no invoice) are not "to check"', () => {
+    expect(bookedOutsideSite({ reason: 'order_not_found', invoice: null })).toBe(true);
+    expect(bookedOutsideSite({ reason: 'order_not_found', invoice: 'NM-1' })).toBe(false);
+    const outside = item({ invoice: null, order_id: null, match_status: 'to_check', match_reason: 'order_not_found' });
+    expect(payoutPill({ items: [outside] })).toEqual({ tone: 'grey', text: 'Booked on Steadfast' });
+    expect(payoutPill({ items: [outside, item({})] })).toEqual({ tone: 'green', text: 'Matched' });
+    expect(reasonText(outside)).toBe('Booked directly on Steadfast, not from this site');
+  });
+});
+
+describe('invoices that are not our order numbers', () => {
+  it('"N/A" or Steadfast\'s own code = booked directly on Steadfast', () => {
+    for (const invoice of ['N/A', 'CIM7LFLK9V', '', null]) {
+      expect(bookedOutsideSite({ reason: 'order_not_found', invoice })).toBe(true);
+    }
+    expect(bookedOutsideSite({ reason: 'order_not_found', invoice: 'nm-1979' })).toBe(false);
+    expect(bookedOutsideSite({ reason: 'cod_differs', invoice: 'N/A' })).toBe(false);
   });
 });

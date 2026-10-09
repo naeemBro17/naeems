@@ -88,24 +88,40 @@ export interface PayoutSummary {
   amountPaisa: number;
   parcelCount: number | null;
   steadfastStatus: string | null;
+  /** Payout-level totals, when Steadfast gives them (its real answer:
+   *  amount = COD collected, charges = COD fees, due_bills = delivery
+   *  charges, total = what was paid; checked live in Batch 36). */
+  codTotalPaisa: number | null;
+  feeTotalPaisa: number | null;
+  deliveryTotalPaisa: number | null;
   raw: Json;
 }
 
-const PAYMENT_ID_KEYS = ['id', 'payment_id', 'payment_invoice_id', 'invoice_id'] as const;
+const PAYMENT_ID_KEYS = ['payment_id', 'id', 'payment_invoice_id', 'invoice_id'] as const;
 const PAYMENT_DATE_KEYS = ['paid_at', 'payment_date', 'date', 'created_at', 'updated_at'] as const;
-const PAYMENT_AMOUNT_KEYS = ['amount', 'total_amount', 'paid_amount', 'net_amount', 'payable_amount', 'total'] as const;
+// What reached Naeem. Steadfast's own answer calls it "total" ("amount" is
+// the COD collected before charges).
+const PAYMENT_AMOUNT_KEYS = ['total', 'net_amount', 'payable_amount', 'paid_amount', 'total_amount', 'amount'] as const;
 const PAYMENT_COUNT_KEYS = ['total_consignment', 'total_consignments', 'consignment_count', 'parcel_count', 'total_parcel', 'count'] as const;
+
+function optionalPaisa(obj: Json, key: string): number | null {
+  return obj[key] === undefined || obj[key] === null || obj[key] === '' ? null : toPaisa(obj[key]);
+}
 
 function readPayoutSummary(obj: Json): PayoutSummary | null {
   const paymentId = text(pick(obj, PAYMENT_ID_KEYS));
   if (!paymentId) return null;
   const count = Number(pick(obj, PAYMENT_COUNT_KEYS));
+  const hasNet = hasAny(obj, ['total', 'net_amount', 'payable_amount', 'paid_amount']);
   return {
     paymentId,
     paidAt: parseSteadfastDate(pick(obj, PAYMENT_DATE_KEYS)),
     amountPaisa: toPaisa(pick(obj, PAYMENT_AMOUNT_KEYS)),
     parcelCount: Number.isFinite(count) && count >= 0 ? Math.round(count) : null,
-    steadfastStatus: text(pick(obj, ['status', 'payment_status'])),
+    steadfastStatus: text(pick(obj, ['status_label', 'status', 'payment_status'])),
+    codTotalPaisa: hasNet ? optionalPaisa(obj, 'amount') : null,
+    feeTotalPaisa: optionalPaisa(obj, 'charges'),
+    deliveryTotalPaisa: optionalPaisa(obj, 'due_bills'),
     raw: obj,
   };
 }
@@ -136,7 +152,7 @@ function pagingOf(body: unknown): Json | null {
   return null;
 }
 
-export function parsePaymentsList(body: unknown, page = 1): { payouts: PayoutSummary[]; hasMore: boolean } {
+export function parsePaymentsList(body: unknown, page = 1): { payouts: PayoutSummary[]; hasMore: boolean; paged: boolean } {
   const payouts = listRows(body)
     .filter(isObject)
     .map(readPayoutSummary)
@@ -149,7 +165,7 @@ export function parsePaymentsList(body: unknown, page = 1): { payouts: PayoutSum
     if (Number.isFinite(last) && Number.isFinite(current)) hasMore = current < last;
     else hasMore = typeof paging.next_page_url === 'string' && paging.next_page_url !== '';
   }
-  return { payouts, hasMore: hasMore && payouts.length > 0 };
+  return { payouts, hasMore: hasMore && payouts.length > 0, paged: paging !== null };
 }
 
 export interface PayoutItem {
@@ -162,6 +178,8 @@ export interface PayoutItem {
   netPaisa: number;
   /** True when the COD fee was not in the answer and was worked out as 1%. */
   feeEstimated: boolean;
+  /** Steadfast gave this parcel's own delivery charge. */
+  chargeGiven: boolean;
   raw: Json;
 }
 
@@ -208,6 +226,7 @@ export function readPayoutItem(obj: Json): PayoutItem | null {
     otherPaisa,
     netPaisa,
     feeEstimated: !feeGiven,
+    chargeGiven: hasAny(obj, CHARGE_KEYS),
     raw: obj,
   };
 }
@@ -264,6 +283,74 @@ export interface OrderForMatch {
   steadfast_cod_amount: number | null;
   /** Payments and refunds, minus the "COD via Steadfast" row itself. */
   paid_before_courier: number;
+  /** The delivery fee on our order — the guide for splitting Steadfast's
+   *  payout-level delivery charges between parcels. */
+  delivery_fee?: number | null;
+}
+
+/** Our order numbers ("NM-1979", migration-021); the site books every
+ *  parcel with one as its invoice. */
+export const SITE_ORDER_NUMBER = /^NM-\d+$/i;
+
+/** "Order not found" for a parcel whose invoice is not one of our order
+ *  numbers (none, "N/A", or Steadfast's own code): it was booked directly
+ *  on Steadfast's website, not from this site. */
+export function bookedOutsideSite(item: { reason: MatchReason | null; invoice: string | null }): boolean {
+  return item.reason === 'order_not_found' && !SITE_ORDER_NUMBER.test((item.invoice ?? '').trim());
+}
+
+/** Splits `totalPaisa` by weights, exactly (largest remainder). */
+export function splitExactly(totalPaisa: number, weights: readonly number[]): number[] {
+  if (weights.length === 0) return [];
+  const safe = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
+  const sum = safe.reduce((a, b) => a + b, 0);
+  const shares = sum > 0 ? safe.map((w) => (totalPaisa * w) / sum) : safe.map(() => totalPaisa / safe.length);
+  const floors = shares.map((s) => Math.floor(s));
+  let left = totalPaisa - floors.reduce((a, b) => a + b, 0);
+  const order = shares.map((s, i) => [s - Math.floor(s), i] as const).sort((a, b) => b[0] - a[0]);
+  for (const [, i] of order) {
+    if (left <= 0) break;
+    floors[i] += 1;
+    left -= 1;
+  }
+  return floors;
+}
+
+/**
+ * Steadfast's real payout answer gives the COD fee ("charges") and the
+ * delivery charges ("due_bills") only as payout totals, not per parcel.
+ * They are split here so every payout still adds up to the paisa: the COD
+ * fee by each parcel's COD, the delivery charges by our own order's
+ * delivery fee (inside / outside Dhaka) where known, otherwise equally.
+ * Anything else Steadfast kept (paid − (COD − fee − delivery)) becomes
+ * "other", split by COD. The per-order amounts are marked as estimates.
+ */
+export function allocatePayoutTotals<T extends PayoutItem>(
+  items: readonly T[],
+  summary: Pick<PayoutSummary, 'amountPaisa' | 'feeTotalPaisa' | 'deliveryTotalPaisa'>,
+  deliveryWeights: readonly (number | null)[]
+): T[] {
+  if (items.length === 0 || items.some((i) => i.chargeGiven)) return [...items];
+  if (summary.feeTotalPaisa === null && summary.deliveryTotalPaisa === null) return [...items];
+  const cods = items.map((i) => i.codPaisa);
+  const fees = summary.feeTotalPaisa === null ? items.map((i) => i.codFeePaisa) : splitExactly(summary.feeTotalPaisa, cods);
+  const known = deliveryWeights.filter((w): w is number => w !== null && w > 0);
+  const fallback = known.length > 0 ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+  const weights = deliveryWeights.map((w) => (w !== null && w > 0 ? w : fallback));
+  const delivery = splitExactly(summary.deliveryTotalPaisa ?? 0, weights);
+  const codSum = cods.reduce((a, b) => a + b, 0);
+  const feeSum = fees.reduce((a, b) => a + b, 0);
+  const deliverySum = delivery.reduce((a, b) => a + b, 0);
+  const otherTotal = Math.max(0, codSum - feeSum - deliverySum - summary.amountPaisa);
+  const others = otherTotal > 0 ? splitExactly(otherTotal, cods.some((c) => c > 0) ? cods : cods.map(() => 1)) : cods.map(() => 0);
+  return items.map((item, i) => ({
+    ...item,
+    codFeePaisa: fees[i],
+    deliveryChargePaisa: delivery[i],
+    otherPaisa: others[i],
+    netPaisa: item.codPaisa - fees[i] - delivery[i] - others[i],
+    feeEstimated: true,
+  }));
 }
 
 /** The COD we expected Steadfast to collect: what the parcel was booked
@@ -526,13 +613,13 @@ export async function syncSteadfastPayouts(
       }
       break;
     }
-    const { payouts, hasMore } = parsePaymentsList(answer.body, page);
+    const { payouts, hasMore, paged } = parsePaymentsList(answer.body, page);
     const fresh = payouts.filter((p) => !all.some((a) => a.paymentId === p.paymentId));
     all.push(...fresh);
-    if (!hasMore || fresh.length === 0) break;
-    // Later pages only matter while they still hold payouts we don't have.
-    const known = await store.storedPayouts(fresh.map((p) => p.paymentId));
-    if (fresh.every((p) => known.get(p.paymentId)?.itemsSynced && !known.get(p.paymentId)?.hasToCheck)) break;
+    // Steadfast's real list comes oldest first, a page at a time, without
+    // saying how many pages there are: keep asking until a page brings
+    // nothing new (an API that ignores ?page= repeats page 1 → stop).
+    if (fresh.length === 0 || (paged && !hasMore)) break;
   }
   result.payoutsSeen = all.length;
 
@@ -560,6 +647,9 @@ export async function syncSteadfastPayouts(
       paidAt: summary.paidAt ?? more.paidAt ?? null,
       amountPaisa: summary.amountPaisa || more.amountPaisa || 0,
       parcelCount: summary.parcelCount ?? more.parcelCount ?? null,
+      codTotalPaisa: summary.codTotalPaisa ?? more.codTotalPaisa ?? null,
+      feeTotalPaisa: summary.feeTotalPaisa ?? more.feeTotalPaisa ?? null,
+      deliveryTotalPaisa: summary.deliveryTotalPaisa ?? more.deliveryTotalPaisa ?? null,
     };
     const payoutId = await store.upsertPayout(baseRow(merged, true, stamp, items.length));
 
@@ -568,7 +658,15 @@ export async function syncSteadfastPayouts(
       items.map((i) => i.consignmentId).filter((v): v is string => v !== null)
     );
     const elsewhere = await store.ordersInOtherPayouts(orders.map((o) => o.id), payoutId);
-    const matched = matchItems(items, orders, elsewhere);
+    const weights = items.map((i) => {
+      const o = orders.find(
+        (x) =>
+          (i.invoice !== null && x.order_number.toUpperCase() === i.invoice.toUpperCase()) ||
+          (i.consignmentId !== null && x.steadfast_consignment_id === i.consignmentId)
+      );
+      return o?.delivery_fee ?? null;
+    });
+    const matched = matchItems(allocatePayoutTotals(items, merged, weights), orders, elsewhere);
     await store.upsertItems(matched.map((m) => payoutItemRow(payoutId, m)));
     const costs = matched
       .map((m) => courierCostRow(payoutId, merged.paidAt, m, stamp))
