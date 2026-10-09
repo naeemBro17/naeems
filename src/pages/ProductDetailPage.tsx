@@ -264,6 +264,12 @@ function DetailContent({
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
+  // Batch 36 Part 4: the mirrored strip under the photo moves with the
+  // carousel (transform only, no re-render).
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const syncMirror = (left: number) => {
+    if (mirrorRef.current) mirrorRef.current.style.transform = `translate3d(${-left}px, 0, 0)`;
+  };
   const galleryRef = useRef<HTMLDivElement>(null);
   // Opened by the picture morph: the sheet waits for the photo to land
   // before sliding up over its bottom edge (see .pdp-sheet--settle).
@@ -327,6 +333,7 @@ function DetailContent({
   // the browser paints, so no frame ever shows the previous photo.
   useLayoutEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
+    syncMirror(0);
     setActiveImage(0);
   }, [selectedOption.id, firstImage]);
 
@@ -396,6 +403,7 @@ function DetailContent({
 
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    syncMirror(el.scrollLeft);
     const index = Math.round(el.scrollLeft / el.clientWidth);
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
@@ -458,6 +466,28 @@ function DetailContent({
                 data-testid="photo-backdrop"
               />
             ))}
+          {/* Batch 36 Part 4: under the photo, its own bottom edge mirrored
+              (a sharp copy with a softly blurred one over it), so the colour
+              where photo and strip meet is the same and the sheet's rounded
+              corners show no band. It slides with the photos. */}
+          <div className="product-detail__mirror" aria-hidden="true" data-testid="photo-mirror">
+            <div ref={mirrorRef} className="product-detail__mirror-track">
+              {images.map((url, index) => (
+                <span key={`mirror-${url}`} className="product-detail__mirror-slide">
+                  {(['sharp', 'soft'] as const).map((layer) => (
+                    <img
+                      key={layer}
+                      src={url}
+                      alt=""
+                      {...protectedImageProps}
+                      className={`product-detail__mirror-img product-detail__mirror-img--${layer} ${PROTECTED_IMAGE_CLASS}`}
+                      loading={index === 0 ? 'eager' : 'lazy'}
+                    />
+                  ))}
+                </span>
+              ))}
+            </div>
+          </div>
           <div
             ref={carouselRef}
             className="product-detail__carousel"
