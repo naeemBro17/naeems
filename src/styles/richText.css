@@ -454,3 +454,31 @@
 .rich-text h3[data-align='justify'] {
   text-align: justify;
 }
+
+/* Fix (rich-text editor) Part 7: calm body text. Ordinary text is the
+   site's secondary grey at regular weight, as the description was before
+   Batch 36, in the editor and on the product page alike. Bold, headings
+   and the boxes stay in the primary colour; the named colours keep their
+   own. The product name, price and buttons stay the strongest things. */
+.accordion__rich,
+.rt-editor__content.rich-text {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.accordion__rich strong,
+.accordion__rich b,
+.accordion__rich h3,
+.accordion__rich div[data-box],
+.rt-editor__content.rich-text strong,
+.rt-editor__content.rich-text b,
+.rt-editor__content.rich-text h3,
+.rt-editor__content.rich-text div[data-box] {
+  color: var(--color-text-primary);
+}
+
+/* Bold inside a named colour keeps that colour. */
+.accordion__rich span[data-color] :is(strong, b),
+.rt-editor__content.rich-text span[data-color] :is(strong, b) {
+  color: inherit;
+}
