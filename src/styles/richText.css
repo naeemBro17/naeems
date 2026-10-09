@@ -72,7 +72,7 @@
 /* ---------- The text itself ---------- */
 
 .rich-text {
-  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Bengali', system-ui, sans-serif;
   font-size: 15px;
   /* Fix (rich-text editor) Part 5: the old plain text's line height. */
   line-height: 1.7;
