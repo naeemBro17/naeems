@@ -11,31 +11,9 @@ import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PrintScaling, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import { encode as encodeQr } from 'uqr';
 import { code128Widths } from './code128';
-import { fullAddress, invoiceMoney, type InvoiceData, type InvoiceShop } from './invoiceData';
-
-export type InvoiceWeight = 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold';
-
-/** Raw font files: Latin = Plus Jakarta Sans, Bengali = Hind Siliguri. */
-export type InvoiceFontFiles = Record<'latin' | 'bengali', Record<InvoiceWeight, Uint8Array>>;
-
-/** Where the files live in /public, by family and weight. */
-export const INVOICE_FONT_FILES: Record<'latin' | 'bengali', Record<InvoiceWeight, string>> = {
-  latin: {
-    regular: 'PlusJakartaSans-Regular.ttf',
-    medium: 'PlusJakartaSans-Medium.ttf',
-    semibold: 'PlusJakartaSans-SemiBold.ttf',
-    bold: 'PlusJakartaSans-Bold.ttf',
-    extrabold: 'PlusJakartaSans-ExtraBold.ttf',
-  },
-  bengali: {
-    regular: 'HindSiliguri-Regular.ttf',
-    medium: 'HindSiliguri-Medium.ttf',
-    semibold: 'HindSiliguri-SemiBold.ttf',
-    bold: 'HindSiliguri-Bold.ttf',
-    // Hind Siliguri stops at Bold.
-    extrabold: 'HindSiliguri-Bold.ttf',
-  },
-};
+import { fullAddress, invoiceMoney, type InvoiceData } from './invoiceData';
+import type { InvoiceShop } from './invoiceShop';
+import type { InvoiceFontFiles, InvoiceWeight } from './invoiceFonts';
 
 export interface InvoicePdfResult {
   bytes: Uint8Array;

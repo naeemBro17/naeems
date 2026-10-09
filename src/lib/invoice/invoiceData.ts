@@ -1,38 +1,15 @@
 // Batch 37: what one printed invoice says, worked out from a saved order
 // (admin) or the checkout snapshot (the customer's "Download invoice").
 // Pure code — the PDF drawing lives in renderInvoice.ts.
-import type { AppSettings, OrderWithDetails } from '../../types';
+import type { OrderWithDetails } from '../../types';
 import type { OrderSnapshot } from '../../features/checkout/types';
 import { codAmountFor, normalizeCollectMode } from '../../../supabase/functions/_shared/cod';
 import { PAYMENT_METHOD_NAMES, summarizePayments, type OrderPayment } from '../payments';
-import { bdPhoneKey } from '../phone';
+import { formatInvoicePhone } from './invoiceShop';
 import { amountInWords } from './amountInWords';
-
-export const INVOICE_DEFAULTS = {
-  shopName: "NAEEM'S",
-  city: 'Dhaka, Bangladesh',
-  communityLink: 'https://www.facebook.com/groups/skinscience.psychology.solution',
-  communityTitle: "Join the NAEEM'S skincare community",
-  communityLine1: 'Skincare tips, new arrivals and members-only offers.',
-  communityLine2: 'Scan the code with your phone camera to join our Facebook group.',
-} as const;
 
 /** Steadfast parcels are booked as their standard home delivery. */
 export const STEADFAST_DELIVERY_TYPE = 'Regular';
-
-export interface InvoiceShop {
-  name: string;
-  /** "01560-040012" (or as typed when not a BD mobile); '' when unset. */
-  phone: string;
-  city: string;
-  community: {
-    show: boolean;
-    link: string;
-    title: string;
-    line1: string;
-    line2: string;
-  };
-}
 
 export interface InvoiceLine {
   name: string;
@@ -90,18 +67,6 @@ export interface InvoiceData {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** "01850-078600" for a BD mobile; anything else as typed. */
-export function formatInvoicePhone(raw: string | null | undefined): string {
-  const text = (raw ?? '').trim();
-  if (/^https?:/i.test(text)) {
-    const digits = text.replace(/\D/g, '');
-    return digits === '' ? '' : formatInvoicePhone(digits);
-  }
-  const key = bdPhoneKey(text);
-  if (key && /^01\d{9}$/.test(key)) return `${key.slice(0, 5)}-${key.slice(5)}`;
-  return text;
-}
-
 /** ৳ amounts the Bangladeshi way: 1,20,450 — decimals only when there are any. */
 export function invoiceMoney(amount: number): string {
   const negative = amount < 0;
@@ -131,26 +96,6 @@ export function invoiceDate(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
-}
-
-/** Every invoice setting, read from one place, with its default. */
-export function invoiceShop(settings: Partial<AppSettings>): InvoiceShop {
-  const pick = (value: string | undefined, fallback: string) => {
-    const v = (value ?? '').trim();
-    return v === '' ? fallback : v;
-  };
-  return {
-    name: INVOICE_DEFAULTS.shopName,
-    phone: formatInvoicePhone(pick(settings.invoice_shop_phone, settings.shop_whatsapp_number ?? '')),
-    city: pick(settings.invoice_shop_city, INVOICE_DEFAULTS.city),
-    community: {
-      show: (settings.invoice_show_community ?? 'true').trim() !== 'false',
-      link: pick(settings.invoice_community_link, INVOICE_DEFAULTS.communityLink),
-      title: pick(settings.invoice_community_title, INVOICE_DEFAULTS.communityTitle),
-      line1: pick(settings.invoice_community_line1, INVOICE_DEFAULTS.communityLine1),
-      line2: pick(settings.invoice_community_line2, INVOICE_DEFAULTS.communityLine2),
-    },
-  };
 }
 
 function areaOf(thana: string, district: string): string {

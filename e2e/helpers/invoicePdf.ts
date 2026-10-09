@@ -8,7 +8,7 @@ import {
   MultiFormatReader,
   RGBLuminanceSource,
 } from '@zxing/library';
-import { INVOICE_FONT_FILES, type InvoiceFontFiles, type InvoiceWeight } from '../../src/lib/invoice/renderInvoice';
+import { INVOICE_FONT_FILES, type InvoiceFontFiles, type InvoiceWeight } from '../../src/lib/invoice/invoiceFonts';
 
 // Batch 37: reads the invoice fonts from public/, turns a PDF page into an
 // image (pdf.js + @napi-rs/canvas) and reads barcodes / QR codes from it

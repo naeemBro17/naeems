@@ -5,15 +5,8 @@ import { describe, expect, it } from 'vitest';
 import fontkit from '@pdf-lib/fontkit';
 import { amountInWords } from './invoice/amountInWords';
 import { CODE128_PATTERNS, code128Values, code128Widths } from './invoice/code128';
-import {
-  INVOICE_DEFAULTS,
-  formatInvoicePhone,
-  fullAddress,
-  invoiceFromOrder,
-  invoiceFromSnapshot,
-  invoiceMoney,
-  invoiceShop,
-} from './invoice/invoiceData';
+import { fullAddress, invoiceFromOrder, invoiceFromSnapshot, invoiceMoney } from './invoice/invoiceData';
+import { INVOICE_DEFAULTS, formatInvoicePhone, invoiceShop } from './invoice/invoiceShop';
 import { buildInvoicePdf } from './invoice/renderInvoice';
 import { pickBookedToday } from './invoice/invoicePrints';
 import { invoiceCases, mockOrder } from '../../e2e/helpers/invoiceFixtures';

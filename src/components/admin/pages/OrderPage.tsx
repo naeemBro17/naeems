@@ -17,7 +17,8 @@ import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { DeleteOrdersDialog } from '../DeleteOrdersDialog';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { formatTaka } from '../../../lib/format';
-import { buildOrderPdf } from '../../../lib/orderExport';
+import { invoiceFromOrder } from '../../../lib/invoice/invoiceData';
+import { InvoiceDialog } from '../InvoiceDialog';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../lib/orderStatus';
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../../lib/manualOrders';
@@ -46,7 +47,6 @@ import { codAmountFor } from '../../../../supabase/functions/_shared/cod';
 import { toPaisa } from '../../../../supabase/functions/_shared/steadfastPayouts';
 import '../../../styles/adminPayouts.css';
 import { fetchOrderPayout, shortDhakaDate, takaExact, takaWhole, type LoadState, type OrderPayoutInfo } from '../../../lib/payouts';
-import { toOrderSnapshot } from '../../../lib/orderSnapshot';
 import { adminPath } from '../../../lib/adminPages';
 
 interface OrderPageProps {
@@ -106,6 +106,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -287,11 +288,11 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
     showToast(ok ? 'Address copied' : 'Could not copy', ok ? 'success' : 'error');
   };
 
-  const handleDownloadInvoice = async () => {
-    if (!order) return;
-    const doc = await buildOrderPdf(toOrderSnapshot(order));
-    doc.save(`${order.order_number}.pdf`);
-  };
+  // Batch 37: the A4 fold-to-label invoice (Print / Download / Share).
+  const buildInvoice = useCallback(async () => {
+    if (!order) return { invoices: [], orderIds: [] };
+    return { invoices: [invoiceFromOrder(order, payments)], orderIds: [order.id] };
+  }, [order, payments]);
 
   // Batch 30/32: with payments recorded, COD = what is still due (the
   // steadfast function sends exactly this); null = blocked, an unverified
@@ -765,7 +766,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
             <section className="adm-ocard" aria-label="Other actions">
               <h2 className="adm-ocard__title">Other actions</h2>
               <div className="adm-ocard__buttons">
-                <button type="button" className="adm-btn adm-btn--sm" onClick={() => void handleDownloadInvoice()}>
+                <button type="button" className="adm-btn adm-btn--sm" onClick={() => setInvoiceOpen(true)}>
                   Invoice
                 </button>
                 {canChangeStatus && order.status === 'confirmed' && !order.steadfast_consignment_id && (
@@ -814,6 +815,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
             </section>
           </div>
         </div>
+      )}
+
+      {order && (
+        <InvoiceDialog
+          isOpen={invoiceOpen}
+          onClose={() => setInvoiceOpen(false)}
+          title={`Invoice ${order.order_number}`}
+          fileName={`Invoice-${order.order_number}.pdf`}
+          build={buildInvoice}
+          onPrinted={() => void reload()}
+        />
       )}
 
       {order && (

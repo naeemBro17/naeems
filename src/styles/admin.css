@@ -3511,3 +3511,38 @@ html[data-admin] .toast--info .toast__icon {
   gap: var(--adm-s2);
   flex-wrap: wrap;
 }
+
+/* Batch 37: invoice dialog (Print is the one main action). */
+.invoice-dialog__status {
+  display: flex;
+  align-items: center;
+  gap: var(--adm-s2);
+  margin: 0 0 var(--adm-s2);
+}
+.invoice-dialog__hint {
+  margin: 0 0 var(--adm-s3, 12px);
+  color: var(--adm-text-2, #6e6e73);
+  font-size: 0.875rem;
+}
+.invoice-dialog__actions {
+  flex-wrap: wrap;
+}
+
+/* Batch 37: Orders → Print invoices. */
+.adm-orders__print-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--adm-s2);
+  margin: 0 0 var(--adm-s2);
+}
+.adm-orders__print-bar p {
+  margin: 0;
+  flex: 1 1 100%;
+  color: var(--adm-text-2, #6e6e73);
+  font-size: 0.875rem;
+}
+.adm-orow2__printed {
+  font-size: 0.75rem;
+  color: var(--adm-text-2, #6e6e73);
+}
