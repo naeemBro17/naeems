@@ -237,6 +237,10 @@ export interface AppSettings {
    *  features/checkout/types.ts is only the pre-login/offline fallback. */
   delivery_fee_inside_dhaka: string;
   delivery_fee_outside_dhaka: string;
+  /** Batch 35 Part 6: 'true' shows the rider's name and Call button to the
+   *  customer while the order is Out for delivery (when Steadfast gives
+   *  them). Anything else, or missing, is Off. Super Admin only. */
+  show_rider_phone: string;
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
