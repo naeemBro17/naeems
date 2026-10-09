@@ -120,7 +120,7 @@ for (const theme of ['light', 'dark'] as const) {
       await mockBatch30Data(page);
       await mockSteadfast(page, { tracking: { courierStatus: 'pending', events: TIMELINE } });
       await page.goto(`/admin?tab=orders&order=${orderId}`);
-      const dialog = page.getByRole('dialog').first();
+      const dialog = page.getByTestId('admin-order-page');
       await expect(dialog.getByTestId('steadfast-banner')).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(400);
       await page.screenshot({ path: `${DIR}/admin-order-banner-${size.label}-${theme}.png` });
@@ -130,6 +130,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.waitForTimeout(200);
       await page.screenshot({ path: `${DIR}/admin-payment-partly-paid-${size.label}-${theme}.png` });
 
+      await dialog.getByTestId('history-toggle').click();
       await dialog.getByTestId('courier-timeline').scrollIntoViewIfNeeded();
       await page.waitForTimeout(200);
       await page.screenshot({ path: `${DIR}/admin-order-timeline-${size.label}-${theme}.png` });

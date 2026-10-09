@@ -633,7 +633,8 @@ test('customer notes and tags: save, chips, filter; private from the customer; e
   await expect(page).toHaveURL(/ctag=/);
   const rows = page.locator('[data-testid="customer-row"]');
   await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText(E2E_EMAIL);
+  // Batch 35: the row shows the name (the email is searchable, not shown).
+  await expect(rows.first()).toContainText('E2E Test Customer');
 
   const stored = await select<{ note: string; tags: string[]; updated_by: string }[]>(
     admin.accessToken,

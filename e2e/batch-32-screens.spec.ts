@@ -117,8 +117,7 @@ for (const theme of ['light', 'dark'] as const) {
       await start(page, theme, size.width);
       await showOrderAsPayLater(page);
       await page.goto(`/admin?tab=orders&order=${orderId}`);
-      const dialog = page.getByRole('dialog').first();
-      await dialog.getByRole('button', { name: 'Send to Steadfast' }).click({ timeout: 20_000 });
+      await page.getByRole('button', { name: 'Book with Steadfast' }).first().click({ timeout: 20_000 });
       await expect(page.getByRole('dialog', { name: 'Book with Steadfast?' })).toContainText('customer pays later');
       await page.waitForTimeout(300);
       await page.screenshot({ path: `${DIR}/booking-confirm-pay-later-${size.label}-${theme}.png` });

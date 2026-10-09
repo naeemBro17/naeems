@@ -461,9 +461,12 @@ test('admin notes and internal history are private: the customer cannot read the
   // Staff still see them, on the order screen.
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${order.id}`);
-  await expect(page.getByRole('dialog').getByPlaceholder('Private note, customer never sees this')).toHaveValue(note, { timeout: 15_000 });
-  await expect(page.getByRole('dialog').getByText('E2E internal step note').first()).toBeVisible();
-  await expect(page.getByRole('dialog').getByText('by e2e.admin').first()).toBeVisible();
+  // (Batch 35: the order is a page; its History is folded until tapped.)
+  const orderPage = page.getByTestId('admin-order-page');
+  await expect(orderPage.getByPlaceholder('Private note, customer never sees this')).toHaveValue(note, { timeout: 15_000 });
+  await orderPage.getByTestId('history-toggle').click();
+  await expect(orderPage.getByText('E2E internal step note').first()).toBeVisible();
+  await expect(orderPage.getByText('by e2e.admin').first()).toBeVisible();
 
   // The customer's own page still shows only the friendly status.
   const shopper = await page.context().newPage();
@@ -475,10 +478,13 @@ test('admin notes and internal history are private: the customer cannot read the
   await shopper.close();
 });
 
-test('Telegram: test orders are skipped by the live notifier', async () => {
+test('Telegram: the live notifier sends nothing for an outside caller', async () => {
   // A cancellation of an "E2E ..." order would page Naeem; the deployed
-  // function must answer "skipped" without sending anything. (Real orders
-  // are covered by the unit tests — sending one here would message Naeem.)
+  // function must send nothing. Since Batch 34 it refuses every caller
+  // without the database's shared secret (401), so an outside call like
+  // this one never reaches the test-order rule at all — that rule is
+  // covered by src/lib/testOrders.test.ts. (Updated in Batch 35: this test
+  // still expected the pre-Batch-34 "skipped" answer.)
   const res = await fetch(`${SUPABASE_URL}/functions/v1/notify-telegram-order`, {
     method: 'POST',
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
@@ -499,7 +505,6 @@ test('Telegram: test orders are skipped by the live notifier', async () => {
     }),
   });
   const body = (await res.json()) as Record<string, unknown>;
-  // "skipped: telegram secrets not set" would also send nothing, but the
-  // live project has them set, so this is the test-order rule answering.
-  expect(body.skipped).toBe('e2e test order');
+  expect(res.status).toBe(401);
+  expect(body.sent).toBeUndefined();
 });
