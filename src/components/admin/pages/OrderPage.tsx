@@ -43,6 +43,9 @@ import { AdminIcon } from '../ui/AdminIcon';
 import { FraudCheckCard } from '../FraudCheckCard';
 import { bdPhoneKey, telHref, whatsAppChatUrl } from '../../../lib/phone';
 import { codAmountFor } from '../../../../supabase/functions/_shared/cod';
+import { toPaisa } from '../../../../supabase/functions/_shared/steadfastPayouts';
+import '../../../styles/adminPayouts.css';
+import { fetchOrderPayout, shortDhakaDate, takaExact, takaWhole, type LoadState, type OrderPayoutInfo } from '../../../lib/payouts';
 import { toOrderSnapshot } from '../../../lib/orderSnapshot';
 import { adminPath } from '../../../lib/adminPages';
 
@@ -82,6 +85,10 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const canDeleteEarly = can('delete_early_orders');
   const canEditOrder = can('edit_orders');
   const canViewCustomers = can('view_customers');
+  // Batch 36 Part 1: "Steadfast paid ৳X on 8 Oct" — only with View profit
+  // & costs (the database refuses everyone else).
+  const canSeeCosts = can('view_profit_costs');
+  const [payoutInfo, setPayoutInfo] = useState<LoadState<OrderPayoutInfo | null> | null>(null);
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing'>('loading');
@@ -117,12 +124,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
         void fetchTracking(data.id).then((answer) => {
           if (alive) setTracking(answer);
         });
+        if (canSeeCosts) {
+          void fetchOrderPayout(data.id).then((answer) => {
+            if (alive) setPayoutInfo(answer);
+          });
+        }
       }
     })();
     return () => {
       alive = false;
     };
-  }, [orderNumber]);
+  }, [orderNumber, canSeeCosts]);
 
   const reload = useCallback(async () => {
     if (!orderId) return;
@@ -594,6 +606,32 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                       <p className="adm-ocard__muted">
                         Rider: {rider.name} · {rider.phone}
                       </p>
+                    )}
+                    {canSeeCosts && payoutInfo?.kind === 'ready' && (
+                      payoutInfo.data ? (
+                        <p className="adm-payouts__paid" data-testid="order-steadfast-paid">
+                          Steadfast paid{' '}
+                          <b title={takaExact(toPaisa(payoutInfo.data.net_received))}>{takaWhole(toPaisa(payoutInfo.data.net_received))}</b>
+                          {payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''} (fees{' '}
+                          <span title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</span>)
+                          {payoutInfo.data.payout_id && (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                className="adm-payouts__link"
+                                onClick={() => navigate(adminPath.payout(payoutInfo.data?.payout_id ?? ''), { state: { fromList: true } })}
+                              >
+                                Payout{payoutInfo.data.payment_id ? ` #${payoutInfo.data.payment_id}` : ''}
+                              </button>
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="adm-payouts__paid adm-payouts__paid--none" data-testid="order-steadfast-paid">
+                          Steadfast: not paid yet
+                        </p>
+                      )
                     )}
                     <div className="adm-ocard__buttons">
                       <a

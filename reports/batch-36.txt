@@ -1,0 +1,336 @@
+BATCH 36 — Steadfast payouts, rich product text, Smart paste, photo corner seam
+Branch: feature/batch-36-payouts-text-paste (from main after Batch 35) · Version 1.36.0
+Screenshots: reports/batch-36-screens/ (390 px and 1280 px, light and dark)
+Mockups used: docs/mockups/batch-36/ (Batch36_Mockup.png, RichText_Mockup.png,
+NAEEMS_Orb_Chat_Demo.html)
+
+============================================================
+1. WHAT I DID
+============================================================
+
+PART 1 — Steadfast payouts (money reconciliation)
+  - New admin page "Steadfast payouts" (under Orders in the sidebar; in
+    More on a phone). It shows:
+      · "Steadfast balance (not yet paid to you)", a big ৳ amount, and
+        "From N delivered orders · updated X min ago".
+      · An amber box "N orders not paid after 7 days" with the order
+        numbers (tap → that order). The same line appears in Home →
+        "Needs attention", and disappears when it is 0.
+      · "This month": COD collected, Courier charges (−), COD fee (1%)
+        (−), and in bold "Received in bank/bKash". A month picker.
+      · Every payout: "8 Oct · Payout #48213", amount, "6 orders · fees
+        ৳918", and a green "Matched" or amber "N to check" pill.
+  - Tapping a payout opens /admin/payouts/<id>: pill, paid date and time,
+    big amount, then a table Order · COD · Fees · You get, a Total row
+    and the line "Fees = delivery charge + 1% COD fee". Rows to check
+    have an amber bar and the reason ("Expected ৳3,799.00, Steadfast
+    collected ৳3,699.00", "Order not found", "Order is cancelled here",
+    "Already in another payout").
+  - The admin order page's Steadfast card now says "Steadfast paid
+    ৳2,146 on 8 Oct (fees ৳153) · Payout #48213" or "Steadfast: not paid
+    yet".
+  - Money is kept to the paisa (2 decimals) and added up in whole paisa,
+    so totals are exact. The screen shows whole taka; hover or long-press
+    shows the exact amount (৳6,835.02).
+  - Syncing: the 3-hourly Steadfast job now also reads the balance and
+    the payouts. The page also has a Refresh button. Running it twice
+    stores everything once (Steadfast's payment number is unique). On
+    the first run it walks back through every page of payouts Steadfast
+    gives.
+  - Steadfast is only READ (GET balance, GET payments, GET one payment).
+    Nothing can be booked, cancelled or changed by this code.
+  Proof: src/lib/batch36.payouts.test.ts (11 unit tests: reading the
+  answers, Matched / COD differs / unknown invoice / cancelled order /
+  duplicate, stored once when run twice, courier cost and net to the
+  paisa, month totals = sum of the parcels, the 7-day alert appears and
+  disappears). e2e/batch-36.spec.ts Part 1 (page, detail, Home row, order
+  page line, staff without the permission). Screenshots payouts-*,
+  payout-detail-*, order-steadfast-paid-*, home-needs-attention-*.
+
+PART 2 — Word-like editor for product text
+  - Description, How to Use and Key Ingredients (every long text in the
+    product page's sections) now have an editor (Tiptap, free, MIT
+    licence). Toolbar: Bold · Italic · Underline · Heading · Bullet list ·
+    Numbered list · Colour (text colour + highlight) · Warning box ·
+    Tip box · Key benefits box · Link · Undo · Redo · Clear formatting.
+    On a phone the toolbar scrolls sideways and stays at the top of the
+    field.
+  - Colours are names, not codes: Orange, Red, Green, Blue, Purple, Teal
+    for text; Peach, Yellow, Mint for highlight. Each name has a darker
+    shade in light mode and a brighter one in dark mode, checked for
+    readability (contrast 4.5:1 or more). No fonts, sizes or justify.
+  - Boxes look like the mockup: Warning = soft red with a red bar and
+    the warning icon; Tip = soft green with a tick; Key benefits = a card
+    with an orange "Key benefits" title and orange ring bullets. Numbered
+    steps have round numbers.
+  - Safety: the saved text is cleaned with an allow-list (DOMPurify) when
+    saving AND again when showing it. Scripts, onclick and the like,
+    styles and unknown tags are removed (their words are kept). Links
+    must be http/https and open in a new tab with "noopener noreferrer
+    nofollow". Pasting from Word, Google Docs or WhatsApp keeps only bold,
+    italic, lists and so on.
+  - Old text keeps working: plain text shows exactly as before. It only
+    becomes rich when you edit and save it. No product was changed.
+  - Search engines (the product's structured data) and link previews
+    (WhatsApp/Facebook) get the plain-text version.
+  - The editor is only downloaded when a product form opens. The shop
+    never loads it.
+  Proof: src/lib/batch36.richtext.test.ts (25 unit tests: every toolbar
+  button, boxes on/off, clear formatting, javascript: links refused,
+  scripts/handlers/styles/unknown tags stripped, Word and Google Docs
+  paste, old text unchanged, plain text for meta, colour contrast in
+  light and dark). e2e Part 2 (customer page with boxes; real toolbar
+  clicks; paste cleaning; the "Discard changes?" guard; phone toolbar).
+  Screenshots editor-toolbar-*, customer-description-*.
+
+PART 3 — Smart paste on New order
+  - At the top of Admin → New order: the orange orb, "Smart paste",
+    "Paste the customer's message", a box and "Fill the form".
+  - Tapping it: the orb shrinks away and the five-petal flower opens in
+    its place, turning, next to "Reading the message…" (2.4 seconds).
+    Then the flower folds, the orb comes back with one blink, and the
+    fields fill one by one (about 1 second). The orb and the flower are
+    never on screen together. With "reduce motion" there is no spinning,
+    only a short fade.
+  - The header changes to "Filled, please check · Orange outline =
+    guessed, tap to change". The guessed fields (name, address, thana)
+    have an orange outline until you change them. Under the thana:
+    'matched "poroshuram"' and three one-tap chips. "Undo fill" puts the
+    form back as it was. Nothing is saved until Create order.
+  - If the phone belongs to a saved customer: "Saved customer: Rume
+    Akter, Parshuram, Feni — Use saved details". The courier history
+    check runs as usual.
+  - The mark is one reusable piece, <AssistantMark state="idle|thinking"
+    />, ready for "Naeems Assistant" later. No "AI" wording anywhere.
+  Proof: src/lib/batch36.smartpaste.test.ts (41 tests, 30+ realistic
+  messages). e2e Part 3 (your Rume example end to end; reading time
+  2–3 s measured; orb and flower sampled every frame, never together;
+  outlines; Undo fill; saved customer; COD/Product hints; reduced
+  motion). Screenshots smart-paste-before-*, -reading-*, -filled-*.
+
+PART 4 — Photo corner seam
+  - Under the square photo, the 24 px strip (what shows in the sheet's
+    rounded corners) now shows the photo's own bottom edge, mirrored: a
+    sharp copy with a 7 px blurred copy over it, no zoom. The colour on
+    both sides of the photo's edge is therefore the same, so there is no
+    band. It slides with the photos while you swipe, so it always
+    mirrors the photo on screen. The soft full-photo blur stays behind it
+    only as a base colour for see-through photos.
+  Proof: e2e Part 4 — at 360, 390, 430 and 1280 px, light and dark,
+  photo 1 and photo 2: the pixels 2 px above and 2 px below the photo's
+  edge at both corners differ by at most 6 in each colour channel.
+  Batch 35's corner tests still pass. Screenshots photo-corner-*.
+
+============================================================
+2. WHAT STEADFAST'S PAYOUT DATA CONTAINS
+============================================================
+  Read live (after your yes), so these are the REAL fields:
+    One payout (GET /payments, a list of 10 per page, OLDEST first, with
+    no page count — the sync keeps asking for the next page until a page
+    brings nothing new):
+      payment_id   "SFC-29776606"
+      paid_at      the date and time it was paid (Dhaka time)
+      amount       COD collected in that payout          e.g. ৳2,390
+      charges      the COD fees for the whole payout      e.g. ৳22
+      due_bills    the delivery charges for the payout   e.g. ৳230
+      total        what reached you                      e.g. ৳2,138
+                   (2,390 − 22 − 230 = 2,138, exactly)
+      method       "Bkash" · status_label "paid" · paid_bills (a third
+                   amount, ৳425 in the example — its meaning isn't
+                   documented; kept in the raw answer, not used)
+    One parcel inside a payout (GET /payments/{id}):
+      consignment_id, invoice, cod_amount, recipient name / phone /
+      address, status, tracking_code, dates. NO delivery charge and NO
+      COD fee per parcel.
+  So: the payout totals are exact (all 26 payouts add up to the paisa).
+  Each ORDER'S share of the fees is worked out from the payout totals:
+  the COD fee is split by each order's COD, and the delivery charges by
+  each order's own delivery fee (inside/outside Dhaka) where it is our
+  order, otherwise equally. They are marked as estimates. Per order it is
+  close, not to the paisa; per payout and per month it is exact.
+  How far back: 26 payouts, 14 Jan 2026 – 3 Oct 2026 (everything
+  Steadfast lists).
+  Not matched: all 142 parcels in those payouts were booked by hand on
+  Steadfast's website. Your first booking from the site was on 5 Oct,
+  after the newest payout (3 Oct), so none of your site orders has been
+  paid yet. The ৳3,445 balance is waiting for them. Parcels whose invoice
+  is not one of our order numbers (empty, "N/A" or Steadfast's own code)
+  are labelled "Booked directly on Steadfast, not from this site" in
+  grey. They never count as "to check" and their payout gets a grey
+  "Booked on Steadfast" pill. Only parcels with one of our NM- numbers
+  can be Matched or To check.
+
+============================================================
+3. THE MONEY RULE IN PLAIN WORDS
+============================================================
+  The customer pays the rider the COD → Steadfast keeps its delivery
+  charge and a 1% COD fee → Steadfast pays you the rest in a payout.
+  Example: order NM-1722, COD ৳2,299.00
+     delivery charge  − ৳130.00
+     COD fee (1%)     −  ৳22.99
+     you receive        ৳2,146.01   (shown as ৳2,146)
+  Nothing is counted twice: the "COD via Steadfast" payment row (Batch
+  30) is still the record that the customer paid. A payout is only
+  Steadfast handing that money to you. It is never a second payment.
+  Each order's courier cost (charge + fee + other) and the amount you
+  received are kept in order_courier_costs, ready for the later
+  profit/inventory batch.
+
+============================================================
+4. WHO CAN SEE THE MONEY
+============================================================
+  - The Super Admin, always.
+  - Staff only with the new Team switch "View profit & costs". It is Off
+    for every person and every role. Only the Super Admin can turn it on
+    (Team).
+  - The rule is in the DATABASE (row security on all four tables, plus a
+    check inside the unpaid-orders function), not just hidden buttons.
+    Staff with the switch Off get nothing back, even when asking the
+    database directly. Visitors get nothing.
+  - Only the Steadfast functions (server side) can write these tables.
+
+============================================================
+5. THE PARSER (Smart paste)
+============================================================
+  Handles:
+  - Phones: 01XXXXXXXXX with or without +88 / 88, spaces, dashes, dots,
+    Bengali digits (০–৯). A second number → Alternative phone.
+  - Labels (English or Bengali): Name, Phone/Mobile, Address, Thana/PS,
+    District, COD/Price, Product/Item. COD and Product are shown as
+    hints only ("In the message (not added): COD 1250 tk · Product:
+    Scalpe Plus x2"). Nothing is added to the order by itself.
+  - Name: the "Name:" label, otherwise the first line with no digits
+    that doesn't look like an address or a place. Kept as written.
+  - Thana: matched against our thana list (Steadfast's list when it has
+    loaded, otherwise the bundled one), with Banglish spelling tolerance
+    (o/a, sh/s, oo/u, ph/f, kh/k, double letters, "gonj"/"ganj",
+    "sadar"/"model" ignored) and Bengali script names. The district in
+    the message decides between same-named thanas.
+  - It only picks a thana when the match is clear. Otherwise it picks
+    nothing and offers the top 3 as chips.
+  - Address: the customer's own words. Only spaces and commas are
+    tidied, and the phone/name lines are removed. It is never translated
+    or reworded.
+  Example results:
+    "Rume / …pisone basha,uttar bazar,poroshuram, Feni / 01638820872"
+        → Rume · 01638820872 · Parshuram, Feni (district Feni)
+    "Mirpur 10, Dhaka"        → Mirpur (Dhaka), not Kushtia's Mirpur
+    "Mirpur" alone            → nothing picked; chips incl. Dhaka and Kushtia
+    "Sector 7, Uttara, Dhaka" → nothing picked; chips Uttara East / West
+    "station road, Feni"      → no thana; chips Feni Sadar, Chhagalnaiya, …
+    "sitakundo, chittagong"   → Sitakunda, Chattogram
+    Bengali "উত্তর বাজার, পরশুরাম, ফেনী" → Parshuram, Feni
+  Can't do: guess a thana that isn't written at all (only the district),
+  tell apart two areas with the same name when no district is given,
+  understand free sentences ("send to my sister's house"), or read
+  products/quantities into the order.
+
+============================================================
+6. DECISIONS, WHAT ONLY YOUR PHONE CAN CONFIRM, LATER BATCHES
+============================================================
+  Decisions I made:
+  - Address: kept the thana and district words inside the address
+    (the mockup's filled address had dropped them and capitalised "Uttar
+    Bazar"). The brief says "never reworded, only remove the phone/name
+    parts", and riders read the address, so the customer's full words
+    stay.
+  - 7-day alert: counts only Steadfast orders delivered after the oldest
+    payout we hold. Orders delivered before that were paid before the
+    history Steadfast still shows, and would otherwise warn forever. It
+    shows nothing until the first sync has run.
+  - Courier charges in "This month" include any "other" amount Steadfast
+    kept (return charge etc.), so the four lines always add up.
+  - Smart paste's "reading" lasts 2.4 s. The text shimmer is done with
+    fading only, because the site animates only movement and fading
+    (the demo's gradient sweep would break that rule).
+  - The orb and the flower are staggered (orb out by 0.2 s, flower in
+    from 0.22 s, and the mirror of that going back), so they can never
+    overlap, not even for one frame.
+  - The editor keeps an empty line after a box so you can keep typing
+    under it; that empty line is not saved.
+  - The Refresh button is grey, not orange, as in the mockup: the payouts
+    page is for reading, with no main action. On New order, Smart
+    paste's orange is "Fill the form", as in the mockup.
+  Only your phone/PC can confirm:
+  - How the orb/flower feels on your phone, and the typing speed.
+  - Pasting from real WhatsApp/Word on your phone (tests use simulated
+    pastes).
+  - The real Steadfast payout field names and history (section 8).
+  - The photo corners on your real photos with your screen brightness.
+  Needs a later batch:
+  - Profit per order (price − cost − courier costs). The courier half is
+    now stored.
+  - A "Mark as checked" button for "to check" payout rows.
+  - Smart paste for products ("Scalpe Plus x2" → add the item).
+
+============================================================
+7. THE DATABASE ADDITION IN PLAIN WORDS
+============================================================
+  File: supabase/migration-038-batch36-payouts.sql. Additive only, safe
+  to run more than once:
+  - 4 new tables: steadfast_payouts, steadfast_payout_items,
+    order_courier_costs, steadfast_sync_state (only "View profit &
+    costs" can read them; only the Steadfast functions can write).
+  - 1 new function: steadfast_unpaid_orders (the 7-day alert).
+  - 1 new name in the staff switch list: view_profit_costs (Off for
+    everyone).
+  Nothing existing is dropped, renamed or changed. Until it runs, the
+  site works as before. The payouts page says "Payouts are not set up
+  yet", and Home and the order page simply don't show the new lines.
+  The two Steadfast functions (steadfast, steadfast-refresh-all) also
+  need redeploying for the Refresh button and the 3-hourly sync.
+
+  SQL Naeem must run in Supabase: the whole file
+  supabase/migration-038-batch36-payouts.sql (paste-ready).
+
+  Tests changed (only where Batch 36 changed what they check):
+  - src/lib/adminNav.test.ts: two tests that list every menu item by name
+    now include "Steadfast payouts" (between Orders and Customers / at
+    the start of the More list).
+  - e2e/batch-25.spec.ts: the 1280 px sidebar list now includes
+    "Steadfast payouts" after Orders. Nothing removed or weakened.
+  - playwright.config.ts: batch-36 added to the one-at-a-time group (it
+    creates a test order and a test staff login).
+
+  Build / test results:
+  - npm run verify (full): build OK · vitest 334/334 · e2e 260 passed,
+    120 skipped, 1 failed. The one failure was the Batch 25 sidebar
+    list above (the new menu item). Fixed, and that file re-run: 9/9
+    passed.
+  - New: src/lib/batch36.payouts.test.ts (11), batch36.richtext.test.ts
+    (25), batch36.smartpaste.test.ts (41); e2e/batch-36.spec.ts (17
+    passed; the database half of the staff test is skipped until
+    migration-038 runs); e2e/batch-36-screens.spec.ts (screenshots
+    only, SCREENS=1).
+  - Skipped = screenshot-only specs and tests waiting for a database step.
+
+============================================================
+8. LIVE DATABASE AND FUNCTIONS
+============================================================
+  You said yes. Done:
+  - migration-038 applied. Checked: 4 tables, 4 read rules, the
+    steadfast_unpaid_orders function, view_profit_costs in the switch
+    list, and nobody (no role, no person) has it.
+  - Redeployed: steadfast and steadfast-refresh-all.
+  Read-only check (only GETs to Steadfast; nothing booked, cancelled or
+  changed):
+  - First real read showed Steadfast's real field names (section 2)
+    were different from the guesses: the payout's "amount" is the COD,
+    not what you received, and the list is oldest first with no page
+    count, so only the first 10 payouts had been read. I fixed both in
+    the code (and in the tests), deleted the 10 rows that first read had
+    stored (rows created minutes earlier by the check itself — none of
+    your orders, customers or payments were touched), redeployed and
+    read again.
+  - Now: balance ৳3,445; 26 payouts (14 Jan – 3 Oct) with 142 parcels;
+    every payout's parcels add up exactly to what Steadfast paid. A
+    second read stored nothing new and asked Steadfast only for the
+    list (no parcel details again).
+  - A visitor (not signed in) is refused by the function ("Not
+    authorized") and by the database (permission denied).
+  - e2e/batch-36.spec.ts run again with the database in place: 18/18
+    passed, including the database half of the staff test (staff
+    without the switch get nothing; staff with it see what you see).
+    Unit tests after the fixes: 339/339.
+  - Screenshot with your real data: live-payouts-390-light.png and
+    live-payout-detail-390-light.png.

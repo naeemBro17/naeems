@@ -129,3 +129,29 @@ export async function checkSteadfastStatus(
     needsAttention: needsAttention(courierStatus),
   };
 }
+
+/**
+ * Batch 36: a READ-ONLY GET against Steadfast (balance, payouts). Only the
+ * GET method is ever used here, so nothing can be booked, cancelled or
+ * changed through it.
+ */
+export function steadfastReadOnlyGet(
+  apiKey: string,
+  secretKey: string
+): (path: string) => Promise<{ ok: boolean; status: number; body: unknown }> {
+  return async (path: string) => {
+    try {
+      const res = await fetch(`${STEADFAST_BASE_URL}${path}`, { method: 'GET', headers: steadfastHeaders(apiKey, secretKey) });
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+      return { ok: res.ok, status: res.status, body };
+    } catch (err) {
+      console.error(`Steadfast GET ${path} network error:`, err);
+      return { ok: false, status: 0, body: null };
+    }
+  };
+}

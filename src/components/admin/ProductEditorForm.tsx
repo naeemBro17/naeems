@@ -18,6 +18,8 @@ import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { distinctRegions } from '../../lib/variants';
 import { ImageUploader } from './ImageUploader';
+import { RichTextField } from './RichTextField';
+import { cleanLongText } from '../../lib/richText';
 import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
 import type { Product, ProductFormData, FormImage } from '../../types';
@@ -375,10 +377,10 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       name,
       slug,
       brand: form.brand.trim() === '' ? null : form.brand.trim(),
-      description: form.description.trim() === '' ? null : form.description.trim(),
-      how_to_use: form.how_to_use.trim() === '' ? null : form.how_to_use.trim(),
-      key_ingredients:
-        form.key_ingredients.trim() === '' ? null : form.key_ingredients.trim(),
+      // Batch 36 Part 2: rich text is cleaned (allow-list) again on save.
+      description: cleanLongText(form.description),
+      how_to_use: cleanLongText(form.how_to_use),
+      key_ingredients: cleanLongText(form.key_ingredients),
       youtube_url: form.youtube_url.trim() === '' ? null : form.youtube_url.trim(),
       category_id: form.category_id === '' ? null : form.category_id,
       retail_price: Number(form.retail_price),
@@ -500,56 +502,33 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
         </p>
       </div>
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-description">
-          Description
-        </label>
-        <textarea
-          id="pf-description"
-          className="form-input form-textarea"
-          rows={4}
-          placeholder="What makes this product worth buying — ingredients, benefits, how to use, etc."
-          value={form.description}
-          onChange={(e) => setField('description', e.target.value)}
-        />
-        <p className="form-helper">
-          Shown on the detail page under "About this product".
-        </p>
-      </div>
+      {/* Batch 36 Part 2: the three long texts use the Word-like editor. */}
+      <RichTextField
+        id="pf-description"
+        label="Description"
+        value={form.description}
+        onChange={(html) => setField('description', html)}
+        placeholder="What makes this product worth buying — ingredients, benefits, how to use, etc."
+        helper='Shown on the detail page under "About this product".'
+      />
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-how-to-use">
-          How to Use
-        </label>
-        <textarea
-          id="pf-how-to-use"
-          className="form-input form-textarea"
-          rows={3}
-          placeholder="Apply morning and night to clean, dry skin…"
-          value={form.how_to_use}
-          onChange={(e) => setField('how_to_use', e.target.value)}
-        />
-        <p className="form-helper">
-          Detail-page accordion. Leave blank to hide the section.
-        </p>
-      </div>
+      <RichTextField
+        id="pf-how-to-use"
+        label="How to Use"
+        value={form.how_to_use}
+        onChange={(html) => setField('how_to_use', html)}
+        placeholder="Apply morning and night to clean, dry skin…"
+        helper="Detail-page accordion. Leave blank to hide the section."
+      />
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-key-ingredients">
-          Key Ingredients
-        </label>
-        <textarea
-          id="pf-key-ingredients"
-          className="form-input form-textarea"
-          rows={3}
-          placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
-          value={form.key_ingredients}
-          onChange={(e) => setField('key_ingredients', e.target.value)}
-        />
-        <p className="form-helper">
-          Detail-page accordion. Leave blank to hide the section.
-        </p>
-      </div>
+      <RichTextField
+        id="pf-key-ingredients"
+        label="Key Ingredients"
+        value={form.key_ingredients}
+        onChange={(html) => setField('key_ingredients', html)}
+        placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
+        helper="Detail-page accordion. Leave blank to hide the section."
+      />
 
       <div className="form-field">
         <label className="form-label" htmlFor="pf-youtube">

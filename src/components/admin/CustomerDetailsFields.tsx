@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AddressFormFields, type AddressFieldErrors } from '../checkout/AddressFormFields';
 import type { DeliveryAddress } from '../../features/checkout/types';
 
@@ -12,6 +13,8 @@ interface CustomerDetailsFieldsProps {
   /** Add customer only: a private note. */
   note?: string;
   onNoteChange?: (value: string) => void;
+  /** Batch 36: Smart paste's thana chips, under the thana picker. */
+  thanaExtra?: ReactNode;
 }
 
 const noErrors: AddressFieldErrors = {};
@@ -32,6 +35,7 @@ export function CustomerDetailsFields({
   onAltPhoneChange,
   note,
   onNoteChange,
+  thanaExtra,
 }: CustomerDetailsFieldsProps) {
   return (
     <>
@@ -41,6 +45,7 @@ export function CustomerDetailsFields({
         onChange={onAddressChange}
         onLocationChange={onLocationChange}
         idPrefix={idPrefix}
+        thanaExtra={thanaExtra}
       />
       <div className="form-field">
         <label className="form-label" htmlFor={`${idPrefix}-alt-phone`}>

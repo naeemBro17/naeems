@@ -1,0 +1,434 @@
+/* Batch 36 Part 2: rich product text — the editor (admin) and the product
+   page (customer) share these styles, so what Naeem sees while writing is
+   what the shopper sees. Colours are NAMES mapped to tokens: a darker
+   shade in light mode, a brighter one in dark mode (always readable; the
+   contrast is checked in src/lib/batch36.richtext.test.ts). */
+
+:root {
+  --rt-orange: #c2410c;
+  --rt-red: #c62828;
+  --rt-green: #1b7a3a;
+  --rt-blue: #1d5bb8;
+  --rt-purple: #7438b8;
+  --rt-teal: #0f6f68;
+  --rt-hl-peach: #ffdcca;
+  --rt-hl-yellow: #fff0a3;
+  --rt-hl-mint: #c8f0da;
+  --rt-hl-text: #1c1c1e;
+  --rt-warning-bg: rgba(229, 55, 44, 0.08);
+  --rt-warning-bar: #e5372c;
+  --rt-tip-bg: rgba(52, 199, 89, 0.1);
+  --rt-tip-bar: #28a745;
+  --rt-benefits-bg: #f5f5f7;
+  --rt-benefits-accent: #e8551f;
+  --rt-step-bg: #ececf0;
+  --rt-step-text: #1c1c1e;
+}
+
+:root[data-theme='dark'] {
+  --rt-orange: #ff9b6e;
+  --rt-red: #ff7b72;
+  --rt-green: #5fd98a;
+  --rt-blue: #82b6ff;
+  --rt-purple: #c7a4ff;
+  --rt-teal: #5fd4c8;
+  --rt-hl-peach: #4d2a1b;
+  --rt-hl-yellow: #4a3f10;
+  --rt-hl-mint: #173f2c;
+  --rt-hl-text: #ffffff;
+  --rt-warning-bg: #2a1416;
+  --rt-warning-bar: #ff6b61;
+  --rt-tip-bg: #0f2418;
+  --rt-tip-bar: #4cd07d;
+  --rt-benefits-bg: #1c1c1e;
+  --rt-benefits-accent: #ff8a57;
+  --rt-step-bg: #2c2c2e;
+  --rt-step-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --rt-orange: #ff9b6e;
+    --rt-red: #ff7b72;
+    --rt-green: #5fd98a;
+    --rt-blue: #82b6ff;
+    --rt-purple: #c7a4ff;
+    --rt-teal: #5fd4c8;
+    --rt-hl-peach: #4d2a1b;
+    --rt-hl-yellow: #4a3f10;
+    --rt-hl-mint: #173f2c;
+    --rt-hl-text: #ffffff;
+    --rt-warning-bg: #2a1416;
+    --rt-warning-bar: #ff6b61;
+    --rt-tip-bg: #0f2418;
+    --rt-tip-bar: #4cd07d;
+    --rt-benefits-bg: #1c1c1e;
+    --rt-benefits-accent: #ff8a57;
+    --rt-step-bg: #2c2c2e;
+    --rt-step-text: #ffffff;
+  }
+}
+
+/* ---------- The text itself ---------- */
+
+.rich-text {
+  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text-primary);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.rich-text > :first-child {
+  margin-top: 0;
+}
+
+.rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text p {
+  margin: 0 0 10px;
+}
+
+.rich-text h3 {
+  margin: 16px 0 6px;
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rich-text strong {
+  font-weight: 700;
+}
+
+.rich-text a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text span[data-color='orange'] { color: var(--rt-orange); }
+.rich-text span[data-color='red'] { color: var(--rt-red); }
+.rich-text span[data-color='green'] { color: var(--rt-green); }
+.rich-text span[data-color='blue'] { color: var(--rt-blue); }
+.rich-text span[data-color='purple'] { color: var(--rt-purple); }
+.rich-text span[data-color='teal'] { color: var(--rt-teal); }
+
+.rich-text mark {
+  color: var(--rt-hl-text);
+  padding: 1px 3px;
+  border-radius: 4px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.rich-text mark[data-hl='peach'] { background: var(--rt-hl-peach); }
+.rich-text mark[data-hl='yellow'] { background: var(--rt-hl-yellow); }
+.rich-text mark[data-hl='mint'] { background: var(--rt-hl-mint); }
+
+/* Bullet list */
+.rich-text ul {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.rich-text li {
+  margin: 0 0 4px;
+}
+
+.rich-text li > p {
+  margin: 0;
+}
+
+/* Numbered steps with round numbers */
+.rich-text ol {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  counter-reset: rt-step;
+}
+
+.rich-text ol > li {
+  position: relative;
+  counter-increment: rt-step;
+  padding-left: 40px;
+  margin-bottom: 10px;
+  min-height: 28px;
+}
+
+.rich-text ol > li::before {
+  content: counter(rt-step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--rt-step-bg);
+  color: var(--rt-step-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 26px;
+  text-align: center;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+/* ---------- Boxes ---------- */
+
+.rich-text div[data-box] {
+  position: relative;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.rich-text div[data-box] > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text div[data-box='warning'],
+.rich-text div[data-box='tip'] {
+  padding-left: 42px;
+  border-left: 3px solid;
+}
+
+.rich-text div[data-box='warning']::before,
+.rich-text div[data-box='tip']::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 15px;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--rt-icon) center / contain no-repeat;
+  mask: var(--rt-icon) center / contain no-repeat;
+}
+
+.rich-text div[data-box='warning'] {
+  background: var(--rt-warning-bg);
+  border-left-color: var(--rt-warning-bar);
+  --rt-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4l9 16H3z'/%3E%3Cpath d='M12 10v4M12 17h.01'/%3E%3C/svg%3E");
+}
+
+.rich-text div[data-box='warning']::before {
+  color: var(--rt-warning-bar);
+}
+
+.rich-text div[data-box='tip'] {
+  background: var(--rt-tip-bg);
+  border-left-color: var(--rt-tip-bar);
+  --rt-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+.rich-text div[data-box='tip']::before {
+  color: var(--rt-tip-bar);
+}
+
+.rich-text div[data-box='benefits'] {
+  background: var(--rt-benefits-bg);
+  padding: 14px 16px;
+}
+
+.rich-text div[data-box='benefits']::before {
+  content: 'Key benefits';
+  display: block;
+  margin-bottom: 6px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--rt-benefits-accent);
+}
+
+/* Orange ring bullets inside Key benefits */
+.rich-text div[data-box='benefits'] ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rich-text div[data-box='benefits'] ul > li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 6px;
+}
+
+.rich-text div[data-box='benefits'] ul > li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 9px;
+  height: 9px;
+  border: 3px solid var(--rt-benefits-accent);
+  border-radius: 50%;
+}
+
+/* ---------- The editor (admin) ---------- */
+
+.rt-editor {
+  position: relative;
+  border: 1px solid var(--adm-line, #e3e3e8);
+  border-radius: 14px;
+  background: var(--adm-input-bg, var(--color-surface, #fff));
+}
+
+.rt-editor:focus-within {
+  border-color: var(--adm-or-line, rgba(242, 89, 42, 0.5));
+}
+
+.rt-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border-bottom: 1px solid var(--adm-line, #e3e3e8);
+  background: var(--adm-card, #fff);
+  border-radius: 14px 14px 0 0;
+}
+
+.rt-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
+.rt-toolbar__row::-webkit-scrollbar {
+  display: none;
+}
+
+.rt-toolbar__sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--adm-line, #e3e3e8);
+}
+
+.rt-tool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--adm-text, #16161a);
+  cursor: pointer;
+}
+
+.rt-tool svg {
+  width: 19px;
+  height: 19px;
+}
+
+.rt-tool.is-active {
+  background: var(--adm-or-bg, rgba(242, 89, 42, 0.1));
+  color: var(--adm-or, #f2592a);
+}
+
+.rt-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rt-panel {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--adm-line, #e3e3e8);
+}
+
+.rt-panel__title {
+  display: block;
+  margin: 2px 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--adm-text, #16161a);
+}
+
+.rt-panel__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rt-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--adm-card, #fff);
+  box-shadow: 0 0 0 1px var(--adm-line, #e3e3e8);
+  cursor: pointer;
+  padding: 0;
+}
+
+.rt-swatch[data-color='orange'] { background: var(--rt-orange); }
+.rt-swatch[data-color='red'] { background: var(--rt-red); }
+.rt-swatch[data-color='green'] { background: var(--rt-green); }
+.rt-swatch[data-color='blue'] { background: var(--rt-blue); }
+.rt-swatch[data-color='purple'] { background: var(--rt-purple); }
+.rt-swatch[data-color='teal'] { background: var(--rt-teal); }
+.rt-swatch[data-hl='peach'] { background: var(--rt-hl-peach); }
+.rt-swatch[data-hl='yellow'] { background: var(--rt-hl-yellow); }
+.rt-swatch[data-hl='mint'] { background: var(--rt-hl-mint); }
+
+.rt-swatch--none {
+  background: linear-gradient(135deg, transparent 46%, var(--adm-muted, #6e6e76) 47%, var(--adm-muted, #6e6e76) 53%, transparent 54%);
+}
+
+.rt-panel__hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--adm-muted, #6e6e76);
+}
+
+.rt-panel__link-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rt-panel__link-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rt-panel__error {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--adm-red-text, #d63025);
+}
+
+.rt-editor__content {
+  min-height: 140px;
+  padding: 12px 14px 14px;
+  outline: none;
+  color: var(--adm-text, var(--color-text-primary));
+}
+
+.rt-editor.is-empty .rt-editor__content::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--adm-muted, #6e6e76);
+  pointer-events: none;
+}
+
+.rich-text-loading {
+  min-height: 190px;
+  border: 1px solid var(--adm-line, #e3e3e8);
+  border-radius: 14px;
+  background: var(--adm-input-bg, #fff);
+}
+
+/* ---------- On the product page ---------- */
+
+.accordion__rich {
+  font-size: 14.5px;
+  color: var(--color-text-primary);
+}

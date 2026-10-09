@@ -7,6 +7,7 @@ import { formatTakaBd, greeting, greetingName, type AdminSection } from '../../l
 import { AdminPageHeader, EmptyState, ListGroup, ListRow } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import { SalesChart } from './SalesChart';
+import { fetchUnpaidOrders, overdueOrders, UNPAID_AFTER_DAYS } from '../../lib/payouts';
 
 interface HomeTabProps {
   /** "NAEEM'S SUPER ADMIN" / "NAEEM'S <ROLE>". */
@@ -32,12 +33,18 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
   const [due, setDue] = useState<DueSummary | null>(null);
   const canSeeCustomers = can('view_customers');
   const hideTests = !isTestViewer(staff);
+  // Batch 36 Part 1: Steadfast orders not paid after 7 days (only with
+  // "View profit & costs"; the database answers nobody else).
+  const canSeeCosts = can('view_profit_costs');
+  const [unpaidCount, setUnpaidCount] = useState(0);
 
   const load = useCallback(async () => {
-    const [result, customers] = await Promise.all([
+    const [result, customers, unpaid] = await Promise.all([
       fetchDashboard(),
       canSeeCustomers ? fetchCustomersV3() : Promise.resolve(null),
+      canSeeCosts ? fetchUnpaidOrders() : Promise.resolve([]),
     ]);
+    setUnpaidCount(overdueOrders(unpaid).length);
     setData(result.data);
     setError(result.error);
     setDue(
@@ -46,7 +53,7 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
         : null
     );
     setIsLoading(false);
-  }, [canSeeCustomers, hideTests]);
+  }, [canSeeCustomers, canSeeCosts, hideTests]);
 
   useEffect(() => {
     void load();
@@ -57,7 +64,7 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
 
   const attention: {
     key: string;
-    icon: 'orders' | 'low-stock' | 'reviews' | 'wholesalers' | 'receipt';
+    icon: 'orders' | 'low-stock' | 'reviews' | 'wholesalers' | 'receipt' | 'payouts';
     count?: number;
     text: string;
     open: () => void;
@@ -86,6 +93,15 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
       icon: 'receipt',
       text: `${formatTakaBd(due.total)} due from ${due.customers} customer${due.customers === 1 ? '' : 's'}`,
       open: () => onOpen('customers', { cshow: 'due', csort: 'due' }),
+    });
+  }
+  if (unpaidCount > 0) {
+    attention.push({
+      key: 'payouts',
+      icon: 'payouts',
+      count: unpaidCount,
+      text: `order${unpaidCount === 1 ? '' : 's'} not paid by Steadfast after ${UNPAID_AFTER_DAYS} days`,
+      open: () => onOpen('payouts'),
     });
   }
   if (data?.reviews_pending !== undefined && data.reviews_pending > 0) {
@@ -204,7 +220,15 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
                   key={row.key}
                   icon={row.icon}
                   count={row.count}
-                  label={row.key === 'due' ? <span data-testid="home-due-row">{row.text}</span> : row.text}
+                  label={
+                    row.key === 'due' ? (
+                      <span data-testid="home-due-row">{row.text}</span>
+                    ) : row.key === 'payouts' ? (
+                      <span data-testid="home-unpaid-row">{row.text}</span>
+                    ) : (
+                      row.text
+                    )
+                  }
                   onClick={row.open}
                 />
               ))

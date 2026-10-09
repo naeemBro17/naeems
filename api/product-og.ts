@@ -53,6 +53,26 @@ interface OgFields {
   url: string;
 }
 
+/**
+ * Batch 36 Part 2: descriptions written with the editor are HTML; link
+ * previews get plain text (same rule as src/lib/richTextPlain.ts — this
+ * function is deployed on its own, so it keeps its own copy).
+ */
+function plainText(value: string): string {
+  if (!/^\s*<(p|h3|ul|ol|div)[\s>]/i.test(value)) return value.replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/<(br|\/p|\/h3|\/li|\/div)\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function renderHtml({ title, description, image, url }: OgFields): string {
   const safeTitle = escapeHtml(title);
   const safeDescription = escapeHtml(description);
@@ -146,7 +166,7 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
     const image = product.image_urls?.[0] ?? product.image_url ?? FALLBACK_IMAGE;
     const brandPrefix = product.brand ? `${product.brand} — ` : '';
     const description = `${brandPrefix}${formatTaka(price)}${
-      product.description ? ` — ${product.description.slice(0, 150)}` : ''
+      product.description ? ` — ${plainText(product.description).slice(0, 150)}` : ''
     }`;
 
     res.status(200).send(

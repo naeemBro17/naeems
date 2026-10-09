@@ -25,7 +25,9 @@
 // for the cases that actually need him.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { STEADFAST_BASE_URL, checkSteadfastStatus, steadfastHeaders } from '../_shared/steadfast.ts';
+import { STEADFAST_BASE_URL, checkSteadfastStatus, steadfastHeaders, steadfastReadOnlyGet } from '../_shared/steadfast.ts';
+import { syncSteadfastPayouts, type SyncResult } from '../_shared/steadfastPayouts.ts';
+import { supabasePayoutStore } from '../_shared/payoutStoreSupabase.ts';
 import { parseTrackingResponse } from '../_shared/steadfastSteps.ts';
 import { trackingEventRows } from '../_shared/orderTracking.ts';
 
@@ -158,8 +160,20 @@ Deno.serve(async (req: Request) => {
     if (result.needsAttention) flagged += 1;
   }
 
+  // Batch 36 Part 1: Steadfast's balance and payouts, read (GET only) and
+  // stored once. Best effort: before migration-038 it fails quietly and
+  // the status refresh above is unaffected.
+  let payouts: SyncResult | { ok: false; error: string };
+  try {
+    payouts = await syncSteadfastPayouts(steadfastReadOnlyGet(apiKey, secretKey), supabasePayoutStore(serviceClient));
+  } catch (err) {
+    console.error('steadfast-refresh-all: payouts sync failed:', err);
+    payouts = { ok: false, error: err instanceof Error ? err.message : 'Payouts sync failed.' };
+  }
+
   return json({
     ok: true,
+    payouts,
     checked: shipped.length,
     updated,
     delivered,

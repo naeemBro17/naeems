@@ -37,6 +37,8 @@ import { VariantSelector } from '../components/viewer/VariantSelector';
 import { VideoReview } from '../components/viewer/VideoReview';
 import { extractYouTubeId } from '../lib/youtube';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
+import { RichTextView } from '../components/shared/RichTextView';
+import { richTextToPlain } from '../lib/richTextPlain';
 import type { Product, ProductVariant, VariantOption } from '../types';
 
 /** The URL query param a shared variant link uses, e.g. /product/x?variant=<id>. */
@@ -84,7 +86,8 @@ function setProductJsonLd(product: Product, price: number, inStock: boolean): vo
     '@type': 'Product',
     name: product.name,
     image: coverImage(product) ?? undefined,
-    description: product.description ?? product.note ?? undefined,
+    // Batch 36 Part 2: search engines get the plain-text version.
+    description: (product.description ? richTextToPlain(product.description) : '') || product.note || undefined,
     brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
     offers: {
       '@type': 'Offer',
@@ -261,6 +264,12 @@ function DetailContent({
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
+  // Batch 36 Part 4: the mirrored strip under the photo moves with the
+  // carousel (transform only, no re-render).
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const syncMirror = (left: number) => {
+    if (mirrorRef.current) mirrorRef.current.style.transform = `translate3d(${-left}px, 0, 0)`;
+  };
   const galleryRef = useRef<HTMLDivElement>(null);
   // Opened by the picture morph: the sheet waits for the photo to land
   // before sliding up over its bottom edge (see .pdp-sheet--settle).
@@ -324,6 +333,7 @@ function DetailContent({
   // the browser paints, so no frame ever shows the previous photo.
   useLayoutEffect(() => {
     if (carouselRef.current) carouselRef.current.scrollLeft = 0;
+    syncMirror(0);
     setActiveImage(0);
   }, [selectedOption.id, firstImage]);
 
@@ -393,6 +403,7 @@ function DetailContent({
 
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    syncMirror(el.scrollLeft);
     const index = Math.round(el.scrollLeft / el.clientWidth);
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
@@ -455,6 +466,28 @@ function DetailContent({
                 data-testid="photo-backdrop"
               />
             ))}
+          {/* Batch 36 Part 4: under the photo, its own bottom edge mirrored
+              (a sharp copy with a softly blurred one over it), so the colour
+              where photo and strip meet is the same and the sheet's rounded
+              corners show no band. It slides with the photos. */}
+          <div className="product-detail__mirror" aria-hidden="true" data-testid="photo-mirror">
+            <div ref={mirrorRef} className="product-detail__mirror-track">
+              {images.map((url, index) => (
+                <span key={`mirror-${url}`} className="product-detail__mirror-slide">
+                  {(['sharp', 'soft'] as const).map((layer) => (
+                    <img
+                      key={layer}
+                      src={url}
+                      alt=""
+                      {...protectedImageProps}
+                      className={`product-detail__mirror-img product-detail__mirror-img--${layer} ${PROTECTED_IMAGE_CLASS}`}
+                      loading={index === 0 ? 'eager' : 'lazy'}
+                    />
+                  ))}
+                </span>
+              ))}
+            </div>
+          </div>
           <div
             ref={carouselRef}
             className="product-detail__carousel"
@@ -600,17 +633,17 @@ function DetailContent({
           <Accordion>
             {about !== '' && (
               <AccordionItem title="About this product" defaultOpen>
-                <p className="accordion__text">{about}</p>
+                <RichTextView value={about} testId="pdp-about" />
               </AccordionItem>
             )}
             {howToUse !== '' && (
               <AccordionItem title="How to use" defaultOpen={about === ''}>
-                <p className="accordion__text">{howToUse}</p>
+                <RichTextView value={howToUse} testId="pdp-how-to-use" />
               </AccordionItem>
             )}
             {keyIngredients !== '' && (
               <AccordionItem title="Key ingredients">
-                <p className="accordion__text">{keyIngredients}</p>
+                <RichTextView value={keyIngredients} testId="pdp-key-ingredients" />
               </AccordionItem>
             )}
             {youtubeUrl !== '' && (

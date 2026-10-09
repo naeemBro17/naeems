@@ -9,6 +9,7 @@ import type { StaffPermission } from '../types';
 export type AdminSection =
   | 'home'
   | 'orders'
+  | 'payouts'
   | 'customers'
   | 'products'
   | 'categories'
@@ -28,6 +29,7 @@ export type AdminSection =
 export type AdminIconName =
   | 'home'
   | 'orders'
+  | 'payouts'
   | 'customers'
   | 'products'
   | 'categories'
@@ -80,6 +82,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'home', label: 'Home', icon: 'home', group: 'main' },
   { id: 'orders', label: 'Orders', icon: 'orders', group: 'main' },
+  // Batch 36 Part 1: under Orders; only with "View profit & costs".
+  { id: 'payouts', label: 'Steadfast payouts', tabLabel: 'Payouts', icon: 'payouts', group: 'main' },
   { id: 'customers', label: 'Customers', icon: 'customers', group: 'main' },
   { id: 'products', label: 'Products', icon: 'products', group: 'catalog' },
   { id: 'categories', label: 'Categories', icon: 'categories', group: 'catalog' },
@@ -115,6 +119,8 @@ export function canOpenSection(section: AdminSection, access: NavAccess): boolea
       return true;
     case 'orders':
       return can('view_orders');
+    case 'payouts':
+      return can('view_profit_costs');
     case 'customers':
       return can('view_customers');
     case 'products':
