@@ -1,10 +1,11 @@
-// Customer order detail (/orders/:orderId) — items, timeline, address,
-// payment, and a Cancel action while still pending. RLS already means
-// fetchOrderDetail() can only ever return this customer's own order (or any
-// order, for an admin browsing here), so there's no separate ownership
-// check needed client-side — a mismatched/foreign id just resolves to null
-// exactly like a genuinely missing one, and gets the same "not found" state.
-import { useCallback, useEffect, useState } from 'react';
+// Customer order detail (/orders/:orderId) — Batch 35 Part 2: tracking
+// (expected date, payment pill, five steps, all updates), the items with
+// the money, where it is going, and help on WhatsApp; Cancel while still
+// Processing. RLS already means fetchOrderDetail() can only ever return
+// this customer's own order (or any order, for an admin browsing here), so
+// a mismatched/foreign id resolves to null exactly like a missing one and
+// gets the same "not found" state.
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
@@ -12,65 +13,28 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useToast } from '../hooks/useToast';
 import { useProducts } from '../contexts/ProductContext';
 import { fetchOrderDetail, cancelOrder } from '../lib/orders';
-import { formatTaka } from '../lib/format';
+import { formatTakaBd } from '../lib/adminNav';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
-import {
-  ORDER_STATUS_TONE,
-  PAYMENT_STATUS_LABELS,
-  PAYMENT_STATUS_TONE,
-  isCancellableByCustomer,
-} from '../lib/orderStatus';
+import { whatsAppChatUrl } from '../lib/phone';
+import { isCancellableByCustomer } from '../lib/orderStatus';
 import type { OrderWithDetails } from '../types';
-import { steadfastTrackingUrl } from '../lib/steadfastLink';
-import { deriveOrderStep, fetchTracking, stepLabel, stepTimesFrom, type TrackingAnswer } from '../lib/orderSteps';
-import { fetchPaymentSummary, type PaymentSummary } from '../lib/payments';
-import { OrderSteps } from '../components/orders/OrderSteps';
-import { customerSafeText } from '../../supabase/functions/_shared/steadfastSteps';
-
-function shortTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    timeZone: 'Asia/Dhaka',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-/**
- * Batch 30 Part 5: the six real steps (Order Placed → Delivered). For a
- * parcel on Steadfast the page asks the steadfast function for its
- * tracking steps (cached a minute) — the latest one shows under the
- * current step, never with a rider's name or phone. Without that answer
- * (function not updated yet, or offline) the steps come from what is saved
- * on the order, with no error.
- */
-function DeliveryProgressSection({ order, tracking }: { order: OrderWithDetails; tracking: TrackingAnswer | null }) {
-  const step = deriveOrderStep({
-    status: order.status,
-    booked: Boolean(order.steadfast_consignment_id),
-    courierStatus: tracking?.courierStatus ?? order.steadfast_status,
-    events: tracking?.events ?? [],
-  });
-  const historyTimes = order.history.map((h) => h.changed_at).sort();
-  const updatedAt =
-    step.latest?.at ??
-    order.steadfast_status_updated_at ??
-    historyTimes[historyTimes.length - 1] ??
-    order.updated_at ??
-    order.created_at;
-  return (
-    <div className="delivery-progress" aria-label="Delivery progress">
-      <OrderSteps
-        step={step}
-        audience="customer"
-        labelTestId="delivery-status"
-        stepTimes={stepTimesFrom(order.history, tracking?.events ?? [])}
-      />
-      {updatedAt && <p className="delivery-progress__time">Last update {shortTime(updatedAt)}</p>}
-    </div>
-  );
-}
+import { fetchTracking, type TrackingAnswer } from '../lib/orderSteps';
+import { fetchPaymentSummary, PAYMENT_METHOD_NAMES, type PaymentSummary } from '../lib/payments';
+import {
+  customerPaymentPill,
+  fetchOrderUpdates,
+  friendlyUpdates,
+  paidByMethod,
+  paymentUpdates,
+  savedTrack,
+  stepTimes,
+  translateCourierText,
+  type FriendlyUpdate,
+  type OrderUpdates,
+  type TrackStatus,
+} from '../lib/orderTracking';
+import { OrderTrackingCard, type CustomerTrackingView } from '../components/orders/OrderTrackingCard';
+import { LineIcon } from '../components/orders/TrackIcons';
 
 function DetailSkeleton() {
   return (
@@ -80,6 +44,33 @@ function DetailSkeleton() {
       <div className="skeleton order-detail__skeleton-block" />
     </div>
   );
+}
+
+/** Live updates (the steadfast function) and stored ones (migration-037)
+ *  as one list, oldest first, each update once. */
+function mergeUpdates(live: TrackingAnswer | null, stored: OrderUpdates | null): FriendlyUpdate[] {
+  const all = [
+    ...friendlyUpdates(live?.events ?? []),
+    ...(stored?.tracking ?? []).map((u) => ({ step: u.step, kind: translateCourierText(u.text).kind, text: u.text, at: u.at })),
+  ];
+  const seen = new Set<string>();
+  return all
+    .filter((u) => {
+      const key = `${u.at ?? ''}|${u.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''));
+}
+
+/** The newest update that proves In transit / Out for delivery. */
+function latestStep(updates: FriendlyUpdate[]): TrackStatus | null {
+  for (let i = updates.length - 1; i >= 0; i -= 1) {
+    const step = updates[i].step;
+    if (step === 'in_transit' || step === 'out_for_delivery') return step;
+  }
+  return null;
 }
 
 export function OrderDetailPage() {
@@ -92,6 +83,7 @@ export function OrderDetailPage() {
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [tracking, setTracking] = useState<TrackingAnswer | null>(null);
   const [payment, setPayment] = useState<PaymentSummary | null>(null);
+  const [stored, setStored] = useState<OrderUpdates | null>(null);
 
   useDocumentTitle(order ? `${order.order_number} — NAEEM'S` : "Order — NAEEM'S");
 
@@ -103,18 +95,45 @@ export function OrderDetailPage() {
     setIsLoading(false);
     if (!data) return;
     void fetchPaymentSummary(data.id).then(setPayment);
-    if (data.steadfast_consignment_id) {
-      // The function already removes rider names and phones for a
-      // customer; cleaned again here so the page never shows them anyway.
-      void fetchTracking(data.id).then((answer) =>
-        setTracking(answer ? { ...answer, events: answer.events.map((e) => ({ ...e, text: customerSafeText(e.text) })) } : null)
-      );
-    }
+    void fetchOrderUpdates(data.id).then(setStored);
+    if (data.steadfast_consignment_id) void fetchTracking(data.id).then(setTracking);
   }, [orderId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const view = useMemo<CustomerTrackingView | null>(() => {
+    if (!order) return null;
+    const updates = mergeUpdates(tracking, stored);
+    const track = savedTrack(order, { courierStatus: tracking?.courierStatus ?? null, storedStep: latestStep(updates) });
+    track.reachedArea = updates.some((u) => u.kind === 'area_hub');
+    const ended = track.status === 'cancelled' || track.status === 'returned';
+    const pill = ended
+      ? null
+      : customerPaymentPill({
+          total: order.total,
+          due: payment ? payment.due : order.payment_status === 'paid' ? 0 : order.total,
+          paid: payment?.paid ?? 0,
+          payLater: order.collect_mode === 'pay_later',
+          fallbackPaid: payment === null && order.payment_status === 'paid',
+          delivered: track.status === 'delivered',
+        });
+    const showRider = settings.show_rider_phone === 'true' && track.status === 'out_for_delivery';
+    return {
+      orderNumber: order.order_number,
+      track,
+      zone: order.delivery_zone,
+      createdAt: order.created_at,
+      times: stepTimes(order, order.history, updates, track),
+      updates,
+      payments: paymentUpdates(stored?.payments ?? []),
+      pill,
+      trackingLink: order.steadfast_tracking_link,
+      booked: Boolean(order.steadfast_consignment_id),
+      rider: showRider ? (tracking?.rider ?? null) : null,
+    };
+  }, [order, tracking, stored, payment, settings.show_rider_phone]);
 
   if (!orderId) {
     return <Navigate to="/orders" replace />;
@@ -134,27 +153,39 @@ export function OrderDetailPage() {
     void load();
   };
 
-  const handleHelp = () => {
-    if (!order) return;
-    const base = whatsAppUrl(settings.expert_whatsapp_url);
-    if (!base) return;
-    const separator = base.includes('?') ? '&' : '?';
-    const text = `Hi, I need help with my order ${order.order_number}`;
-    openExternal(`${base}${separator}text=${encodeURIComponent(text)}`);
-  };
+  // The shop's WhatsApp number from settings (the existing phone helper),
+  // else the expert's WhatsApp link as before.
+  const chatBase = whatsAppChatUrl(settings.shop_whatsapp_number) ?? whatsAppUrl(settings.expert_whatsapp_url);
+  const chatHref = order && chatBase
+    ? `${chatBase}${chatBase.includes('?') ? '&' : '?'}text=${encodeURIComponent(`Hi, I have a question about order ${order.order_number}`)}`
+    : null;
+
+  const methodRows = paidByMethod(stored?.payments ?? []);
+  const isDelivered = view?.track.status === 'delivered';
+  const paidTotal = payment?.paid ?? 0;
+  const due = payment ? payment.due : order?.payment_status === 'paid' ? 0 : (order?.total ?? 0);
+  const finalLine = !order
+    ? null
+    : order.status === 'cancelled'
+      ? { label: 'Total', amount: order.total }
+      : due <= 0
+        ? { label: 'Total paid', amount: order.total }
+        : order.collect_mode === 'pay_later' || isDelivered
+          ? { label: 'Balance due', amount: due }
+          : { label: 'To pay on delivery', amount: due };
 
   return (
     <div className="viewer-shell detail-shell">
       <header className="detail-header">
         <BackButton />
-        <h1 className="detail-header__title">{order?.order_number ?? 'Order'}</h1>
+        <h1 className="detail-header__title">{order ? `Order ${order.order_number}` : 'Order'}</h1>
         <div className="detail-header__actions" />
       </header>
 
-      <main className="detail-main">
+      <main className="detail-main ot-page">
         {isLoading ? (
           <DetailSkeleton />
-        ) : !order ? (
+        ) : !order || !view ? (
           <div className="empty-state">
             <div className="empty-state__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -169,143 +200,117 @@ export function OrderDetailPage() {
           </div>
         ) : (
           <>
-            <div className="order-detail__status-row">
-              <span className={`status-badge status-badge--${ORDER_STATUS_TONE[order.status]}`}>
-                {stepLabel(
-                  deriveOrderStep({
-                    status: order.status,
-                    booked: Boolean(order.steadfast_consignment_id),
-                    courierStatus: tracking?.courierStatus ?? order.steadfast_status,
-                    events: tracking?.events ?? [],
-                  }),
-                  'customer'
-                )}
-              </span>
-              <span className="order-detail__date">
-                {new Date(order.created_at).toLocaleString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            </div>
+            <OrderTrackingCard view={view} />
 
-            <DeliveryProgressSection order={order} tracking={tracking} />
-
-            {order.tracking_number && (
-              <>
-                <div className="order-detail__tracking">
-                  <span>Tracking number</span>
-                  <strong>{order.tracking_number}</strong>
-                </div>
-                {order.steadfast_consignment_id && (
-                  <a
-                    href={steadfastTrackingUrl(order.steadfast_tracking_link)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="order-detail__tracking-link"
-                  >
-                    Track parcel on Steadfast →
-                  </a>
-                )}
-              </>
-            )}
-
-            <section className="checkout-summary-card">
-              <h2 className="checkout-summary-card__title">Items</h2>
-              <ul className="checkout-summary-card__items">
+            <section className="ot-card ot-items" aria-label="Your items">
+              <h2 className="ot-card__title">Your items ({order.items.reduce((n, item) => n + item.quantity, 0)})</h2>
+              <ul className="ot-items__list">
                 {order.items.map((item) => (
-                  <li key={item.id} className="checkout-summary-card__item">
-                    <span className="checkout-summary-card__thumb">
+                  <li key={item.id} className="ot-item">
+                    <span className="ot-item__thumb">
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.product_name} />
+                        <img src={item.image_url} alt="" width={54} height={54} loading="lazy" decoding="async" />
                       ) : (
-                        <span className="checkout-summary-card__thumb-empty" aria-hidden="true" />
+                        <span className="ot-item__thumb-empty" aria-hidden="true" />
                       )}
                     </span>
-                    <span className="checkout-summary-card__item-name">
-                      {item.product_name}
-                      {item.variant_label && (
-                        <span className="checkout-summary-card__item-variant">{item.variant_label}</span>
-                      )}
-                      <span className="checkout-summary-card__item-qty">&times;{item.quantity}</span>
+                    <span className="ot-item__main">
+                      <span className="ot-item__name">{item.product_name}</span>
+                      <span className="ot-item__sub">
+                        {item.variant_label ? `${item.variant_label} · ` : ''}Qty {item.quantity}
+                      </span>
                     </span>
-                    <span className="checkout-summary-card__item-price">{formatTaka(item.line_total)}</span>
+                    <span className="ot-item__price">{formatTakaBd(item.line_total)}</span>
                   </li>
                 ))}
               </ul>
-
-              <div className="checkout-summary-card__divider" />
-              <div className="checkout-summary-card__row">
-                <span>Subtotal</span>
-                <span>{formatTaka(order.subtotal)}</span>
-              </div>
-              <div className="checkout-summary-card__row">
-                <span>Delivery</span>
-                <span>{formatTaka(order.delivery_fee)}</span>
-              </div>
-              {order.discount > 0 && (
-                <div className="checkout-summary-card__row checkout-summary-card__row--discount">
-                  <span>Promo {order.promo_code ? `(${order.promo_code})` : ''}</span>
-                  <span>&minus;{formatTaka(order.discount)}</span>
+              <div className="ot-totals">
+                <div className="ot-totals__row">
+                  <span>Subtotal</span>
+                  <span>{formatTakaBd(order.subtotal)}</span>
                 </div>
-              )}
-              <div className="checkout-summary-card__row checkout-summary-card__row--total">
-                <span>Total</span>
-                <span>{formatTaka(order.total)}</span>
+                <div className="ot-totals__row">
+                  <span>Delivery</span>
+                  <span>{order.delivery_fee > 0 ? formatTakaBd(order.delivery_fee) : 'Free'}</span>
+                </div>
+                {order.discount > 0 && (
+                  <div className="ot-totals__row">
+                    <span>{order.promo_code ? `Discount (${order.promo_code})` : 'Discount'}</span>
+                    <span>&minus;{formatTakaBd(order.discount)}</span>
+                  </div>
+                )}
+                {order.status !== 'cancelled' &&
+                  (methodRows.length > 0
+                    ? methodRows.map((row) => (
+                        <div key={row.method} className="ot-totals__row ot-totals__row--paid" data-testid="customer-payment-summary">
+                          <span>Paid with {PAYMENT_METHOD_NAMES[row.method]}</span>
+                          <span>&minus;{formatTakaBd(row.amount)}</span>
+                        </div>
+                      ))
+                    : paidTotal > 0 &&
+                      due > 0 && (
+                        <div className="ot-totals__row ot-totals__row--paid" data-testid="customer-payment-summary">
+                          <span>Paid</span>
+                          <span>&minus;{formatTakaBd(paidTotal)}</span>
+                        </div>
+                      ))}
+                {finalLine && (
+                  <div className="ot-totals__row ot-totals__row--final" data-testid="final-line">
+                    <span>{finalLine.label}</span>
+                    <span>{formatTakaBd(finalLine.amount)}</span>
+                  </div>
+                )}
               </div>
             </section>
 
-            <section className="order-detail__section">
-              <h2 className="order-detail__section-title">Delivery address</h2>
-              <p className="order-detail__address">
-                {order.customer_name} &middot; {order.customer_phone}
-                <br />
-                {order.address_line}, {order.thana}, {order.district}, {order.division}
-              </p>
-            </section>
-
-            <section className="order-detail__section">
-              <h2 className="order-detail__section-title">Payment</h2>
-              <div className="order-detail__payment-row">
-                <span>{order.payment_method === 'bkash' ? 'bKash' : 'Cash on Delivery'}</span>
-                <span className={`status-badge status-badge--${PAYMENT_STATUS_TONE[order.payment_status]}`}>
-                  {PAYMENT_STATUS_LABELS[order.payment_status]}
+            <section className="ot-card ot-address" aria-label="Delivering to">
+              <h2 className="ot-card__title">Delivering to</h2>
+              <div className="ot-address__row">
+                <span className="ot-address__icon">
+                  <LineIcon name="pin" />
                 </span>
-              </div>
-              {order.payment_method === 'bkash' && order.bkash_trx_id && (
-                <p className="order-detail__trx">TrxID: {order.bkash_trx_id}</p>
-              )}
-              {payment && payment.paid > 0 && (
-                <p className="order-detail__trx" data-testid="customer-payment-summary">
-                  Paid {formatTaka(payment.paid)}
-                  {payment.due > 0 ? ` · Due ${formatTaka(payment.due)}` : ''}
+                <p className="ot-address__text">
+                  <span className="ot-address__name">
+                    {order.customer_name} · {order.customer_phone}
+                  </span>
+                  <span>{order.address_line}</span>
+                  <span>
+                    {order.thana}, {order.district}
+                  </span>
                 </p>
-              )}
+              </div>
             </section>
 
-            <div className="order-detail__actions">
-              {whatsAppUrl(settings.expert_whatsapp_url) && (
-                <button type="button" className="account-row" onClick={handleHelp}>
-                  <span>Need help?</span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="account-row__chevron">
-                    <path d="M9 6l6 6-6 6" />
-                  </svg>
-                </button>
-              )}
-
-              {isCancellableByCustomer(order) && (
+            {chatHref && (
+              <section className="ot-card ot-help" aria-label="Help">
+                <div className="ot-help__row">
+                  <span className="ot-help__icon">
+                    <LineIcon name="chat" />
+                  </span>
+                  <span className="ot-help__text">
+                    <span className="ot-help__title">Questions about this order?</span>
+                    <span className="ot-help__sub">We usually reply within an hour.</span>
+                  </span>
+                </div>
                 <button
                   type="button"
-                  className="button button--secondary button--full"
-                  onClick={() => setIsCancelOpen(true)}
+                  className="button button--secondary button--full ot-help__button"
+                  onClick={() => openExternal(chatHref)}
+                  data-testid="chat-whatsapp"
+                  data-href={chatHref}
                 >
+                  Chat on WhatsApp
+                </button>
+              </section>
+            )}
+
+            {isCancellableByCustomer(order) && (
+              <div className="order-detail__actions">
+                <button type="button" className="button button--secondary button--full" onClick={() => setIsCancelOpen(true)}>
                   Cancel order
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </main>

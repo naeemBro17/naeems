@@ -10,8 +10,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchMyOrders } from '../lib/orders';
 import { formatTaka } from '../lib/format';
-import { ORDER_STATUS_TONE } from '../lib/orderStatus';
-import { savedOrderStep, stepLabel } from '../lib/orderSteps';
+import { TRACK_STATUS, fetchLatestSteps, savedTrack, type TrackStatus } from '../lib/orderTracking';
 import type { Order } from '../types';
 
 function OrdersSkeleton() {
@@ -29,6 +28,8 @@ export function OrdersListPage() {
   const { session, isLoading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Batch 35: the newest stored courier step (Out for delivery), when known.
+  const [steps, setSteps] = useState<Map<string, TrackStatus>>(() => new Map());
 
   useEffect(() => {
     if (authLoading) return;
@@ -43,6 +44,9 @@ export function OrdersListPage() {
       if (cancelled) return;
       setOrders(data);
       setIsLoading(false);
+    });
+    void fetchLatestSteps().then((map) => {
+      if (!cancelled) setSteps(map);
     });
     return () => {
       cancelled = true;
@@ -83,6 +87,7 @@ export function OrdersListPage() {
                     <span className="orders-list__number">{order.order_number}</span>
                     <span className="orders-list__date">
                       {new Date(order.created_at).toLocaleDateString('en-GB', {
+                        timeZone: 'Asia/Dhaka',
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
@@ -91,9 +96,14 @@ export function OrdersListPage() {
                   </div>
                   <div className="orders-list__row-end">
                     <span className="orders-list__total">{formatTaka(order.total)}</span>
-                    <span className={`status-badge status-badge--${ORDER_STATUS_TONE[order.status]}`}>
-                      {stepLabel(savedOrderStep(order), 'customer')}
-                    </span>
+                    {(() => {
+                      const info = TRACK_STATUS[savedTrack(order, { storedStep: steps.get(order.id) ?? null }).status];
+                      return (
+                        <span className={`track-pill track-pill--${info.tone}`} data-testid="order-status-pill">
+                          {info.customer}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </Link>
               </li>

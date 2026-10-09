@@ -7,6 +7,7 @@ import { pageForPath, preloadShopPages } from './lib/routePages';
 import { trackInputModality } from './lib/inputModality';
 import './styles/tokens.css';
 import './styles/app.css';
+import './styles/orderTracking.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
