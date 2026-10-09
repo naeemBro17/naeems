@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../lib/protectImage';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -300,6 +301,15 @@ function DetailContent({
   // product's own — the same photo its card showed), then every other photo
   // once. See optionGalleryImages for the one rule the whole site follows.
   const images = optionGalleryImages(productImages(product), selectedOption, variants);
+  // Batch 35 Part 8: the blurred copy behind the photo follows the photo on
+  // screen. Only photos already shown get a copy (the same file the slide
+  // already loaded — nothing extra is downloaded), so they can crossfade.
+  const currentImage = images[activeImage] ?? images[0] ?? null;
+  const [blurredShown, setBlurredShown] = useState<string[]>([]);
+  useEffect(() => {
+    if (!currentImage) return;
+    setBlurredShown((shown) => (shown.includes(currentImage) ? shown : [...shown, currentImage]));
+  }, [currentImage]);
   const firstImage = images[0] ?? null;
 
   // The carousel keeps its own scroll position across re-renders — without
@@ -432,6 +442,19 @@ function DetailContent({
           }`}
           style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
+          {blurredShown
+            .filter((url) => images.includes(url))
+            .map((url) => (
+              <img
+                key={`blur-${url}`}
+                src={url}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                className={`product-detail__backdrop${url === currentImage ? ' product-detail__backdrop--on' : ''}`}
+                data-testid="photo-backdrop"
+              />
+            ))}
           <div
             ref={carouselRef}
             className="product-detail__carousel"
@@ -443,7 +466,8 @@ function DetailContent({
                 key={url}
                 src={url}
                 alt={`${product.name} — image ${index + 1}`}
-                className="product-detail__image"
+                {...protectedImageProps}
+                className={`product-detail__image ${PROTECTED_IMAGE_CLASS}`}
                 loading={index === 0 ? 'eager' : 'lazy'}
               />
             ))}

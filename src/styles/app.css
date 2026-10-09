@@ -560,6 +560,41 @@ html[data-input='keyboard'] .focus-host :focus-visible {
   padding-left: var(--space-8);
 }
 
+/* Batch 35 Part 7: the one money field. The ৳ (or %) has its own reserved
+   space on the left; the selector is stronger than every other input style
+   (.adm .form-input sets "padding: 8px 12px", which is what used to put
+   the first digit under the sign), so nothing can take that space away. */
+.money-input {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.money-input:has(> .manual-order-line__price-input),
+.money-input:has(> .edit-order__price-input) {
+  flex: 0 0 auto;
+}
+
+.money-input__sign {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.money-input > .form-input.money-input__field {
+  padding-left: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Non-editable value shown in place of an input (e.g. a generated SKU). */
 .form-readonly {
   font-family: var(--font-price);
@@ -760,7 +795,64 @@ html[data-input='keyboard'] .focus-host :focus-visible {
   position: relative;
   margin: 0 calc(-1 * var(--space-4)) 0 calc(-1 * var(--space-4));
   overflow: hidden;
-  background: #fff;
+  /* Batch 35 Part 8: the page colour (dark in dark mode), never white;
+     the blurred photo below covers it as soon as the photo is there. */
+  background: var(--pdp-bg);
+}
+
+/* Batch 35 Part 8: the photo area is the full square plus the sheet's
+   overlap (24 px), so the rounded sheet only ever covers that extra strip
+   and the whole square photo stays visible. Behind it, a blurred, slightly
+   zoomed copy of the photo on screen fills the strip and shows behind the
+   sheet's rounded corners (light and dark). It follows a swipe with a
+   crossfade (instant with reduced motion). */
+.product-detail__gallery:not(.product-card__placeholder) {
+  padding-bottom: var(--pdp-sheet-overlap);
+}
+
+.product-detail__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(24px);
+  transform: scale(1.15);
+  opacity: 0;
+  transition: opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.product-detail__backdrop--on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-detail__backdrop {
+    transition: none;
+  }
+}
+
+.product-detail__gallery > .product-detail__carousel {
+  position: relative;
+  z-index: 1;
+}
+
+.product-detail__gallery > .product-detail__counter {
+  z-index: 2;
+}
+
+/* Batch 35 Part 9: shop product photos — no long-press "Save image" menu,
+   no text selection, no dragging (casual saving only; a screenshot can
+   never be blocked). Taps, swipes and pinch-zoom are untouched. */
+.protected-image {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* No-image fallback reuses the card placeholder inside the gallery frame */
@@ -851,7 +943,8 @@ html[data-input='keyboard'] .focus-host :focus-visible {
   flex: 0 0 100%;
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  /* Batch 35: the whole photo, never cut (photos are square anyway). */
+  object-fit: contain;
   scroll-snap-align: start;
 }
 
@@ -8289,7 +8382,7 @@ html.vt-fade::view-transition-new(root) {
 }
 
 .manual-order-line__price-input {
-  width: 90px;
+  width: 104px;
   padding: 4px 8px;
   height: 32px;
 }
@@ -10555,7 +10648,7 @@ html.vt-fade::view-transition-new(root) {
 }
 
 .edit-order__price-input {
-  width: 96px;
+  width: 110px;
   min-height: 34px;
   padding: 6px 8px;
 }
