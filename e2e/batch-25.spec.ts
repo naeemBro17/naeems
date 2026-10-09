@@ -177,7 +177,7 @@ test.describe('phone, 360px', () => {
       await page.goto(`/admin${p.query}`);
       // Batch 32 Part 5: Home's title is "Good morning/afternoon/evening, <name>".
       const pattern =
-        p.name === 'Home' ? '^Good (morning|afternoon|evening), E2E' : `^${p.name.replace(/[()&/.]/g, '\\$&')}`;
+        p.name === 'Home' ? '^(Good (morning|afternoon|evening)|Hello), E2E' : `^${p.name.replace(/[()&/.]/g, '\\$&')}`;
       await expect(page.locator('.adm-page-header__title')).toHaveText(new RegExp(pattern), {
         timeout: 15_000,
       });

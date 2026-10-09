@@ -1,0 +1,266 @@
+BATCH 37 — New invoice (A4, fold-to-label), group QR, bulk print
+Branch: feature/batch-37-invoice · Version 1.37.0
+IMPORTANT: Batch 36 was NOT merged into main when this batch ran, so this
+branch is built ON TOP OF feature/batch-36-payouts-text-paste. Merge
+Batch 36 first; then the Batch 37 pull request shows only its own changes.
+Approved design: docs/mockups/batch-37/NAEEMS_Invoice_v2.pdf (copied from
+Downloads). Samples and screenshots: reports/batch-37-samples/
+
+============================================================
+1. WHAT I DID
+============================================================
+
+PART 1 — The new invoice
+  - One A4 page, matched to the approved PDF. The TOP THIRD is the parcel
+    label: NAEEM'S + "Invoice", the Steadfast consignment ID in big
+    letters with a barcode under it, tracking code, "Steadfast Courier ·
+    Regular", and a box "DELIVER TO" with name, phone, address,
+    thana/district and a black panel "COLLECT (COD) ৳4,079".
+  - The rest is the invoice: Sold by / Billed to / Invoice no., the items
+    table (Unit price, Qty, Discount, Amount — no SKU), amount in words
+    ("Four thousand seventy-nine taka only", lakh and crore work), the
+    totals, the community box with the QR code to the Facebook group,
+    and the thank-you footer.
+  - The COD amount follows the same rule as Steadfast booking: pay-later
+    orders show ৳0 "Customer pays later" and the last line "Balance due
+    (pay later)"; fully paid orders show ৳0 "Paid — do not collect";
+    advance payments show one "Paid in advance (bKash)" line per method.
+  - Not booked yet: "Not booked yet" + "Book with Steadfast to print the
+    label", no barcode; the invoice part still prints.
+  - Long orders continue on page 2 ("NAEEM'S · Invoice INV-NM-xxxx · page
+    2 of 2"); totals, community box and footer go on the last page.
+  - Fonts: Plus Jakarta Sans (the site's font) and Hind Siliguri for ৳ and
+    Bengali, built into the PDF, so it prints the same everywhere.
+    Bengali names and addresses come out correctly shaped (joined
+    letters, vowel signs) — checked in samples/bengali-name.png.
+  - Where it is used: the admin order page "Invoice" button, and the
+    customer's "Download invoice" on the Order placed page (their copy
+    shows the order number instead of the consignment, never staff notes).
+    The old plain invoice code (jsPDF, "Tk" instead of ৳) is removed.
+  - Settings → Invoice (Super Admin): shop phone/WhatsApp (blank = the
+    Checkout WhatsApp number), shop city ("Dhaka, Bangladesh"), community
+    QR link (default: the Facebook group), title and two lines, and a
+    switch "Show community box" (On). Blank fields use the default.
+
+PART 2 — Printing
+  - ONE ORDER: order page → Other actions → Invoice. A small window
+    makes the PDF, then: Print (orange), Download PDF, and Share (when
+    the device can). On a PC, Print opens Chrome's print window. On a
+    phone, Print opens the share sheet — choose Print there (Android).
+  - MANY ORDERS: Orders → the ⋮ menu → "Print invoices". Tick orders, or
+    tap "All booked today, not printed yet (N)". Then "Print N invoices"
+    makes ONE PDF, one order per page, lowest order number first.
+  - Printing, downloading or sharing marks the orders as printed: a small
+    grey "Printed" under the order in the list, and "Invoice printed" with
+    the time in the order's History. Re-printing is allowed. (This part
+    needs the database addition below.)
+
+HOW TO PRINT
+  - Paper: A4. In the print window choose Scale: "Actual size" / 100%,
+    NOT "Fit to page" — a shrunk barcode may not scan. (The PDF also asks
+    printers not to shrink it.)
+
+HOW TO FOLD
+  - The two faint dashed lines split the page in thirds. Fold the lower
+    two-thirds BACKWARDS along both lines (like a letter), so the label —
+    the top third with the barcode and "Deliver to" — stays on the
+    outside. Tape it on the box with the label facing up.
+
+============================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+============================================================
+File: supabase/migration-039-batch37-invoice.sql (additive only: 7 new
+settings rows that never overwrite anything, one new table
+order_invoice_prints, one new function record_invoice_prints). Status of
+applying it is in section 7 below.
+
+Paste this whole block into the Supabase SQL Editor and press Run:
+
+-- ============================================================
+-- Batch 37 — new invoice and bulk print (reports/batch-37.txt).
+--
+--   app_settings rows       the invoice settings (Admin → Settings →
+--                           Invoice). Blank = the default the website
+--                           uses: shop phone = the Checkout WhatsApp
+--                           number, "Dhaka, Bangladesh", the Facebook
+--                           group link and texts, community box On.
+--   order_invoice_prints    one row each time an order's invoice is
+--                           printed (re-printing is allowed).
+--   record_invoice_prints() remembers a print and adds "Invoice printed"
+--                           to each order's History.
+--
+-- Who: anyone allowed to see orders (staff_can('view_orders'); the Super
+-- Admin always) can print and read the print marks. Nobody can write
+-- order_invoice_prints directly — only through record_invoice_prints().
+--
+-- Additive only: new rows (existing settings are never overwritten), one
+-- new table, one new function. Nothing is changed or dropped. Safe to run
+-- more than once.
+-- ============================================================
+
+BEGIN;
+
+INSERT INTO app_settings (key, value) VALUES
+  ('invoice_shop_phone', ''),
+  ('invoice_shop_city', ''),
+  ('invoice_community_link', ''),
+  ('invoice_community_title', ''),
+  ('invoice_community_line1', ''),
+  ('invoice_community_line2', ''),
+  ('invoice_show_community', 'true')
+ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS order_invoice_prints (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id    uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  printed_at  timestamptz NOT NULL DEFAULT now(),
+  printed_by  uuid DEFAULT auth.uid()
+);
+
+CREATE INDEX IF NOT EXISTS order_invoice_prints_order_idx ON order_invoice_prints (order_id, printed_at DESC);
+
+ALTER TABLE order_invoice_prints ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "order_invoice_prints_staff_read" ON order_invoice_prints;
+CREATE POLICY "order_invoice_prints_staff_read"
+  ON order_invoice_prints FOR SELECT TO authenticated
+  USING (staff_can('view_orders'));
+
+REVOKE ALL ON order_invoice_prints FROM anon;
+REVOKE INSERT, UPDATE, DELETE ON order_invoice_prints FROM authenticated;
+GRANT SELECT ON order_invoice_prints TO authenticated;
+
+CREATE OR REPLACE FUNCTION record_invoice_prints(p_order_ids uuid[])
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+DECLARE
+  v_order record;
+  v_count integer := 0;
+BEGIN
+  IF NOT staff_can('view_orders') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_order_ids IS NULL OR array_length(p_order_ids, 1) IS NULL THEN
+    RETURN 0;
+  END IF;
+  IF array_length(p_order_ids, 1) > 500 THEN
+    RAISE EXCEPTION 'Too many orders at once.';
+  END IF;
+
+  FOR v_order IN SELECT id, status FROM orders WHERE id = ANY (p_order_ids) LOOP
+    INSERT INTO order_invoice_prints (order_id, printed_by) VALUES (v_order.id, auth.uid());
+    PERFORM order_history_line(v_order.id, v_order.status, 'Invoice printed');
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END;
+$;
+
+REVOKE ALL ON FUNCTION record_invoice_prints(uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION record_invoice_prints(uuid[]) TO authenticated;
+
+COMMIT;
+
+-- Checks (read only):
+-- 1. SELECT key, value FROM app_settings WHERE key LIKE 'invoice_%' ORDER BY key;  → 7 rows
+-- 2. SELECT count(*) FROM order_invoice_prints;                                      → 0 at first
+-- 3. SELECT proname FROM pg_proc WHERE proname = 'record_invoice_prints';            → 1 row
+
+Without it everything still prints; only the "Printed" mark and the
+"not printed yet" memory are missing (a message says so).
+
+============================================================
+3. WHAT I COULD NOT FINISH
+============================================================
+  - Nothing in scope is left. What only Naeem's printer and rider can
+    confirm: that the rider's Steadfast scanner reads the printed barcode
+    (it scans correctly from the rendered page in the tests, and it is a
+    standard Code 128 of the consignment ID), and that his printer prints
+    at actual size. Please print one, scan it with a phone barcode app,
+    and check that "COLLECT (COD)" is right before using it for real.
+
+============================================================
+4. WHAT I FOUND ALONG THE WAY
+============================================================
+  - The approved mockup had the "Billed to" address running into the
+    Invoice column ("Narsingdi" over "Date"). Mine wraps it.
+  - My first version of "All booked today, not printed yet" could pick
+    nothing if tapped before today's bookings had loaded (the test caught
+    it). Fixed: the button reads today's bookings again first.
+  - When an order has many advance payments, the "Amount to collect" line
+    can sit on the lower fold line. It is only a guide; folding through
+    text does not hide the label.
+  - The barcode/QR reader used in the tests prints harmless "not found"
+    stack lines in the test log when a test checks that NO code is there.
+
+============================================================
+5. DESIGN DECISIONS
+============================================================
+  - PDF library: switched from jsPDF to pdf-lib + fontkit (free, MIT).
+    jsPDF cannot shape Bengali; fontkit does. The PDF code (~600 KB) and
+    fonts (~1.6 MB) load only when an invoice is made, never for shoppers
+    browsing, and the browser keeps them after the first time. Fonts are
+    not in the offline cache.
+  - "Steadfast Courier · Regular" as in the approved mockup — every parcel
+    is booked as Steadfast's standard home delivery.
+  - The QR code sits on a small white square inside the grey box (the
+    mockup had it straight on grey) — better contrast for phone cameras.
+  - Item text is 9 pt (mockup size) so normal product names fit on one line.
+  - "Booked today" = the order's "shipped" History line is from today,
+    Dhaka time, and it has a consignment ID. No change to Steadfast
+    booking was needed.
+  - Any of Print / Download / Share counts as "printed" (you cannot know
+    whether the paper actually came out).
+  - The customer's copy uses the same design (as the brief asked: replace
+    the old invoice everywhere), showing their order number in the label
+    area; bKash website orders show as paid (they pay the full total).
+
+============================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+============================================================
+  1. Thermal label size (medium): many shops print 4×6 in labels on a
+     thermal printer — faster and no folding. The label part could be
+     made as a separate 4×6 page. Saves time on busy days.
+  2. Print straight after booking (small): "Book with Steadfast" could
+     offer "Print label now" in the same step.
+  3. Invoice number series (small): today the invoice number is the order
+     number with INV-. If Naeem later needs VAT-style continuous invoice
+     numbers, a separate counter is needed.
+  4. Scan check before dispatch (medium): scanning each parcel's barcode
+     with the phone camera on a "Dispatch" screen would catch a wrong
+     label on a wrong box before the rider leaves.
+
+============================================================
+7. BUILD, TESTS, DATABASE
+============================================================
+  - npm run verify: build OK · vitest 361/361 · e2e 256 passed, 125
+    skipped (need accounts/features not set up on this PC, as before),
+    3 failed on the first run, then fixed and re-run green:
+      · two older tests (batch-25, batch-32) expected "Good morning /
+        afternoon / evening" on admin Home; since Batch 35 it says "Hello"
+        at night and the run was after midnight. The tests now also accept
+        "Hello" (test-only change; the screen is unchanged).
+      · the Batch 37 screenshot could not be written once (Windows locked
+        the old file); saving it now retries.
+    Re-run of batch-25, batch-32 and batch-37: 26 passed, 1 skipped (the
+    "Printed" check, which needs the database addition).
+  - Unit tests (src/lib/batch37.invoice.test.ts, 22): amount in words (0,
+    79, 4,079, 1,20,450, crore, paisa); Code 128 table and checksum; normal
+    COD, pay later, fully paid, advance + COD, long order (2 pages),
+    Bengali name/address (every character has a glyph), not booked;
+    totals equal the stored amounts; barcode and QR decoded from the
+    rendered page image; label address = billed-to; bulk 3 orders = 3
+    pages; settings (QR link, box off) change the PDF; "booked today, not
+    printed yet" picks the right orders.
+  - Browser tests (e2e/batch-37.spec.ts): order page → Invoice → PDF
+    downloaded, barcode scans to the consignment ID, QR to the live group
+    link; settings change reflected; bulk print of 3 ticked orders = 3
+    pages in order-number order with the right barcodes; "All booked
+    today" ticks the new orders; Printed mark + History line.
+  - Samples (reports/batch-37-samples/): normal, pay-later, fully-paid,
+    advance-cod, long-order (page1 + page2), bengali-name, not-booked —
+    each as .pdf and .png; screenshots of the invoice window and print
+    mode at phone width.

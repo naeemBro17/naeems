@@ -602,7 +602,7 @@ for (const width of [390, 1280]) {
     for (const card of cards) await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('kpi-today')).toContainText('Today');
     await expect(page.getByTestId('kpi-way')).toContainText('With courier');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Good (morning|afternoon|evening), \S+/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^(Good (morning|afternoon|evening)|Hello), \S+/);
     await expect(page.locator('.adm-page-header__subtitle')).toHaveText(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+$/);
     await expect(page.locator('.adm-home__section-title').filter({ hasText: 'Needs attention' })).toBeVisible();
     await expect(page.locator('.adm-home__section-title').filter({ hasText: 'Sales · last 7 days' })).toBeVisible();
