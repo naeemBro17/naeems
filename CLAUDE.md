@@ -165,3 +165,5 @@ So future sessions do not assume more exists than does:
 - **There are no customer accounts.** Customers cannot log in or see order history.
 - The product grid currently lives at `/`. A future session will move it to `/shop` and put a landing page at `/`. Until that session runs, use whatever route the grid is on today — do not pre-emptively change routing.
 - Delivery tracking, blog, AI assistant, and payment gateway are all future work. None exist.
+- **Inventory lots exist (Batch 38) but Inventory mode is Off.** Lots, landed cost and the stock ledger (`lots`, `lot_costs`, `lot_items`, `stock_movements`) are a separate record. Sales, cancels and stock numbers do not use them yet; that is Batch 39. The database refuses `inventory_mode = 'true'` until then.
+- **Never count the old weight cost twice.** The opening lot L-000 stores `opening_weight_added_bdt`: weight cost moved from the old 2025–26 expenses into the opening stock's cost. If those old expenses are ever imported, subtract this amount from the old weight expenses.

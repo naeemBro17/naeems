@@ -1,0 +1,282 @@
+/* Batch 38: Admin → Inventory. Plain on purpose (correct numbers first):
+   existing admin cards, buttons and fields; neutral colours; every row
+   stacks on a phone so nothing scrolls sideways. */
+
+.inv {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.inv-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.inv-section {
+  margin: 8px 0 0;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.inv-muted {
+  margin: 0;
+  color: var(--adm-muted);
+  font-size: var(--adm-fs-small);
+  overflow-wrap: anywhere;
+}
+
+.inv-mode__title {
+  margin: 0 0 4px;
+  color: var(--adm-text);
+}
+
+.inv-note-strong {
+  margin: 0;
+  font-weight: 600;
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+}
+
+.inv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inv-lot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--adm-text);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-lg);
+  cursor: pointer;
+}
+
+.inv-lot__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inv-lot__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.inv-lot__sub {
+  color: var(--adm-muted);
+  font-size: var(--adm-fs-small);
+  overflow-wrap: anywhere;
+}
+
+.inv-lot__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--adm-r-pill);
+  background: var(--adm-amber-bg);
+  color: var(--adm-amber-text);
+  font-size: var(--adm-fs-micro);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inv-badge--grey {
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+}
+
+.inv-item .inv-badge {
+  margin-left: 6px;
+}
+
+/* Two fields side by side where they fit, one per line on a narrow phone. */
+.inv-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.inv-fields .form-field,
+.inv-stack > .form-field {
+  margin: 0;
+  min-width: 0;
+}
+
+.inv-fields .form-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.inv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-md);
+  background: var(--adm-card);
+}
+
+.inv-item__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.inv-item__name {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+}
+
+.inv-remove {
+  align-self: flex-start;
+}
+
+.inv-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+}
+
+.inv-calc {
+  color: var(--adm-text-2);
+}
+
+.inv-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+}
+
+.inv-line > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.inv-line > span:last-child {
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-line--total {
+  padding-top: 6px;
+  border-top: 1px solid var(--adm-line);
+  font-weight: 700;
+}
+
+.inv-ok {
+  margin: 0;
+  color: var(--adm-green-text);
+  font-weight: 600;
+}
+
+.inv-bad {
+  color: var(--adm-red-text);
+}
+
+.inv-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--adm-r-md);
+  background: var(--adm-red-bg);
+  color: var(--adm-red-text);
+  font-size: var(--adm-fs-small);
+  overflow-wrap: anywhere;
+}
+
+.inv-danger-box {
+  border-color: var(--adm-red);
+}
+
+.inv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inv-counts,
+.inv-compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+}
+
+.inv-issues {
+  font-size: var(--adm-fs-small);
+  border-radius: var(--adm-r-md);
+  padding: 8px 12px;
+}
+
+.inv-issues summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.inv-issues ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.inv-issues--bad {
+  background: var(--adm-red-bg);
+  color: var(--adm-red-text);
+}
+
+.inv-issues--warn {
+  background: var(--adm-amber-bg);
+  color: var(--adm-amber-text);
+}
+
+.inv-helper summary {
+  cursor: pointer;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+  margin-bottom: 8px;
+}
+
+.inv-weight-edit {
+  display: flex;
+  gap: 8px;
+}
+
+.inv-weight-edit .form-input {
+  flex: 1;
+  min-width: 0;
+}

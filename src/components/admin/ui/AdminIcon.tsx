@@ -65,6 +65,13 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
       <path d="M9 9.5h.01M15 9.5h.01" />
     </>
   ),
+  inventory: (
+    <>
+      <rect x="3" y="4" width="18" height="5" rx="1.5" />
+      <path d="M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9" />
+      <path d="M10 13h4" />
+    </>
+  ),
   products: (
     <>
       <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />

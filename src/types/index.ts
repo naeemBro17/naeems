@@ -241,6 +241,9 @@ export interface AppSettings {
    *  customer while the order is Out for delivery (when Steadfast gives
    *  them). Anything else, or missing, is Off. Super Admin only. */
   show_rider_phone: string;
+  /** Batch 38: 'true' = sales use lots. Stays 'false' until Batch 39 (the
+   *  database refuses 'true'). While Off, lots never touch stock. */
+  inventory_mode: string;
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
