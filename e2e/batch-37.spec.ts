@@ -64,6 +64,18 @@ async function saveScreen(page: Page, name: string): Promise<void> {
   }
 }
 
+/** Fix 1.38.1: the order page's Invoice card downloads straight away. */
+async function downloadFromCard(page: Page, screenshot?: string): Promise<Uint8Array> {
+  const card = page.getByTestId('invoice-card');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  if (screenshot) await saveScreen(page, screenshot);
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 30_000 }) as Promise<Download>,
+    card.getByTestId('invoice-download').click(),
+  ]);
+  return new Uint8Array(readFileSync((await download.path()) as string));
+}
+
 async function downloadFromDialog(page: Page, screenshot?: string): Promise<Uint8Array> {
   const dialog = page.getByTestId('invoice-dialog');
   await expect(dialog.getByTestId('invoice-ready')).toBeVisible({ timeout: 30_000 });
@@ -99,8 +111,7 @@ test('order page → Invoice: A4 PDF, barcode scans to the consignment ID, QR to
   const shop = await liveShop();
   await useSessionInPage(page, admin);
   await page.goto(`/admin/orders/${order.orderNumber}`);
-  await page.getByRole('button', { name: 'Invoice', exact: true }).click();
-  const bytes = await downloadFromDialog(page, 'screen-invoice-dialog.png');
+  const bytes = await downloadFromCard(page, 'screen-invoice-card.png');
 
   expect(await pdfPageCount(bytes)).toBe(1);
   const image = await renderPdfPage(bytes, 1, 3);
@@ -121,7 +132,6 @@ test('order page → Invoice: A4 PDF, barcode scans to the consignment ID, QR to
   // "Billed to" joins them — both from the same text.
   for (const part of [row.thana, row.district]) expect(text).toContain(part);
   expect(text).toContain(Number(row.total).toLocaleString('en-IN'));
-  await page.getByRole('button', { name: 'Close dialog' }).click();
 });
 
 test('settings change (QR link, box switched off) reflects in the PDF', async ({ page }) => {
@@ -140,15 +150,13 @@ test('settings change (QR link, box switched off) reflects in the PDF', async ({
   });
   await useSessionInPage(page, admin);
   await page.goto(`/admin/orders/${order.orderNumber}`);
-  await page.getByRole('button', { name: 'Invoice', exact: true }).click();
-  let image = await renderPdfPage(await downloadFromDialog(page), 1, 3);
+  let image = await renderPdfPage(await downloadFromCard(page), 1, 3);
   expect(decodeRegion(image, QR_REGION, 'qr')).toBe(link);
 
   link = 'https://example.com/unused';
   show = 'false';
   await page.reload();
-  await page.getByRole('button', { name: 'Invoice', exact: true }).click();
-  const bytes = await downloadFromDialog(page);
+  const bytes = await downloadFromCard(page);
   image = await renderPdfPage(bytes, 1, 3);
   expect(decodeRegion(image, QR_REGION, 'qr')).toBeNull();
   expect((await pdfPageText(bytes)).join(' ')).not.toContain('skincare community');

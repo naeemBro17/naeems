@@ -29,7 +29,7 @@ export function DeleteOrdersDialog({ orders, isOpen, onConfirm, onClose }: Delet
   const booked = orders.filter((o) => o.steadfast_consignment_id);
   // Fix (1.38.1): one order → type its number's digits (NM-2851 → 2851);
   // several → type DELETE. Nothing is deleted on one tap.
-  const word = orders.length === 1 ? orders[0].order_number.replace(/D/g, '') : BULK_DELETE_WORD;
+  const word = orders.length === 1 ? orders[0].order_number.replace(/\D/g, '') : BULK_DELETE_WORD;
   const canConfirm = typed.trim() === word;
   const restoresStock = orders.some((o) => o.status !== 'cancelled');
 
