@@ -425,3 +425,152 @@
     min-width: 0;
   }
 }
+
+/* ------------------------------------------------------------------
+   Fix 1.38.1 — order page: Invoice card, Careful actions, Reopen card,
+   confirmation sheets.
+   ------------------------------------------------------------------ */
+.adm-oinvoice__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.adm-oinvoice__buttons .adm-btn {
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.adm-oinvoice__hint {
+  margin-top: 8px;
+}
+
+.adm-careful {
+  border-color: color-mix(in srgb, var(--adm-red) 45%, var(--adm-line));
+  background: color-mix(in srgb, var(--adm-red) 5%, var(--adm-card));
+}
+
+.adm-careful__title {
+  margin: 0 0 2px;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+  color: var(--adm-red-text);
+}
+
+.adm-careful__list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.adm-careful__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--adm-line);
+}
+
+.adm-careful__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.adm-careful__name {
+  font-weight: 600;
+  color: var(--adm-text);
+}
+
+.adm-careful__explain {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.adm-ocard .adm-btn.adm-careful__btn {
+  background: transparent;
+  white-space: nowrap;
+}
+
+.adm-ocard .adm-btn.adm-careful__btn--red {
+  color: var(--adm-red-text);
+  border-color: color-mix(in srgb, var(--adm-red) 55%, transparent);
+}
+
+.adm-oreopen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.adm-oreopen__btn {
+  width: 100%;
+  justify-content: center;
+  gap: 6px;
+}
+
+.adm-csheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.adm-csheet__warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--adm-r-md);
+  background: var(--adm-amber-bg);
+  color: var(--adm-amber-text);
+  font-size: var(--adm-fs-small);
+}
+
+.adm-csheet__warning .adm-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.adm-csheet__text {
+  margin: 0;
+  color: var(--adm-text);
+}
+
+.adm-csheet__type {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.adm-csheet__type b {
+  color: var(--adm-text);
+}
+
+.adm-csheet__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.adm-csheet__actions .adm-btn {
+  justify-content: center;
+}
+
+.adm-csheet__actions .adm-btn:disabled {
+  opacity: 0.45;
+}
+
+.adm-csheet__foot {
+  margin: 0;
+  text-align: center;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}

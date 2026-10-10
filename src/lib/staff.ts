@@ -15,7 +15,7 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'edit_products', label: 'Edit products and stock', hint: 'Add and edit products, options, photos and stock. Cannot delete products.' },
   { id: 'edit_categories', label: 'Edit categories', hint: 'Add, rename and remove categories.' },
   { id: 'view_customers', label: 'View customers', hint: 'See the Customers page and look up customers by phone. Read only.' },
-  { id: 'delete_early_orders', label: 'Delete early orders', hint: 'Delete Pending orders, or Cancelled orders never booked on Steadfast.' },
+  { id: 'delete_early_orders', label: 'Delete early orders', hint: 'Delete orders not booked on Steadfast and not sent (Processing, Confirmed or Cancelled).' },
   { id: 'view_wholesalers', label: 'View wholesalers', hint: 'See the Wholesalers list. Read only: approving stays with you.' },
   { id: 'see_sales', label: 'See sales figures', hint: 'See money totals: today, this month, the 7-day chart, and what each customer has spent.' },
   { id: 'edit_brands', label: 'Edit brands', hint: 'Add, rename, reorder and delete brands; logos, banners and the Home row.' },

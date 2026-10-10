@@ -10,6 +10,7 @@ import {
   refreshSteadfastStatus,
   steadfastNeedsAttention,
   adminDeleteOrders,
+  adminReopenOrder,
   isEarlyStageOrder,
 } from '../../../lib/orders';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -18,7 +19,7 @@ import { DeleteOrdersDialog } from '../DeleteOrdersDialog';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { formatTaka } from '../../../lib/format';
 import { invoiceFromOrder } from '../../../lib/invoice/invoiceData';
-import { InvoiceDialog } from '../InvoiceDialog';
+import { CarefulActionsCard, ConfirmSheet, OrderInvoiceCard, ReopenCard, orderDigits, type CarefulAction } from '../OrderActionCards';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../lib/orderStatus';
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../../lib/manualOrders';
@@ -71,9 +72,11 @@ function shortTrx(trx: string | null): string {
  * Batch 35 Part 3: /admin/orders/:orderNumber — the order as a page of its
  * own (it used to be a pop-up): status, customer, items and money,
  * Steadfast, history (folded), and ONE main action at the bottom
- * (Processing → Confirm order, Confirmed → Book with Steadfast). Every
- * other action of the old pop-up is still here, under "Other actions".
- * Every action is checked again by the database.
+ * (Processing → Confirm order, Confirmed → Book with Steadfast).
+ * Fix 1.38.1: the invoice has its own card near the top; the actions that
+ * change the order sit in "Careful actions" at the very bottom and each
+ * asks first (cancel and delete need the order number typed). A cancelled
+ * order can be reopened. Every action is checked again by the database.
  */
 export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const { showToast } = useToast();
@@ -106,7 +109,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
+  const [transitOpen, setTransitOpen] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -192,8 +197,30 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   };
 
   const handleCancel = async () => {
-    setCancelOpen(false);
     await handleStatusChange('cancelled');
+    setCancelOpen(false);
+  };
+
+  const handleMarkDelivered = async () => {
+    await handleStatusChange('delivered');
+    setDeliverOpen(false);
+  };
+
+  const handleMarkInTransit = async () => {
+    await handleStatusChange('shipped');
+    setTransitOpen(false);
+  };
+
+  const handleReopen = async () => {
+    if (!order) return;
+    const { status: back, error } = await adminReopenOrder(order.id);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    setReopenOpen(false);
+    showToast(`Order reopened: ${back ? SAVED_STATUS_NAME[back] : 'back'}`);
+    await reload();
   };
 
   const handleMarkPaid = async () => {
@@ -289,9 +316,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   };
 
   // Batch 37: the A4 fold-to-label invoice (Print / Download / Share).
-  const buildInvoice = useCallback(async () => {
-    if (!order) return { invoices: [], orderIds: [] };
-    return { invoices: [invoiceFromOrder(order, payments)], orderIds: [order.id] };
+  const buildInvoice = useCallback(() => {
+    if (!order) throw new Error('The order is not loaded.');
+    return invoiceFromOrder(order, payments);
   }, [order, payments]);
 
   // Batch 30/32: with payments recorded, COD = what is still due (the
@@ -321,6 +348,54 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   }
 
   const canDeleteNow = order ? (isAdmin && openUntil !== null) || (canDeleteEarly && isEarlyStageOrder(order)) : false;
+
+  // Fix 1.38.1: only the actions the database allows for this status.
+  // cancel_order() takes Processing and Confirmed orders only.
+  const careful: CarefulAction[] = [];
+  if (order && canChangeStatus && order.status === 'confirmed' && !order.steadfast_consignment_id) {
+    careful.push({
+      key: 'transit',
+      title: 'Mark in transit (other courier)',
+      explain: 'Only if you sent it without Steadfast.',
+      button: 'Mark…',
+      onOpen: () => setTransitOpen(true),
+    });
+  }
+  if (order && canChangeStatus && order.status === 'shipped') {
+    careful.push({
+      key: 'deliver',
+      title: 'Mark delivered',
+      explain: order.steadfast_consignment_id ? "Use only if Steadfast didn't update it." : 'When the customer has the parcel.',
+      button: 'Mark…',
+      onOpen: () => setDeliverOpen(true),
+    });
+  }
+  if (order && canChangeStatus && (order.status === 'pending' || order.status === 'confirmed')) {
+    careful.push({
+      key: 'cancel',
+      title: 'Cancel order',
+      explain: order.steadfast_consignment_id ? 'Stock goes back. Booked with Steadfast — cancel there too.' : 'Stock goes back to the shop.',
+      button: 'Cancel…',
+      onOpen: () => setCancelOpen(true),
+    });
+  }
+  if (order && (isAdmin || (canDeleteEarly && canDeleteNow))) {
+    careful.push({
+      key: 'delete',
+      title: 'Delete order',
+      explain: canDeleteNow
+        ? isEarlyStageOrder(order)
+          ? 'Removes it for good. Not booked, so no Safety Lock needed.'
+          : 'Removes it for good. The Safety Lock is open.'
+        : "Booked or sent orders need the Safety Lock ('Allow deleting orders at any stage').",
+      button: 'Delete…',
+      disabled: !canDeleteNow,
+      onOpen: () => setDeleteOpen(true),
+    });
+  }
+  const units = order ? order.items.reduce((n, i) => n + i.quantity, 0) : 0;
+  const paidSoFar = summary?.paid ?? 0;
+  const lastCancel = order ? [...order.history].reverse().find((h) => h.new_status === 'cancelled') ?? null : null;
 
   return (
     <AdminFormPage
@@ -378,6 +453,23 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                 <p className="adm-ocard__muted">Delivered, waiting for Steadfast to confirm.</p>
               )}
             </section>
+
+            {order.status === 'cancelled' && (
+              <ReopenCard
+                cancelledAt={lastCancel?.changed_at ?? null}
+                cancelledBy={lastCancel?.changed_by_username ?? null}
+                canReopen={canChangeStatus}
+                onReopen={() => setReopenOpen(true)}
+              />
+            )}
+
+            <OrderInvoiceCard
+              orderId={order.id}
+              orderNumber={order.order_number}
+              build={buildInvoice}
+              printIsPrimary={!primary && order.status !== 'cancelled'}
+              onPrinted={() => void reload()}
+            />
 
             {/* 2. Customer */}
             <section className="adm-ocard" aria-label="Customer">
@@ -762,86 +854,82 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
               )}
             </section>
 
-            {/* Every other action of the old pop-up. */}
-            <section className="adm-ocard" aria-label="Other actions">
-              <h2 className="adm-ocard__title">Other actions</h2>
-              <div className="adm-ocard__buttons">
-                <button type="button" className="adm-btn adm-btn--sm" onClick={() => setInvoiceOpen(true)}>
-                  Invoice
-                </button>
-                {canChangeStatus && order.status === 'confirmed' && !order.steadfast_consignment_id && (
-                  <button
-                    type="button"
-                    className="adm-btn adm-btn--sm"
-                    onClick={() => void handleStatusChange('shipped')}
-                    disabled={isChangingStatus}
-                  >
-                    Mark In transit (other courier)
-                  </button>
-                )}
-                {canChangeStatus && order.status === 'shipped' && (
-                  <button
-                    type="button"
-                    className="adm-btn adm-btn--sm"
-                    onClick={() => void handleStatusChange('delivered')}
-                    disabled={isChangingStatus}
-                  >
-                    Mark Delivered
-                  </button>
-                )}
-                {canChangeStatus && !ended && (
-                  <button
-                    type="button"
-                    className="adm-btn adm-btn--sm"
-                    onClick={() => setCancelOpen(true)}
-                    disabled={isChangingStatus}
-                  >
-                    Cancel order
-                  </button>
-                )}
-                {(isAdmin || canDeleteEarly) && canDeleteNow && (
-                  <button type="button" className="button button--danger-outline button--small" onClick={() => setDeleteOpen(true)}>
-                    Delete order
-                  </button>
-                )}
-              </div>
-              {(isAdmin || canDeleteEarly) && !canDeleteNow && (
-                <p className="admin-panel__description order-admin-detail__locked">
-                  {isAdmin
-                    ? "Delete is locked: turn on 'Allow deleting orders at any stage' in Safety Locks."
-                    : 'Only Processing orders, or Cancelled orders never booked on Steadfast, can be deleted.'}
-                </p>
-              )}
-            </section>
+            {/* Fix 1.38.1: everything that changes the order, at the very bottom. */}
+            <CarefulActionsCard actions={careful} />
           </div>
         </div>
-      )}
-
-      {order && (
-        <InvoiceDialog
-          isOpen={invoiceOpen}
-          onClose={() => setInvoiceOpen(false)}
-          title={`Invoice ${order.order_number}`}
-          fileName={`Invoice-${order.order_number}.pdf`}
-          build={buildInvoice}
-          onPrinted={() => void reload()}
-        />
       )}
 
       {order && (
         <DeleteOrdersDialog isOpen={deleteOpen} orders={[order]} onConfirm={handleDelete} onClose={() => setDeleteOpen(false)} />
       )}
 
-      <ConfirmDialog
-        isOpen={cancelOpen}
-        title="Cancel this order?"
-        message={`${order?.order_number ?? ''} will be cancelled and any reserved stock restored.`}
-        confirmLabel="Cancel order"
-        cancelLabel="Keep order"
-        danger
-        onConfirm={handleCancel}
-        onClose={() => setCancelOpen(false)}
-      />
+      {order && (
+        <>
+          <ConfirmSheet
+            isOpen={cancelOpen}
+            title={`Cancel ${order.order_number}?`}
+            warning={
+              order.steadfast_consignment_id
+                ? `This parcel is booked with Steadfast (${order.steadfast_consignment_id}). Cancelling here does not cancel it at Steadfast.`
+                : null
+            }
+            typeToConfirm={orderDigits(order.order_number)}
+            keepLabel="Keep order"
+            confirmLabel="Cancel order"
+            danger
+            onConfirm={handleCancel}
+            onClose={() => setCancelOpen(false)}
+          >
+            <p className="adm-csheet__text" data-testid="cancel-effects">
+              {`${units} item${units === 1 ? '' : 's'} go${units === 1 ? 'es' : ''} back to stock.`}
+              {due > 0 && ` The customer's due of ${formatTakaBd(due)} is removed.`}
+              {paidSoFar > 0 && ` Payments already recorded (${formatTakaBd(paidSoFar)}) stay on the order — refund them separately if needed.`}
+              {' '}You can reopen it later.
+            </p>
+          </ConfirmSheet>
+
+          <ConfirmSheet
+            isOpen={deliverOpen}
+            title={`Mark ${order.order_number} delivered?`}
+            keepLabel="Keep"
+            confirmLabel="Mark delivered"
+            onConfirm={handleMarkDelivered}
+            onClose={() => setDeliverOpen(false)}
+          >
+            <p className="adm-csheet__text">
+              {order.steadfast_consignment_id
+                ? "Use this only if Steadfast hasn't updated the parcel itself."
+                : 'The order moves to Delivered.'}
+            </p>
+          </ConfirmSheet>
+
+          <ConfirmSheet
+            isOpen={transitOpen}
+            title={`Mark ${order.order_number} in transit?`}
+            keepLabel="Keep"
+            confirmLabel="Mark in transit"
+            onConfirm={handleMarkInTransit}
+            onClose={() => setTransitOpen(false)}
+          >
+            <p className="adm-csheet__text">Only if you sent this parcel with another courier (not Steadfast).</p>
+          </ConfirmSheet>
+
+          <ConfirmSheet
+            isOpen={reopenOpen}
+            title={`Reopen ${order.order_number}?`}
+            keepLabel="Keep cancelled"
+            confirmLabel="Reopen order"
+            onConfirm={handleReopen}
+            onClose={() => setReopenOpen(false)}
+          >
+            <p className="adm-csheet__text" data-testid="reopen-effects">
+              It goes back to {lastCancel?.old_status ? SAVED_STATUS_NAME[lastCancel.old_status] : 'Processing'} and takes{' '}
+              {units} item{units === 1 ? '' : 's'} from stock again, like a new order. If any item is short, nothing changes.
+            </p>
+          </ConfirmSheet>
+        </>
+      )}
 
       <ConfirmDialog
         isOpen={steadfastConfirmOpen}
