@@ -1,6 +1,18 @@
 import { supabase } from '../supabase';
 import { isMissingSchema, type LoadState } from '../payouts';
-import type { LotDetail, LotSavePayload, LotSummary, StockMovement, StockUnit } from './types';
+import type {
+  LotDetail,
+  LotSavePayload,
+  LotSummary,
+  ModeCheck,
+  OrderProfit,
+  SalesProfit,
+  Shortfall,
+  StockMovement,
+  StockUnit,
+  StockUnitWord,
+  Supplier,
+} from './types';
 
 /**
  * Batch 38: the Inventory screens' database calls. Every read is refused by
@@ -44,17 +56,19 @@ export async function fetchStockUnits(): Promise<LoadState<StockUnit[]>> {
       selling_price: num(r.selling_price),
       lot_pieces_left: num(r.lot_pieces_left),
       lot_rows: num(r.lot_rows),
+      pack_size: Math.max(1, num(r.pack_size)),
+      latest_unit_cost: num(r.latest_unit_cost),
     })),
   };
 }
 
 const LOT_COLUMNS =
-  'id, code, kind, source_type, country, supplier, lot_date, currency, exchange_rate, costs_pending, notes, opening_weight_percent, opening_weight_added_bdt, created_by_username, created_at, updated_at';
+  'id, code, kind, source_type, country, supplier, supplier_id, lot_date, currency, exchange_rate, costs_pending, notes, opening_weight_percent, opening_weight_added_bdt, created_by_username, created_at, updated_at';
 
 export async function fetchLots(): Promise<LoadState<LotSummary[]>> {
   const { data, error } = await supabase
     .from('lots')
-    .select(`${LOT_COLUMNS}, lot_items(qty, qty_remaining, unit_price_bdt, alloc_weight_paisa, alloc_other_paisa, product_id, variant_id)`)
+    .select(`${LOT_COLUMNS}, lot_items(qty, qty_remaining, unit_price_bdt, buy_value_bdt, alloc_weight_paisa, alloc_other_paisa, product_id, variant_id)`)
     .order('lot_date', { ascending: false })
     .order('code', { ascending: false });
   if (error) return fail(error);
@@ -141,6 +155,128 @@ export async function undoOpening(): Promise<Answer<null>> {
   return error ? { ok: false, error: message(error) } : { ok: true, data: null };
 }
 
+/* ------------------------------------------------- Batch 39: units, sales */
+
+export async function fetchSuppliers(): Promise<Supplier[]> {
+  const { data } = await supabase.from('suppliers').select('id, name, country, note').order('name');
+  return (data ?? []) as Supplier[];
+}
+
+export async function saveSupplier(name: string, country: string): Promise<Answer<string>> {
+  const { data, error } = await supabase.rpc('inventory_save_supplier', { p_name: name, p_country: country, p_note: '' });
+  if (error) return { ok: false, error: message(error) };
+  return { ok: true, data: data as string };
+}
+
+export interface PackUnit {
+  product_id: string;
+  variant_id: string | null;
+  stock_unit: StockUnitWord;
+  pack_size: number;
+}
+
+/** Stock unit and pack size of every product / option (staff only). */
+export async function fetchPackUnits(): Promise<Map<string, PackUnit>> {
+  const { data, error } = await supabase.rpc('inventory_pack_units');
+  const map = new Map<string, PackUnit>();
+  if (error || !data) return map;
+  for (const row of data as PackUnit[]) {
+    map.set(packKey(row.product_id, row.variant_id), { ...row, pack_size: Math.max(1, num(row.pack_size)) });
+  }
+  return map;
+}
+
+export function packKey(productId: string, variantId: string | null): string {
+  return `${productId}:${variantId ?? ''}`;
+}
+
+export async function setPack(productId: string, variantId: string | null, unit: StockUnitWord, packSize: number): Promise<Answer<null>> {
+  const { error } = await supabase.rpc('inventory_set_pack', {
+    p_product_id: productId,
+    p_variant_id: variantId,
+    p_unit: unit,
+    p_pack_size: packSize,
+  });
+  return error ? { ok: false, error: message(error) } : { ok: true, data: null };
+}
+
+export async function fetchShortfalls(): Promise<LoadState<Shortfall[]>> {
+  const { data, error } = await supabase.rpc('inventory_shortfall_list');
+  if (error) return fail(error);
+  return {
+    kind: 'ready',
+    data: ((data ?? []) as Shortfall[]).map((r) => ({
+      ...r,
+      units: num(r.units),
+      provisional_unit_cost: num(r.provisional_unit_cost),
+      real_unit_cost: numOrNull(r.real_unit_cost),
+    })),
+  };
+}
+
+function numbers<T extends object>(row: T, keys: readonly (keyof T)[]): T {
+  const out = { ...row };
+  for (const key of keys) {
+    const value = out[key];
+    if (value !== null && value !== undefined) (out as Record<keyof T, unknown>)[key] = num(value);
+  }
+  return out;
+}
+
+export async function fetchOrderProfit(orderId: string): Promise<LoadState<OrderProfit>> {
+  const { data, error } = await supabase.rpc('order_profit', { p_order_id: orderId });
+  if (error) return fail(error);
+  return {
+    kind: 'ready',
+    data: numbers(data as OrderProfit, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'courier_charge', 'cod_fee', 'profit', 'margin', 'filled_adjustments']),
+  };
+}
+
+export async function fetchSalesProfit(from: string, to: string): Promise<LoadState<SalesProfit>> {
+  const { data, error } = await supabase.rpc('inventory_sales_profit', { p_from: from, p_to: to });
+  if (error) return fail(error);
+  const raw = data as SalesProfit;
+  return {
+    kind: 'ready',
+    data: {
+      ...raw,
+      totals: numbers(raw.totals, ['orders', 'uncosted_orders', 'sales', 'cost', 'provisional', 'delivery', 'courier', 'adjustments', 'profit', 'margin']),
+      orders: raw.orders.map((o) => numbers(o, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'profit', 'margin'])),
+      products: raw.products.map((p) => numbers(p, ['units', 'pack_size', 'sales', 'cost', 'profit', 'margin'])),
+      adjustments: raw.adjustments.map((a) => numbers(a, ['amount'])),
+    },
+  };
+}
+
+export async function fetchModeCheck(): Promise<LoadState<ModeCheck>> {
+  const { data, error } = await supabase.rpc('inventory_mode_check');
+  if (error) return fail(error);
+  return { kind: 'ready', data: data as ModeCheck };
+}
+
+/** Turns Inventory mode On / Off. The caller re-confirms the password
+ *  first (a fresh sign-in), which the database checks. */
+export async function setInventoryMode(on: boolean, takeOpenOrders: boolean): Promise<Answer<{ open_orders_taken: number }>> {
+  const { data, error } = await supabase.rpc('inventory_set_mode', { p_on: on, p_take_open_orders: takeOpenOrders });
+  if (error) return { ok: false, error: message(error) };
+  return { ok: true, data: data as { open_orders_taken: number } };
+}
+
+/** "1050 pcs", "2 × 473 ml" … : units in plain words. Pack size 1 → just the number. */
+export function unitsText(units: number, unit: StockUnitWord, packSize: number): string {
+  return packSize > 1 ? `${units} ${unit}` : String(units);
+}
+
+/** "2 packs + 250 pcs" for units of a product with a pack size. */
+export function packsText(units: number, unit: StockUnitWord, packSize: number): string {
+  if (packSize <= 1) return String(units);
+  const packs = Math.floor(units / packSize);
+  const loose = units - packs * packSize;
+  const parts = [`${packs} pack${packs === 1 ? '' : 's'}`];
+  if (loose > 0) parts.push(`${loose} ${unit}`);
+  return parts.join(' + ');
+}
+
 /* ------------------------------------------------------------ helpers */
 
 /** Today in Dhaka, "YYYY-MM-DD". */
@@ -173,7 +309,8 @@ export function lotTotals(items: LotSummary['lot_items']): {
   for (const item of items) {
     pieces += num(item.qty);
     left += num(item.qty_remaining);
-    buyPaisa += Math.round(num(item.qty) * num(item.unit_price_bdt) * 100);
+    // Batch 39: the row's exact buy value (packs × price per pack).
+    buyPaisa += Math.round((item.buy_value_bdt !== undefined && num(item.buy_value_bdt) > 0 ? num(item.buy_value_bdt) : num(item.qty) * num(item.unit_price_bdt)) * 100);
     costsPaisa += num(item.alloc_weight_paisa) + num(item.alloc_other_paisa);
   }
   return { products, pieces, left, buyPaisa, costsPaisa, landedPaisa: buyPaisa + costsPaisa };

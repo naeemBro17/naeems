@@ -35,6 +35,7 @@ import {
 } from '../lib/orderTracking';
 import { OrderTrackingCard, type CustomerTrackingView } from '../components/orders/OrderTrackingCard';
 import { LineIcon } from '../components/orders/TrackIcons';
+import { lineQuantityText, orderItemCount, soldInUnits } from '../lib/orderLines';
 
 function DetailSkeleton() {
   return (
@@ -203,7 +204,7 @@ export function OrderDetailPage() {
             <OrderTrackingCard view={view} />
 
             <section className="ot-card ot-items" aria-label="Your items">
-              <h2 className="ot-card__title">Your items ({order.items.reduce((n, item) => n + item.quantity, 0)})</h2>
+              <h2 className="ot-card__title">Your items ({orderItemCount(order.items)})</h2>
               <ul className="ot-items__list">
                 {order.items.map((item) => (
                   <li key={item.id} className="ot-item">
@@ -217,7 +218,8 @@ export function OrderDetailPage() {
                     <span className="ot-item__main">
                       <span className="ot-item__name">{item.product_name}</span>
                       <span className="ot-item__sub">
-                        {item.variant_label ? `${item.variant_label} · ` : ''}Qty {item.quantity}
+                        {item.variant_label ? `${item.variant_label} · ` : ''}
+                        {soldInUnits(item) ? lineQuantityText(item) : `Qty ${item.quantity}`}
                       </span>
                     </span>
                     <span className="ot-item__price">{formatTakaBd(item.line_total)}</span>

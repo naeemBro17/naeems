@@ -32,7 +32,7 @@ const ORDER_SELECT =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, created_at, updated_at';
 
 const ORDER_ITEM_SELECT =
-  'id, order_id, product_id, variant_id, product_name, variant_label, image_url, list_price, unit_price, quantity, line_total, reason, reason_note';
+  'id, order_id, product_id, variant_id, product_name, variant_label, image_url, list_price, unit_price, quantity, line_total, reason, reason_note, sold_unit';
 
 // Batch 22 added columns to orders/order_items (migration-028) that Naeem
 // may not have run yet — per CLAUDE.md, a migration file existing is never
@@ -463,6 +463,9 @@ export interface ManualOrderItemInput {
   quantity: number;
   /** Null = charge the product/variant's real current price (no discount). */
   soldPrice: number | null;
+  /** Batch 39: sold in loose units ('pcs' / 'ml' / 'g'): quantity = units,
+   *  prices per unit. Null / missing = whole packs. */
+  soldUnit?: 'pcs' | 'ml' | 'g' | null;
   reason: DiscountReason | null;
   reasonNote: string | null;
 }
@@ -522,6 +525,7 @@ export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<Ad
     variant_id: item.variantId,
     quantity: item.quantity,
     sold_price: item.soldPrice,
+    sold_unit: item.soldUnit ?? null,
     reason: item.reason,
     reason_note: item.reasonNote,
   }));
@@ -737,6 +741,14 @@ export async function adminReopenOrder(orderId: string): Promise<{ status: Order
     return { status: null, error: notReady ? 'Reopen is not ready yet (the database addition is not applied).' : error.message };
   }
   return { status: data as Order['status'], error: null };
+}
+
+/** Batch 39: a sent order (In transit or Delivered) came back. Its goods
+ *  go back to stock — to the same lot rows when they came from lots. See
+ *  admin_mark_order_returned() (migration-042). */
+export async function adminMarkOrderReturned(orderId: string, note: string | null): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_mark_order_returned', { p_order_id: orderId, p_note: note });
+  return { error: error ? error.message || 'Could not mark the order returned.' : null };
 }
 
 /** Deletes orders — see admin_delete_orders(): early-stage orders for the

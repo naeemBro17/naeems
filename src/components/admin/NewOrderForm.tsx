@@ -17,6 +17,8 @@ import { formatTaka, normalizeText } from '../../lib/format';
 import { cardImage } from '../../lib/productImages';
 import { zoneForAddress } from '../../lib/deliveryZones';
 import { adminCreateOrder, findCustomerMatches, type ManualOrderItemInput } from '../../lib/orders';
+import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
+import type { StockUnitWord } from '../../lib/inventory/types';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   MANUAL_ORDER_SOURCES,
@@ -65,6 +67,12 @@ interface OrderLine {
   reason: DiscountReason | null;
   reasonNote: string;
   stockQuantity: number | null;
+  /** Batch 39: units in one pack, and the pack's own list price. */
+  packSize: number;
+  stockUnit: StockUnitWord;
+  packListPrice: number;
+  /** Sold in loose units (quantity = units, prices per unit), or null = packs. */
+  soldUnit: StockUnitWord | null;
 }
 
 interface SellableOption {
@@ -155,6 +163,20 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
 
   const [isSaving, setIsSaving] = useState(false);
   const [pendingWarnings, setPendingWarnings] = useState<StockWarning[] | null>(null);
+
+  // Batch 39: stock unit and pack size (staff only). A product with a pack
+  // size above 1 can be sold in whole packs or in loose units.
+  const [packs, setPacks] = useState<Map<string, PackUnit>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    void fetchPackUnits().then((map) => {
+      if (alive) setPacks(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const inventoryOn = settings.inventory_mode === 'true';
 
   // A fresh form every time the page opens — a manual order is a one-shot
   // entry, not a draft worth remembering between sessions.
@@ -266,6 +288,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
       if (existing) {
         return current.map((l) => (l.key === option.key ? { ...l, quantity: l.quantity + 1 } : l));
       }
+      const pack = packs.get(packKey(option.productId, option.variantId));
       return [
         ...current,
         {
@@ -282,10 +305,27 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           reason: null,
           reasonNote: '',
           stockQuantity: option.stockQuantity,
+          packSize: pack?.pack_size ?? 1,
+          stockUnit: pack?.stock_unit ?? 'pcs',
+          packListPrice: option.listPrice,
+          soldUnit: null,
         },
       ];
     });
     setQuery('');
+  };
+
+  /** Batch 39: switch a line between whole packs and loose units. The list
+   *  price follows (one unit = pack price ÷ pack size); the line starts
+   *  again at that price and quantity 1. */
+  const setLineSoldUnit = (key: string, unit: StockUnitWord | null) => {
+    setLines((current) =>
+      current.map((l) => {
+        if (l.key !== key) return l;
+        const listPrice = unit ? Math.round((l.packListPrice / l.packSize) * 100) / 100 : l.packListPrice;
+        return { ...l, soldUnit: unit, listPrice, soldPrice: listPrice, soldPriceInput: String(listPrice), quantity: 1, reason: null };
+      })
+    );
   };
 
   const updateLine = (key: string, patch: Partial<OrderLine>) => {
@@ -477,6 +517,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
       variantId: l.variantId,
       quantity: l.quantity,
       soldPrice: l.soldPrice === l.listPrice ? null : l.soldPrice,
+      soldUnit: l.soldUnit,
       reason: l.reason,
       reasonNote: l.reasonNote.trim() || null,
     })),
@@ -544,12 +585,15 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
 
   const warningMessage = pendingWarnings
     ? pendingWarnings
-        .map(
-          (w) =>
-            `${w.product_name}${w.variant_label ? ` (${w.variant_label})` : ''}: only ${w.available} left, ${w.requested} requested`
-        )
+        .map((w) => {
+          const unit = w.unit ? ` ${w.unit}` : '';
+          return `${w.product_name}${w.variant_label ? ` (${w.variant_label})` : ''}: only ${w.available}${unit} left, ${w.requested}${unit} requested`;
+        })
         .join('. ')
     : '';
+  // Batch 39: while Inventory mode is On the database counts units in lots;
+  // selling anyway records the missing units as "Sold without stock".
+  const warningInUnits = pendingWarnings?.some((w) => w.unit) ?? false;
 
   return (
     <>
@@ -790,7 +834,32 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                 <div className="checkout-cart__info">
                   <span className="checkout-cart__name">{line.productName}</span>
                   {line.variantLabel && <span className="checkout-cart__variant">{line.variantLabel}</span>}
-                  {line.stockQuantity !== null && line.stockQuantity < line.quantity && (
+                  {line.packSize > 1 && (
+                    <div className="chip-group" role="group" aria-label={`Sell ${line.productName} in`} data-testid="line-sold-unit">
+                      <button
+                        type="button"
+                        className={`chip-select${line.soldUnit === null ? ' chip-select--on' : ''}`}
+                        aria-pressed={line.soldUnit === null}
+                        onClick={() => setLineSoldUnit(line.key, null)}
+                      >
+                        Packs ({line.packSize} {line.stockUnit})
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip-select${line.soldUnit !== null ? ' chip-select--on' : ''}`}
+                        aria-pressed={line.soldUnit !== null}
+                        onClick={() => setLineSoldUnit(line.key, line.stockUnit)}
+                      >
+                        Loose {line.stockUnit}
+                      </button>
+                    </div>
+                  )}
+                  {line.soldUnit !== null && !inventoryOn && (
+                    <span className="checkout-cart__variant" data-testid="line-units-note">
+                      Loose {line.soldUnit} don&apos;t change the stock number while Inventory mode is Off.
+                    </span>
+                  )}
+                  {line.soldUnit === null && line.stockQuantity !== null && line.stockQuantity < line.quantity && (
                     <span
                       className="checkout-cart__variant"
                       style={{ color: 'var(--color-danger, #d33)' }}
@@ -801,7 +870,9 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                     </span>
                   )}
                   {!isAdmin ? (
-                    <span className="checkout-cart__variant">{formatTaka(line.listPrice)} each</span>
+                    <span className="checkout-cart__variant">
+                      {formatTaka(line.listPrice)} {line.soldUnit ? `per ${line.soldUnit}` : 'each'}
+                    </span>
                   ) : (
                   <div className="manual-order-line__price-row">
                     {line.soldPrice !== line.listPrice && (
@@ -812,7 +883,9 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                       className="manual-order-line__price-input"
                       value={line.soldPriceInput}
                       onChange={(e) => setLineSoldPrice(line.key, e.target.value)}
+                      aria-label={line.soldUnit ? `Price per ${line.soldUnit}` : undefined}
                     />
+                    {line.soldUnit && <span className="checkout-cart__variant">per {line.soldUnit}</span>}
                     <button type="button" className="account-card__edit" onClick={() => setLineFree(line.key)}>
                       Free
                     </button>
@@ -834,6 +907,22 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                   )}
                 </div>
                 <div className="checkout-cart__row-end">
+                  {line.soldUnit ? (
+                    <label className="manual-order-line__units">
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        value={line.quantity}
+                        onChange={(e) => setLineQuantity(line.key, Math.floor(Number(e.target.value) || 1))}
+                        aria-label={`Loose ${line.soldUnit} of ${line.productName}`}
+                        data-testid="line-units-input"
+                      />
+                      <span className="checkout-cart__variant">{line.soldUnit}</span>
+                    </label>
+                  ) : (
                   <div className="checkout-cart__stepper">
                     <button type="button" className="checkout-cart__step-btn" onClick={() => setLineQuantity(line.key, line.quantity - 1)} aria-label="Decrease quantity">
                       &minus;
@@ -843,6 +932,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                       +
                     </button>
                   </div>
+                  )}
                   <span className="checkout-cart__line-total">{formatTaka(line.soldPrice * line.quantity)}</span>
                   <button type="button" className="account-card__edit" onClick={() => removeLine(line.key)}>
                     Remove
@@ -995,9 +1085,13 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
 
       <ConfirmDialog
         isOpen={pendingWarnings !== null}
-        title="Low stock"
-        message={`${warningMessage} — continue anyway? Stock may go negative.`}
-        confirmLabel="Continue anyway"
+        title={warningInUnits ? 'Not in stock — sell anyway?' : 'Low stock'}
+        message={
+          warningInUnits
+            ? `${warningMessage}. Sell anyway? The units that are there are taken; the missing ones are listed in Inventory → Sold without stock until the next lot arrives.`
+            : `${warningMessage} — continue anyway? Stock may go negative.`
+        }
+        confirmLabel={warningInUnits ? 'Sell anyway' : 'Continue anyway'}
         cancelLabel="Go back"
         danger={false}
         onConfirm={async () => {

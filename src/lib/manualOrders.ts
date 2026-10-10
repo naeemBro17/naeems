@@ -147,6 +147,9 @@ export interface StockWarning {
   variant_label: string | null;
   available: number;
   requested: number;
+  /** Batch 39: while Inventory mode is On the numbers are units of this
+   *  word ('pcs', 'ml', 'g'); missing = whole packs as before. */
+  unit?: string;
 }
 
 const STOCK_WARNING_PREFIX = 'STOCK_WARNING:';

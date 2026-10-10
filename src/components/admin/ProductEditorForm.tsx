@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { LONG_TEXTS, cleanLongText, emptiedLongTexts } from '../../lib/richText';
 import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
+import { PackSizePanel } from './inventory/PackSizePanel';
 import type { Product, ProductFormData, FormImage } from '../../types';
 
 interface ProductEditorFormProps {
@@ -182,7 +183,9 @@ function validate(form: ProductFormData): FieldErrors {
  * points automatically instead of needing to be copied by hand.
  */
 export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, formId, onState }: ProductEditorFormProps) {
-  const { categories, products, allVariants, brands, refetch } = useProducts();
+  const { categories, products, allVariants, brands, refetch, settings } = useProducts();
+  // Batch 39: while Inventory mode is On the stock number comes from lots.
+  const stockFromLots = settings.inventory_mode === 'true';
   const brandNames = useMemo(() => brands.map((b) => b.name).sort((a, b) => a.localeCompare(b)), [brands]);
   const { showToast } = useToast();
   const knownRegions = useMemo(() => distinctRegions(products, allVariants), [products, allVariants]);
@@ -741,7 +744,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
             id="pf-stock-status"
             className="form-input form-select"
             value={derivedStatus}
-            disabled={quantityDrivesStatus}
+            disabled={quantityDrivesStatus || stockFromLots}
             onChange={(e) =>
               setField('stock_status', e.target.value as ProductFormData['stock_status'])
             }
@@ -770,10 +773,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
             placeholder="e.g. 25"
             className={`form-input${fieldError('stock_quantity') ? ' form-input--error' : ''}`}
             value={form.stock_quantity}
+            disabled={stockFromLots}
             onChange={(e) => setField('stock_quantity', e.target.value)}
             onBlur={() => markTouched('stock_quantity')}
           />
-          <p className="form-helper">Leave blank if not tracking exact quantity</p>
+          <p className="form-helper">
+            {stockFromLots
+              ? 'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.'
+              : 'Leave blank if not tracking exact quantity'}
+          </p>
           {fieldError('stock_quantity') && (
             <p className="form-error" role="alert">
               {fieldError('stock_quantity')}
@@ -858,6 +866,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       {/* Variants only make sense for a product that already exists —
           a newly-created one has no id to attach them to yet. */}
       {product && <VariantEditor productId={product.id} />}
+      {product && <PackSizePanel productId={product.id} />}
 
       <div className="form-field form-field--toggle">
         <span className="toggle-label">Featured (shown in the bento grid)</span>
