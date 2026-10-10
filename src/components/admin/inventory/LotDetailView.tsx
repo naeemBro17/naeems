@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '../../../hooks/useToast';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { takaExact } from '../../../lib/payouts';
-import { deleteLot, fetchLot, fetchMovements, fetchStockUnits, monthYear, unitName } from '../../../lib/inventory/api';
+import { deleteLot, fetchLot, fetchMovements, fetchStockUnits, monthYear, packsText, unitName } from '../../../lib/inventory/api';
 import type { LotDetail, StockMovement, StockUnit } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
 import { AdminPageHeader, EmptyState, SkeletonRows } from '../ui/AdminUi';
@@ -11,7 +11,9 @@ import { formatLotDate, movementLabel, sourceLabel, taka2 } from './invFormat';
 /**
  * Batch 38 Part 3: one lot — its rows with the cost shared out, its bills,
  * the stock movements and the pieces left. Deleting needs the Safety Lock
- * (the database checks it too).
+ * (the database checks it too). Batch 39: stock and cost are per unit
+ * (packs shown for products with a pack size); rows whose weight was
+ * guessed from their price are marked.
  */
 export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: string; onBack: () => void; onEdit: () => void; onDeleted: () => void }) {
   const { showToast } = useToast();
@@ -53,7 +55,7 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
     for (const i of data.lot_items) {
       pieces += i.qty;
       left += i.qty_remaining;
-      buyPaisa += Math.round(i.qty * Number(i.unit_price_bdt) * 100);
+      buyPaisa += Math.round((Number(i.buy_value_bdt) > 0 ? Number(i.buy_value_bdt) : i.qty * Number(i.unit_price_bdt)) * 100);
       weightAlloc += Number(i.alloc_weight_paisa);
       otherAlloc += Number(i.alloc_other_paisa);
     }
@@ -172,15 +174,15 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
 
       <div className="adm-ocard inv-stack" data-testid="inv-lot-totals">
         <div className="inv-line">
-          <span>Pieces</span>
+          <span>Units</span>
           <span>{totals.pieces}</span>
         </div>
         <div className="inv-line">
-          <span>Pieces left</span>
+          <span>Units left</span>
           <span>{totals.left}</span>
         </div>
         <div className="inv-line">
-          <span>Buy price (all pieces)</span>
+          <span>Buy price (all units)</span>
           <span>{takaExact(totals.buyPaisa)}</span>
         </div>
         <div className="inv-line">
@@ -209,21 +211,37 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
 
       <h2 className="inv-section">Products</h2>
       <div className="inv-stack">
-        {data.lot_items.map((i) => (
+        {data.lot_items.map((i) => {
+          const unit = units.get(`${i.product_id}:${i.variant_id ?? ''}`);
+          const word = unit?.stock_unit ?? 'pcs';
+          const pack = Math.max(1, Number(i.pack_size) || 1);
+          const per = pack > 1 ? word : 'piece';
+          return (
           <div key={i.id} className="inv-item" data-testid="inv-detail-item">
             <span className="inv-item__name">{label(i.product_id, i.variant_id)}</span>
             <div className="inv-line">
-              <span>Pieces · left</span>
+              <span>{pack > 1 ? `Units (${word}) · left` : 'Pieces · left'}</span>
               <span>
                 {i.qty} · {i.qty_remaining}
               </span>
             </div>
+            {pack > 1 && (
+              <div className="inv-line">
+                <span>In packs of {pack}</span>
+                <span>{packsText(i.qty_remaining, word, pack)} left</span>
+              </div>
+            )}
             <div className="inv-line">
               <span>Expiry · weight</span>
               <span>
                 {monthYear(i.expiry_date)} · {i.weight_grams_used === null ? '—' : `${Number(i.weight_grams_used)} g`}
               </span>
             </div>
+            {i.weight_guessed && (
+              <p className="inv-muted" data-testid="inv-detail-guessed">
+                <span className="inv-badge inv-badge--grey">weight guessed from price</span>
+              </p>
+            )}
             {isOpening && i.opening_source && (
               <div className="inv-line">
                 <span>Source</span>
@@ -231,12 +249,18 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
               </div>
             )}
             <div className="inv-line">
-              <span>Buy price</span>
+              <span>Buy price per {per}</span>
               <span>
                 {!isOpening && data.currency !== 'BDT' ? `${data.currency} ${Number(i.unit_price_foreign)} = ` : ''}
                 {taka2(Number(i.unit_price_bdt))}
               </span>
             </div>
+            {pack > 1 && (i.entry_unit === 'pack' || isOpening) && (
+              <div className="inv-line">
+                <span>Typed per pack</span>
+                <span>{taka2(Number(i.unit_price_foreign))}</span>
+              </div>
+            )}
             <div className="inv-line">
               <span>+ weight share</span>
               <span>{taka2(Number(i.alloc_weight_bdt))}</span>
@@ -248,11 +272,12 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
               </div>
             )}
             <div className="inv-line inv-line--total">
-              <span>Landed cost per piece</span>
+              <span>Landed cost per {per}</span>
               <span data-testid="inv-landed-unit">{taka2(Number(i.landed_unit_cost_bdt))}</span>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!isOpening && (
