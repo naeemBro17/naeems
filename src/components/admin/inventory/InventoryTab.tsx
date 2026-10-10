@@ -11,11 +11,15 @@ import { LotDetailView } from './LotDetailView';
 import { NeedsWeightView } from './NeedsWeightView';
 import { CompareView } from './CompareView';
 import { OpeningStockView } from './OpeningStockView';
+import { ShortfallsView } from './ShortfallsView';
+import { SalesProfitView } from './SalesProfitView';
+import { ModeView } from './ModeView';
 import { formatLotDate, sourceLabel } from './invFormat';
 import '../../../styles/adminInventory.css';
 
 /**
- * Admin → Inventory (Batch 38). Only "View profit & costs" opens it, and
+ * Admin → Inventory (Batch 38; Batch 39: sales from lots, Sold without
+ * stock, Sales profit, the Inventory mode switch). Only "View profit & costs" opens it, and
  * the database shows these numbers to nobody else. Plain screens on
  * purpose: correct numbers first, design later.
  */
@@ -28,6 +32,9 @@ export function InventoryTab() {
   if (view === 'weights') return <NeedsWeightView onBack={back} />;
   if (view === 'compare') return <CompareView onBack={back} />;
   if (view === 'opening') return <OpeningStockView onBack={back} onOpenLot={(id) => open('lot', id)} />;
+  if (view === 'shortfalls') return <ShortfallsView onBack={back} />;
+  if (view === 'profit') return <SalesProfitView onBack={back} />;
+  if (view === 'mode') return <ModeView onBack={back} />;
   return <InventoryHome onOpen={open} />;
 }
 
@@ -66,8 +73,9 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
           Inventory mode: <b>{modeOn ? 'On' : 'Off'}</b>
         </p>
         <p className="inv-muted">
-          Lots are a separate record for costs and profit. While Inventory mode is Off, the shop&apos;s stock numbers and
-          checkout are not changed by anything here.
+          {modeOn
+            ? 'Every sale takes stock from lots (earliest expiry first) and the shop’s stock numbers come from the lots.'
+            : 'Lots are a separate record for costs and profit. While Inventory mode is Off, the shop’s stock numbers and checkout are not changed by anything here.'}
         </p>
       </div>
 
@@ -75,6 +83,9 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
         <ListRow icon="restock" label="Opening stock" detail={opening ? 'Saved (L-000)' : 'Not uploaded'} onClick={() => onOpen('opening')} />
         <ListRow icon="alert" label="Needs weight" detail={units.length ? String(needsWeight) : undefined} onClick={() => onOpen('weights')} />
         <ListRow icon="chart" label="Compare stock (shop vs lots)" onClick={() => onOpen('compare')} />
+        <ListRow icon="chart" label="Sales profit" onClick={() => onOpen('profit')} />
+        <ListRow icon="alert" label="Sold without stock" onClick={() => onOpen('shortfalls')} />
+        <ListRow icon="restock" label={modeOn ? 'Inventory mode: On' : 'Turn on Inventory mode (check first)'} detail={modeOn ? 'On' : 'Off'} onClick={() => onOpen('mode')} />
       </ListGroup>
 
       <h2 className="inv-section">Lots</h2>

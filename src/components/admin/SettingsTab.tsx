@@ -381,12 +381,13 @@ function ShopWhatsAppPanel() {
   );
 }
 
-/** Batch 38: "Inventory mode" — Off, and it can't be turned On yet: lots
- *  only start to follow sales in Batch 39, so stock would drift. The
- *  database refuses 'true' too (migration-040). While Off, lots never
- *  change a product's stock number or checkout. */
+/** "Inventory mode" (Batch 38; Batch 39 makes it work). The switch shows
+ *  the state; turning it On or Off happens on Inventory → Inventory mode,
+ *  after the check screen and with the password typed again (the database
+ *  refuses any other way — migration-042). */
 function InventoryModePanel() {
   const { settings } = useProducts();
+  const navigate = useNavigate();
   const isOn = settings.inventory_mode === 'true';
   return (
     <div className="admin-panel">
@@ -397,7 +398,7 @@ function InventoryModePanel() {
             Inventory mode
           </span>
           <span className="admin-panel__description settings-switch-row__hint" data-testid="inventory-mode-note">
-            Available after Batch 39 (sales use lots).
+            {isOn ? 'On: sales take stock from lots.' : 'Off. Turn it On after your opening stock (L-000) is confirmed.'}
           </span>
         </span>
         <button
@@ -413,8 +414,18 @@ function InventoryModePanel() {
         </button>
       </div>
       <p className="admin-panel__description">
-        While Off, the shop works exactly as before: checkout, orders and the stock numbers on products are not changed by lots.
+        {isOn
+          ? 'Every sale takes stock from lots (earliest expiry first); the stock numbers on products come from the lots.'
+          : 'While Off, the shop works exactly as before: checkout, orders and the stock numbers on products are not changed by lots.'}
       </p>
+      <button
+        type="button"
+        className="button button--secondary"
+        onClick={() => navigate({ search: '?tab=inventory&inv=mode' })}
+        data-testid="inventory-mode-open"
+      >
+        {isOn ? 'Inventory mode settings' : 'Check and turn On…'}
+      </button>
     </div>
   );
 }

@@ -6,9 +6,9 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
  * (?tab=inventory&inv=<view>&lot=<id>), like Settings' sub-pages, so phone
  * Back returns to the list and a refresh keeps the place.
  */
-export type InvView = 'home' | 'new' | 'lot' | 'edit' | 'weights' | 'compare' | 'opening';
+export type InvView = 'home' | 'new' | 'lot' | 'edit' | 'weights' | 'compare' | 'opening' | 'shortfalls' | 'profit' | 'mode';
 
-const VIEWS: readonly InvView[] = ['home', 'new', 'lot', 'edit', 'weights', 'compare', 'opening'];
+const VIEWS: readonly InvView[] = ['home', 'new', 'lot', 'edit', 'weights', 'compare', 'opening', 'shortfalls', 'profit', 'mode'];
 
 export function useInvNav() {
   const [searchParams] = useSearchParams();
