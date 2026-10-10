@@ -1,0 +1,246 @@
+BATCH 38 — Inventory foundation: lots, landed cost, opening stock upload
+Version 1.38.0 · Branch feature/batch-38-inventory-lots (pushed; no PR opened)
+
+Inventory mode is Off. The live shop's stock and checkout are unchanged.
+
+====================================================================
+WHAT WAS BUILT (short)
+====================================================================
+- A new admin section "Inventory" (under Catalog). Only people with
+  "View profit & costs" see it (today: only you, the Super Admin).
+- Lots: each shipment or buying trip is one lot (L-001, L-002 ...). You
+  enter the products, pieces, buy price (in any of 8 currencies), expiry
+  month and weight, plus the bills: weight cost (luggage / cargo) and
+  other costs (customs, courier ...). The shop works out the landed cost
+  of every piece: buy price + its share of the weight cost (by grams) +
+  its share of the other costs (by buy price). Shares add up to the lot's
+  bills exactly, to the paisa.
+- Weight of every product, guessed from the size in its name
+  (473 ml ≈ 544 g). 90 of your 113 products and all 10 options got a
+  weight automatically. 23 products have no size in the name; they are in
+  "Needs weight", where you can type the weight.
+- Opening stock: download an Excel template (one row per product / size),
+  fill it, upload it, check the preview, then Confirm. This makes the one
+  opening lot L-000.
+- "Inventory mode" switch in Settings. It is Off and cannot be turned on
+  yet ("Available after Batch 39 (sales use lots)"). The database also
+  refuses it.
+
+====================================================================
+PART 0 — WHERE THINGS LIVE TODAY (no changes made here)
+====================================================================
+- Stock lives at BOTH levels:
+  * A product with no options keeps its stock on the product
+    (products.stock_quantity, plus an in/out-of-stock status).
+  * A product with options (sizes / regions) keeps stock on each option
+    (product_variants.stock_quantity, plus an in-stock flag).
+  * Empty stock number = "not counted" (only in / out of stock).
+  Today: 113 products, 5 of them have options (10 options in total);
+  21 products have a counted stock number.
+  So lots are built the same way: a lot row is a product, or a product +
+  option.
+- Checkout checks and reduces stock inside the database function
+  place_order() (it re-reads stock and refuses "Only N left"). Manual
+  orders use admin_create_manual_order(); cancelling gives stock back
+  (cancel_order and the admin status change). None of these were changed.
+- Permissions: staff_can('view_profit_costs') is the one server check.
+  It is true for the Super Admin (is_admin()) and for an active staff
+  member whose role has "View profit & costs". The website uses can(...)
+  from the login (AuthContext) only to hide menus; the database checks again.
+- Settings: Admin → Settings (app_settings table; only the Super Admin can
+  change it). Activity Log: activity_log table, written by write_activity()
+  and by triggers on products / options / orders. Safety Lock:
+  Settings → Safety Locks; it needs your password and switches itself
+  back on after 15 minutes (admin_safety_locks, admin_delete_lock_until()).
+
+====================================================================
+SQL NAEEM MUST RUN IN SUPABASE
+====================================================================
+None. The database step (supabase/migration-040-batch38-inventory.sql) is
+additive only (4 new tables, new empty weight columns, new functions, one
+new setting row). Nothing was dropped, renamed or changed. I tested it in
+a "try and undo" run first, then applied it myself, as you allowed.
+Checked afterwards: the tables and 18 functions exist, Inventory mode is
+"false", 90 products have an estimated weight.
+
+====================================================================
+TESTS
+====================================================================
+npm run verify (final full run, 10 Oct 2026):
+- Build: passed, zero errors.
+- Unit tests (vitest): 421 of 421 passed.
+- Browser tests (e2e): 280 passed, 114 skipped (skipped on purpose, as
+  in earlier batches), 1 failed.
+- The 1 failure was a timing problem in an OLD test, not in Batch 38:
+  batch-25 "no emoji anywhere in the rendered admin" waited 15 seconds
+  for the Settings page header near the end of a 30-minute run. Run on
+  its own it passed, and then the whole batch-25 file passed 3 times in
+  a row (37 of 37 each time). Your rule for timing flakes was followed:
+  re-run the file 3 times.
+- All 7 Batch 38 browser tests passed in the full run and in 3 extra
+  runs. (One earlier full run failed only because Windows had a
+  screenshot file locked while I was looking at it; the re-runs passed.)
+- The last fully green full run was not repeated after the flake, as you
+  asked (it takes about 30 minutes).
+
+New tests this batch:
+- Unit tests (src/lib/batch38.inventory.test.ts, 46 tests): weight
+  estimate (ml, l, g, kg, fl oz, oz, names with no size, halves rounded
+  correctly), exact sharing to the paisa (3 rows, ৳10,000 weight cost,
+  uneven grams, AUD), weight by grams and other by value, currency
+  conversion, late bill, missing weight blocks saving, every opening file
+  check, 200-row file, duplicate merge, % only on imports, menu access.
+- Browser tests (e2e/batch-38.spec.ts, 7 tests, on the live database with
+  throwaway hidden test products that are deleted afterwards):
+  the database and the screens give the same weight and the same cost
+  shares; a typed weight is never overwritten; late bill; pieces left
+  always equals the sum of the stock movements; one opening lot only; a
+  200-row opening file; undo and delete need the Safety Lock; staff
+  without "View profit & costs" (and the public) can read nothing and save
+  nothing; Activity Log entries; Inventory mode can't be turned on; and
+  the shop's stock numbers did not change after creating lots and opening
+  stock.
+- Two existing tests list the admin menu exactly; I added "Inventory" to
+  those lists (adminNav.test.ts and e2e/batch-25). Nothing else in old
+  tests was changed. Checkout and order tests run unchanged.
+- Screenshots (phone width 360 px): reports/batch-38-screens/
+  01 lots list, 02 new lot with preview, 03 lot detail, 04 needs weight,
+  05 compare, 06 settings switch, 07 opening file with mistakes,
+  08 opening preview, 09 opening saved.
+
+====================================================================
+CHOICES I MADE FOR YOU (and why)
+====================================================================
+1. Exact money maths. All sharing is done in whole paisa with the
+   "largest remainder" method: every row first gets its whole paisa, and
+   the few paisa left over go one each to the rows with the biggest
+   leftover fraction. Result: the shares always add up to the bill
+   exactly. The cost PER PIECE can have more than 2 decimals (for example
+   ৳211.055 when ৳422.11 is shared by 2 pieces); the row total is exact.
+2. If every buy price in a lot is 0 (free samples), other costs are
+   shared by pieces instead (you can't share by value when value is 0).
+3. Lot numbers: one more than the highest lot number (L-001, L-002 ...).
+   A deleted lot's number can be used again only if it was the last one.
+   The opening lot is always L-000.
+4. Editing a lot never rewrites history: if you change pieces from 3 to 5,
+   the ledger gets a new row "+2 (Lot edited: pieces 3 → 5)".
+5. A product that is in a lot can no longer be DELETED (hide it instead).
+   Its stock history must stay. Products not in any lot delete as before.
+6. Weight: an option uses its own size first, then its product's name.
+   A typed weight is marked "manual" and the estimate never changes it.
+   If you rename a product, an estimated weight is worked out again.
+   Weights are not secret costs, so staff with "Edit products" may also
+   type a weight. Weight edits show in the Activity Log as product edits
+   ("weight_grams").
+7. Opening stock file:
+   - "source" is pre-filled "import" on every row; change it to
+     "wholesale" where needed (most of your goods are imports).
+   - Rows with no price AND no pieces are skipped (products you don't
+     have). A row with only one of them is "must fix".
+   - Duplicate rows (same product + same expiry month + same source) are
+     merged: pieces added, buy price = average weighted by pieces.
+     Import and wholesale rows of the same product stay separate, because
+     only imports get the weight %.
+   - Expiry can be typed 2027-03, 03/2027 or as an Excel date; it is
+     stored as the last day of that month.
+   - The product_key column is grey and marked "do not change", but the
+     sheet is not password-locked: a locked sheet would stop you copying a
+     row to split two expiry dates. A changed key is caught as
+     "Unknown product_key".
+   - The upload itself is written to the Activity Log (file name, rows,
+     how many to fix), so you can see each try.
+8. Excel library: two small, well-known libraries (read-excel-file and
+   write-excel-file). They load only when you open Opening stock, so
+   shoppers' phones never download them.
+9. Plain screens, as you asked: existing admin cards, fields and buttons,
+   no animations. One orange button per screen.
+
+====================================================================
+WHAT I SHOULD CHECK ON MY PHONE (step by step)
+====================================================================
+ 1. Open Admin → More → Inventory. You should see "Inventory mode: Off",
+    three tools (Opening stock, Needs weight, Compare stock) and "No lots
+    yet".
+ 2. Tap Needs weight. You should see about 23 products with no size in
+    the name (for example "Nivea Men Deep Espresso"). Type a weight for
+    one (grams of one piece) and tap Save. It leaves the list.
+ 3. Tap "All products" there and check a few estimates (a 473 ml bottle
+    should show 544 g). Correct any that are wrong.
+ 4. Go back. Tap New lot. Choose Import, currency AUD, type a rate
+    (for example 80). Search and add 2 products. Type pieces and buy
+    price (in AUD). Tap "Add weight cost" and type 5000.
+    - If a product has no weight, the Preview shows "Enter weight for: ..."
+      in red. Type its weight; the tick should come back.
+    - Each product shows "Buy ৳... + weight ৳... + other ৳... = ৳... per
+      piece".
+    - At the bottom: "Allocated total = lot total ✓".
+    Tap Create lot. You land on the lot page with the same numbers.
+ 5. On that lot page tap ⋮ → Edit lot, add an "other cost" (for example
+    ৳500 customs), Save. The cost per piece goes up; the tick stays.
+ 6. Tap Compare stock. Your test lot's products now show "Lots N"; the
+    difference to the shop's stock is shown. (Nothing changes the shop's
+    stock.)
+ 7. Delete the test lot: Settings → Safety Locks → turn the lock off
+    (password), then on the lot ⋮ → Delete lot → Delete lot.
+ 8. Open Inventory → Opening stock → Download template. Open it in Excel
+    or Google Sheets on your phone or PC. Read the "How to fill" sheet.
+ 9. Fill 3–4 rows with real numbers, and on purpose make mistakes in two
+    more rows: leave pieces empty on one, type -1 on another. Save as
+    .xlsx and upload. You should see "To fix 2" with the rows listed, and
+    Confirm greyed out.
+10. Fix the file and upload again (it replaces the preview). Type your
+    weight % (or open "Work it out from past lots"), pick the start date.
+    Check total pieces and opening stock value. You may Confirm, or stop
+    here and do the real upload later.
+11. If you confirmed a test upload: Opening stock now shows "L-000 saved"
+    and "Weight cost moved from old expenses into opening stock: ৳X".
+    To remove it: turn off the Safety Lock, then "Undo opening stock".
+12. Settings → Inventory mode: the switch is Off and greyed out, with
+    "Available after Batch 39 (sales use lots)".
+13. Place or look at a normal order: nothing about checkout or stock has
+    changed.
+
+====================================================================
+WHAT I COULD NOT FINISH
+====================================================================
+Nothing from the brief was left out.
+
+====================================================================
+WHAT I FOUND ALONG THE WAY (not fixed)
+====================================================================
+- 23 products have no size in the name or size field (vitamins, brushes,
+  derma roller, some The Ordinary products). They need a typed weight
+  before they can be in a lot that has a weight cost.
+- The "View profit & costs" switch now also opens Inventory. Its wording
+  in Team → roles was updated to say so.
+- Undoing the opening stock does not undo weights that the file saved to
+  products (they stay as typed). This is on purpose but worth knowing.
+
+====================================================================
+FOR BATCH 39 (noted in the code and CLAUDE.md)
+====================================================================
+- A bill that arrives after some pieces of a lot were already sold:
+  the cost of pieces already sold must not silently change; that extra
+  cost goes to the cost of sales of the period the bill arrived in.
+  (Comment in inventory_allocate_lot.)
+- Never count old weight costs twice: when the old 2025–26 expenses are
+  ever imported, subtract the opening lot's "weight cost moved into
+  opening stock" amount from them. (Comment in the database and a note in
+  CLAUDE.md section 6.)
+- Turning Inventory mode On must replace the guard trigger
+  app_settings_inventory_mode_guard.
+
+====================================================================
+INDUSTRY-LEVEL SUGGESTIONS (not built)
+====================================================================
+1. Stock count day (medium): a screen to count the shelf and record the
+   difference as "adjustment" movements with a reason (damaged, expired,
+   lost). Shops lose money quietly without a regular count.
+2. Expiry alerts (small): a list of lots expiring in the next 3 months,
+   so they can be sold on offer before they expire.
+3. Exchange-rate memory (small): suggest the last rate used for each
+   currency to save typing and mistakes.
+4. Attach bill photos to a lot's costs (medium): proof for the accountant
+   and for checking later.
+5. Supplier list (small): pick suppliers from a list instead of typing,
+   so reports by supplier are clean.

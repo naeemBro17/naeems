@@ -21,6 +21,7 @@ import { CustomersTab } from '../components/admin/CustomersTab';
 import { BannerTextsTab } from '../components/admin/BannerTextsTab';
 import { BrandsTab } from '../components/admin/BrandsTab';
 import { PayoutsTab } from '../components/admin/PayoutsTab';
+import { InventoryTab } from '../components/admin/inventory/InventoryTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
 import { fetchOwnRoleName } from '../lib/staff';
@@ -265,6 +266,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
           />
         )}
+        {active === 'inventory' && <InventoryTab />}
         {active === 'customers' && <CustomersTab />}
         {active === 'reviews' && <ReviewsTab />}
         {active === 'bento' && <BentoTilesTab />}

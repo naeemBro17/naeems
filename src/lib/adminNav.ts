@@ -12,6 +12,7 @@ export type AdminSection =
   | 'payouts'
   | 'customers'
   | 'products'
+  | 'inventory'
   | 'categories'
   | 'brands'
   | 'import-export'
@@ -32,6 +33,7 @@ export type AdminIconName =
   | 'payouts'
   | 'customers'
   | 'products'
+  | 'inventory'
   | 'categories'
   | 'brands'
   | 'import'
@@ -86,6 +88,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'payouts', label: 'Steadfast payouts', tabLabel: 'Payouts', icon: 'payouts', group: 'main' },
   { id: 'customers', label: 'Customers', icon: 'customers', group: 'main' },
   { id: 'products', label: 'Products', icon: 'products', group: 'catalog' },
+  // Batch 38: lots, landed cost, opening stock; only with "View profit & costs".
+  { id: 'inventory', label: 'Inventory', icon: 'inventory', group: 'catalog' },
   { id: 'categories', label: 'Categories', icon: 'categories', group: 'catalog' },
   { id: 'brands', label: 'Brands', icon: 'brands', group: 'catalog' },
   { id: 'import-export', label: 'Import / Export', icon: 'import', group: 'catalog' },
@@ -120,6 +124,7 @@ export function canOpenSection(section: AdminSection, access: NavAccess): boolea
     case 'orders':
       return can('view_orders');
     case 'payouts':
+    case 'inventory':
       return can('view_profit_costs');
     case 'customers':
       return can('view_customers');

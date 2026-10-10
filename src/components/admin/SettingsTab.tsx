@@ -381,6 +381,44 @@ function ShopWhatsAppPanel() {
   );
 }
 
+/** Batch 38: "Inventory mode" — Off, and it can't be turned On yet: lots
+ *  only start to follow sales in Batch 39, so stock would drift. The
+ *  database refuses 'true' too (migration-040). While Off, lots never
+ *  change a product's stock number or checkout. */
+function InventoryModePanel() {
+  const { settings } = useProducts();
+  const isOn = settings.inventory_mode === 'true';
+  return (
+    <div className="admin-panel">
+      <h3 className="admin-panel__title">Inventory mode</h3>
+      <div className="form-field form-field--toggle settings-switch-row">
+        <span className="settings-switch-row__text">
+          <span className="toggle-label" id="settings-inventory-mode-label">
+            Inventory mode
+          </span>
+          <span className="admin-panel__description settings-switch-row__hint" data-testid="inventory-mode-note">
+            Available after Batch 39 (sales use lots).
+          </span>
+        </span>
+        <button
+          type="button"
+          className={`toggle${isOn ? ' toggle--on' : ''}`}
+          role="switch"
+          aria-checked={isOn}
+          aria-labelledby="settings-inventory-mode-label"
+          disabled
+          data-testid="inventory-mode-switch"
+        >
+          <span className="toggle__thumb" />
+        </button>
+      </div>
+      <p className="admin-panel__description">
+        While Off, the shop works exactly as before: checkout, orders and the stock numbers on products are not changed by lots.
+      </p>
+    </div>
+  );
+}
+
 /** Batch 35 Part 6: "Show rider's phone to customers" — default Off. It
  *  only ever matters while an order is Out for delivery and Steadfast names
  *  the rider. app_settings can only be changed by the Super Admin (checked
@@ -1040,6 +1078,8 @@ export function SettingsTab() {
     { id: 'invoice', group: 'ORDERS', label: 'Invoice', icon: 'receipt', render: () => <InvoiceSettingsPanel /> },
     { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
     { id: 'delivery', group: 'DELIVERY', label: "Rider's phone for customers", icon: 'truck', render: () => <DeliveryTrackingPanel /> },
+    // Batch 38.
+    { id: 'inventory', group: 'INVENTORY', label: 'Inventory mode', icon: 'inventory', detail: 'Off', render: () => <InventoryModePanel /> },
     { id: 'tracking', group: 'TRACKING', label: 'Facebook Pixel and Google Analytics', icon: 'chart', render: () => <AdTrackingSettingsPanel /> },
     { id: 'safety', group: 'SAFETY LOCKS', label: 'Safety Locks', icon: 'lock', render: () => <SafetyLocksPanel /> },
     // Batch 34 Part 1.

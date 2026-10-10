@@ -34,6 +34,7 @@ const SERIAL_SPECS = [
   'batch-35',
   'batch-36',
   'batch-37',
+  'batch-38',
   'fix-rich-text-editor',
   'checkout',
 ];
