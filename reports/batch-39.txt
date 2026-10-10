@@ -1,0 +1,273 @@
+BATCH 39 — Inventory: units, sales from lots, order profit, Inventory mode switch
+Version 1.39.0 · Branch feature/batch-39-inventory-sales (pushed; no PR opened)
+
+INVENTORY MODE IS STILL OFF. Nothing about the live shop's checkout or
+stock numbers has changed. You turn it On yourself, after your real
+opening stock (L-000) is uploaded and confirmed.
+
+====================================================================
+WHAT WAS BUILT (short)
+====================================================================
+- Units and pack size. Every product (or each size of a product) now has
+  a "Stock unit" (pcs / ml / g) and a "Pack size" (default 1). You set
+  them in the product editor, under the options. Example: fish oil bottle
+  = pcs, 400. Shoppers never see this.
+- Lots keep stock and cost PER UNIT. A lot row can be typed in packs or in
+  loose units. The opening stock file has 3 new columns at the end:
+  stock_unit and pack_size (grey, just for reading) and extra_units (loose
+  units in an opened pack).
+- Lot form clean-up: no currency or exchange rate any more (all prices in
+  taka; old lots keep theirs). A missing weight no longer blocks saving —
+  the weight is guessed from the price and marked "weight guessed from
+  price". Suppliers are picked from a list with "+ Add new" (the
+  suppliers you typed before were moved into the list).
+- Sales take stock from lots (only when Inventory mode is On): earliest
+  expiry first. Cancel, Return, order edits and order delete give the
+  units back to the exact lot rows they came from. The shop's stock number
+  then always equals the whole packs left in lots, so "Only N left" and
+  "Sold out" keep working as before.
+- "Returned" is now a real order status. On an order that was sent (In
+  transit or Delivered) there is a new Careful action "Mark returned"
+  (type the order number to confirm). Its goods go back to stock.
+- Selling without stock (admin only): the website still refuses. In a
+  manual order or an order edit you get "Not in stock — sell anyway?". If
+  you say yes, the missing units are listed in Inventory → Sold without
+  stock until the next lot (or the opening stock) fills them.
+- Profit: on each order page a "Profit" box (items sold, cost of goods,
+  delivery charged, courier + COD fee, profit and %). Inventory → Sales
+  profit shows any dates (Today / This month / Custom): totals, every
+  delivered or returned order, and a table per product sorted by profit.
+- Inventory mode switch: Inventory → "Turn on Inventory mode (check
+  first)" shows a check screen, then needs your password. Turning Off
+  again is a Careful action with a clear warning.
+- Small fixes: sitemap (no duplicates, alphabetical, no hidden or test
+  products, not rewritten when nothing changed), the "Needs weight" note,
+  the old Batch 24 delete test now uses the Careful actions steps.
+
+====================================================================
+SQL NAEEM MUST RUN IN SUPABASE
+====================================================================
+None. The database step (supabase/migration-042-batch39-inventory-sales.sql)
+was tried first in a "try and undo" run, then applied by me, as you
+allowed. Afterwards I checked: Inventory mode = false, the 4 new tables
+(suppliers, order_item_lots, stock_shortfalls, cost_adjustments) and all
+the new functions exist. Nothing was dropped or renamed. The order status
+list was widened to allow "returned". The file is safe to run again.
+
+====================================================================
+TESTS
+====================================================================
+npm run verify — final full run, 11 Oct 2026: ALL GREEN (30.2 min)
+- Build: passed, zero errors.
+- Unit tests (vitest): 450 of 450 passed.
+- Browser tests (e2e): 295 passed, 112 skipped (skipped on purpose, as
+  in earlier batches), 0 failed.
+The first full run had 4 failures (no timing flakes, so the new rule's
+"re-run 3 times" did not apply):
+- 1 was this batch's: the Batch 38 test listed the template columns by
+  hand; it now includes the 3 new ones.
+- 3 (and 1 more found while fixing them) were old tests that still
+  described the order page from BEFORE the "Careful actions" fix that is
+  already in main: the "Invoice" button is now the Invoice card, the
+  delete explanation text changed, Print is the one orange button when
+  there is no other main action, and a Confirmed, not-booked order may now
+  be deleted without the Safety Lock (a sent one still may not). I updated
+  only those assertions (batch-24, batch-31, batch-35). Then the whole
+  suite was run again in full: all green.
+New rule written into CLAUDE.md (section 3, Build): timing flakes in
+files the batch did not touch → re-run that file 3 times instead of the
+whole suite.
+
+How the "Inventory mode On" tests were done without touching the shop:
+your test computer talks to the LIVE database, and turning Inventory mode
+On there would make every product "Sold out" (no opening stock yet). So
+the tests that need it On run inside ONE database transaction that is
+always undone at the end (e2e/sql/batch-39-inventory.sql). Inside it they
+switch the mode on, create throwaway products, lots and orders as the
+real test accounts, and check 61 things. Then everything is undone — the
+shop never sees any of it.
+The "two orders at the same moment" test needs two real sessions, so it
+uses a hidden throwaway product and two throwaway orders, and removes
+them right after (e2e/sql/batch-39-lock.sql).
+
+What is checked (all passed):
+- Units: 2 packs of 400 = 800 units; 250 loose units; a website order of
+  1 pack takes 400 units; an admin order of 150 pcs at ৳8 (list ৳5); shop
+  stock = whole packs (1050 units → 2, 650 → 1); opening file 2 packs +
+  250 extra = 1050 units at ৳3 + 10% = ৳3.30.
+- Weight: a row with no weight gets a guessed weight; no row with weight
+  → shared by price; totals exact to the paisa; an old AUD lot still
+  gives the same numbers. The phone preview and the database give the
+  very same paisa (unit tests compare them).
+- Taking stock: earliest expiry first across 3 lots; two orders at the
+  same moment: the second waited ~5 seconds for the first, then was
+  refused ("Only 0 left") — the same units were never taken twice; cancel
+  and return give back to the same lot rows; edit 1→4 takes 3 more, 4→2
+  gives back the 2 taken last; "units left = sum of the stock ledger"
+  after every step.
+- Selling without stock: website refused; admin asked first, then 4 units
+  taken and 6 recorded at the latest cost ৳120; the next lot (৳150) filled
+  them and wrote a ৳180 cost adjustment; cancelling undid it all.
+- Late bill: 4 of 10 sold at ৳500; a ৳100.01 bill arrives → sold units
+  keep ৳500, unsold units ৳510.001, cost adjustment ৳40.00 dated the
+  bill's date; the lot still adds up to the paisa.
+- Profit: 2 × ৳400 (item discount) − ৳50 order discount = ৳750 sale,
+  cost ৳200, delivery ৳80, courier + COD ৳68.30 → profit ৳561.70 (74.9%);
+  free delivery; returned order = −courier charge; cancelled = nothing;
+  counted on the Delivered day (today, not yesterday); per-product totals
+  add up to the order totals.
+- Permissions (checked in the database): a customer, the public, and a
+  staff member WITHOUT "View profit & costs" can read no cost, profit,
+  lot or shortfall data. Staff with "Edit products" may set a pack size.
+- Inventory mode: can't be switched by saving the setting directly; needs
+  the password again; can't turn On without L-000; with L-000 it turns On
+  and the shop's numbers come from lots.
+- Mode Off: a website order and a cancel change the stock number exactly
+  as before, and nothing is taken from lots. All the old checkout and
+  order tests run unchanged (see below).
+- Screens at phone width (360 px): pack size in the product editor, lot
+  form in packs/units with the supplier list and no currency, opening
+  template columns, Sold without stock, Sales profit, the Inventory mode
+  check screen, the order Profit box, Mark returned (stock comes back),
+  and a manual order line sold as loose pcs.
+- Sitemap: one line per address, alphabetical, no hidden/test products.
+
+Old tests changed, and why (only where this batch changed the behaviour
+on purpose):
+- e2e/batch-38 and src/lib/batch38 unit test: "missing weight blocks
+  saving" is now "missing weight is guessed"; the lot form no longer has
+  Exchange rate (the test types the taka price instead: ৳800 = AUD 10 ×
+  80, same numbers as before) and picks the supplier from the list; the
+  Settings note text changed.
+- e2e/batch-24 delete test: uses Careful actions (Part 5.3 — the Careful
+  actions flow IS in main, so this applied).
+- e2e/batch-35 and batch-37 small updates and the e2e/fix-order-actions
+  test came from the last fix session; they were finished but never
+  committed, so I committed them here (with that session's bug fix: the
+  delete box asked for the wrong word — "/D/" instead of "/\D/").
+
+Screenshots: reports/batch-39-screens/ (01–11).
+
+====================================================================
+CHOICES I MADE FOR YOU (and why)
+====================================================================
+1. Pack size is a whole number (1 to 1,000,000). Stock is counted in
+   whole units (pcs, ml, g), so a pack must hold a whole number of them.
+2. Loose-unit lines are priced PER UNIT (e.g. ৳8 a pc × 150 = ৳1,200),
+   like a shop till. The invoice and the customer's page show one line:
+   "Fish Oil 1000mg — 150 pcs", 1 × ৳1,200. No cost or lot ever shows.
+3. While Inventory mode is Off, loose-unit lines don't change the shop's
+   stock number (it counts whole packs; part of a pack can't be taken
+   off it). The screen says so.
+4. The website's stock number = whole packs left: an opened bottle with
+   250 pcs left does not show as "1 in stock".
+5. "Returned" is set by you (Careful action), not automatically from
+   Steadfast. Steadfast's "cancelled" can still change; the button
+   explains when Steadfast says the parcel is coming back. A returned
+   order cannot be reopened (it is final), and its goods always go back
+   to stock (damaged returns: Batch 40).
+6. When you turn Inventory mode On, orders that are still Processing or
+   Confirmed (their goods are still on your shelf, so they were counted in
+   your opening stock) can take their stock from lots at that moment.
+   This is a tick box on the check screen, ticked by default. Missing
+   units go to "Sold without stock". Orders already In transit are left
+   alone (their goods have left the shelf).
+7. Late bills and filled shortfalls are "cost adjustments" counted on the
+   day they happened (the bill's date, or the day the lot was saved). The
+   order's own profit keeps the cost locked when the stock left. If units
+   that had an adjustment come back (cancel / return), the adjustment is
+   undone on that day.
+8. Delivery collected = the delivery fee on the order. Courier + COD =
+   what Steadfast kept (from the Batch 36 payouts). Until Steadfast pays
+   out an order, that line says "not known yet" and counts as ৳0.
+9. Profit for one order counts on the last time it became Delivered
+   (or Returned). Orders delivered before Inventory mode show "No cost
+   (before inventory)" and are left out of the totals.
+10. Order history (which staff without the profit permission can see)
+    gets no lot or cost details. The stock taken / given back is written
+    to the Activity Log as ONE entry per order action.
+11. Suppliers: a supplier can be removed only if no lot uses it.
+12. A new product created while Inventory mode is On shows the stock you
+    typed until its first lot; the website still can't oversell it (the
+    lots refuse). The stock fields in the product editor are locked while
+    On, with a note.
+13. The Inventory mode switch in Settings now shows the state and opens
+    the check screen; the actual On/Off is there, behind your password.
+
+====================================================================
+WHAT I SHOULD CHECK ON MY PHONE (step by step)
+====================================================================
+NOW (Inventory mode Off):
+ 1. Admin → Products → open any product → under the options: "Stock unit
+    & pack size". Use a TEST product (hidden), set pcs and 400, tap Save
+    pack size.
+ 2. Admin → More → Inventory → New lot. Supplier: pick "+ Add new", type
+    a name, Add supplier. Search your test product: you see "Packs (400
+    pcs)" / "Units (pcs)". Type 2 packs at ৳1,200: it says "= 800 pcs in
+    stock". Add a weight cost of ৳100: "weight guessed from price"
+    appears. Tap Create lot. On the lot page: Units 800, cost per pcs.
+    (There is no currency or exchange rate any more.)
+ 3. Inventory → Sales profit: Today / This month / Custom work (orders
+    delivered before Inventory mode show "No cost (before inventory)").
+ 4. Inventory → Sold without stock: empty for now.
+ 5. Inventory → "Turn on Inventory mode (check first)": read the check
+    screen — opening stock, differences, "These will show Sold out", pack
+    sizes. The Turn On button stays grey until L-000 is confirmed.
+ 6. Open any order that is In transit: at the bottom, Careful actions has
+    "Mark returned". (Only use it on a real return.)
+
+AFTER you upload your real opening stock and turn Inventory mode On
+(these need the mode On; use your hidden test product and a test lot):
+ 7. New order (manual): add the test product, tap "Loose pcs", type 150,
+    price ৳8 per pcs, save. If the test product is hidden, first make it
+    active only for this test, or use any real product with pack size
+    set.
+ 8. Open that order: the Profit box shows sale ৳1,200, cost (150 × the
+    lot's cost per pcs), profit.
+ 9. Cancel the order (type its number): Inventory → your test lot →
+    Units left goes back up by 150.
+10. Make a manual order for MORE than the lot has: you get "Not in stock —
+    sell anyway?". Tap Sell anyway. Inventory → Sold without stock shows
+    the missing units. Cancel that order afterwards.
+11. Inventory → Sales profit → Today.
+Note: a lot that has had sales can't be deleted (its history must stay),
+so a test lot used for these steps stays in your list with its units.
+
+====================================================================
+WHAT I COULD NOT FINISH
+====================================================================
+Nothing from the brief was left out. One limit to know: the "sell
+anyway" tests in a real browser need Inventory mode On, which I never
+turn on in the live shop, so those parts were tested in the database
+(undone transaction) and the screens were tested with the mode Off.
+
+====================================================================
+WHAT I FOUND ALONG THE WAY (not fixed)
+====================================================================
+- The last fix session left real work uncommitted on its branch (the
+  delete-box word bug and three test updates). I carried it into this
+  branch so it isn't lost.
+- Supabase's API refuses an UPDATE without a WHERE; my own database test
+  route doesn't have that rule, so one bug only showed in the browser test
+  (fixed). Worth remembering for future database work.
+- The Edit order page doesn't let you change a SAVED line between packs
+  and loose units (only new lines). Remove it and add it again instead.
+- The product editor's per-option stock fields (in the options editor)
+  are not locked while Inventory mode is On; changes there are simply
+  replaced by the lots' number.
+
+====================================================================
+INDUSTRY-LEVEL SUGGESTIONS (not built)
+====================================================================
+1. Stock count day (medium): count the shelf, record differences as
+   adjustments (damaged, expired, lost). Needed once sales use lots —
+   real stock drifts quietly otherwise.
+2. Expiry alerts (small): lots expiring in the next 3 months, to sell on
+   offer before they expire. Earliest-expiry-first selling helps, but a
+   list makes it visible.
+3. Damaged returns (medium, planned for Batch 40): write off returned
+   goods that can't be sold again, so profit and stock stay true.
+4. Profit by month chart and by source (small): Facebook vs website vs
+   WhatsApp — shows where your profit really comes from.
+5. Low-margin warning on the manual order (small): show when a custom
+   price is below cost (only for people with "View profit & costs").
