@@ -18,6 +18,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   shipped: 'Shipped',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  returned: 'Returned',
 };
 
 /** CSS modifier suffix for .status-badge--{tone} — see app.css. Neutral/
@@ -29,6 +30,7 @@ export const ORDER_STATUS_TONE: Record<OrderStatus, 'neutral' | 'info' | 'succes
   shipped: 'info',
   delivered: 'success',
   cancelled: 'danger',
+  returned: 'neutral',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<OrderPaymentStatus, string> = {

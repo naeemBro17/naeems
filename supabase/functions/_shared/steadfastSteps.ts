@@ -93,7 +93,7 @@ export function sortEvents(events: TrackingEvent[]): TrackingEvent[] {
 
 export interface StepInput {
   /** The order's own status on this site. */
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
   /** Booked on Steadfast (has a consignment id). */
   booked: boolean;
   /** Steadfast's delivery_status, as saved or just fetched. */
@@ -137,6 +137,8 @@ export function deriveOrderStep(input: StepInput): StepResult {
   const courier = input.booked ? (input.courierStatus ?? '').trim() : '';
 
   if (input.status === 'cancelled') return result(STEP_INDEX.placed, 'cancelled');
+  // Batch 39: marked Returned on the site — it came back.
+  if (input.status === 'returned') return result(STEP_INDEX.in_transit, 'returning');
 
   if (courier === 'delivered') return result(STEP_INDEX.delivered, null);
   if (courier === 'delivered_approval_pending') return result(STEP_INDEX.delivered, null, true);

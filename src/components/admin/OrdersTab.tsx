@@ -33,6 +33,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'shipped', label: 'With courier' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'returned', label: 'Returned' },
   { value: 'due', label: 'Due' },
 ];
 
@@ -57,7 +58,7 @@ function orderDay(iso: string): string {
 
 /** The small neutral money pill — only when something is still owed. */
 function owedText(order: Order, due: number): string | null {
-  if (order.status === 'cancelled' || due <= 0) return null;
+  if (order.status === 'cancelled' || order.status === 'returned' || due <= 0) return null;
   if (order.status === 'delivered') return `${formatTakaBd(due)} due`;
   if (normalizeCollectMode(order.collect_mode) === 'pay_later') return 'Due, pays later';
   return `COD ${formatTakaBd(due)}`;
@@ -146,7 +147,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     const map = new Map<string, number>();
     if (!payments) return map;
     for (const o of orders) {
-      if (o.status === 'cancelled') continue;
+      if (o.status === 'cancelled' || o.status === 'returned') continue;
       const due = summarizePayments(o.total, payments.get(o.id) ?? []).due;
       if (due > 0) map.set(o.id, due);
     }
