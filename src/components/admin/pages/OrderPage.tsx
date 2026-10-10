@@ -11,8 +11,11 @@ import {
   steadfastNeedsAttention,
   adminDeleteOrders,
   adminReopenOrder,
+  adminMarkOrderReturned,
   isEarlyStageOrder,
 } from '../../../lib/orders';
+import { OrderProfitBox } from '../inventory/OrderProfitBox';
+import { lineQuantityText, orderItemCount, soldInUnits } from '../../../lib/orderLines';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { DeleteOrdersDialog } from '../DeleteOrdersDialog';
@@ -112,6 +115,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [transitOpen, setTransitOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -209,6 +213,18 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const handleMarkInTransit = async () => {
     await handleStatusChange('shipped');
     setTransitOpen(false);
+  };
+
+  const handleMarkReturned = async () => {
+    if (!order) return;
+    const { error } = await adminMarkOrderReturned(order.id, null);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    setReturnOpen(false);
+    showToast('Order marked Returned: its goods are back in stock');
+    await reload();
   };
 
   const handleReopen = async () => {
@@ -336,7 +352,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const latestUpdate = tracking && tracking.events.length > 0 ? tracking.events[tracking.events.length - 1] : null;
   const rider = tracking ? latestRider(tracking.events) : null;
   const due = summary ? summary.due : order?.payment_status === 'paid' ? 0 : (order?.total ?? 0);
-  const ended = order?.status === 'cancelled' || order?.status === 'delivered';
+  const ended = order?.status === 'cancelled' || order?.status === 'delivered' || order?.status === 'returned';
   const payLater = order?.collect_mode === 'pay_later';
 
   // The one main action (orange) for this status.
@@ -370,6 +386,19 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       onOpen: () => setDeliverOpen(true),
     });
   }
+  // Batch 39: a parcel that went out and came back (Steadfast "cancelled"
+  // is a return) — its goods go back to stock.
+  if (order && canChangeStatus && (order.status === 'shipped' || order.status === 'delivered')) {
+    careful.push({
+      key: 'return',
+      title: 'Mark returned',
+      explain: order.steadfast_status?.startsWith('cancelled')
+        ? 'Steadfast says it is coming back. Goods go back to stock.'
+        : 'The parcel came back to you. Goods go back to stock.',
+      button: 'Returned…',
+      onOpen: () => setReturnOpen(true),
+    });
+  }
   if (order && canChangeStatus && (order.status === 'pending' || order.status === 'confirmed')) {
     careful.push({
       key: 'cancel',
@@ -393,7 +422,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       onOpen: () => setDeleteOpen(true),
     });
   }
-  const units = order ? order.items.reduce((n, i) => n + i.quantity, 0) : 0;
+  const units = order ? orderItemCount(order.items) : 0;
   const paidSoFar = summary?.paid ?? 0;
   const lastCancel = order ? [...order.history].reverse().find((h) => h.new_status === 'cancelled') ?? null : null;
 
@@ -563,7 +592,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                       <span className="adm-oitem__name">{item.product_name}</span>
                       <span className="adm-oitem__sub">
                         {item.variant_label ? `${item.variant_label} · ` : ''}
-                        {item.quantity} × {formatTakaBd(item.unit_price)}
+                        {soldInUnits(item) ? `${lineQuantityText(item)} at ` : `${item.quantity} × `}
+                        {formatTakaBd(item.unit_price)}
+                        {soldInUnits(item) ? ` per ${item.sold_unit}` : ''}
                         {item.list_price !== item.unit_price &&
                           ` · ${item.unit_price === 0 ? 'Free' : `List ${formatTakaBd(item.list_price)}`}${
                             item.reason ? ` (${DISCOUNT_REASON_LABELS[item.reason]})` : ''
@@ -608,7 +639,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                     </span>
                   </div>
                 ))}
-                {order.status !== 'cancelled' && (
+                {order.status !== 'cancelled' && order.status !== 'returned' && (
                   <div className="adm-ototals__row adm-ototals__row--final" data-testid="courier-collects">
                     <span>{order.status === 'delivered' ? 'Still due' : payLater ? 'Courier collects (pays later)' : 'Courier collects'}</span>
                     <span>{formatTakaBd(payLater && order.status !== 'delivered' ? 0 : due)}</span>
@@ -854,6 +885,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
               )}
             </section>
 
+            {/* Batch 39: profit — only with "View profit & costs". */}
+            {canSeeCosts && <OrderProfitBox orderId={order.id} version={`${order.status}:${order.updated_at}`} />}
+
             {/* Fix 1.38.1: everything that changes the order, at the very bottom. */}
             <CarefulActionsCard actions={careful} />
           </div>
@@ -913,6 +947,27 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
             onClose={() => setTransitOpen(false)}
           >
             <p className="adm-csheet__text">Only if you sent this parcel with another courier (not Steadfast).</p>
+          </ConfirmSheet>
+
+          <ConfirmSheet
+            isOpen={returnOpen}
+            title={`Mark ${order.order_number} returned?`}
+            warning={
+              order.steadfast_consignment_id && !order.steadfast_status?.startsWith('cancelled')
+                ? `Steadfast does not say this parcel is coming back (status: ${order.steadfast_status ?? 'not known'}). Mark it only if you have it back.`
+                : null
+            }
+            typeToConfirm={orderDigits(order.order_number)}
+            keepLabel="Keep"
+            confirmLabel="Mark returned"
+            danger
+            onConfirm={handleMarkReturned}
+            onClose={() => setReturnOpen(false)}
+          >
+            <p className="adm-csheet__text" data-testid="return-effects">
+              {`${units} item${units === 1 ? '' : 's'} go${units === 1 ? 'es' : ''} back to stock.`} The order counts no sale; the
+              courier charge counts as a loss. This can&apos;t be undone.
+            </p>
           </ConfirmSheet>
 
           <ConfirmSheet
