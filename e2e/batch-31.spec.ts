@@ -314,8 +314,9 @@ test('Part 4: no inline "Edit price" or fee "Edit"; the pen at the top opens Edi
   const [penBox, backBox] = [(await pen.boundingBox())!, (await back.boundingBox())!];
   expect(Math.abs(penBox.y + penBox.height / 2 - (backBox.y + backBox.height / 2))).toBeLessThanOrEqual(4);
   expect(penBox.x).toBeGreaterThan(backBox.x);
-  // Call / WhatsApp / Invoice stay.
-  for (const name of ['Call', 'WhatsApp', 'Invoice']) await expect(sheet.getByRole(name === 'Invoice' ? 'button' : 'link', { name, exact: true })).toBeVisible();
+  // Call / WhatsApp / the invoice stay (fix 1.38.1: the invoice is a card of its own).
+  for (const name of ['Call', 'WhatsApp']) await expect(sheet.getByRole('link', { name, exact: true })).toBeVisible();
+  await expect(sheet.getByTestId('invoice-card')).toBeVisible();
   await pen.click();
   await expect(page.getByTestId('edit-order-page')).toBeVisible({ timeout: 10_000 });
 });

@@ -7,7 +7,13 @@ import type { StockUnit } from './types';
  * sellable product / option; Naeem fills buy price, pieces, expiry and
  * source. Everything here is checked in the browser for the preview —
  * nothing is saved until Confirm, and the database checks it all again
- * (inventory_confirm_opening, migration-040).
+ * (inventory_confirm_opening, migration-040; units in migration-042).
+ *
+ * Batch 39: stock_unit and pack_size (grey, for reading only) and an
+ * optional extra_units column were added at the END, so a template
+ * downloaded before still uploads. Units = pieces × pack size +
+ * extra_units (loose units from an opened pack). Buy price stays per pack.
+ * The pack size used is always the shop's own (from the database).
  */
 export const OPENING_COLUMNS = [
   'product_key',
@@ -19,6 +25,9 @@ export const OPENING_COLUMNS = [
   'buy_price_bdt',
   'pieces',
   'expiry',
+  'stock_unit',
+  'pack_size',
+  'extra_units',
 ] as const;
 
 export type OpeningColumn = (typeof OPENING_COLUMNS)[number];
@@ -31,11 +40,13 @@ export const HOW_TO_FILL: readonly string[] = [
   '',
   'Fill the sheet "Opening stock". One row is one product (or one size of a product).',
   '',
-  '1. buy_price_bdt: what you paid for ONE piece, in taka (the latest buy price).',
+  '1. buy_price_bdt: what you paid for ONE piece (one full pack), in taka (the latest buy price).',
   '2. pieces: how many pieces you have now.',
   '3. expiry: the expiry month, written like 2027-03 (year-month). Leave it empty if there is none.',
   '4. source: "import" (you brought it from abroad) or "wholesale" (bought from a shop or wholesaler here). It is filled with "import" — change it where needed.',
   '5. weight_g: the weight of one piece in grams. It is already filled with an estimate from the size. Correct it if it is wrong.',
+  '6. stock_unit and pack_size (grey): how the product is counted, e.g. a fish oil bottle of 400 pcs. Do not change them here — change the pack size in the product editor and download the template again.',
+  '7. extra_units: only for an OPENED pack — the loose units left in it (e.g. 250 pcs left in an open bottle). Leave it empty otherwise. pieces counts the full packs.',
   '',
   'If one product has two expiry dates: copy the row, paste it below, and split the pieces between the two rows.',
   'Products you do not have: leave buy_price_bdt and pieces empty. Those rows are skipped.',
@@ -65,6 +76,9 @@ export function templateRows(units: readonly StockUnit[]): TemplateCell[][] {
     null,
     null,
     null,
+    u.stock_unit,
+    u.pack_size,
+    null,
   ]);
 }
 
@@ -79,9 +93,14 @@ export interface OpeningRow {
   variantId: string | null;
   label: string;
   source: OpeningSource;
-  /** Buy price per piece, 4 decimals (scaled). */
+  /** Buy price per piece (one full pack), 4 decimals (scaled). */
   priceE4: bigint;
+  /** Full packs. */
   pieces: number;
+  /** Loose units from an opened pack (Batch 39; default 0). */
+  extraUnits?: number;
+  /** Units in one pack (Batch 39; default 1). */
+  packSize?: number;
   /** Last day of the expiry month, "YYYY-MM-DD", or null. */
   expiry: string | null;
   weightG: number | null;
@@ -212,8 +231,9 @@ export function readOpeningSheet(sheet: readonly SheetCell[][], units: readonly 
     const label = unit ? unitLabel(unit) : cellText(at(row, 'product_name')) || keyText || `Row ${rowNumber}`;
     const priceCell = at(row, 'buy_price_bdt');
     const piecesCell = at(row, 'pieces');
+    const extraCell = at(row, 'extra_units');
 
-    if (isBlank(priceCell) && isBlank(piecesCell)) {
+    if (isBlank(priceCell) && isBlank(piecesCell) && isBlank(extraCell)) {
       preview.skipped += 1;
       continue;
     }
@@ -221,7 +241,25 @@ export function readOpeningSheet(sheet: readonly SheetCell[][], units: readonly 
       preview.problems.unknown_key.push({ row: rowNumber, label, message: keyText ? `Unknown product_key "${keyText}"` : 'product_key is empty' });
       continue;
     }
-    if (isBlank(priceCell) || isBlank(piecesCell)) {
+    let extra = 0n;
+    if (!isBlank(extraCell)) {
+      const parsedExtra = toScaled(typeof extraCell === 'number' ? extraCell : cellText(extraCell), 4);
+      if (parsedExtra === null || parsedExtra < 0n || parsedExtra % 10000n !== 0n || parsedExtra / 10000n > 100_000_000n) {
+        preview.problems.bad_value.push({ row: rowNumber, label, message: 'extra_units must be a whole number (0 or more)' });
+        continue;
+      }
+      extra = parsedExtra / 10000n;
+    }
+    const filePack = at(row, 'pack_size');
+    if (!isBlank(filePack) && Number(cellText(filePack)) !== unit.pack_size) {
+      preview.problems.bad_value.push({
+        row: rowNumber,
+        label,
+        message: `pack_size ${cellText(filePack)} is not the shop's pack size ${unit.pack_size} — download the template again`,
+      });
+      continue;
+    }
+    if (isBlank(priceCell) || (isBlank(piecesCell) && extra === 0n)) {
       preview.problems.missing.push({
         row: rowNumber,
         label,
@@ -230,12 +268,12 @@ export function readOpeningSheet(sheet: readonly SheetCell[][], units: readonly 
       continue;
     }
     const price = toScaled(typeof priceCell === 'number' ? priceCell : cellText(priceCell), 4);
-    const pieces = toScaled(typeof piecesCell === 'number' ? piecesCell : cellText(piecesCell), 4);
+    const pieces = isBlank(piecesCell) ? 0n : toScaled(typeof piecesCell === 'number' ? piecesCell : cellText(piecesCell), 4);
     if (price === null || pieces === null) {
       preview.problems.bad_value.push({ row: rowNumber, label, message: price === null ? 'Buy price is not a number' : 'Pieces is not a number' });
       continue;
     }
-    if (price <= 0n || pieces <= 0n) {
+    if (price <= 0n || pieces < 0n || (pieces === 0n && extra === 0n)) {
       preview.problems.not_positive.push({
         row: rowNumber,
         label,
@@ -291,6 +329,8 @@ export function readOpeningSheet(sheet: readonly SheetCell[][], units: readonly 
       source: sourceText,
       priceE4: price,
       pieces: piecesWhole,
+      extraUnits: Number(extra),
+      packSize: unit.pack_size,
       expiry,
       weightG,
       fromRows: [rowNumber],
@@ -306,10 +346,16 @@ export function readOpeningSheet(sheet: readonly SheetCell[][], units: readonly 
   return preview;
 }
 
+/** Units of a row: full packs × pack size + loose units. */
+export function openingUnits(row: Pick<OpeningRow, 'pieces' | 'extraUnits' | 'packSize'>): number {
+  return row.pieces * (row.packSize ?? 1) + (row.extraUnits ?? 0);
+}
+
 /**
- * Rows with the same product + expiry (+ source) become one: pieces added,
- * buy price = the average weighted by pieces (4 decimals), the same as the
- * database's merge in inventory_confirm_opening().
+ * Rows with the same product + expiry (+ source) become one: pieces and
+ * loose units added, buy price per pack = the average weighted by units
+ * (4 decimals), the same as the database's merge in
+ * inventory_confirm_opening().
  */
 export function mergeDuplicates(rows: readonly OpeningRow[], log: OpeningPreview['merged'] = []): OpeningRow[] {
   const groups = new Map<string, OpeningRow[]>();
@@ -326,13 +372,16 @@ export function mergeDuplicates(rows: readonly OpeningRow[], log: OpeningPreview
       continue;
     }
     const pieces = list.reduce((a, r) => a + r.pieces, 0);
-    const value = list.reduce((a, r) => a + BigInt(r.pieces) * r.priceE4, 0n);
+    const extraUnits = list.reduce((a, r) => a + (r.extraUnits ?? 0), 0);
+    const units = list.reduce((a, r) => a + openingUnits(r), 0);
+    const value = list.reduce((a, r) => a + BigInt(openingUnits(r)) * r.priceE4, 0n);
     const weights = list.map((r) => r.weightG).filter((w): w is number => w !== null);
     const fromRows = list.flatMap((r) => r.fromRows);
     out.push({
       ...list[0],
       pieces,
-      priceE4: roundDiv(value, BigInt(pieces)),
+      extraUnits,
+      priceE4: roundDiv(value, BigInt(units)),
       weightG: weights.length > 0 ? Math.max(...weights) : null,
       fromRows,
     });
@@ -352,15 +401,23 @@ export function weightPercentFromHistory(buyTotal: string, costsTotal: string): 
   return Number(roundDiv(costs * 10000n, buy)) / 100;
 }
 
+type OpeningMoney = Pick<OpeningRow, 'source' | 'pieces' | 'priceE4' | 'extraUnits' | 'packSize'>;
+
 /** The % added to one row, in paisa for the whole row (the database's
- *  round(pieces × price × %)). 0 for wholesale. `percentE3` is the % at 3
- *  decimals (38% → 38000n). */
-export function openingAddedPaisa(row: Pick<OpeningRow, 'source' | 'pieces' | 'priceE4'>, percentE3: bigint): bigint {
+ *  round(units × price × % ÷ pack size)). 0 for wholesale. `percentE3` is
+ *  the % at 3 decimals (38% → 38000n). */
+export function openingAddedPaisa(row: OpeningMoney, percentE3: bigint): bigint {
   if (row.source !== 'import') return 0n;
-  return roundDiv(BigInt(row.pieces) * row.priceE4 * percentE3, 10_000_000n);
+  return roundDiv(BigInt(openingUnits(row)) * row.priceE4 * percentE3, BigInt(row.packSize ?? 1) * 10_000_000n);
+}
+
+/** Buy value of a row at 4 decimals: units × price per pack ÷ pack size. */
+export function openingBuyE4(row: OpeningMoney): bigint {
+  return roundDiv(BigInt(openingUnits(row)) * row.priceE4, BigInt(row.packSize ?? 1));
 }
 
 export interface OpeningTotals {
+  /** Units (pieces when the pack size is 1). */
   pieces: number;
   buyPaisa: bigint;
   addedPaisa: bigint;
@@ -373,17 +430,18 @@ export function openingTotals(rows: readonly OpeningRow[], percentE3: bigint): O
   let buyE4 = 0n;
   let added = 0n;
   for (const row of rows) {
-    pieces += row.pieces;
-    buyE4 += BigInt(row.pieces) * row.priceE4;
+    pieces += openingUnits(row);
+    buyE4 += openingBuyE4(row);
     added += openingAddedPaisa(row, percentE3);
   }
   const buyPaisa = roundDiv(buyE4, 100n);
   return { pieces, buyPaisa, addedPaisa: added, valuePaisa: buyPaisa + added };
 }
 
-/** Landed cost per piece of one row, in taka (for showing). */
-export function openingLandedUnit(row: Pick<OpeningRow, 'source' | 'pieces' | 'priceE4'>, percentE3: bigint): number {
-  return Number(row.priceE4) / 10000 + Number(openingAddedPaisa(row, percentE3)) / row.pieces / 100;
+/** Landed cost per unit of one row, in taka (for showing). */
+export function openingLandedUnit(row: OpeningMoney, percentE3: bigint): number {
+  const units = openingUnits(row);
+  return Number(openingBuyE4(row)) / 10000 / units + Number(openingAddedPaisa(row, percentE3)) / units / 100;
 }
 
 /** What Confirm sends (the database re-checks every value). */
@@ -394,6 +452,7 @@ export function confirmPayload(rows: readonly OpeningRow[]): Record<string, stri
     source: r.source,
     buy_price_bdt: scaledText(r.priceE4, 4),
     pieces: r.pieces,
+    extra_units: r.extraUnits ?? 0,
     expiry: r.expiry,
     weight_g: r.weightG,
   }));

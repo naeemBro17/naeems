@@ -161,6 +161,32 @@
   align-self: flex-start;
 }
 
+/* Batch 39: a whole item that opens something (Sales profit → order). */
+.inv-item--button {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.inv-item--button:focus-visible {
+  outline: 2px solid var(--adm-text);
+  outline-offset: 2px;
+}
+
+/* Batch 39: the Inventory mode check lists. */
+.inv-check-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--adm-text);
+  font-size: var(--adm-fs-small);
+}
+
+.inv-check-list li + li {
+  margin-top: 4px;
+}
+
 .inv-check {
   display: flex;
   align-items: center;

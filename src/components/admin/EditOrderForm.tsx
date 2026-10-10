@@ -25,6 +25,10 @@ import { addOrderPayment, summarizePayments, type OrderPayment, type PaymentMeth
 import { adminSetCollectMode, isCollectModeReady } from '../../lib/orders';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
+import { useProducts } from '../../contexts/ProductContext';
+import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
+import type { StockWarning } from '../../lib/manualOrders';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 
 interface EditOrderFormProps {
   order: OrderWithDetails;
@@ -51,6 +55,21 @@ const emptyErrors = {};
 export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAddPayment, onUnchanged, onSaved }: EditOrderFormProps) {
   const { showToast } = useToast();
   const { options, stockFor } = useSellableOptions();
+  const { settings } = useProducts();
+  // Batch 39: while Inventory mode is On the database checks stock in lots
+  // and asks "sell anyway?"; the shop's number is not the limit here.
+  const inventoryOn = settings.inventory_mode === 'true';
+  const [packs, setPacks] = useState<Map<string, PackUnit>>(new Map());
+  const [pendingWarnings, setPendingWarnings] = useState<StockWarning[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchPackUnits().then((map) => {
+      if (alive) setPacks(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -77,7 +96,10 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
   }, [order]);
 
   const holdsStock = order.status !== 'cancelled';
-  const problems = useMemo(() => (draft ? stockProblems(draft, holdsStock) : new Map<string, number>()), [draft, holdsStock]);
+  const problems = useMemo(
+    () => (draft && !inventoryOn ? stockProblems(draft, holdsStock) : new Map<string, number>()),
+    [draft, holdsStock, inventoryOn]
+  );
   const totals = draft ? draftTotals(draft) : null;
   const results = useMemo(() => {
     const term = normalizeText(query.trim());
@@ -104,6 +126,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
       if (existing) {
         return { ...d, items: d.items.map((i) => (i.key === existing.key ? { ...i, quantity: i.quantity + 1 } : i)) };
       }
+      const pack = packs.get(packKey(opt.productId, opt.variantId));
       return {
         ...d,
         items: [
@@ -122,12 +145,32 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
             originalQuantity: 0,
             originalUnitPrice: opt.listPrice,
             stockQuantity: opt.stockQuantity,
+            packSize: pack?.pack_size ?? 1,
+            stockUnit: pack?.stock_unit ?? 'pcs',
+            packListPrice: opt.listPrice,
+            soldUnit: null,
           },
         ],
       };
     });
     setQuery('');
   };
+
+  /** Batch 39: a NEW line of a product with a pack size can be sold in
+   *  loose units — price per unit = pack price ÷ pack size. */
+  const setItemSoldUnit = (key: string, unit: 'pcs' | 'ml' | 'g' | null) =>
+    setDraft((d) => {
+      if (!d) return d;
+      return {
+        ...d,
+        items: d.items.map((i) => {
+          if (i.key !== key || i.id !== null) return i;
+          const packPrice = i.packListPrice ?? i.listPrice;
+          const listPrice = unit ? Math.round((packPrice / (i.packSize ?? 1)) * 100) / 100 : packPrice;
+          return { ...i, soldUnit: unit, listPrice, unitPrice: listPrice, originalUnitPrice: listPrice, quantity: 1 };
+        }),
+      };
+    });
 
   const address: DeliveryAddress = draft
     ? {
@@ -154,9 +197,10 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     (plan === null || plan.error === null) &&
     !methodMissing;
 
-  const save = async () => {
+  const save = async (allowShort = false) => {
     if (!draft || !canSave) return;
     const changes = buildOrderChanges(order, draft);
+    if (allowShort) changes.allow_short = true;
     const modeChanged = collectMode !== order.collect_mode;
     const paidNow = plan?.paidNow ?? 0;
     if (Object.keys(changes).length === 0 && !modeChanged && paidNow <= 0) {
@@ -173,6 +217,11 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     };
     if (Object.keys(changes).length > 0) {
       const result = await adminEditOrder(order.id, changes);
+      if (result.stockWarnings) {
+        setIsSaving(false);
+        setPendingWarnings(result.stockWarnings);
+        return;
+      }
       if (result.error) return fail(result.error);
     }
     if (modeChanged) {
@@ -253,6 +302,27 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                   <div className="edit-order__item-main">
                     <span className="edit-order__item-name">{item.productName}</span>
                     {item.variantLabel && <span className="edit-order__item-sub">{item.variantLabel}</span>}
+                    {item.id === null && (item.packSize ?? 1) > 1 && (
+                      <div className="chip-group" role="group" aria-label={`Sell ${item.productName} in`} data-testid="edit-line-sold-unit">
+                        <button
+                          type="button"
+                          className={`chip-select${!item.soldUnit ? ' chip-select--on' : ''}`}
+                          aria-pressed={!item.soldUnit}
+                          onClick={() => setItemSoldUnit(item.key, null)}
+                        >
+                          Packs ({item.packSize} {item.stockUnit})
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip-select${item.soldUnit ? ' chip-select--on' : ''}`}
+                          aria-pressed={Boolean(item.soldUnit)}
+                          onClick={() => setItemSoldUnit(item.key, item.stockUnit ?? 'pcs')}
+                        >
+                          Loose {item.stockUnit}
+                        </button>
+                      </div>
+                    )}
+                    {item.soldUnit && <span className="edit-order__item-sub">Sold in loose {item.soldUnit} — price per {item.soldUnit}</span>}
                     {isAdmin ? (
                       <label className="edit-order__price">
                         <span className="edit-order__item-sub">Price ৳</span>
@@ -277,6 +347,22 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                     )}
                   </div>
                   <div className="edit-order__item-end">
+                    {item.soldUnit ? (
+                      <label className="manual-order-line__units">
+                        <input
+                          className="form-input"
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(item.key, { quantity: Math.max(1, Math.floor(Number(e.target.value) || 1)) })}
+                          aria-label={`Loose ${item.soldUnit} of ${item.productName}`}
+                          data-testid="edit-order-units"
+                        />
+                        <span className="edit-order__item-sub">{item.soldUnit}</span>
+                      </label>
+                    ) : (
                     <div className="checkout-cart__stepper">
                       <button
                         type="button"
@@ -298,6 +384,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                         +
                       </button>
                     </div>
+                    )}
                     <span className="edit-order__line-total">{formatTaka(item.unitPrice * item.quantity)}</span>
                     <button
                       type="button"
@@ -452,6 +539,24 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
           )}
         </form>
       )}
+      <ConfirmDialog
+        isOpen={pendingWarnings !== null}
+        title="Not in stock — sell anyway?"
+        message={`${(pendingWarnings ?? [])
+          .map((w) => {
+            const unit = w.unit ? ` ${w.unit}` : '';
+            return `${w.product_name}${w.variant_label ? ` (${w.variant_label})` : ''}: only ${w.available}${unit} in stock, ${w.requested}${unit} needed`;
+          })
+          .join('. ')}. The units that are there are taken; the missing ones are listed in Inventory → Sold without stock until the next lot arrives.`}
+        confirmLabel="Sell anyway"
+        cancelLabel="Go back"
+        danger={false}
+        onConfirm={async () => {
+          setPendingWarnings(null);
+          await save(true);
+        }}
+        onClose={() => setPendingWarnings(null)}
+      />
     </>
   );
 }

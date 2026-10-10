@@ -8434,6 +8434,19 @@ html.vt-fade::view-transition-new(root) {
   height: 32px;
 }
 
+/* Batch 39: a line sold in loose units — the units are typed. */
+.manual-order-line__units {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-order-line__units .form-input {
+  width: 84px;
+  padding: 4px 8px;
+  height: 32px;
+}
+
 /* ---------- Admin: Orders tab list ---------- */
 
 .admin-order-row {

@@ -101,6 +101,11 @@ async function cleanUp(): Promise<void> {
     });
   }
   await remove(admin.accessToken, `products?sku=like.${TEST_SKU_PREFIX}*`);
+  // Batch 39: the supplier list — the test supplier the lot form picks.
+  const suppliers = await select<{ id: string; name: string }[]>(admin.accessToken, 'suppliers?select=id,name');
+  for (const s of suppliers.data ?? []) {
+    if (s.name.startsWith(TEST_SUPPLIER)) await rpc(admin.accessToken, 'inventory_delete_supplier', { p_id: s.id });
+  }
   const team = await rpc<{ id: string; username: string }[]>(admin.accessToken, 'admin_team_list');
   for (const member of team.data ?? []) {
     if (member.username === STAFF_USERNAME) await callFunction(admin.accessToken, 'admin-team', { action: 'delete', userId: member.id });
@@ -257,12 +262,18 @@ test('Part 1: weight estimate — the database and the screens give the same ans
 
 /* ---------------------------------------------------------------- Part 2 */
 
-test('Part 2: landed cost — missing weight blocks, totals exact to the paisa, late bill re-shares, ledger matches; shop stock unchanged', async () => {
+test('Part 2: landed cost — missing weight guessed (Batch 39), totals exact to the paisa, late bill re-shares, ledger matches; shop stock unchanged', async () => {
   const stockBefore = await testStock();
 
-  const blocked = await rpc(admin.accessToken, 'inventory_save_lot', { p_lot: importLot(units, null) });
-  expect(blocked.ok).toBe(false);
-  expect(blocked.error).toContain(`Enter weight for: ${TEST_PREFIX} Toner`);
+  // Batch 39 Part 1 changed this rule on purpose: a missing weight no
+  // longer blocks saving; the row's weight is guessed from its price.
+  const noWeight = importLot(units, null);
+  const guessed = allocateLot(
+    noWeight.items.map((i) => ({ qty: i.qty, unitPriceForeign: i.unit_price_foreign, weightGrams: i.weight_grams, label: i.product_id })),
+    noWeight.costs.map((c) => ({ costType: c.cost_type as 'weight' | 'other', amountBdt: c.amount_bdt })),
+    noWeight.exchange_rate
+  );
+  expect(guessed.ok && guessed.rows.map((r) => r.weightGuessed)).toEqual([false, true, false]);
 
   const saved = await rpc<string>(admin.accessToken, 'inventory_save_lot', { p_lot: importLot(units, 333) });
   expect(saved.ok, saved.error ?? '').toBe(true);
@@ -341,23 +352,29 @@ test('Part 3: screens at phone width — lots list, new lot with preview, lot de
   await page.screenshot({ path: `${SHOTS}/01-lots-list.png`, fullPage: true });
 
   // New lot: two products, a weight bill, the toner has no weight yet.
+  // Batch 39: the supplier comes from the list; prices are in taka (no
+  // currency or exchange rate on the screen), so ৳800 is the old AUD 10 × 80.
+  const supplier = await rpc<string>(admin.accessToken, 'inventory_save_supplier', { p_name: `${TEST_SUPPLIER} UI`, p_country: 'Australia', p_note: '' });
+  expect(supplier.ok, supplier.error ?? '').toBe(true);
+  await page.reload();
   await page.getByTestId('inv-new-lot').click();
   await expect(page.getByRole('heading', { name: 'New lot' })).toBeVisible();
-  await page.getByLabel('Supplier').fill(`${TEST_SUPPLIER} UI`);
-  await page.getByLabel('Exchange rate').fill('80');
+  await page.getByLabel('Supplier', { exact: true }).selectOption(supplier.data!);
   const search = page.getByLabel('Search product to add');
   await search.fill(`${TEST_PREFIX} Cleanser`);
   await page.getByTestId('inv-picker').getByRole('button').first().click();
   await search.fill(`${TEST_PREFIX} Toner`);
   await page.getByTestId('inv-picker').getByRole('button').first().click();
   await page.getByLabel(`Pieces of ${TEST_PREFIX} Cleanser 236ml`).fill('2');
-  await page.getByLabel(`Buy price of ${TEST_PREFIX} Cleanser 236ml`).fill('10');
+  await page.getByLabel(`Buy price of ${TEST_PREFIX} Cleanser 236ml`).fill('800');
   await page.getByLabel(`Pieces of ${TEST_PREFIX} Toner`).fill('1');
-  await page.getByLabel(`Buy price of ${TEST_PREFIX} Toner`).fill('5');
+  await page.getByLabel(`Buy price of ${TEST_PREFIX} Toner`).fill('400');
   await page.getByTestId('inv-add-weight-cost').click();
   await page.getByLabel('Weight cost amount').fill('500');
-  await expect(page.getByTestId('inv-preview')).toContainText(`Enter weight for: ${TEST_PREFIX} Toner`);
+  // Batch 39: no weight → guessed from its price (no longer blocks).
+  await expect(page.getByTestId('inv-weight-guessed')).toBeVisible();
   await page.getByLabel(`Weight of ${TEST_PREFIX} Toner`).fill('100');
+  await expect(page.getByTestId('inv-weight-guessed')).toHaveCount(0);
   await expect(page.getByTestId('inv-allocated-ok')).toHaveText('Allocated total = lot total ✓');
   // 2 × 271 g and 1 × 100 g share ৳500: 542 / 642 → ৳422.12, 100 / 642 → ৳77.88.
   await expect(page.getByTestId('inv-item-calc').first()).toContainText('Buy ৳800.00 + weight ৳211.06 + other ৳0.00 = ৳1,011.06 per piece');
@@ -394,12 +411,13 @@ test('Part 3: screens at phone width — lots list, new lot with preview, lot de
   await noSideScroll(page);
   await page.screenshot({ path: `${SHOTS}/05-compare.png`, fullPage: true });
 
-  // Settings → Inventory mode: Off, and it can't be switched on.
+  // Settings → Inventory mode: Off; the switch itself is on the Inventory
+  // check screen (Batch 39), so here it only shows the state.
   await page.goto('/admin?tab=settings&sset=inventory');
   const sw = page.getByTestId('inventory-mode-switch');
   await expect(sw).toHaveAttribute('aria-checked', 'false');
   await expect(sw).toBeDisabled();
-  await expect(page.getByTestId('inventory-mode-note')).toHaveText('Available after Batch 39 (sales use lots).');
+  await expect(page.getByTestId('inventory-mode-note')).toHaveText('Off. Turn it On after your opening stock (L-000) is confirmed.');
   await page.screenshot({ path: `${SHOTS}/06-settings-inventory-mode.png`, fullPage: true });
 
   expect(await testStock()).toBe(stockBefore);
@@ -427,7 +445,7 @@ test('Part 4: opening stock — template, upload with mistakes, clean upload, co
   const sheets = (await readXlsxFile(templatePath)) as unknown as { sheet: string; data: unknown[][] }[];
   expect(sheets.map((s) => s.sheet)).toEqual(['How to fill', 'Opening stock']);
   const data = sheets[1].data;
-  expect(data[0]).toEqual(['product_key', 'sku', 'product_name', 'option/size', 'weight_g', 'source', 'buy_price_bdt', 'pieces', 'expiry']);
+  expect(data[0]).toEqual(['product_key', 'sku', 'product_name', 'option/size', 'weight_g', 'source', 'buy_price_bdt', 'pieces', 'expiry', 'stock_unit', 'pack_size', 'extra_units']); // Batch 39: 3 columns at the end
   const keys = data.slice(1).map((r) => r[0]);
   expect(keys).toEqual(expect.arrayContaining([cleanserKey, tonerKey, serumKey]));
   const serumRow = data.find((r) => r[0] === serumKey)!;

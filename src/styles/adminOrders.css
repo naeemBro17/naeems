@@ -490,12 +490,12 @@
   color: var(--adm-text-2);
 }
 
-.adm-ocard .adm-btn.adm-careful__btn {
+.adm-ocard.adm-careful .adm-btn.adm-careful__btn {
   background: transparent;
   white-space: nowrap;
 }
 
-.adm-ocard .adm-btn.adm-careful__btn--red {
+.adm-ocard.adm-careful .adm-btn.adm-careful__btn.adm-careful__btn--red {
   color: var(--adm-red-text);
   border-color: color-mix(in srgb, var(--adm-red) 55%, transparent);
 }

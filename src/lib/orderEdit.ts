@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { OrderWithDetails } from '../types';
 import type { PaymentSummary } from './payments';
 import { courierCod } from '../../supabase/functions/_shared/cod';
+import { parseStockWarning, type StockWarning } from './manualOrders';
 
 /* Batch 30 Part 2 — "Edit order" (any field, any stage). The sheet keeps a
    draft; this works out what actually changed and sends only that to
@@ -27,6 +28,14 @@ export interface EditDraftItem {
   originalUnitPrice: number;
   /** Tracked stock in the shop right now; null = not tracked / unknown. */
   stockQuantity: number | null;
+  /** Batch 39: sold in loose units ('pcs' / 'ml' / 'g'; quantity = units,
+   *  price per unit). Null / missing = whole packs. Chosen only for a line
+   *  added in this edit; a saved line keeps how it was sold. */
+  soldUnit?: 'pcs' | 'ml' | 'g' | null;
+  /** Units in one pack and the pack's list price (lines added in this edit). */
+  packSize?: number;
+  stockUnit?: 'pcs' | 'ml' | 'g';
+  packListPrice?: number;
 }
 
 export interface EditDraft {
@@ -71,6 +80,7 @@ export function draftFromOrder(order: OrderWithDetails, stockFor: (productId: st
       originalQuantity: item.quantity,
       originalUnitPrice: item.unit_price,
       stockQuantity: stockFor(item.product_id, item.variant_id),
+      ...(item.sold_unit ? { soldUnit: item.sold_unit } : {}),
     })),
   };
 }
@@ -87,6 +97,8 @@ export function stockProblems(draft: EditDraft, orderHoldsStock: boolean): Map<s
   const problems = new Map<string, number>();
   if (!orderHoldsStock) return problems;
   for (const item of draft.items) {
+    // Loose units are checked by the database (the shop's number is packs).
+    if (item.soldUnit) continue;
     const extra = item.quantity - item.originalQuantity;
     if (extra > 0 && item.stockQuantity !== null && extra > item.stockQuantity) {
       problems.set(item.key, Math.max(item.stockQuantity, 0) + item.originalQuantity);
@@ -123,8 +135,8 @@ export function buildOrderChanges(order: OrderWithDetails, draft: EditDraft): Re
           : { id: i.id, quantity: i.quantity };
       }
       return i.unitPrice !== i.listPrice
-        ? { product_id: i.productId, variant_id: i.variantId, quantity: i.quantity, unit_price: i.unitPrice }
-        : { product_id: i.productId, variant_id: i.variantId, quantity: i.quantity };
+        ? { product_id: i.productId, variant_id: i.variantId, quantity: i.quantity, unit_price: i.unitPrice, ...(i.soldUnit ? { sold_unit: i.soldUnit } : {}) }
+        : { product_id: i.productId, variant_id: i.variantId, quantity: i.quantity, ...(i.soldUnit ? { sold_unit: i.soldUnit } : {}) };
     });
   }
   return changes;
@@ -138,9 +150,18 @@ export function draftTotals(draft: EditDraft): { subtotal: number; deliveryFee: 
   return { subtotal, deliveryFee, discount, total: Math.max(subtotal + deliveryFee - discount, 0) };
 }
 
-export async function adminEditOrder(orderId: string, changes: Record<string, unknown>): Promise<{ error: string | null }> {
+/** Batch 39: while Inventory mode is On, an edit that needs more units than
+ *  the lots hold comes back with stockWarnings — the page asks "Not in
+ *  stock — sell anyway?" and sends the same changes again with
+ *  allow_short: true (the missing units become "Sold without stock"). */
+export async function adminEditOrder(
+  orderId: string,
+  changes: Record<string, unknown>
+): Promise<{ error: string | null; stockWarnings?: StockWarning[] }> {
   const { error } = await supabase.rpc('admin_edit_order', { p_order_id: orderId, p_changes: changes });
   if (!error) return { error: null };
+  const warnings = parseStockWarning(error.message ?? '');
+  if (warnings) return { error: 'Not in stock', stockWarnings: warnings };
   if (error.code === 'PGRST202') {
     return { error: 'Editing orders needs the Batch 30 database update. Ask Naeem to run migration-033.' };
   }

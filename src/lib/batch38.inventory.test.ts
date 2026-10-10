@@ -130,14 +130,19 @@ describe('Batch 38 landed cost allocation', () => {
     expect(later.ok && later.allocatedWeightPaisa).toBe(10001n);
   });
 
-  it('missing weight blocks saving when the lot has a weight cost; not when it has none', () => {
+  // Batch 39 Part 1 changed this rule on purpose: a missing weight no
+  // longer blocks saving — it is guessed from the price (batch39 tests).
+  it('missing weight no longer blocks saving: guessed from price, still exact', () => {
     const items = [
       { qty: 1, unitPriceForeign: 10, weightGrams: 50, label: 'Has weight' },
       { qty: 1, unitPriceForeign: 10, weightGrams: null, label: 'Toner' },
       { qty: 1, unitPriceForeign: 10, weightGrams: '', label: 'Serum' },
     ];
-    const blocked = allocateLot(items, [{ costType: 'weight', amountBdt: 50 }], 1);
-    expect(blocked).toEqual({ ok: false, error: 'Enter weight for: Toner, Serum' });
+    const guessed = allocateLot(items, [{ costType: 'weight', amountBdt: 50 }], 1);
+    expect(guessed.ok).toBe(true);
+    if (!guessed.ok) return;
+    expect(guessed.rows.map((r) => r.weightGuessed)).toEqual([false, true, true]);
+    expect(guessed.allocatedWeightPaisa).toBe(5000n);
     expect(allocateLot(items, [{ costType: 'other', amountBdt: 50 }], 1).ok).toBe(true);
   });
 
@@ -183,6 +188,9 @@ function unit(product_id: string, name: string, price: number, extra: Partial<St
     selling_price: price,
     lot_pieces_left: 0,
     lot_rows: 0,
+    stock_unit: 'pcs',
+    pack_size: 1,
+    latest_unit_cost: 0,
     ...extra,
   };
 }

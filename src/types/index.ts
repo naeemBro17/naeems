@@ -487,7 +487,8 @@ export interface PromoCodeFormData {
 
 export type OrderPaymentMethod = 'cod' | 'bkash' | 'cash' | 'due';
 export type OrderPaymentStatus = 'unpaid' | 'pending_verification' | 'paid';
-export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+/** 'returned' (Batch 39): sent, then came back; its goods are back in stock. */
+export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
 
 /** Where an order came from. 'web' is the only source the checkout flow
  *  itself ever writes; every other value is chosen by hand in the admin
@@ -605,6 +606,9 @@ export interface OrderItem {
   /** Why unit_price is below list_price (Batch 22) — null when they're equal. */
   reason: DiscountReason | null;
   reason_note: string | null;
+  /** Batch 39: 'pcs' / 'ml' / 'g' when sold in loose units (quantity = units,
+   *  prices per unit); null / missing = whole packs. */
+  sold_unit?: 'pcs' | 'ml' | 'g' | null;
 }
 
 /** One row of an order's status timeline. */

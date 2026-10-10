@@ -63,6 +63,9 @@ export function NeedsWeightView({ onBack }: { onBack: () => void }) {
   return (
     <section className="inv" aria-label="Needs weight">
       <AdminPageHeader title="Needs weight" onBack={onBack} />
+      <p className="inv-note-strong" data-testid="inv-weight-optional">
+        Optional. Products without a weight share the weight cost by price.
+      </p>
       <p className="inv-muted">
         The weight of one piece, in grams, used to share the weight (luggage / cargo) cost of a lot. Estimated from the size in the
         name; type a weight to replace the estimate. Leave it empty and tap Save to go back to the estimate.

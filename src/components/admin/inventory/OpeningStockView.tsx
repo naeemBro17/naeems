@@ -18,6 +18,7 @@ import {
   confirmPayload,
   openingLandedUnit,
   openingTotals,
+  openingUnits,
   readOpeningSheet,
   weightPercentFromHistory,
   type OpeningIssue,
@@ -345,7 +346,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
           )}
 
           <div className="inv-line">
-            <span>Total pieces</span>
+            <span>Total units (pieces)</span>
             <span data-testid="inv-total-pieces">{totals.pieces}</span>
           </div>
           <div className="inv-line">
@@ -366,11 +367,17 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
               <div key={`${r.key}-${r.expiry ?? ''}-${r.source}`} className="inv-item">
                 <span className="inv-item__name">{r.label}</span>
                 <span className="inv-muted">
-                  {r.pieces} pcs · {sourceLabel(r.source)} · expiry {monthYear(r.expiry)}
+                  {(r.packSize ?? 1) > 1
+                    ? `${r.pieces} packs${r.extraUnits ? ` + ${r.extraUnits} loose` : ''} = ${openingUnits(r)} units`
+                    : `${openingUnits(r)} pcs`}{' '}
+                  · {sourceLabel(r.source)} · expiry {monthYear(r.expiry)}
                   {r.weightG !== null ? ` · ${r.weightG} g` : ''}
                 </span>
                 <div className="inv-line">
-                  <span>Buy {taka2(Number(r.priceE4) / 10000)} → landed per piece</span>
+                  <span>
+                    Buy {taka2(Number(r.priceE4) / 10000)}
+                    {(r.packSize ?? 1) > 1 ? ' per pack' : ''} → landed per {(r.packSize ?? 1) > 1 ? 'unit' : 'piece'}
+                  </span>
                   <span>{percentOk && percentE3 !== null ? taka2(openingLandedUnit(r, percentE3)) : '—'}</span>
                 </div>
               </div>

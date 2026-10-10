@@ -7,6 +7,7 @@ import { codAmountFor, normalizeCollectMode } from '../../../supabase/functions/
 import { PAYMENT_METHOD_NAMES, summarizePayments, type OrderPayment } from '../payments';
 import { formatInvoicePhone } from './invoiceShop';
 import { amountInWords } from './amountInWords';
+import { lineNameWithUnits, orderItemCount, soldInUnits } from '../orderLines';
 
 /** Steadfast parcels are booked as their standard home delivery. */
 export const STEADFAST_DELIVERY_TYPE = 'Regular';
@@ -182,7 +183,7 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     orderNumber: order.order_number,
     invoiceNumber: `INV-${order.order_number}`,
     date: invoiceDate(order.created_at),
-    itemCount: order.items.reduce((n, item) => n + item.quantity, 0),
+    itemCount: orderItemCount(order.items),
     consignmentId: order.steadfast_consignment_id ? String(order.steadfast_consignment_id).trim() : null,
     trackingCode: order.steadfast_tracking_code,
     deliveryType: STEADFAST_DELIVERY_TYPE,
@@ -194,7 +195,18 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     },
     paymentLabel,
     lines: order.items.map((item) =>
-      lineOf(item.product_name, item.variant_label, item.list_price, Number(item.unit_price), item.quantity, Number(item.line_total))
+      // Batch 39: a line sold in loose units prints as one item,
+      // "Fish Oil 1000mg — 150 pcs", 1 × the line total.
+      soldInUnits(item)
+        ? lineOf(
+            lineNameWithUnits(item.variant_label ? `${item.product_name} (${item.variant_label})` : item.product_name, item),
+            null,
+            round2(Number(item.list_price) * item.quantity),
+            Number(item.line_total),
+            1,
+            Number(item.line_total)
+          )
+        : lineOf(item.product_name, item.variant_label, item.list_price, Number(item.unit_price), item.quantity, Number(item.line_total))
     ),
     subtotal: Number(order.subtotal),
     deliveryFee: Number(order.delivery_fee),

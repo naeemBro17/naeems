@@ -20,14 +20,22 @@ const GREY = '#E5E5E5';
 /** Builds the template file (two sheets: "How to fill", "Opening stock"). */
 export async function buildOpeningTemplate(units: readonly StockUnit[]): Promise<Blob> {
   const { default: writeXlsxFile } = await import('write-excel-file/browser');
+  // Grey = for reading only: the product key, and (Batch 39) the stock unit
+  // and pack size, which come from the product editor.
+  const readOnly = new Set(['product_key', 'stock_unit', 'pack_size'].map((c) => OPENING_COLUMNS.indexOf(c as (typeof OPENING_COLUMNS)[number])));
   const header = OPENING_COLUMNS.map((name, i) => ({
     value: name,
     fontWeight: 'bold' as const,
-    backgroundColor: i === 0 ? GREY : undefined,
+    backgroundColor: readOnly.has(i) ? GREY : undefined,
   }));
   const body = templateRows(units).map((row) =>
     row.map((cell, i) => {
       if (i === 0) return { value: String(cell ?? ''), backgroundColor: GREY, textColor: '#555555' };
+      if (readOnly.has(i) && cell !== null) {
+        return typeof cell === 'number'
+          ? { value: cell, type: Number, backgroundColor: GREY, textColor: '#555555' }
+          : { value: cell, type: String, backgroundColor: GREY, textColor: '#555555' };
+      }
       if (cell === null) return null;
       return typeof cell === 'number' ? { value: cell, type: Number } : { value: cell, type: String };
     })
@@ -41,7 +49,7 @@ export async function buildOpeningTemplate(units: readonly StockUnit[]): Promise
     {
       sheet: OPENING_SHEET_NAME,
       data: [header, ...body],
-      columns: [{ width: 40 }, { width: 14 }, { width: 50 }, { width: 18 }, { width: 10 }, { width: 11 }, { width: 14 }, { width: 9 }, { width: 10 }],
+      columns: [{ width: 40 }, { width: 14 }, { width: 50 }, { width: 18 }, { width: 10 }, { width: 11 }, { width: 14 }, { width: 9 }, { width: 10 }, { width: 11 }, { width: 10 }, { width: 12 }],
       stickyRowsCount: 1,
     },
   ]).toBlob();

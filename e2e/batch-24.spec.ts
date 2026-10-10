@@ -326,10 +326,14 @@ test('Deleting an order restores its stock', async ({ page }) => {
 
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${order.id}`);
-  await page.getByRole('button', { name: 'Delete order' }).click();
+  // Batch 39 Part 5.3: the Careful actions flow (fix 1.38.1) — "Delete…"
+  // only opens the box, which asks for the order number to be typed.
+  await page.getByTestId('careful-delete').click();
   const dialog = page.getByRole('dialog', { name: `Delete order ${order.orderNumber}?` });
   await expect(dialog).toContainText('Stock for the items will be put back');
-  await dialog.getByRole('button', { name: 'Delete order' }).click();
+  await expect(dialog.getByRole('button', { name: 'Delete order', exact: true })).toBeDisabled();
+  await dialog.getByTestId('delete-orders-input').fill(order.orderNumber.replace(/\D/g, ''));
+  await dialog.getByRole('button', { name: 'Delete order', exact: true }).click();
   await expect(page.getByText(`Order ${order.orderNumber} deleted`)).toBeVisible({ timeout: 15_000 });
 
   expect(await productStock(product.id)).toBe(before);
@@ -357,9 +361,12 @@ test('Safety Lock: a shipped order cannot be deleted until the lock is off, and 
   // The order screen shows why.
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${shipped.id}`);
-  await expect(page.getByText("Locked: turn on 'Allow deleting orders at any stage' in Safety Locks.")).toBeVisible({
+  // Fix 1.38.1 (Careful actions): the Delete row explains it, and its
+  // button stays off while the lock is on.
+  await expect(page.getByText("Booked or sent orders need the Safety Lock ('Allow deleting orders at any stage').")).toBeVisible({
     timeout: 15_000,
   });
+  await expect(page.getByTestId('careful-delete')).toBeDisabled();
 
   // Turning it off needs a fresh password sign-in (a short test window of
   // 6 seconds instead of 15 minutes).
@@ -390,22 +397,28 @@ test('Safety Lock: a shipped order cannot be deleted until the lock is off, and 
   expect((log.data ?? []).map((r) => r.action)).toContain('safety.delete_lock_off');
 });
 
-test('A moderator with "Delete early orders" can delete a Pending order but not a Confirmed one', async () => {
+test('A moderator with "Delete early orders" can delete a Pending or Confirmed (not booked) order but not a sent one', async () => {
+  // Fix 1.38.1 changed the rule on purpose: not booked and not sent = early
+  // (Pending or Confirmed); a sent order still needs the Safety Lock.
   await setModerator(['view_orders', 'delete_early_orders']);
   const mod = await moderatorSession();
   const pending = await newOrder();
   const confirmed = await newOrder();
   await setStatus(confirmed.id, 'confirmed');
+  const sent = await newOrder();
+  await setStatus(sent.id, 'confirmed');
+  await setStatus(sent.id, 'shipped');
 
   const res = await rpc<{ order_id: string; deleted: boolean; reason: string | null }[]>(
     mod.accessToken,
     'admin_delete_orders',
-    { p_order_ids: [pending.id, confirmed.id] }
+    { p_order_ids: [pending.id, confirmed.id, sent.id] }
   );
   expect(res.ok, res.error ?? '').toBe(true);
   const byId = new Map((res.data ?? []).map((r) => [r.order_id, r]));
   expect(byId.get(pending.id)?.deleted).toBe(true);
-  expect(byId.get(confirmed.id)?.deleted).toBe(false);
+  expect(byId.get(confirmed.id)?.deleted).toBe(true);
+  expect(byId.get(sent.id)?.deleted).toBe(false);
 });
 
 test('Price edit recalculates the total; a moderator cannot do it', async ({ page }) => {

@@ -78,7 +78,7 @@ export function stepIndexOf(status: TrackStatus): number {
 }
 
 /** The order's own status, as saved (never renamed in the database). */
-export type SavedOrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+export type SavedOrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
 
 /** The admin name for a saved status — for history lines and toasts. */
 export const SAVED_STATUS_NAME: Record<SavedOrderStatus, string> = {
@@ -87,6 +87,7 @@ export const SAVED_STATUS_NAME: Record<SavedOrderStatus, string> = {
   shipped: 'In transit',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  returned: 'Returned',
 };
 
 /** Something off the normal path, shown as a note — never a new status. */
@@ -139,6 +140,8 @@ export function trackOrder(input: TrackInput): TrackResult {
   });
 
   if (input.status === 'cancelled') return result('cancelled');
+  // Batch 39: marked Returned on the site (its goods are back in stock).
+  if (input.status === 'returned') return result('returned');
   if (courier === 'delivered') return result('delivered');
   if (courier === 'delivered_approval_pending') return result('delivered', 'awaiting_confirmation');
   if (courier.startsWith('partial_delivered')) return result('delivered', 'partly_delivered');

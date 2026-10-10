@@ -285,14 +285,14 @@ test('Part 3: the one main action follows the status; every other action is stil
   const order = await newOrder();
   let el = await openAdminOrderPage(page, order.orderNumber);
   await expect(el.getByRole('button', { name: 'Confirm order' })).toBeVisible();
-  for (const name of ['Invoice', 'Cancel order', 'Copy address', 'Call', 'WhatsApp', 'Profile']) {
+  for (const name of ['Print', 'Download', 'Share', 'Cancel…', 'Copy address', 'Call', 'WhatsApp', 'Profile']) {
     await expect(el.getByRole(name === 'Call' || name === 'WhatsApp' ? 'link' : 'button', { name, exact: true }).first()).toBeVisible();
   }
   await expect(el.getByTestId('edit-order')).toBeVisible();
   await el.getByRole('button', { name: 'Confirm order' }).click();
   await expect(el.getByTestId('order-step-label')).toHaveText('Confirmed', { timeout: 15_000 });
   await expect(el.getByRole('button', { name: 'Book with Steadfast' })).toBeVisible();
-  await expect(el.getByRole('button', { name: 'Mark In transit (other courier)' })).toBeVisible();
+  await expect(el.getByTestId('careful-transit')).toBeVisible();
 
   // History is folded until tapped.
   await expect(el.locator('.order-admin-detail__history')).toHaveCount(0);
@@ -304,9 +304,11 @@ test('Part 3: the one main action follows the status; every other action is stil
   await mockSteadfast(page, { tracking: { courierStatus: 'pending', events: [CREATED, AT_HUB, RIDER] } });
   el = await openAdminOrderPage(page, booked.orderNumber);
   await expect(el.getByTestId('order-step-label')).toHaveText('Out for delivery', { timeout: 15_000 });
-  await expect(el.locator('.adm-btn--primary')).toHaveCount(0);
+  // Fix 1.38.1: with no main action, the invoice card's Print is the one orange button.
+  await expect(el.locator('.adm-btn--primary')).toHaveCount(1);
+  await expect(el.getByTestId('invoice-card').locator('.adm-btn--primary')).toHaveCount(1);
   await expect(el.getByRole('button', { name: 'Check delivery status' })).toBeVisible();
-  await expect(el.getByRole('button', { name: 'Mark Delivered' })).toBeVisible();
+  await expect(el.getByTestId('careful-deliver')).toBeVisible();
 
   // The pen opens the edit page.
   await el.getByTestId('edit-order').click();
