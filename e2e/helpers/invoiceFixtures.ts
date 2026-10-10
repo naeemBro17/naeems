@@ -141,3 +141,21 @@ export function invoiceCases(): Record<string, { order: OrderWithDetails; paymen
     notBooked: { order: notBooked, payments: [] },
   };
 }
+
+/** Fix 1.38.1: an order with `count` one-line items (3, 12 and 20 in the tests). */
+export function sizedOrder(count: number): OrderWithDetails {
+  const names = [
+    'ILLIYOON Ceramide Ato Soothing Gel 30ml',
+    'The Ordinary Niacinamide 10% + Zinc 1% 30ml',
+    'CeraVe Foaming Cleanser Eco-Recharge Refill 473mL',
+    'La Roche-Posay Anthelios UVMune 400 Fluid 50ml',
+    'Beauty of Joseon Relief Sun 50ml',
+    'COSRX Advanced Snail 96 Mucin Power Essence 100ml',
+    'Cancer Council Ultra Sunscreen SPF50+ 110ml',
+    'Cetaphil Gentle Skin Cleanser 500ml',
+    'Aveeno Baby Daily Moisture Lotion 227ml',
+    'Bioderma Sensibio H2O Micellar Water 250ml',
+  ];
+  const items = Array.from({ length: count }, (_, i) => item(`${names[i % names.length]}${i >= names.length ? ` (${i + 1})` : ''}`, 749 + i * 50));
+  return mockOrder({ order_number: `NM-28${String(count).padStart(2, '0')}`, items });
+}

@@ -114,4 +114,7 @@ export function decodeRegion(
 
 /** Where the label's barcode and the community QR are drawn (points). */
 export const BARCODE_REGION = { x: 20, top: 140, width: 270, height: 56 };
-export const QR_REGION = { x: 400, top: 630, width: 175, height: 128 };
+// Fix 1.38.1: the community box follows the content (big box on the right
+// for short orders, small box on the left for long ones), so search the
+// whole inside part below the fold.
+export const QR_REGION = { x: 20, top: 290, width: 555, height: 480 };

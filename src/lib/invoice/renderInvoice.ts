@@ -42,11 +42,15 @@ const H = 841.89;
 const M = 40;
 const R = W - M;
 const FOLD_1 = H / 3;
-const FOLD_2 = (2 * H) / 3;
 
 const BOX_X = 311;
-const COMMUNITY_TOP = 640;
 const COMMUNITY_H = 108;
+const COMMUNITY_GAP = 18;
+// Fix 1.38.1: more than this many items → tighter rows and the small
+// community box beside the totals, so about 14 items still fit on page 1.
+const COMPACT_AFTER = 8;
+const SMALL_QR = 58;
+const SMALL_BOX_H = SMALL_QR + 12;
 const FOOTER_RULE = 770;
 const CONT_TABLE_TOP = 80;
 
@@ -64,6 +68,7 @@ const ROW_LINE = 12;
 // Totals block.
 const TOTALS_X = 367;
 const TOTAL_STEP = 14.5;
+const COMPACT_TOTAL_STEP = 13;
 
 function hex(color: string): RGB {
   const n = parseInt(color.slice(1), 16);
@@ -399,13 +404,14 @@ function drawLabel(page: PDFPage, w: Writer, inv: InvoiceData, shop: InvoiceShop
     align: 'right',
   });
 
-  // Fold guides.
-  for (const top of [FOLD_1, FOLD_2]) hline(page, 14, W - 14, top, 0.6, FOLD, [2.5, 2.5]);
+  // The one fold guide, under the label. Nothing is printed on or near it.
+  hline(page, 14, W - 14, FOLD_1, 0.6, FOLD, [2.5, 2.5]);
 }
 
 /** Sold by / Billed to / Invoice. Returns where the block ends. */
 function drawParties(page: PDFPage, w: Writer, inv: InvoiceData, shop: InvoiceShop): number {
-  const top = 304;
+  // A clear gap below the fold line.
+  const top = Math.round(FOLD_1) + 24;
   const col2 = 221;
   const col3 = 391;
   const col2W = col3 - col2 - 14;
@@ -469,12 +475,16 @@ interface RowLayout {
   height: number;
 }
 
-function drawRow(page: PDFPage, w: Writer, inv: InvoiceData, row: RowLayout, top: number) {
+function rowHeight(lineCount: number, compact: boolean): number {
+  return compact ? 7 + lineCount * 11 : 13 + lineCount * ROW_LINE;
+}
+
+function drawRow(page: PDFPage, w: Writer, inv: InvoiceData, row: RowLayout, top: number, compact: boolean) {
   const line = inv.lines[row.index];
-  const base = top + 16;
+  const base = top + (compact ? 12.5 : 16);
   const cell: TextOptions = { size: 9 };
   w.draw(page, String(row.index + 1), COL_NUM, base, { ...cell, color: GREY });
-  row.lines.forEach((text, i) => w.draw(page, text, COL_ITEM, base + i * ROW_LINE, cell));
+  row.lines.forEach((text, i) => w.draw(page, text, COL_ITEM, base + i * (compact ? 11 : ROW_LINE), cell));
   w.draw(page, invoiceMoney(line.unitPrice), COL_UNIT, base, { ...cell, align: 'right' });
   w.draw(page, String(line.quantity), COL_QTY, base, { ...cell, align: 'right' });
   w.draw(page, line.discount > 0 ? `−${invoiceMoney(line.discount)}` : invoiceMoney(0), COL_DISC, base, {
@@ -504,33 +514,70 @@ function totalsRows(inv: InvoiceData): TotalsRow[] {
   return rows;
 }
 
-function tailHeight(inv: InvoiceData): number {
-  return totalsRows(inv).length * TOTAL_STEP + 30;
+const WORDS_W = TOTALS_X - M - 24;
+
+function wordsLines(w: Writer, inv: InvoiceData): string[] {
+  return w.wrap(inv.amountInWords, WORDS_W, { size: 10, weight: 'semibold' }, 3);
 }
 
-function drawTail(page: PDFPage, w: Writer, inv: InvoiceData, top: number) {
+function totalsHeight(inv: InvoiceData, compact: boolean): number {
+  return totalsRows(inv).length * (compact ? COMPACT_TOTAL_STEP : TOTAL_STEP) + 30;
+}
+
+/** Where the small community box starts, measured from the tail's top. */
+function smallBoxOffset(w: Writer, inv: InvoiceData): number {
+  return 10 + 15 + (wordsLines(w, inv).length - 1) * 13 + 12;
+}
+
+/** Totals + amount in words (+ the small community box when compact). */
+function tailHeight(w: Writer, inv: InvoiceData, shop: InvoiceShop, compact: boolean): number {
+  const totals = totalsHeight(inv, compact);
+  if (!compact || !shop.community.show) return totals;
+  return Math.max(totals, smallBoxOffset(w, inv) + SMALL_BOX_H);
+}
+
+function drawTail(page: PDFPage, w: Writer, inv: InvoiceData, shop: InvoiceShop, top: number, compact: boolean) {
   const rows = totalsRows(inv);
+  const step = compact ? COMPACT_TOTAL_STEP : TOTAL_STEP;
   let y = top + 10;
   for (const r of rows) {
     const labelW = TOTALS_X;
     w.draw(page, w.ellipsize(r.label, COL_AMOUNT - labelW - 60, { size: 9.5 }), labelW, y, { size: 9.5, color: GREY });
     w.draw(page, r.value, COL_AMOUNT, y, { size: 9.5, align: 'right' });
-    y += TOTAL_STEP;
+    y += step;
   }
   const ruleTop = y - 6;
   hline(page, TOTALS_X, R, ruleTop, 1, INK);
   w.draw(page, inv.finalRow.label, TOTALS_X, ruleTop + 18, { size: 11, weight: 'bold' });
   w.draw(page, invoiceMoney(inv.finalRow.amount), COL_AMOUNT, ruleTop + 18, { size: 13, weight: 'extrabold', align: 'right' });
 
-  const wordsTop = top + Math.max(10, tailHeight(inv) / 2 - 12);
+  const smallBox = compact && shop.community.show;
+  const wordsTop = top + (smallBox ? 10 : Math.max(10, totalsHeight(inv, compact) / 2 - 12));
   w.draw(page, 'AMOUNT IN WORDS', M, wordsTop, SMALL_LABEL);
-  w.wrap(inv.amountInWords, TOTALS_X - M - 24, { size: 10, weight: 'semibold' }, 3).forEach((line, i) =>
-    w.draw(page, line, M, wordsTop + 15 + i * 13, { size: 10, weight: 'semibold' })
-  );
+  wordsLines(w, inv).forEach((line, i) => w.draw(page, line, M, wordsTop + 15 + i * 13, { size: 10, weight: 'semibold' }));
+  if (smallBox) drawSmallCommunity(page, w, shop, top + smallBoxOffset(w, inv));
 }
 
-function drawCommunity(page: PDFPage, w: Writer, shop: InvoiceShop) {
-  const top = COMMUNITY_TOP;
+/** The small community box (long orders): QR left, two lines right. */
+function drawSmallCommunity(page: PDFPage, w: Writer, shop: InvoiceShop, top: number) {
+  roundedRect(page, M, top, WORDS_W, SMALL_BOX_H, 8, { fill: PANEL });
+  const qrX = M + 8;
+  const qrTop = top + 6;
+  roundedRect(page, qrX - 2, qrTop - 2, SMALL_QR + 4, SMALL_QR + 4, 3, { fill: WHITE });
+  qrCode(page, shop.community.link, qrX, qrTop, SMALL_QR);
+  const tx = qrX + SMALL_QR + 12;
+  const maxW = M + WORDS_W - 10 - tx;
+  const lines = w.wrap(shop.community.line2, maxW, { size: 7.5 }, 2);
+  let y = top + SMALL_BOX_H / 2 - (lines.length > 1 ? 7 : 2);
+  w.draw(page, w.ellipsize(shop.community.title, maxW, { size: 9, weight: 'bold' }), tx, y, { size: 9, weight: 'bold' });
+  for (const line of lines) {
+    y += 11;
+    w.draw(page, line, tx, y, { size: 7.5, color: GREY });
+  }
+}
+
+/** The big community box, right after the totals (short orders). */
+function drawCommunity(page: PDFPage, w: Writer, shop: InvoiceShop, top: number) {
   roundedRect(page, M, top, R - M, COMMUNITY_H, 10, { fill: PANEL });
   const qrSize = 76;
   const qrX = R - 18 - qrSize;
@@ -570,13 +617,13 @@ interface PagePlan {
 
 /** Splits one invoice into pages: rows while they fit, totals, community
  *  and footer on the last page only. */
-function planPages(w: Writer, inv: InvoiceData, firstTableTop: number, shop: InvoiceShop): PagePlan[] {
+function planPages(w: Writer, inv: InvoiceData, firstTableTop: number, shop: InvoiceShop, compact: boolean): PagePlan[] {
   const rows: RowLayout[] = inv.lines.map((line, index) => {
     const lines = w.wrap(line.name, ITEM_MAX_W, { size: 9 });
-    return { index, lines, height: 13 + lines.length * ROW_LINE };
+    return { index, lines, height: rowHeight(lines.length, compact) };
   });
   const rowLimit = 790;
-  const tailLimit = (shop.community.show ? COMMUNITY_TOP : FOOTER_RULE) - 12;
+  const tailLimit = FOOTER_RULE - 12;
   const pages: PagePlan[] = [{ rows: [], tail: false }];
   let y = firstTableTop + TABLE_HEAD_H;
   for (const row of rows) {
@@ -587,7 +634,7 @@ function planPages(w: Writer, inv: InvoiceData, firstTableTop: number, shop: Inv
     pages[pages.length - 1].rows.push(row);
     y += row.height;
   }
-  const tailH = tailHeight(inv) + 14;
+  const tailH = tailHeight(w, inv, shop, compact) + 4 + (shop.community.show && !compact ? COMMUNITY_GAP + COMMUNITY_H : 0);
   if (y + tailH > tailLimit) {
     const last = pages[pages.length - 1];
     const moved = last.rows.length >= 2 ? [last.rows.pop() as RowLayout] : [];
@@ -602,7 +649,8 @@ function drawInvoice(doc: PDFDocument, w: Writer, inv: InvoiceData, shop: Invoic
   const first = doc.addPage([W, H]);
   drawLabel(first, w, inv, shop);
   const firstTableTop = drawParties(first, w, inv, shop);
-  const plan = planPages(w, inv, firstTableTop, shop);
+  const compact = inv.lines.length > COMPACT_AFTER;
+  const plan = planPages(w, inv, firstTableTop, shop, compact);
   plan.forEach((pagePlan, i) => {
     const page = i === 0 ? first : doc.addPage([W, H]);
     if (i > 0) drawContinuationHead(page, w, inv, shop, i + 1, plan.length);
@@ -611,13 +659,15 @@ function drawInvoice(doc: PDFDocument, w: Writer, inv: InvoiceData, shop: Invoic
       drawTableHead(page, w, y);
       y += TABLE_HEAD_H;
       for (const row of pagePlan.rows) {
-        drawRow(page, w, inv, row, y);
+        drawRow(page, w, inv, row, y, compact);
         y += row.height;
       }
     }
     if (pagePlan.tail) {
-      drawTail(page, w, inv, y + 4);
-      if (shop.community.show) drawCommunity(page, w, shop);
+      // Sections follow each other; only the footer is pinned to the bottom.
+      const tailTop = y + 4;
+      drawTail(page, w, inv, shop, tailTop, compact);
+      if (shop.community.show && !compact) drawCommunity(page, w, shop, tailTop + tailHeight(w, inv, shop, compact) + COMMUNITY_GAP);
       drawFooter(page, w, shop);
     } else {
       w.draw(page, `Continued on page ${i + 2} of ${plan.length}`, R, 812, { size: 7.5, color: GREY, align: 'right' });
