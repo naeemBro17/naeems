@@ -15,8 +15,8 @@ export const BULK_DELETE_WORD = 'DELETE';
 /**
  * The "are you sure" step before orders are deleted (Batch 24 Part 4).
  * Plain English, a warning for every parcel already booked on Steadfast
- * (deleting here does not cancel it there), and for more than one order the
- * admin must type DELETE.
+ * (deleting here does not cancel it there), and the admin types the order
+ * number (one order) or DELETE (several) before the button turns on.
  */
 export function DeleteOrdersDialog({ orders, isOpen, onConfirm, onClose }: DeleteOrdersDialogProps) {
   const [typed, setTyped] = useState('');
@@ -27,8 +27,10 @@ export function DeleteOrdersDialog({ orders, isOpen, onConfirm, onClose }: Delet
   }, [isOpen]);
 
   const booked = orders.filter((o) => o.steadfast_consignment_id);
-  const needsTyping = orders.length > 1;
-  const canConfirm = !needsTyping || typed.trim() === BULK_DELETE_WORD;
+  // Fix (1.38.1): one order → type its number's digits (NM-2851 → 2851);
+  // several → type DELETE. Nothing is deleted on one tap.
+  const word = orders.length === 1 ? orders[0].order_number.replace(/D/g, '') : BULK_DELETE_WORD;
+  const canConfirm = typed.trim() === word;
   const restoresStock = orders.some((o) => o.status !== 'cancelled');
 
   const handleConfirm = async () => {
@@ -57,22 +59,22 @@ export function DeleteOrdersDialog({ orders, isOpen, onConfirm, onClose }: Delet
           here does NOT cancel it on Steadfast. Cancel it on the Steadfast portal too.
         </p>
       ))}
-      {needsTyping && (
-        <div className="form-field delete-orders__type">
-          <label className="form-label" htmlFor="delete-orders-confirm">
-            Type {BULK_DELETE_WORD} to confirm
-          </label>
-          <input
-            id="delete-orders-confirm"
-            className="form-input"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            autoCapitalize="characters"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      )}
+      <div className="form-field delete-orders__type">
+        <label className="form-label" htmlFor="delete-orders-confirm">
+          Type {word} to confirm
+        </label>
+        <input
+          id="delete-orders-confirm"
+          className="form-input"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          autoCapitalize="characters"
+          inputMode={orders.length === 1 ? 'numeric' : 'text'}
+          autoComplete="off"
+          spellCheck={false}
+          data-testid="delete-orders-input"
+        />
+      </div>
       <div className="confirm-actions">
         <button type="button" className="button button--secondary" onClick={onClose}>
           Cancel

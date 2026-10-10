@@ -75,3 +75,16 @@ export async function recordInvoicePrints(orderIds: string[]): Promise<{ ok: boo
   }
   return { ok: true, error: null };
 }
+
+/** When this one order's invoice was last printed; null = never (or before migration-039). */
+export async function fetchInvoicePrintedAt(orderId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('order_invoice_prints')
+    .select('printed_at')
+    .eq('order_id', orderId)
+    .order('printed_at', { ascending: false })
+    .limit(1);
+  if (error) return null;
+  const rows = (data ?? []) as { printed_at: string }[];
+  return rows[0]?.printed_at ?? null;
+}

@@ -719,11 +719,24 @@ export async function findCustomerMatches(phone: string): Promise<{
    Batch 24 — deleting orders, price edits, order number format
    ============================================================ */
 
-/** An order anyone allowed to delete orders may delete: Pending, or
- *  Cancelled and never booked on Steadfast. Mirrors admin_delete_orders()
- *  (migration-030), which is what actually decides. */
+/** An order anyone allowed to delete orders may delete without the Safety
+ *  Lock: never booked on Steadfast and not sent (Pending, Confirmed or
+ *  Cancelled). Mirrors admin_delete_orders() (migration-041), which is what
+ *  actually decides. */
 export function isEarlyStageOrder(order: Pick<Order, 'status' | 'steadfast_consignment_id'>): boolean {
-  return order.status === 'pending' || (order.status === 'cancelled' && !order.steadfast_consignment_id);
+  return !order.steadfast_consignment_id && (order.status === 'pending' || order.status === 'confirmed' || order.status === 'cancelled');
+}
+
+/** Puts a cancelled order back to the status it had before the cancel and
+ *  takes its stock again — see admin_reopen_order() (migration-041). The
+ *  database refuses when stock is short ("Only 0 in stock for …"). */
+export async function adminReopenOrder(orderId: string): Promise<{ status: Order['status'] | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_reopen_order', { p_order_id: orderId });
+  if (error) {
+    const notReady = error.code === 'PGRST202' || error.code === '42883';
+    return { status: null, error: notReady ? 'Reopen is not ready yet (the database addition is not applied).' : error.message };
+  }
+  return { status: data as Order['status'], error: null };
 }
 
 /** Deletes orders — see admin_delete_orders(): early-stage orders for the
