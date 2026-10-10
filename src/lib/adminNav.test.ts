@@ -19,7 +19,7 @@ describe('admin navigation', () => {
     const groups = groupNavItems(visibleNavItems(superAdmin)).map((g) => [g.group.label, g.items.map((i) => i.label)]);
     expect(groups).toEqual([
       ['', ['Home', 'Orders', 'Steadfast payouts', 'Customers']],
-      ['CATALOG', ['Products', 'Categories', 'Brands', 'Import / Export']],
+      ['CATALOG', ['Products', 'Inventory', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Wholesalers', 'Reviews']],
       ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
       ['ADMIN', ['Team', 'Activity Log', 'Settings']],
@@ -31,7 +31,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'payouts', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
+      'payouts', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
     ]);
   });
 

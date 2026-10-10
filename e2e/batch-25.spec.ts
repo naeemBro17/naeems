@@ -197,7 +197,7 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
   expect(await page.locator('.adm-sidebar__heading').allInnerTexts()).toEqual(['CATALOG', 'SALES', 'STORE DESIGN', 'ADMIN']);
   expect((await page.locator('.adm-sidebar__label').allInnerTexts()).map((t) => t.trim())).toEqual([
     'Home', 'Orders', 'Steadfast payouts', 'Customers',
-    'Products', 'Categories', 'Brands', 'Import / Export',
+    'Products', 'Inventory', 'Categories', 'Brands', 'Import / Export',
     'Promo Codes', 'Wholesalers', 'Reviews',
     'Bento Tiles', 'Banner & Texts',
     'Team', 'Activity Log', 'Settings',
