@@ -486,7 +486,8 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
     'products_view?select=id,name,image_urls,image_urls_thumb&is_active=eq.true'
   );
   const all = rows.data ?? [];
-  const withSmall = all.find((p) => (p.image_urls_thumb?.[0] ?? '').includes('/thumb/'));
+  // Batch 40: a small copy is in card/ (480 px) or, older, thumb/.
+  const withSmall = all.find((p) => /\/(thumb|card)\//.test(p.image_urls_thumb?.[0] ?? ''));
   // Batch 32: only a product whose photo file really exists (a missing
   // file shows the placeholder, with no photo to compare).
   let withoutSmall: (typeof all)[number] | undefined;
@@ -509,19 +510,19 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
     const card = page.locator('.product-card', { hasText: item.name }).first();
     await card.scrollIntoViewIfNeeded();
     const src = (await card.locator('img').first().getAttribute('src')) ?? '';
-    if (expectSmall) expect(src).toContain('/thumb/');
+    if (expectSmall) expect(src).toMatch(/\/(thumb|card)\//);
     else expect(src.split('?')[0]).toBe(item.image_urls[0].split('?')[0]);
   }
 });
 
-test('Part 8: "Generate small images" covers a product without a small copy (storage and saves mocked)', async ({ page }) => {
+test('Part 8 / Batch 40: "Make images light" covers a product without a card copy (storage and saves mocked)', async ({ page }) => {
   test.setTimeout(180_000);
   const rows = await select<{ id: string; image_urls: string[]; image_urls_thumb: string[] | null }[]>(
     null,
     'products_view?select=id,image_urls,image_urls_thumb'
   );
-  const needing = (rows.data ?? []).filter((p) => p.image_urls?.length && (p.image_urls ?? []).some((u, i) => !(p.image_urls_thumb?.[i] ?? '').includes('/thumb/')));
-  test.skip(needing.length === 0, 'Every product already has small copies — nothing for the tool to do.');
+  const needing = (rows.data ?? []).filter((p) => p.image_urls?.length && (p.image_urls ?? []).some((u, i) => !(p.image_urls_thumb?.[i] ?? '').includes('/card/')));
+  test.skip(needing.length === 0, 'Every product already has card copies — nothing for the tool to do.');
 
   const icon = readFileSync('public/icons/icon-192.png');
   const uploads: string[] = [];
@@ -537,6 +538,11 @@ test('Part 8: "Generate small images" covers a product without a small copy (sto
     }
     return route.fallback();
   });
+  // Batch 40: the tool's second step (one-year cache on every stored photo)
+  // finds nothing to do here — that step is checked in batch-40.spec.ts.
+  await page.route(/\/storage\/v1\/object\/list\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+  );
   // Neither do saves to products / categories / variants.
   await page.route(/\/rest\/v1\/(products|categories|product_variants)\?/, async (route) => {
     if (route.request().method() !== 'PATCH') return route.fallback();
@@ -551,12 +557,12 @@ test('Part 8: "Generate small images" covers a product without a small copy (sto
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=products');
   await expect(page.getByTestId('product-row').first()).toBeVisible({ timeout: 20_000 });
-  const generate = page.getByRole('button', { name: 'Generate small images' }).first();
+  const generate = page.getByRole('button', { name: 'Make images light' }).first();
   if (await generate.isVisible()) {
     await generate.click();
   } else {
     await page.getByRole('button', { name: /More actions for Products/ }).click();
-    await page.getByRole('menuitem', { name: 'Generate small images' }).click();
+    await page.getByRole('menuitem', { name: 'Make images light' }).click();
   }
   await expect(page.getByText(/Done: /)).toBeVisible({ timeout: 150_000 });
 
@@ -564,6 +570,7 @@ test('Part 8: "Generate small images" covers a product without a small copy (sto
   const saved = productSaves.find((s) => s.id === target.id);
   expect(saved, 'the product without a small copy was processed').toBeTruthy();
   expect(saved!.thumbs.length).toBe(target.image_urls.length);
-  for (const t of saved!.thumbs) expect(t).toMatch(/\/thumb\/.+\?v=\d+$/);
-  expect(uploads.some((u) => u.includes('/thumb/'))).toBe(true);
+  // Batch 40: the 480 px card copy, under the photo's own name, no "?v=".
+  for (const t of saved!.thumbs) expect(t).toMatch(/\/card\/[^?]+\.webp$/);
+  expect(uploads.some((u) => u.includes('/card/'))).toBe(true);
 });

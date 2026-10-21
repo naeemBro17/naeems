@@ -8,7 +8,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase, STORAGE_BUCKET } from '../../lib/supabase';
+import { supabase, uploadAdminImage } from '../../lib/supabase';
 import { clearCache } from '../../lib/cache';
 import {
   BANNER_SLIDES_KEY,
@@ -16,7 +16,7 @@ import {
   emptyBannerSlide,
   serializeBannerSlides,
 } from '../../lib/bannerSlides';
-import { resizeImage, isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
+import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProducts, type TextSettingKey } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -152,19 +152,8 @@ export function ExpertSettingsPanel() {
     try {
       let finalPhotoUrl = storedPhotoUrl;
       if (pendingFile) {
-        const blob = await resizeImage(pendingFile);
-        const { error } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(EXPERT_PHOTO_PATH, blob, {
-            contentType: 'image/webp',
-            upsert: true,
-          });
-        if (error) throw error;
-        const { data } = supabase.storage
-          .from(STORAGE_BUCKET)
-          .getPublicUrl(EXPERT_PHOTO_PATH);
-        // Cache-bust so the new photo shows despite the stable storage path.
-        finalPhotoUrl = `${data.publicUrl}?v=${Date.now()}`;
+        // Batch 40: a new file name for every upload (uploadAdminImage).
+        finalPhotoUrl = await uploadAdminImage(EXPERT_PHOTO_PATH, pendingFile);
       } else if (photoRemoved) {
         finalPhotoUrl = '';
       }

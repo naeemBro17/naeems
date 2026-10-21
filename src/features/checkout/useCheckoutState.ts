@@ -16,6 +16,7 @@ import {
 } from 'react';
 import { useCart } from '../../contexts/CartContext';
 import { computePromoDiscount } from '../../lib/promoCodes';
+import { smallImageFor } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import type { AppSettings } from '../../types';
 import {
@@ -139,7 +140,8 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
             unitPrice: item.priceAtAdd,
             variantId: item.variantId,
             variantLabel: item.variantLabel,
-            variantImage: variant?.image_url ?? null,
+            // Batch 40: the option photo's small copy when it has one.
+            variantImage: variant?.image_url ? smallImageFor(variant.image_url, product, [variant]) : null,
           },
         ];
       }),

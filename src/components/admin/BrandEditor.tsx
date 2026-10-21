@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { BRAND_SLUG_PATTERN, brandSlugify } from '../../lib/brands';
-import { checkMediaFile, saveBrand, uploadBrandMedia, videoSizeNote, type MediaKind } from '../../lib/brandAdmin';
+import { checkMediaFile, saveBrand, uploadBrandMedia, uploadBrandVideo, type MediaKind } from '../../lib/brandAdmin';
 import { extractYouTubeId } from '../../lib/youtube';
 import { formatDhakaTime } from '../../lib/staff';
 import { AdminIcon } from './ui/AdminIcon';
@@ -99,6 +99,7 @@ function MediaField({
   help,
   value,
   onChange,
+  onVideoStill,
   testId,
 }: {
   kind: MediaKind;
@@ -106,10 +107,14 @@ function MediaField({
   help: string;
   value: string | null;
   onChange: (url: string | null) => void;
+  /** Video only (Batch 40): the still picture to show when the chosen video
+   *  could not be made small. */
+  onVideoStill?: (url: string) => void;
   testId: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; warn: boolean } | null>(null);
 
@@ -126,13 +131,21 @@ function MediaField({
     setNote(null);
     setBusy(true);
     try {
-      onChange(await uploadBrandMedia(kind, file));
-      if (kind === 'video') setNote(videoSizeNote(file.size));
+      if (kind === 'video') {
+        setProgress(0);
+        const result = await uploadBrandVideo(file, setProgress);
+        if (result.videoUrl) onChange(result.videoUrl);
+        if (result.stillUrl) onVideoStill?.(result.stillUrl);
+        setNote(result.note);
+      } else {
+        onChange(await uploadBrandMedia(kind, file));
+      }
     } catch (err) {
       console.error('Brand upload failed:', err);
       setError('Could not upload. Please try again.');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -146,7 +159,7 @@ function MediaField({
       <div className={`adm-media-field__box adm-media-field__box--${kind}`}>
         {value ? (
           isVideo ? (
-            <video className="adm-media-field__preview" src={value} muted loop autoPlay playsInline aria-label={label} />
+            <video className="adm-media-field__preview" src={value} muted loop autoPlay playsInline preload="metadata" aria-label={label} />
           ) : (
             <img className="adm-media-field__preview" src={value} alt={label} data-testid={`${testId}-img`} />
           )
@@ -157,8 +170,13 @@ function MediaField({
           </span>
         )}
         {busy && (
-          <span className="adm-media-field__busy" role="status" aria-label="Uploading">
+          <span className="adm-media-field__busy" role="status" aria-label={progress === null ? 'Uploading' : 'Making the video smaller'}>
             <span className="spinner" aria-hidden="true" />
+            {progress !== null && (
+              <span className="adm-media-field__progress" data-testid={`${testId}-progress`}>
+                Making it smaller… {Math.round(progress * 100)}%
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -338,7 +356,10 @@ export function BrandEditor({ brand, nextOrder, productCount, onSaved, onCancel,
 
       <div className="form-field">
         <span className="form-label">Banner video (optional)</span>
-        <p className="form-helper">A short clip (5–20 seconds). It plays silently in a loop. Max 15 MB.</p>
+        <p className="form-helper">
+          A short clip (5–20 seconds). It plays silently in a loop. It is made smaller for phones before it is saved
+          (720p, no sound, about 1.5 MB) — this takes a moment.
+        </p>
         <div className="adm-segment" role="radiogroup" aria-label="Video source">
           <button
             type="button"
@@ -367,6 +388,9 @@ export function BrandEditor({ brand, nextOrder, productCount, onSaved, onCancel,
           help="MP4 works on every phone. The banner image is shown while it loads."
           value={form.banner_video_url}
           onChange={(url) => set('banner_video_url', url)}
+          onVideoStill={(url) => {
+            if (!form.banner_image_url) set('banner_image_url', url);
+          }}
           testId="brand-video"
         />
       ) : (

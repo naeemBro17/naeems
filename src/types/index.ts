@@ -305,6 +305,9 @@ export interface ProductVariant {
    *  variant is selected; null falls back to the product's image exactly as
    *  before this field existed. */
   image_url: string | null;
+  /** Small card copy of image_url (Batch 31; Batch 40: 480 px, card/
+   *  folder). Absent on rows cached before Batch 40. */
+  image_url_thumb?: string | null;
   /** Optional short text, same purpose as Product.note but variant-specific
    *  (e.g. "USA batch, slightly different box"). Falls back to the
    *  product's own note when null. */

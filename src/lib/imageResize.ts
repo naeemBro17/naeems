@@ -1,12 +1,15 @@
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
-export const MAX_IMAGE_WIDTH = 1200;
+/** Batch 40: the "large" photo — the product page and its zoom. 1400 px
+ *  (was 1200) so it stays sharp on a 3× phone screen; a smaller original is
+ *  never enlarged. */
+export const MAX_IMAGE_WIDTH = 1400;
 export const WEBP_QUALITY = 0.85;
 
 /** Small "card" size — grid cards, bento tiles, search results, cart
- *  thumbnails never display wider than this, so there is no reason to ship
- *  the full 1200px photo to them (see Batch 15/19 performance notes). */
-export const CARD_IMAGE_WIDTH = 400;
-export const CARD_WEBP_QUALITY = 0.8;
+ *  thumbnails. A card is at most ~180 px wide on a phone, 480 px covers a
+ *  2.6× screen (Batch 40: was 400 px). */
+export const CARD_IMAGE_WIDTH = 480;
+export const CARD_WEBP_QUALITY = 0.82;
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -63,13 +66,13 @@ function resizeToWidth(source: Blob, maxWidth: number, quality: number): Promise
 
 /**
  * Resize an image file client-side using an HTML Canvas:
- * max 1200px wide (aspect ratio preserved), WebP format, 0.85 quality.
+ * max 1400px wide (aspect ratio preserved), WebP format, 0.85 quality.
  */
 export function resizeImage(file: Blob): Promise<Blob> {
   return resizeToWidth(file, MAX_IMAGE_WIDTH, WEBP_QUALITY);
 }
 
-/** Small-card version of the same image — max 400px wide, WebP, 0.8 quality. */
+/** Small-card version of the same image — max 480px wide, WebP, 0.82 quality. */
 export function resizeImageCard(file: Blob): Promise<Blob> {
   return resizeToWidth(file, CARD_IMAGE_WIDTH, CARD_WEBP_QUALITY);
 }

@@ -5,7 +5,9 @@ import {
   STORAGE_BUCKET,
   newProductImagePath,
   storagePathFromUrl,
-  productThumbPath,
+  productCardPath,
+  smallCopyPath,
+  LONG_CACHE_SECONDS,
 } from '../../lib/supabase';
 import { resizeImage, resizeImageCard } from '../../lib/imageResize';
 import { slugify } from '../../lib/format';
@@ -278,13 +280,14 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   /**
    * Resolve the final image_urls (and their small "card" counterparts, see
    * Batch 19), in display order:
-   * - pending files → resize + upload each to products/{uuid}.webp, plus a
-   *   small card version at products/thumb/{uuid}.webp
+   * - pending files → resize + upload each to products/{uuid}.webp (large,
+   *   1400 px), plus a small card version at products/card/{uuid}.webp
+   *   (480 px) — Batch 40: new names, kept by phones for a year
    * - kept existing images → reuse their existing thumb if this product
    *   already had one at the same URL, otherwise backfill one now (a
    *   pre-Batch-19 image being kept for the first time since)
    * - existing images removed from the form → delete their stored files
-   *   (full + thumb)
+   *   (full + its small copies)
    * Storage paths are random (SKU-independent), so SKU changes need no moves.
    * Throws on upload failure; removals are best-effort.
    */
@@ -298,7 +301,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           .map(storagePathFromUrl)
           .filter((path): path is string => path !== null)
       : [];
-    const removedPaths = removedFullPaths.flatMap((path) => [path, productThumbPath(path)]);
+    const removedPaths = removedFullPaths.flatMap((path) => [path, smallCopyPath(path, 'thumb'), productCardPath(path)]);
 
     // Existing product's own full URL -> thumb URL, so a kept image (order
     // may have changed) still finds its own thumb by URL, not by index.
@@ -337,12 +340,14 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           resizeImage(image.file),
           resizeImageCard(image.file),
         ]);
-        const thumbPath = productThumbPath(path);
+        const thumbPath = productCardPath(path);
         const [fullUpload, thumbUpload] = await Promise.all([
-          supabase.storage.from(STORAGE_BUCKET).upload(path, blob, { contentType: 'image/webp' }),
           supabase.storage
             .from(STORAGE_BUCKET)
-            .upload(thumbPath, thumbBlob, { contentType: 'image/webp' }),
+            .upload(path, blob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
+          supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(thumbPath, thumbBlob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
         ]);
         if (fullUpload.error) throw fullUpload.error;
         urls.push(supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl);

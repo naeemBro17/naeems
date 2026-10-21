@@ -308,9 +308,13 @@ test('banner video: muted, looping, inline, no controls; picture only under redu
   await page.goto(`/brand/${ALPHA.slug}`);
   const video = page.locator('[data-testid="brand-banner-video"]');
   await expect(video).toHaveCount(1);
-  for (const attr of ['muted', 'loop', 'playsinline', 'autoplay']) {
+  for (const attr of ['muted', 'loop', 'playsinline']) {
     expect(await video.evaluate((el, a) => el.hasAttribute(a), attr), attr).toBe(true);
   }
+  // Batch 40: nothing downloads before the banner is on screen — no
+  // autoplay attribute, preload="none"; the page starts it when visible.
+  expect(await video.evaluate((el) => el.hasAttribute('autoplay'))).toBe(false);
+  await expect(video).toHaveAttribute('preload', 'none');
   expect(await video.evaluate((el) => el.hasAttribute('controls'))).toBe(false);
   expect(await video.evaluate((el) => (el as HTMLVideoElement).muted)).toBe(true);
   await expect(video).toHaveAttribute('poster', BANNER);

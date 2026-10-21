@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { supabase } from '../../../lib/supabase';
+import { supabase, uniqueImagePath, LONG_CACHE_SECONDS } from '../../../lib/supabase';
 import { useProducts, type TextSettingKey } from '../../../contexts/ProductContext';
 import { useToast } from '../../../hooks/useToast';
 import { saveSettings } from '../../../lib/settingsLists';
@@ -21,7 +21,7 @@ interface FieldSpec {
   multiline?: boolean;
 }
 
-/** Storage bucket + fixed path for the expert photo (created in migration-010). */
+/** Storage bucket + base name for the expert photo (created in migration-010). */
 const EXPERT_PHOTO_BUCKET = 'expert-photos';
 const EXPERT_PHOTO_PATH = 'expert-photo.webp';
 
@@ -131,14 +131,13 @@ export function ExpertEditSheet({ section, onClose }: ExpertEditSheetProps) {
     setIsUploading(true);
     try {
       const blob = await resizeImage(file);
+      // Batch 40: a new file name for every upload, kept by phones a year.
+      const path = uniqueImagePath(EXPERT_PHOTO_PATH);
       const { error } = await supabase.storage
         .from(EXPERT_PHOTO_BUCKET)
-        .upload(EXPERT_PHOTO_PATH, blob, { contentType: 'image/webp', upsert: true });
+        .upload(path, blob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS });
       if (error) throw error;
-      const { data } = supabase.storage.from(EXPERT_PHOTO_BUCKET).getPublicUrl(EXPERT_PHOTO_PATH);
-      // Cache-bust: the path is fixed, so the URL has to change for the new
-      // image to show.
-      setPhotoUrl(`${data.publicUrl}?v=${Date.now()}`);
+      setPhotoUrl(supabase.storage.from(EXPERT_PHOTO_BUCKET).getPublicUrl(path).data.publicUrl);
       showToast('Photo uploaded — save to apply');
     } catch (error) {
       console.error('Expert photo upload failed:', error);

@@ -2557,6 +2557,19 @@ html[data-admin] .toast--info .toast__icon {
   background: var(--adm-overlay);
 }
 
+/* Batch 40: "Making it smaller… 40%" under the spinner while a video is
+   made small for phones. */
+.adm-media-field__busy:has(.adm-media-field__progress) {
+  flex-direction: column;
+  gap: var(--adm-s2);
+}
+
+.adm-media-field__progress {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .adm-media-field__actions {
   display: flex;
   gap: var(--adm-s2);

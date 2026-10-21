@@ -203,7 +203,8 @@ async function saveAndRead(page: Page): Promise<{ urls: string[]; thumbs: string
 function expectThumbsLinked(saved: { urls: string[]; thumbs: string[] }): void {
   expect(saved.thumbs).toHaveLength(saved.urls.length);
   saved.urls.forEach((u, i) => {
-    expect(storagePath(saved.thumbs[i])).toBe(`products/thumb/${uuidOf(u)}.webp`);
+    // Batch 40: the 480 px card copy lives in card/.
+    expect(storagePath(saved.thumbs[i])).toBe(`products/card/${uuidOf(u)}.webp`);
   });
 }
 

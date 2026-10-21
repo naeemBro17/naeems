@@ -1,8 +1,10 @@
-import { supabase } from './supabase';
+import { supabase, LONG_CACHE_SECONDS, randomFileId } from './supabase';
 import { resizeImage } from './imageResize';
 import { trimLogo } from './logoTrim';
 import { BRANDS_TABLE, BRAND_SELECT } from './brands';
 import { videoPosterUrl } from './brandVideo';
+import { downloadForCopy } from './productImages';
+import { compressBrandVideo, isCompressedVideoUrl, megabytesText, VideoCompressError } from './videoCompress';
 import type { Brand } from '../types';
 
 /* Admin-only brand writes and the Batch 26 admin extras (Restock, 7-day
@@ -10,7 +12,9 @@ import type { Brand } from '../types';
    database (migration-032), so hiding a button is only tidiness. */
 
 export const BRAND_MEDIA_BUCKET = 'brand-media';
-export const BRAND_VIDEO_MAX_BYTES = 15 * 1024 * 1024;
+/** The largest video file that can be chosen. Batch 40: it is made small
+ *  (≤ 1.5 MB) before it is stored, so a normal phone clip is fine. */
+export const BRAND_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
 export const BRAND_VIDEO_TYPES = ['video/mp4', 'video/webm'];
 export const BRAND_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const BRAND_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -28,41 +32,15 @@ export async function fetchAllBrands(): Promise<{ brands: Brand[]; error: string
   return { brands: (data ?? []) as Brand[], error: null };
 }
 
-function randomId(): string {
-  return typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 async function uploadMedia(path: string, blob: Blob, contentType: string): Promise<string> {
   const { error } = await supabase.storage
     .from(BRAND_MEDIA_BUCKET)
-    .upload(path, blob, { contentType, upsert: true, cacheControl: '31536000' });
+    .upload(path, blob, { contentType, upsert: true, cacheControl: LONG_CACHE_SECONDS });
   if (error) throw error;
   return supabase.storage.from(BRAND_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
 export type MediaKind = 'logo' | 'logo-dark' | 'banner' | 'video';
-
-/** Videos above this load slowly on a phone (Batch 29 Part 6). */
-export const BRAND_VIDEO_WARN_BYTES = 4 * 1024 * 1024;
-
-/** "5.1 MB" */
-export function megabytes(bytes: number): string {
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** A gentle note after a video upload: its size, and a warning when it's
- *  big enough to make the brand page slow. */
-export function videoSizeNote(bytes: number): { text: string; warn: boolean } {
-  if (bytes > BRAND_VIDEO_WARN_BYTES) {
-    return {
-      text: `This video is ${megabytes(bytes)}. Over 4 MB loads slowly on phones — a shorter clip (5–10 seconds) or 720p, without sound, loads much faster.`,
-      warn: true,
-    };
-  }
-  return { text: `Video size: ${megabytes(bytes)} — good for phones.`, warn: false };
-}
 
 /* ---------- Video preview pictures (Batch 29 Part 6) ---------- */
 
@@ -186,8 +164,7 @@ export function checkMediaFile(kind: MediaKind, file: File): string | null {
   if (kind === 'video') {
     if (!BRAND_VIDEO_TYPES.includes(file.type)) return 'Choose an MP4 video (WebM also works).';
     if (file.size > BRAND_VIDEO_MAX_BYTES) {
-      const mb = (file.size / 1024 / 1024).toFixed(1);
-      return `This video is ${mb} MB. The limit is 15 MB — use a shorter clip (5–20 seconds) or a smaller size.`;
+      return `This video is ${megabytesText(file.size)}. The limit is 100 MB — use a shorter clip (5–20 seconds).`;
     }
     return null;
   }
@@ -197,36 +174,155 @@ export function checkMediaFile(kind: MediaKind, file: File): string | null {
 }
 
 /**
- * Prepares and uploads one file; returns its public URL. Logos are trimmed,
- * resized and compressed (transparent WebP); banners are compressed like
- * product photos; videos go up as they are (re-encoding a video reliably on
- * a phone isn't possible without a ~30 MB tool — the admin shows the size
- * and warns above 4 MB instead), plus a preview picture of the first frame. Every upload gets a new file
- * name, so a replaced logo never shows an old cached copy.
+ * Prepares and uploads one picture; returns its public URL. Logos are
+ * trimmed, resized and compressed (transparent WebP); banners are compressed
+ * like product photos. Every upload gets a new file name, so a replaced logo
+ * never shows an old cached copy. (Videos: uploadBrandVideo.)
  */
-export async function uploadBrandMedia(kind: MediaKind, file: File): Promise<string> {
-  const id = randomId();
-  if (kind === 'video') {
-    const ext = file.type === 'video/webm' ? 'webm' : 'mp4';
-    const path = `videos/${id}.${ext}`;
-    const url = await uploadMedia(path, file, file.type);
-    // Its preview picture, saved next to it (Part 6). A video whose frame
-    // can't be read still uploads fine — the brand page then shows the
-    // banner image or the logo while it loads.
-    const local = URL.createObjectURL(file);
-    try {
-      await uploadPoster(path, await captureVideoFrame(local, false));
-    } catch (err) {
-      console.error('Video preview picture failed:', err);
-    } finally {
-      URL.revokeObjectURL(local);
-    }
-    return url;
-  }
+export async function uploadBrandMedia(kind: Exclude<MediaKind, 'video'>, file: File): Promise<string> {
+  const id = randomFileId();
   if (kind === 'banner') {
     return uploadMedia(`banners/${id}.webp`, await resizeImage(file), 'image/webp');
   }
   return uploadMedia(`logos/${id}.webp`, await trimLogo(file), 'image/webp');
+}
+
+/** One still frame of a video file, as a banner picture (WebP, like an
+ *  uploaded banner). Null when the frame can't be read. */
+async function stillFromVideo(file: Blob): Promise<Blob | null> {
+  const local = URL.createObjectURL(file);
+  try {
+    return await resizeImage(await captureVideoFrame(local, false));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(local);
+  }
+}
+
+/** Saves a made-small video and its preview picture; returns the video's URL. */
+async function storeSmallVideo(small: Blob): Promise<string> {
+  const path = `videos/${randomFileId()}-720p.mp4`;
+  const url = await uploadMedia(path, small, 'video/mp4');
+  // Its preview picture, saved next to it (Batch 29 Part 6). A video whose
+  // frame can't be read still works — the brand page then shows the banner
+  // image or the logo until it plays.
+  const local = URL.createObjectURL(small);
+  try {
+    await uploadPoster(path, await captureVideoFrame(local, false));
+  } catch (err) {
+    console.error('Video preview picture failed:', err);
+  } finally {
+    URL.revokeObjectURL(local);
+  }
+  return url;
+}
+
+export interface BrandVideoUpload {
+  /** The made-small video, or null when it could not be made small. */
+  videoUrl: string | null;
+  /** When the video could not be made small: a still picture from it, saved
+   *  as a banner picture, for the brand page to show instead (or null). */
+  stillUrl: string | null;
+  note: { text: string; warn: boolean };
+}
+
+/**
+ * Batch 40 Part 2.5: a chosen video is made small first (videoCompress.ts —
+ * 720p, no sound, ≤ 1.5 MB) and only that is stored. If it can't be made
+ * small, nothing heavy is stored: the brand keeps a still picture from the
+ * video instead.
+ */
+export async function uploadBrandVideo(file: File, onProgress?: (share: number) => void): Promise<BrandVideoUpload> {
+  try {
+    const small = await compressBrandVideo(file, onProgress);
+    const videoUrl = await storeSmallVideo(small.blob);
+    return {
+      videoUrl,
+      stillUrl: null,
+      note: {
+        text: `Made smaller for phones: ${megabytesText(file.size)} → ${megabytesText(small.blob.size)} (${small.height}p, no sound${
+          small.seconds >= 20 ? ', first 20 seconds' : ''
+        }).`,
+        warn: false,
+      },
+    };
+  } catch (err) {
+    if (!(err instanceof VideoCompressError)) throw err;
+    const still = await stillFromVideo(file);
+    const stillUrl = still ? await uploadMedia(`banners/${randomFileId()}.webp`, still, 'image/webp') : null;
+    return {
+      videoUrl: null,
+      stillUrl,
+      note: {
+        text: `${err.message} The video was not saved${
+          stillUrl ? ' — the brand page shows a still picture from it instead' : ''
+        }. Try a shorter clip.`,
+        warn: true,
+      },
+    };
+  }
+}
+
+export interface SmallVideosResult {
+  made: string[];
+  /** Brands that now show their picture only (their video can't be made small). */
+  pictureOnly: string[];
+  /** Brands left as they were this time (download/upload failed). */
+  failed: string[];
+  /** Set when this browser can't make videos small at all — nothing changed. */
+  unsupported: string | null;
+}
+
+/**
+ * Admin → Brands → "Make videos small" (Batch 40): every brand video stored
+ * before Batch 40 is made small and saved under a new name; the brand then
+ * points at the small one. The old file stays in Storage (not deleted) until
+ * Naeem confirms. A video that can't be made small: the brand shows its
+ * picture only (its banner picture, or the old video's preview picture).
+ */
+export async function makeBrandVideosSmall(
+  brands: Pick<Brand, 'id' | 'name' | 'banner_video_url' | 'banner_image_url'>[],
+  onProgress: (done: number, total: number) => void
+): Promise<SmallVideosResult> {
+  const work = brands.filter(
+    (b): b is typeof b & { banner_video_url: string } => b.banner_video_url !== null && !isCompressedVideoUrl(b.banner_video_url)
+  );
+  const result: SmallVideosResult = { made: [], pictureOnly: [], failed: [], unsupported: null };
+  onProgress(0, work.length);
+  for (const [i, brand] of work.entries()) {
+    const original = await downloadForCopy(brand.banner_video_url);
+    if (!original) {
+      result.failed.push(brand.name);
+    } else {
+      try {
+        const small = await compressBrandVideo(original);
+        const videoUrl = await storeSmallVideo(small.blob);
+        const { data, error } = await supabase.from(BRANDS_TABLE).update({ banner_video_url: videoUrl }).eq('id', brand.id).select('id');
+        if (error || !data || data.length === 0) result.failed.push(brand.name);
+        else result.made.push(brand.name);
+      } catch (err) {
+        if (err instanceof VideoCompressError && err.reason === 'unsupported') {
+          result.unsupported = err.message;
+          onProgress(work.length, work.length);
+          return result;
+        }
+        if (err instanceof VideoCompressError) {
+          const picture = brand.banner_image_url ?? ((await hasPoster(brand.banner_video_url)) ? videoPosterUrl(brand.banner_video_url) : null);
+          const { error } = await supabase
+            .from(BRANDS_TABLE)
+            .update({ banner_video_url: null, banner_image_url: picture })
+            .eq('id', brand.id);
+          if (error) result.failed.push(brand.name);
+          else result.pictureOnly.push(brand.name);
+        } else {
+          result.failed.push(brand.name);
+        }
+      }
+    }
+    onProgress(i + 1, work.length);
+  }
+  return result;
 }
 
 export type BrandInput = Pick<

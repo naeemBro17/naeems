@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka } from '../../lib/format';
-import { coverImage, productImages } from '../../lib/productImages';
+import { coverImage, productImages, cardImage } from '../../lib/productImages';
 import { isOutOfStock } from '../../lib/stockStatus';
 import { nextSku } from '../../lib/sku';
 import { uniqueProductSlug } from '../../lib/slugify';
@@ -254,11 +254,13 @@ export function CombineProductsSheet({
                 </label>
 
                 <div className="combine-product-row__thumb-wrap">
-                  {coverImage(product) ? (
+                  {cardImage(product) ? (
                     <img
-                      src={coverImage(product) ?? ''}
+                      src={cardImage(product) ?? ''}
                       alt={product.name}
                       className="combine-product-row__thumb"
+                      loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="combine-product-row__thumb-placeholder" aria-hidden="true" />

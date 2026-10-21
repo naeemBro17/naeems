@@ -3,8 +3,9 @@ import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
 import { uploadAdminImage } from '../../lib/supabase';
 
 interface AdminImagePickerProps {
-  /** Fixed storage path (e.g. `banners/{id}.webp`) — upserted, so re-uploading
-   *  replaces the same file instead of leaving the old one orphaned. */
+  /** Where the photo is stored (e.g. `banners/{id}.webp`). Batch 40: each
+   *  upload gets a new name next to it (`banners/{id}-{random}.webp`), so a
+   *  phone that kept the old photo never shows it again. */
   path: string;
   /** The field's current stored URL, or null if none is set. */
   value: string | null;
