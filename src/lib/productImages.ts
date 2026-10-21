@@ -1,5 +1,13 @@
-import { supabase, STORAGE_BUCKET, storagePathFromUrl, smallCopyPath, LONG_CACHE_SECONDS } from './supabase';
-import { resizeImageCard } from './imageResize';
+import {
+  supabase,
+  STORAGE_BUCKET,
+  storagePathFromUrl,
+  smallCopyPath,
+  productCardPath,
+  newProductImagePath,
+  LONG_CACHE_SECONDS,
+} from './supabase';
+import { resizeImage, resizeImageCard } from './imageResize';
 import type { Product, ProductVariant } from '../types';
 
 /**
@@ -130,6 +138,27 @@ export async function makeSmallCopy(
   } catch {
     return null;
   }
+}
+
+/**
+ * Batch 40: stores a newly chosen product photo as two WebP files with new
+ * names, both kept by phones for a year — the large one (1400 px, product
+ * page and zoom) at products/{id}.webp and the card one (480 px: grids,
+ * bento, lists) at products/card/{id}.webp. Throws if the large one can't
+ * be stored; a failed card copy falls back to the large photo.
+ */
+export async function uploadProductPhoto(file: Blob): Promise<{ url: string; cardUrl: string }> {
+  const path = newProductImagePath();
+  const cardPath = productCardPath(path);
+  const [large, card] = await Promise.all([resizeImage(file), resizeImageCard(file)]);
+  const bucket = supabase.storage.from(STORAGE_BUCKET);
+  const [largeUpload, cardUpload] = await Promise.all([
+    bucket.upload(path, large, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
+    bucket.upload(cardPath, card, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
+  ]);
+  if (largeUpload.error) throw largeUpload.error;
+  const url = bucket.getPublicUrl(path).data.publicUrl;
+  return { url, cardUrl: cardUpload.error ? url : bucket.getPublicUrl(cardPath).data.publicUrl };
 }
 
 /**

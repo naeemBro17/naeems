@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
-import {
-  supabase,
-  STORAGE_BUCKET,
-  newProductImagePath,
-  storagePathFromUrl,
-  productCardPath,
-  smallCopyPath,
-  LONG_CACHE_SECONDS,
-} from '../../lib/supabase';
-import { resizeImage, resizeImageCard } from '../../lib/imageResize';
+import { supabase, STORAGE_BUCKET, storagePathFromUrl, productCardPath, smallCopyPath } from '../../lib/supabase';
 import { slugify } from '../../lib/format';
 import { uniqueProductSlug } from '../../lib/slugify';
 import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
-import { productImages, generateCardThumb, isSmallCopy } from '../../lib/productImages';
+import { productImages, generateCardThumb, isSmallCopy, uploadProductPhoto } from '../../lib/productImages';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -335,27 +326,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           continue;
         }
         if (!image.file) continue;
-        const path = newProductImagePath();
-        const [blob, thumbBlob] = await Promise.all([
-          resizeImage(image.file),
-          resizeImageCard(image.file),
-        ]);
-        const thumbPath = productCardPath(path);
-        const [fullUpload, thumbUpload] = await Promise.all([
-          supabase.storage
-            .from(STORAGE_BUCKET)
-            .upload(path, blob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
-          supabase.storage
-            .from(STORAGE_BUCKET)
-            .upload(thumbPath, thumbBlob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
-        ]);
-        if (fullUpload.error) throw fullUpload.error;
-        urls.push(supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl);
-        thumbUrls.push(
-          thumbUpload.error
-            ? urls[urls.length - 1]
-            : supabase.storage.from(STORAGE_BUCKET).getPublicUrl(thumbPath).data.publicUrl
-        );
+        const uploaded = await uploadProductPhoto(image.file);
+        urls.push(uploaded.url);
+        thumbUrls.push(uploaded.cardUrl);
       }
 
       if (removedPaths.length > 0) {
