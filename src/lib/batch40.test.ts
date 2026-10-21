@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { productCardPath, smallCopyPath, uniqueImagePath } from './supabase';
 import { isCardCopy, isSmallCopy, productNeedsCardCopies, smallImageFor } from './productImages';
 import { isCompressedVideoUrl, videoBitrate, videoOutputSize, VIDEO_MAX_BYTES, VIDEO_TRIES } from './videoCompress';
+import { judgeAnswer } from './backendStatus';
+import { fallbackMessengerUrl, fallbackWhatsAppUrl } from './shopFallback';
 import type { Product, ProductVariant } from '../types';
 
 const base = 'https://x.supabase.co/storage/v1/object/public/product-images';
@@ -93,5 +95,28 @@ describe('Batch 40 Part 2.5: brand videos are made small', () => {
   it('a made-small video is known by its name', () => {
     expect(isCompressedVideoUrl('https://x.supabase.co/storage/v1/object/public/brand-media/videos/abc-720p.mp4')).toBe(true);
     expect(isCompressedVideoUrl('https://x.supabase.co/storage/v1/object/public/brand-media/videos/abc.mp4')).toBe(false);
+  });
+});
+
+describe('Batch 40 Part 3: when the shop counts Supabase as down', () => {
+  it('402 (plan blocked) is always down; server errors and no answer only before the first data', () => {
+    expect(judgeAnswer(402, true, false)).toBe('down');
+    expect(judgeAnswer(503, true, true)).toBe('down');
+    expect(judgeAnswer(500, true, false)).toBe('unknown');
+    expect(judgeAnswer(null, true, true)).toBe('down');
+    // The phone itself offline is not "the shop is down" (the offline banner covers it).
+    expect(judgeAnswer(null, false, true)).toBe('unknown');
+    expect(judgeAnswer(200, true, true)).toBe('up');
+    expect(judgeAnswer(401, true, false)).toBe('up');
+  });
+
+  it('the fallback buttons work without the database, from the build settings or the defaults', () => {
+    expect(fallbackWhatsAppUrl('')).toBe('https://wa.me/8801560040012');
+    expect(fallbackWhatsAppUrl('01560040012')).toBe('https://wa.me/8801560040012');
+    expect(fallbackWhatsAppUrl('+880 1711-000000')).toBe('https://wa.me/8801711000000');
+    expect(fallbackWhatsAppUrl('https://wa.me/8801999999999')).toBe('https://wa.me/8801999999999');
+    expect(fallbackMessengerUrl('')).toBe('https://m.me/naeems.skinscience');
+    expect(fallbackMessengerUrl('https://m.me/other.page')).toBe('https://m.me/other.page');
+    expect(fallbackMessengerUrl('not a link')).toBe('https://m.me/naeems.skinscience');
   });
 });

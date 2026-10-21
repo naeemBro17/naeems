@@ -14,6 +14,7 @@ import { useAuth } from './AuthContext';
 import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
 import { sortVariants, VARIANT_SELECT, VARIANTS_VIEW } from '../lib/variants';
 import { BRANDS_TABLE, BRAND_SELECT } from '../lib/brands';
+import { markFirstLoadDone, useBackendDown } from '../lib/backendStatus';
 import type { Product, Category, AppSettings, ProductVariant, Brand } from '../types';
 
 interface ProductContextValue {
@@ -266,6 +267,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       setSettings(fetchedSettings);
       setBrands(fetchedBrands);
       setIsOffline(false);
+      markFirstLoadDone();
       saveCache({
         products: fetchedProducts,
         categories: fetchedCategories,
@@ -322,6 +324,20 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [authLoading, isAdmin, session?.user.id, fetchData, reloadVariants]);
+
+  // Batch 40 Part 3: Supabase is reachable again after being blocked or
+  // down — load the shop's data again.
+  const backendDown = useBackendDown();
+  const wasDown = useRef(false);
+  useEffect(() => {
+    if (backendDown) {
+      wasDown.current = true;
+      return;
+    }
+    if (!wasDown.current) return;
+    wasDown.current = false;
+    void Promise.all([fetchData(), reloadVariants()]);
+  }, [backendDown, fetchData, reloadVariants]);
 
   // Auto-dismiss the offline banner when connectivity restores.
   useEffect(() => {

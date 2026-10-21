@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { resizeImage } from './imageResize';
+import { startFirstLoadWatch, watchedFetch } from './backendStatus';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -10,7 +11,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Batch 40 Part 3: every call is watched, so a blocked or unreachable
+// Supabase shows the "shop is being updated" page (lib/backendStatus.ts).
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { fetch: watchedFetch } });
+
+// While Supabase is unreachable: one tiny question every 30 s, "are you back?"
+startFirstLoadWatch(async () => {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/app_settings?select=key&limit=1`, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+      cache: 'no-store',
+    });
+    return res.status !== 402 && res.status < 500;
+  } catch {
+    return false;
+  }
+});
 
 export const STORAGE_BUCKET = 'product-images';
 

@@ -4,6 +4,7 @@ import { safeAdminNext } from '../lib/adminPages';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/shared/ThemeToggle';
 import { PasswordField } from '../components/admin/PasswordField';
+import { BackendDownNote } from '../components/shared/ShopDown';
 
 type LoginMode = 'admin' | 'staff';
 
@@ -120,6 +121,7 @@ export function AdminAccessPage() {
 
       <main className="access-main">
         <h1 className="access-title">Admin Sign In</h1>
+        <BackendDownNote />
         <div className="auth-toggle" role="tablist" aria-label="Admin or staff login">
           <button
             type="button"

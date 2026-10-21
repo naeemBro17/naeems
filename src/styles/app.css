@@ -719,6 +719,88 @@ html[data-input='keyboard'] .focus-host :focus-visible {
   flex-shrink: 0;
 }
 
+/* ---------- Shop can't reach its database (Batch 40 Part 3) ---------- */
+
+.shop-down {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-bg);
+}
+
+.shop-down__card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.shop-down__logo {
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--space-5);
+}
+
+.shop-down__title {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.shop-down__text {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.shop-down__actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shop-down__button {
+  min-height: 56px;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.shop-down__icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+}
+
+.shop-down__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.shop-down__hint {
+  margin-top: var(--space-6);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.backend-down-note {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 12px;
+  background: var(--color-warning-bg);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 /* ---------- Category chips ---------- */
 
 .category-chips {
