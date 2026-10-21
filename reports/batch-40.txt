@@ -1,0 +1,297 @@
+BATCH 40 — Stop the Supabase bandwidth problem + "shop is down" page
+Version 1.40.0 · Branch feature/batch-40-egress-safety (pushed, no pull request — you merge it)
+Date: 21 Oct 2026
+
+Before I started I checked your two conditions: Batch 39 is merged into main (pull request #57), and the live
+shop works again — the database, the sign-in service and the photo storage all answered normally (no 402).
+
+
+======================================================================
+THE SHORT VERSION
+======================================================================
+
+* What used up the 23.4 GB: almost certainly our own automatic tests. Every test opened the live shop in a
+  fresh browser that had nothing saved, so every test downloaded about 1.75 MB of real photos and a brand video
+  from Supabase. The full test run has 407 tests, so one run was about 0.7 GB — and in the last 10 batches the
+  suite was run three times in a row per check ("verify:3"). That alone is about 20 GB.
+* Now the tests download 0 bytes of photos or videos from Supabase. A test that tries is stopped and fails.
+* For real customers: a second visit now downloads 0 KB of photos (before: 3.4 MB on Home), Home no longer
+  downloads a 1.7 MB brand video nobody watches, and brand videos play from the phone after the first time.
+* If Supabase is ever blocked again, customers see a calm page with WhatsApp and Messenger buttons instead of
+  a broken shop.
+* TWO THINGS ONLY YOU CAN DO (I had no admin login on this computer — details in "What I could not finish"):
+  1. Admin → Products → ⋯ (three dots, top right) → "Make images light". Keep the page open until it says Done.
+  2. Admin → Brands → "Make videos small". Keep the page open until it says Done.
+
+
+======================================================================
+1. WHAT I DID
+======================================================================
+
+PART 0 — MEASURED FIRST (no changes)
+Numbers measured with a real phone-sized browser against the live shop, before any change
+(scripts/measure-egress.mjs — it counts the real bytes Supabase sent, not what the page thinks it got).
+
+1) What the shop downloads from Supabase Storage (photos, logos, videos)
+
+   Page                         First visit                 Second visit         Third visit
+   Home (scrolled to the end)   135 files, 3,833 KB         3,463 KB (again!)    0 KB
+                                (incl. one 1.7 MB video)
+   Product page (13 photos)     11 files, 396 KB            121 KB               0 KB
+   Brand page with a video      10 files, 2,053 KB          3,084 KB             3,048 KB (every visit!)
+   Admin sign-in page           17 KB                       0 KB                 0 KB
+   Admin dashboard              could not measure — needs the admin login (see "could not finish"). From the
+                                code: the admin product list showed every product's FULL photo (about 75 KB
+                                each, ~120 products ≈ 9 MB when scrolled through).
+
+   On top of the files, every page visit asks the database for the whole product list (about 320 KB). That is
+   normal "Egress" (1.8 GB of 5 GB), not the "Cached Egress" that blocked us.
+
+2) How uploads were processed before this batch
+   * Product photos: made smaller in the browser to max 1200 px wide, WebP, quality 0.85, plus a small "card"
+     copy, max 400 px, WebP 0.8.
+   * Logos: trimmed (empty border cut off), resized, transparent WebP. Banners: like product photos.
+   * Brand videos: NOT processed at all — stored exactly as uploaded (up to 15 MB allowed).
+   * Banner slides, category circles, variant and expert photos: saved over the SAME file name each time, with
+     "?v=…" added to the link.
+   Biggest 10 files in Storage:
+     5.2 MB  Galderma video          5.1 MB  La Roche-Posay video     4.3 MB  The Ordinary video
+     3.7 MB  Sudocrem video          1.7 MB  Beauty of Joseon video   0.5 MB  Anua video
+     332 KB, 290 KB, 242 KB, 215 KB  product photos
+   Totals: 803 files in the photo store (35.9 MB) + 6 videos (20.4 MB) + ~100 logos (≈2 MB).
+   (Your dashboard said 19 MB; it may count part of it — the files themselves add up to about 58 MB.)
+
+3) The "keep for how long" setting (Cache-Control) Storage sent
+   * All 803 product photos, banners, category pictures: "public, max-age=3600" = phones and Supabase's CDN
+     keep them for only ONE HOUR, then ask again.
+   * Brand logos, banners, videos: "public, max-age=31536000" = one year (already fine).
+
+4) How many requests one full test run made
+   Counted with a request listener on 9 small tests: 313 photo/video requests, 15.8 MB (63% of it brand
+   videos), 102 database requests. That is per test: about 35 Storage requests (1.75 MB) and 11 database
+   requests. The suite has 407 browser tests, so ONE full run ≈ 14,000 Storage requests ≈ 0.7 GB, and ≈ 4,600
+   database requests. "verify:3" (used since Batch 30) did three full runs in a row.
+
+5) Most likely cause of the 23 GB
+   Between 11 Sep and 11 Oct, Batches 1–39 were built. From Batch 30 on, every check ran the full suite three
+   times (≈ 2.1 GB), and the checks were repeated when something failed. 10 batches × 3 runs × 0.7 GB ≈ 21 GB.
+   Real customers add roughly 300 users × 5–10 MB ≈ 2–3 GB (mostly the brand video Home pre-downloaded, and
+   second visits downloading everything again). So: about 90% tests, 10% customers. The "Log ingestion" (182%)
+   is Supabase writing one log line per request — the same thousands of test requests.
+
+
+PART 1 — TESTS NEVER DOWNLOAD REAL PHOTOS OR VIDEOS
+* Every browser the tests open (also extra windows a test opens itself) now answers every Supabase photo with a
+  tiny 1×1 picture and every video with a 1-second, 1.4 KB video, made on this computer. No test can forget
+  it — it is built into the shared test setup (e2e/fixtures.ts, e2e/helpers/storageGuard.ts).
+* If any test still downloads a real Storage file, that test FAILS and names the file. (I proved this with a
+  deliberately leaking test.) Only an upload test may read back its own tiny test file.
+* Facebook Pixel and Google Analytics were already blocked in tests; now they are blocked for every window
+  and for the offline helper too.
+* Guard tests: Home scrolled to the end + a product page → 0 real Storage bytes.
+* New check command: "npm run verify:quick" = build + unit tests + only the browser test files the batch
+  touched. The new rule is in CLAUDE.md: quick checks during a batch, the full suite ONCE at the end, a timing
+  flake re-runs only that one file (3 times), never a loop, never several copies at once. "verify:3" is gone.
+* Noisy logs: I looked — there is no console.log anywhere in the shop or in the Supabase functions; the
+  functions only log real errors. The log usage was Supabase's own one-line-per-request log, so it drops
+  with the test requests.
+
+PART 2 — THE SHOP IS LIGHT FOR REAL CUSTOMERS
+1) Every upload gets a NEW file name and "keep for one year" (Cache-Control max-age=31536000). Old files are
+   never overwritten any more (banner slides, category circles, variant and expert photos used to be).
+   Existing photos: "Make images light" (Admin → Products) stores each one again with the same picture under
+   the same name, but with the one-year setting — no link changes, so nothing can break.
+2) The phone keeps photos: the offline helper now keeps up to 300 photos for 60 days (was 150 / 30 days —
+   Home alone shows ~135, so phones kept throwing them away). It also takes charge on the FIRST visit, so the
+   photos you scroll to are kept from the start. Measured: second and third visits download 0 KB of photos.
+3) Two sizes per product photo, made in the browser at upload:
+   * large: max 1400 px wide (was 1200), WebP 0.85 — product page and zoom. Never enlarged if smaller.
+   * card: 480 px wide (was 400), WebP 0.82 — grids, bento, search, cart, admin lists.
+   Existing photos: "Make images light" makes the 480 px card copy of every product and variant photo, saved
+   next to it in a "card" folder. The large photos are your existing ones, untouched (re-encoding them
+   would only make them blurrier). The old 400 px copies stay in Storage until you say they can go.
+4) Lazy loading: product cards, search results, cart and order-summary pictures load only when near the
+   screen and say their size (nothing jumps). The first big picture (Home banner, the product's first photo,
+   the brand banner picture) still loads at once. The cart, the option sheet and the admin product list now
+   use the small copy instead of the full photo.
+5) Brand videos:
+   * Home no longer downloads videos in the background (it used to download the first three brands' videos
+     on every visit — 1.7 MB each time, in every test too).
+   * The brand page loads nothing of the video until the banner is on screen, plays it while on screen,
+     pauses it when scrolled away. The banner picture shows until it plays.
+   * The phone keeps the whole video after the first time (before, the video was downloaded again on EVERY
+     visit, about 3 MB, because the player asks in pieces and those were never kept).
+   * Uploading a video now makes it small first, in your browser: H.264 MP4, at most 720p, no sound, at most
+     1.5 MB, first 20 seconds at most. You see "Making it smaller… 40%". If it can't be made small, nothing
+     heavy is saved: the brand keeps a still picture from the video instead, and you get a message.
+   * Existing videos: "Make videos small" (Admin → Brands) does the same for the 6 old videos and points each
+     brand at its small one. Old files stay in Storage.
+6) Logos and banners already had new names and the one-year setting; unchanged.
+
+PART 3 — IF THE SHOP CAN'T REACH SUPABASE
+* If Supabase answers "402" (blocked), a server error, nothing at all, or the first data takes more than 8
+  seconds, customers see a full page: "Our online shop is being updated. You can still order — message us:"
+  with two big buttons, WhatsApp (orange) and Messenger. When Supabase answers again, the page goes away by
+  itself and the shop loads. If only the PHONE is offline, the old offline banner shows as before.
+* The two links don't come from the database (it may be down): they are built into the site.
+* The admin sign-in page shows: "Database not reachable right now. Your data is safe; try again later."
+* While down, the site asks once every 30 seconds (one tiny request, only while the page is open on screen) —
+  never in a fast loop.
+* Tested with every Supabase answer mocked as "402 Service restricted". Screenshots:
+  reports/batch-40-screens/shop-down-360-light.png, shop-down-360-dark.png,
+  admin-sign-in-note-360-light.png, admin-sign-in-note-360-dark.png
+
+PART 4 — TESTS
+* Zero real Storage bytes in the tests (guard tests, and every test fails if one leaks).
+* Photos: an uploaded photo becomes a 1400 px and a 480 px WebP (card 19 KB for a 3000 px photo), with new
+  names and the one-year setting on every upload; grids show the card copy, the product page the large photo;
+  every photo, card copy, logo, banner and video the live shop points at exists (835 files, 0 missing —
+  checked by downloading 1 byte of each).
+* Offline helper: after the first visit, opening Home again downloads no photo; all come from the phone.
+* Videos: a 1080p clip with sound (7.9 MB) → 1.2 MB, 720p, no sound; a 26-second clip → 20 s, 1.46 MB;
+  a phone (portrait) clip → 720×1280, 0.9 MB. Home downloads no video; a brand video waits until the banner is
+  on screen; the picture shows first.
+* The 402 page, its links, the admin note, the 30-second check and coming back by itself.
+* The admin pages that use this code can't be opened in tests without the admin login, so the tests run the
+  shop's own photo and video code directly in the test browser instead.
+
+
+BEFORE → AFTER (measured the same way, live shop, phone size)
+
+                                         Before        After (now)    After you run the two tools
+   Home, first visit, first screen       2,416 KB      748 KB         about 750 KB
+   Home, first visit, whole page         3,833 KB      2,165 KB       about 2.5 MB (cards a bit bigger, see note)
+   Home, second visit                    3,463 KB      0 KB           0 KB
+   Product page (13 photos), 1st visit   396 KB        392 KB         about 400 KB
+   Product page, second visit            121 KB        0 KB           0 KB
+   Brand page with video, 1st visit      2,053 KB      1,813 KB       about 1.5 MB or less
+   Brand page, second visit              3,084 KB      0 KB           0 KB
+   Storage requests per full test run    ≈ 14,000      0 real downloads (≈ 835 one-byte checks in one test)
+   Storage bytes per full test run       ≈ 0.7 GB      ≈ 1 MB
+   Note: the 480 px card copies are about 40% bigger than the old 400 px ones (they are sharper on today's
+   phones), but each phone now downloads each one only once.
+
+   What this means for the Free plan: before, one customer who came back twice cost about 10 MB; now about
+   2.5 MB, once. The tests, which were about 90% of the 23 GB, now cost about 1 MB per full run.
+
+
+VERIFY (the full suite, run once at the end — "npm run verify", 6.4 minutes)
+  build OK · unit tests 461 of 461 passed · browser tests 131 passed, 291 skipped, 5 failed.
+  * 291 skipped: they need the test accounts (.env.e2e), which are on your PC, not on this Mac.
+  * The 5 failures are not caused by this batch:
+    - batch-29 "floating cart … never overlaps" and "buy bar: − at 1 removes …": fail on main too (the
+      product they pick from the live shop can't be added to the cart any more).
+    - batch-23 "row shows the YouTube thumbnail …" (fails on main too) and batch-27 "video: our own cover
+      before play …": the same cause — a YouTube video never starts playing in the test browser.
+    - checkout "add to cart, complete checkout …": stops with "Missing .env.e2e" (needs the test customer).
+  * Zero real Storage downloads: no test failed the Batch 40 "downloaded a real file" check.
+  As the new rule says, I did not run the whole suite again.
+
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+None needed. No database change in this batch.
+
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+1) Converting the photos and videos already in Storage. The brief asked me to do it myself. This computer
+   (a Mac — the project was set up on your Windows PC) has no admin test login (.env.e2e) and no Supabase
+   command-line link, so I could not write to Storage or the database. Instead, two one-tap tools, run from
+   your admin, in your own browser:
+   * Admin → Products → ⋯ → "Make images light": makes the 480 px card copy of every product and variant
+     photo, then gives every stored photo the one-year setting (same file, same link). About 400 photos;
+     takes a few minutes on Wi-Fi. Safe to run again if anything fails — it only does what is missing.
+   * Admin → Brands → "Make videos small": makes each of the 6 old videos small (Chrome on a computer is
+     fastest; a phone works too) and points the brand at it.
+   Nothing is deleted. The old files (the 400 px "thumb" copies and the 6 big videos) stay until you tell me
+   they can go.
+2) The admin dashboard measurement (needs the admin login).
+3) In the full test run, the tests that need the test accounts were skipped on this computer, for the same
+   reason (they ran on your PC before). This includes the admin upload tests I updated (batch-26, batch-31,
+   batch-33). Please run "npm run verify" once on your PC, or copy .env.e2e to this Mac.
+
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+======================================================================
+* This Mac had Node 20. The project needs Node 22 or newer (the unit tests and the invoice test helper fail on
+  Node 20). I used Node 25 (already installed with Homebrew). The GitHub backup job uses Node 20 — fine for it.
+* Three browser tests fail on main too, before any Batch 40 change (I checked):
+  - batch-29 "floating cart … never overlaps" and "buy bar: − at 1 removes …": the product they pick from the
+    live shop has no working Add-to-cart button any more (live data changed).
+  - batch-23 "row shows the YouTube thumbnail; taps … stay on the page": the YouTube video never starts in the
+    test browser.
+* Deleting a product removes its photos but not their small copies (tiny orphan files).
+* The bento "featured" stack loads every featured product's picture at once, even the ones not shown.
+* Every page visit downloads the whole product list from the database (~320 KB). Fine at 116 products; it
+  grows with the catalogue.
+
+
+======================================================================
+5. DESIGN DECISIONS (choices I made for you, and why)
+======================================================================
+* "immutable": Supabase's upload can only set "max-age=<seconds>" (it writes "public, max-age=31536000"); it
+  has no way to add "immutable". Because every upload now has a new name, a stored file never changes, so this
+  has the same effect in practice.
+* Existing photos are not re-compressed to 1400 px: they are already 1200 px or less, and re-encoding a WebP
+  only loses sharpness. They become the "large" version as they are. New uploads are 1400 px.
+* Card copies live in a "card" folder with the photo's own name (products/card/<id>.webp), so each photo's
+  card is easy to find and unique, and the old "thumb" copies can be removed later in one go.
+* The card copy is 480 px, quality 0.82: a typical card photo is ~20 KB (smaller than the 40–80 KB the brief
+  allowed — better for egress, and still sharp at 2.6× phone screens).
+* Videos: cut to the first 20 seconds (a banner loops anyway), no sound, 720p. Some video encoders refuse to
+  go below a certain size at 720p, so the tool tries 720p, then 720p at 24 frames a second, then 540p, until
+  it is under 1.5 MB. The video tool (Mediabunny library, ~590 KB) loads only when an admin makes a video small
+  — customers never download it, and the offline helper doesn't pre-download it either.
+* A video that can't be made small is NOT stored; the brand shows a still picture from it (the brief: "keep
+  the poster image only").
+* Shop-down page: WhatsApp is the one orange button (the main action), Messenger outlined (CLAUDE.md: one
+  orange element per screen). It also covers slow connections: if the first data takes over 8 seconds the
+  page shows, and it switches to the shop by itself the moment the data arrives.
+* Tests: placeholders instead of real photos also make the test screenshots show grey squares instead of
+  product photos — the layout is the same.
+
+THE FALLBACK LINKS (please check)
+* WhatsApp: 8801560040012 → https://wa.me/8801560040012   (from Admin → Settings "shop_whatsapp_number")
+* Messenger: https://m.me/naeems.skinscience                (from Admin → Settings "messenger_link")
+To change them without a code change: in Vercel → Project → Settings → Environment Variables add
+VITE_FALLBACK_WHATSAPP and/or VITE_FALLBACK_MESSENGER, then redeploy.
+
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+======================================================================
+1) Load only what a page needs from the database (medium). Every visit downloads the whole catalogue with all
+   descriptions (~320 KB). A lighter list for Home and the full text only on the product page would cut normal
+   egress by ~70% and make the first screen faster on slow phones.
+2) A separate, empty Supabase project for tests (medium). Tests still read and write the live database (with
+   test data they clean up). A test project would make "tests can't affect the shop" a guarantee.
+3) Delete the old files after you confirm (small). The 400 px thumb copies (5.5 MB) and the 6 big videos
+   (20 MB) — Storage size is not the problem, but tidier is easier to manage.
+4) Don't pre-download the invoice tool to every phone (small). The offline helper pre-downloads a 1.3 MB
+   invoice file (admin only) to every customer's phone. This is Vercel bandwidth, not Supabase, but it is
+   wasted data on a customer's phone plan.
+5) A Usage alert (small). Supabase can email when usage passes a level — set it at 60%.
+
+
+======================================================================
+WHAT YOU SHOULD CHECK ON YOUR PHONE (after you merge and Vercel has deployed)
+======================================================================
+1. Open the shop. Admin → Products → ⋯ → "Make images light". Wait for "Done" (keep the screen on).
+2. Admin → Brands → "Make videos small". Wait for "Done". It names any brand it changed to picture-only.
+3. Product photos are sharp: open 3 products, zoom into the photo — it should look as sharp as before.
+4. Grids look right: Home, a category, search — every card has its photo, none missing or blurry.
+5. A brand video plays: open a brand with a video (Sudocrem, Galderma, La Roche-Posay…). The picture shows
+   first, then the video starts by itself. Scroll down — it pauses; scroll up — it plays again.
+6. A second visit is fast: close the shop, open it again — photos appear at once (they come from the phone).
+7. How the fallback page looks: see the screenshots in reports/batch-40-screens/ (I can't block Supabase on
+   the live shop just to show you; the tests do it with a fake "402").
+8. Upload a new brand video once (any phone clip): you should see "Making it smaller… %" and then a note like
+   "Made smaller for phones: 24.3 MB → 1.3 MB (720p, no sound)".
+
+YOUR WEEKLY HABIT (one line)
+Every Monday: Supabase → your project → Usage → "Cached Egress" — safe is under 60% (3 GB) by the 15th of the
+billing month; if it is higher, tell me before it reaches 80%.
