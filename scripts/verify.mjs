@@ -1,6 +1,12 @@
 // npm run verify   — build + unit tests (vitest) + browser tests (Playwright),
 //                    printing ONE short summary line when everything passes.
-// npm run verify:3 — the same three times in a row (build once).
+// (Batch 40: the old `verify:3`, three full runs in a row, was removed —
+// each run downloads from the live Supabase project; see CLAUDE.md.)
+// npm run verify:quick [-- e2e/x.spec.ts ...]
+//                  — Batch 40: build + unit tests + only the browser test
+//                    files this batch touched (changed on this branch or not
+//                    yet committed), plus any named. Use it during a batch;
+//                    run the full `verify` once at the end (CLAUDE.md).
 //
 // Batch 30 Part 1: full test logs are long, and reading them again and
 // again used most of a session's budget. Everything is still run (nothing
@@ -9,7 +15,7 @@
 // in scripts/verifyReport.mjs). Browser tests run in two groups (see
 // playwright.config.ts): "parallel" first, then "serial" (one at a time,
 // alone). The HTML report is kept only when something failed.
-import { spawn } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { firstLines, playwrightSummary, runOutput, vitestSummary } from './verifyReport.mjs';
@@ -17,6 +23,27 @@ import { firstLines, playwrightSummary, runOutput, vitestSummary } from './verif
 const OUT = '.verify';
 const runsArg = process.argv.find((a) => a.startsWith('--runs='));
 const RUNS = runsArg ? Math.max(1, Number(runsArg.split('=')[1]) || 1) : 1;
+const QUICK = process.argv.includes('--quick');
+
+/** The browser test files this batch touched: changed since the branch
+ *  left origin/main, or changed and not committed yet, plus any named. */
+function touchedSpecs() {
+  const git = (cmd) => {
+    try {
+      return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/);
+    } catch {
+      return [];
+    }
+  };
+  const named = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const changed = [
+    ...git('git diff --name-only origin/main...HEAD'),
+    ...git('git diff --name-only HEAD'),
+    ...git('git ls-files --others --exclude-standard e2e'),
+  ];
+  const specs = [...named, ...changed].map((f) => f.trim().replace(/\\/g, '/')).filter((f) => /^e2e\/[^/]+\.spec\.ts$/.test(f));
+  return [...new Set(specs)].filter((f) => existsSync(f)).sort();
+}
 
 function run(commandLine, logFile, env = {}) {
   return new Promise((resolve) => {
@@ -50,7 +77,7 @@ async function vitest(round) {
   return vitestSummary(JSON.parse(readFileSync(jsonFile, 'utf8')), res.seconds, res.code);
 }
 
-async function playwright(round) {
+async function playwright(round, files = []) {
   const reports = [];
   const extraFailures = [];
   let seconds = 0;
@@ -60,7 +87,8 @@ async function playwright(round) {
     const htmlDir = join(OUT, `e2e-${project}-${round}-html`);
     rmSync(jsonFile, { force: true });
     rmSync(htmlDir, { recursive: true, force: true });
-    const res = await run(`npx playwright test --project=${project} --no-deps --reporter=dot,json,html`, join(OUT, `e2e-${project}-${round}.log`), {
+    const only = files.length > 0 ? ` --pass-with-no-tests ${files.join(' ')}` : '';
+    const res = await run(`npx playwright test --project=${project} --no-deps --reporter=dot,json,html${only}`, join(OUT, `e2e-${project}-${round}.log`), {
       PLAYWRIGHT_JSON_OUTPUT_NAME: jsonFile,
       PLAYWRIGHT_HTML_OUTPUT_DIR: htmlDir,
       PLAYWRIGHT_HTML_OPEN: 'never',
@@ -89,6 +117,21 @@ if (!b.ok) {
   process.exit(1);
 }
 let allOk = true;
+if (QUICK) {
+  const specs = touchedSpecs();
+  const v = await vitest(1);
+  if (specs.length === 0) {
+    console.log(`${b.line} · ${v.line} · no browser test files touched`);
+    if (!v.ok) console.log(v.failures.join('\n'));
+    process.exit(v.ok ? 0 : 1);
+  }
+  console.log(`browser test files: ${specs.join(', ')}`);
+  const e = await playwright(1, specs);
+  console.log(runOutput('quick: ', b.line, v, e));
+  const minutes = ((Date.now() - started) / 60000).toFixed(1);
+  console.log(v.ok && e.ok ? `QUICK GREEN (${minutes} min) — run the full verify once at the end of the batch` : `FAILED (${minutes} min)`);
+  process.exit(v.ok && e.ok ? 0 : 1);
+}
 for (let round = 1; round <= RUNS; round += 1) {
   const v = await vitest(round);
   const e = await playwright(round);

@@ -491,7 +491,8 @@ test('Part 8: cards use the small copy when there is one, the full photo otherwi
   // file shows the placeholder, with no photo to compare).
   let withoutSmall: (typeof all)[number] | undefined;
   for (const p of all.filter((p) => p.image_urls?.length && (!p.image_urls_thumb?.[0] || p.image_urls_thumb[0] === p.image_urls[0]))) {
-    if ((await page.request.get(p.image_urls[0])).ok()) {
+    // Batch 40: HEAD — asks whether the file is there without downloading it.
+    if ((await page.request.head(p.image_urls[0])).ok()) {
       withoutSmall = p;
       break;
     }

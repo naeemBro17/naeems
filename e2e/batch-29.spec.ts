@@ -548,7 +548,7 @@ test.describe('Part 6 — brand video banner', () => {
     // Hold the video back for 3 s, as on a slow first visit.
     await page.route(/\/brand-media\/videos\/[^?]+\.(mp4|webm)(\?.*)?$/, async (route: Route) => {
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      await route.continue();
+      await route.fallback();
     });
     await page.goto(`/brand/${slug}`);
     const media = page.getByTestId('brand-banner-media');

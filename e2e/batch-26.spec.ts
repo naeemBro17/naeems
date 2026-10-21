@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { allowStorageFile } from './helpers/storageGuard';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL } from './helpers/env';
@@ -362,6 +363,9 @@ test('admin: add a brand with a logo — the stored logo has no empty border', a
   );
   const logoUrl = saved.data![0].logo_url;
   expect(logoUrl).toContain('/brand-media/logos/');
+  // Batch 40: this test's own tiny upload is read back for real (the
+  // pixels are checked); every other Storage file stays a placeholder.
+  allowStorageFile(page.context(), logoUrl);
   expect(saved.data![0].slug).toBe('e2e-brand-upload');
   const box = await page.evaluate(async (url) => {
     const img = new Image();
