@@ -203,7 +203,8 @@ async function saveAndRead(page: Page): Promise<{ urls: string[]; thumbs: string
 function expectThumbsLinked(saved: { urls: string[]; thumbs: string[] }): void {
   expect(saved.thumbs).toHaveLength(saved.urls.length);
   saved.urls.forEach((u, i) => {
-    expect(storagePath(saved.thumbs[i])).toBe(`products/thumb/${uuidOf(u)}.webp`);
+    // Batch 40: the 480 px card copy lives in card/.
+    expect(storagePath(saved.thumbs[i])).toBe(`products/card/${uuidOf(u)}.webp`);
   });
 }
 
@@ -321,6 +322,11 @@ test('Part 1: a photo that cannot load shows a placeholder with Retry, never a b
   test.setTimeout(60_000);
   test.skip(savedUrls.length !== 3, 'Needs the photos saved by the first Part 1 test.');
   const missing = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/products/e2e-b33-missing-${Date.now()}.webp`;
+  // Batch 40: Storage files are placeholders in tests; this one answers the
+  // way Storage does for a file that isn't there.
+  await page.route((url) => url.href.startsWith(missing), (route) =>
+    route.fulfill({ status: 400, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"statusCode":"404","error":"not_found","message":"Object not found"}' })
+  );
   const res = await setImages({
     image_urls: [...savedUrls, missing],
   });

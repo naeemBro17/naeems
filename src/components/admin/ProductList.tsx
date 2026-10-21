@@ -5,8 +5,8 @@ import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { normalizeText } from '../../lib/format';
-import { productImages, coverImage, productNeedsSmallCopies } from '../../lib/productImages';
-import { findSmallImagesWork, runSmallImages, workCount } from '../../lib/smallImages';
+import { productImages, cardImage, productNeedsCardCopies } from '../../lib/productImages';
+import { findShortCacheFiles, findSmallImagesWork, refreshStoredFiles, runSmallImages, workCount } from '../../lib/smallImages';
 import { adminPath } from '../../lib/adminPages';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { RestockSheet } from './RestockSheet';
@@ -91,12 +91,15 @@ export function ProductList() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [combineOpen, setCombineOpen] = useState(false);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
-  // Batch 31 Part 8: "Generate small images" — every product, variant and
-  // Browse-circle photo that has no real small copy yet (lib/smallImages).
+  // Batch 31 Part 8 / Batch 40: "Make images light" — a 480 px card copy of
+  // every product and variant photo, the Browse-circle copies, then the
+  // one-year cache setting on every stored photo (lib/smallImages).
   const [isBackfillingThumbs, setIsBackfillingThumbs] = useState(false);
-  const [thumbBackfillProgress, setThumbBackfillProgress] = useState<{ done: number; total: number } | null>(
-    null
-  );
+  const [thumbBackfillProgress, setThumbBackfillProgress] = useState<{
+    step: 'copies' | 'cache';
+    done: number;
+    total: number;
+  } | null>(null);
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -166,37 +169,38 @@ export function ProductList() {
     setCategoryFilter(id.startsWith('cat:') ? id.slice(4) : '');
   };
 
-  // Products whose photos still have no real small copy (Batch 31: a full
-  // photo saved in the small slot counts as missing).
-  const productsNeedingThumb = useMemo(() => products.filter(productNeedsSmallCopies), [products]);
+  // Products whose photos still have no 480 px card copy (Batch 40; a full
+  // photo saved in the small slot counts as missing, Batch 31).
+  const productsNeedingThumb = useMemo(() => products.filter(productNeedsCardCopies), [products]);
 
   const handleGenerateThumbnails = async () => {
     if (isBackfillingThumbs) return;
     setIsBackfillingThumbs(true);
-    setThumbBackfillProgress({ done: 0, total: 0 });
+    setThumbBackfillProgress({ step: 'copies', done: 0, total: 0 });
     const work = await findSmallImagesWork(products, categories);
-    if (workCount(work) === 0) {
-      setIsBackfillingThumbs(false);
-      setThumbBackfillProgress(null);
-      showToast(
-        work.columnsReady
-          ? 'All photos already have small copies'
-          : 'All product photos already have small copies (variant and category photos need the Batch 31 database update)'
-      );
-      return;
-    }
-    const { made, failed } = await runSmallImages(
-      work,
-      (done, total) => setThumbBackfillProgress({ done, total }),
-      (productId, thumbs) => patchProductLocal(productId, { image_urls_thumb: thumbs })
-    );
+    const copies =
+      workCount(work) === 0
+        ? { made: 0, failed: 0 }
+        : await runSmallImages(
+            work,
+            (done, total) => setThumbBackfillProgress({ step: 'copies', done, total }),
+            (productId, thumbs) => patchProductLocal(productId, { image_urls_thumb: thumbs })
+          );
     if (work.categories.length > 0 || work.variants.length > 0) await refetch();
+    setThumbBackfillProgress({ step: 'cache', done: 0, total: 0 });
+    const shortCache = await findShortCacheFiles();
+    const cache = await refreshStoredFiles(shortCache, (done, total) =>
+      setThumbBackfillProgress({ step: 'cache', done, total })
+    );
     setIsBackfillingThumbs(false);
     setThumbBackfillProgress(null);
+    const failed = copies.failed + cache.failed;
     showToast(
       failed === 0
-        ? `Done: small images made for ${made} item${made === 1 ? '' : 's'}`
-        : `Done: ${made} made, ${failed} failed (run it again to retry those)`,
+        ? `Done: ${copies.made} item${copies.made === 1 ? '' : 's'} got card photos, ${cache.done} photo${
+            cache.done === 1 ? '' : 's'
+          } now stay on phones`
+        : `Done, but ${failed} could not be changed — tap Make images light again to retry those`,
       failed === 0 ? 'success' : 'error'
     );
   };
@@ -409,7 +413,7 @@ export function ProductList() {
       <AdminPageHeader
         title="Products"
         primary={addButton}
-        menu={[{ label: 'Generate small images', icon: 'products', onSelect: () => void handleGenerateThumbnails(), disabled: isBackfillingThumbs }]}
+        menu={[{ label: 'Make images light', icon: 'products', onSelect: () => void handleGenerateThumbnails(), disabled: isBackfillingThumbs }]}
       />
 
       <div className="adm-filter-row">
@@ -438,21 +442,21 @@ export function ProductList() {
 
       {(productsNeedingThumb.length > 0 || isBackfillingThumbs) && (
         <div className="admin-panel adm-notice">
-          <h3 className="admin-panel__title">Speed up product photos</h3>
-          <p className="admin-panel__description">
+          <h3 className="admin-panel__title">Make product photos light</h3>
+          <p className="admin-panel__description" role="status" data-testid="images-light-status">
             {isBackfillingThumbs
-              ? `Generating small images: ${thumbBackfillProgress?.done ?? 0} of ${
-                  thumbBackfillProgress?.total ?? 0
-                } done. Keep this tab open.`
+              ? thumbBackfillProgress?.step === 'cache'
+                ? `Step 2 of 2 — photos that stay on phones: ${thumbBackfillProgress.done} of ${thumbBackfillProgress.total}. Keep this tab open.`
+                : `Step 1 of 2 — card photos: ${thumbBackfillProgress?.done ?? 0} of ${thumbBackfillProgress?.total ?? 0}. Keep this tab open.`
               : `${productsNeedingThumb.length} product${
                   productsNeedingThumb.length === 1 ? '' : 's'
-                } still send${
+                } still use${
                   productsNeedingThumb.length === 1 ? 's' : ''
-                } the full-size photo to the grid/search/cart instead of a small one. One-time fix, safe to run: it only adds a small extra copy of each photo, nothing is deleted.`}
+                } older photo copies. One-time fix, safe to run: it adds a light card copy of each photo for the grid/search/cart and lets phones keep every photo for a year. Nothing is deleted; product pages keep the same sharp photo.`}
           </p>
           {!isBackfillingThumbs && (
             <button type="button" className="button button--secondary button--small" onClick={handleGenerateThumbnails}>
-              Generate small images
+              Make images light
             </button>
           )}
         </div>
@@ -497,7 +501,8 @@ export function ProductList() {
           </div>
           {filtered.map((product) => {
             const stock = stockLabel(product, threshold);
-            const cover = coverImage(product);
+            // Batch 40: the small card copy (the list shows a 44 px picture).
+            const cover = cardImage(product);
             const isSelected = selectedIds.includes(product.id);
             return (
               <div
@@ -518,7 +523,7 @@ export function ProductList() {
                 </span>
                 <span className="adm-lrow__thumb">
                   {cover ? (
-                    <img src={cover} alt="" loading="lazy" />
+                    <img src={cover} alt="" loading="lazy" decoding="async" />
                   ) : (
                     <AdminIcon name="products" />
                   )}

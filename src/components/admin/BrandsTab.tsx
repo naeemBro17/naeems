@@ -6,11 +6,13 @@ import { brandPath, productCountLabel, productCountsByBrand, sortBrands } from '
 import {
   createMissingVideoPosters,
   deleteBrand,
+  makeBrandVideosSmall,
   MOVE_PRODUCTS_FIRST,
   reorderBrands,
   setBrandOnHome,
 } from '../../lib/brandAdmin';
 import { timeAgo } from '../../lib/adminData';
+import { isCompressedVideoUrl } from '../../lib/videoCompress';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Modal } from '../shared/Modal';
 import { BrandEditor } from './BrandEditor';
@@ -58,6 +60,8 @@ export function BrandsTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [posterBusy, setPosterBusy] = useState(false);
   const [posterStatus, setPosterStatus] = useState<string | null>(null);
+  const [smallBusy, setSmallBusy] = useState(false);
+  const [smallStatus, setSmallStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setList(sortBrands(brands));
@@ -142,6 +146,28 @@ export function BrandsTab() {
     else showToast('Video previews ready');
   };
 
+  // Batch 40 Part 2.5: brand videos stored before videos were made small
+  // on upload (Storage keeps the old files).
+  const bigVideos = list.filter((b) => b.banner_video_url !== null && !isCompressedVideoUrl(b.banner_video_url)).length;
+  const makeVideosSmall = async () => {
+    setSmallBusy(true);
+    const result = await makeBrandVideosSmall(list, (done, total) => {
+      setSmallStatus(total === 0 ? 'Every brand video is already small.' : `Making videos smaller… ${done} of ${total} (keep this page open)`);
+    });
+    setSmallBusy(false);
+    if (result.unsupported) {
+      setSmallStatus(`${result.unsupported} Nothing was changed.`);
+      showToast('This browser cannot make videos smaller', 'error');
+      return;
+    }
+    const parts = [`Done. ${result.made.length} made small`];
+    if (result.pictureOnly.length > 0) parts.push(`picture only (video could not be made small): ${result.pictureOnly.join(', ')}`);
+    if (result.failed.length > 0) parts.push(`not changed this time, tap again: ${result.failed.join(', ')}`);
+    setSmallStatus(`${parts.join('; ')}.`);
+    showToast(result.failed.length > 0 ? 'Some videos were not changed — tap again' : 'Brand videos are small now', result.failed.length > 0 ? 'error' : 'success');
+    await refetch();
+  };
+
   return (
     <section aria-label="Brands" className="adm-brands">
       <AdminPageHeader
@@ -177,6 +203,24 @@ export function BrandsTab() {
           <p className="form-helper" role="status" data-testid="video-previews-status">
             {posterStatus ?? 'The picture a brand page shows while its video loads. Tap once; new uploads get one automatically.'}
           </p>
+          {(bigVideos > 0 || smallStatus !== null) && (
+            <>
+              <button
+                type="button"
+                className="adm-btn adm-btn--ghost adm-btn--sm"
+                disabled={smallBusy || bigVideos === 0}
+                onClick={() => void makeVideosSmall()}
+                data-testid="make-videos-small"
+              >
+                <AdminIcon name="video" />
+                Make videos small
+              </button>
+              <p className="form-helper" role="status" data-testid="make-videos-small-status">
+                {smallStatus ??
+                  `${bigVideos} brand video${bigVideos === 1 ? ' is' : 's are'} still large. Tap once on a computer or phone with Chrome: each becomes 720p, no sound, about 1.5 MB. The old files stay in Storage.`}
+              </p>
+            </>
+          )}
         </div>
       )}
 

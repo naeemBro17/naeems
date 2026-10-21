@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 
 /**
  * A fake e2e "purchase" or "add to cart" must never reach Facebook Pixel or
@@ -15,6 +15,8 @@ const BLOCKED_HOST_PATTERNS = [
   /analytics\.google\.com/,
 ];
 
+const BLOCKED = new RegExp(BLOCKED_HOST_PATTERNS.map((pattern) => pattern.source).join('|'));
+
 export async function blockAdTracking(page: Page): Promise<void> {
   await page.route('**/*', (route) => {
     const url = route.request().url();
@@ -24,4 +26,13 @@ export async function blockAdTracking(page: Page): Promise<void> {
     }
     route.fallback();
   });
+}
+
+/**
+ * Batch 40: the same for a whole browser context, so the extra pages a test
+ * opens (browser.newPage, context.newPage) and the offline helper (service
+ * worker) can't send a fake visit either.
+ */
+export async function blockAdTrackingInContext(context: BrowserContext): Promise<void> {
+  await context.route(BLOCKED, (route) => route.abort());
 }

@@ -13,6 +13,7 @@ import { CheckoutStateProvider } from './features/checkout/useCheckoutState';
 import { ToastContainer } from './components/shared/ToastContainer';
 import { AnalyticsTracker } from './components/shared/AnalyticsTracker';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
+import { ShopDownGate } from './components/shared/ShopDown';
 import { PageTransition } from './components/shared/PageTransition';
 import { ViewerPage } from './pages/ViewerPage';
 import {
@@ -118,55 +119,59 @@ export default function App() {
             <CartProvider>
               <CheckoutStateProvider>
                 <AdminEditProvider>
-                  <AnalyticsTracker />
-                  <PageTransition>
-                    <Suspense fallback={<RouteFallback />}>
-                      <Routes>
-                        <Route path="/" element={<ViewerPage />} />
-                        <Route path="/search" element={<SearchPage />} />
-                        {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
-                        <Route path="/product/:slug" element={<ProductDetailPage />} />
-                        <Route path="/contact" element={<ContactExpertPage />} />
-                        {/* Brands — Batch 26. */}
-                        <Route path="/brands" element={<BrandsPage />} />
-                        <Route path="/brand/:slug" element={<BrandPage />} />
-                        {/* Policy/trust pages — Batch 19 Part 4. /privacy is
-                            already registered with Google for login, must stay
-                            exactly this path. */}
-                        <Route path="/return-policy" element={<ReturnPolicyPage />} />
-                        <Route path="/delivery" element={<DeliveryPolicyPage />} />
-                        <Route path="/terms" element={<TermsPage />} />
-                        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-                        <Route path="/about" element={<AboutPage />} />
-                        <Route path="/account" element={<AccountPage />} />
-                        <Route path="/orders" element={<OrdersListPage />} />
-                        <Route path="/orders/:orderId" element={<OrderDetailPage />} />
-                        {/* Cart & checkout flow — see src/features/checkout. */}
-                        <Route path="/cart" element={<CartPage />} />
-                        <Route path="/checkout/delivery" element={<DeliveryDetailsPage />} />
-                        <Route path="/checkout/summary" element={<OrderSummaryPage />} />
-                        <Route path="/checkout/success" element={<OrderSuccessPage />} />
-                        {/* Unlisted sign-in routes — never linked from the public UI. */}
-                        <Route path="/admin-access" element={<AdminAccessPage />} />
-                        <Route path="/wholesaler-access" element={<WholesalerAccessPage />} />
-                        {/* /admin and its pages (Batch 32: /admin/orders/new, …). */}
-                        <Route
-                          path="/admin/*"
-                          element={
-                            <ProtectedRoute>
-                              <Suspense fallback={<AdminPageFallback />}>
-                                <AdminPage />
-                              </Suspense>
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route path="*" element={<NotFoundPage />} />
-                      </Routes>
-                    </Suspense>
-                  </PageTransition>
-                  <GlobalBottomNav />
-                  <GlassCartButton />
-                  <CartUndoToast />
+                  {/* Batch 40 Part 3: a calm "shop is being updated" page
+                      while the database can't be reached. */}
+                  <ShopDownGate>
+                    <AnalyticsTracker />
+                    <PageTransition>
+                      <Suspense fallback={<RouteFallback />}>
+                        <Routes>
+                          <Route path="/" element={<ViewerPage />} />
+                          <Route path="/search" element={<SearchPage />} />
+                          {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
+                          <Route path="/product/:slug" element={<ProductDetailPage />} />
+                          <Route path="/contact" element={<ContactExpertPage />} />
+                          {/* Brands — Batch 26. */}
+                          <Route path="/brands" element={<BrandsPage />} />
+                          <Route path="/brand/:slug" element={<BrandPage />} />
+                          {/* Policy/trust pages — Batch 19 Part 4. /privacy is
+                              already registered with Google for login, must stay
+                              exactly this path. */}
+                          <Route path="/return-policy" element={<ReturnPolicyPage />} />
+                          <Route path="/delivery" element={<DeliveryPolicyPage />} />
+                          <Route path="/terms" element={<TermsPage />} />
+                          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                          <Route path="/about" element={<AboutPage />} />
+                          <Route path="/account" element={<AccountPage />} />
+                          <Route path="/orders" element={<OrdersListPage />} />
+                          <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+                          {/* Cart & checkout flow — see src/features/checkout. */}
+                          <Route path="/cart" element={<CartPage />} />
+                          <Route path="/checkout/delivery" element={<DeliveryDetailsPage />} />
+                          <Route path="/checkout/summary" element={<OrderSummaryPage />} />
+                          <Route path="/checkout/success" element={<OrderSuccessPage />} />
+                          {/* Unlisted sign-in routes — never linked from the public UI. */}
+                          <Route path="/admin-access" element={<AdminAccessPage />} />
+                          <Route path="/wholesaler-access" element={<WholesalerAccessPage />} />
+                          {/* /admin and its pages (Batch 32: /admin/orders/new, …). */}
+                          <Route
+                            path="/admin/*"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense fallback={<AdminPageFallback />}>
+                                  <AdminPage />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route path="*" element={<NotFoundPage />} />
+                        </Routes>
+                      </Suspense>
+                    </PageTransition>
+                    <GlobalBottomNav />
+                    <GlassCartButton />
+                    <CartUndoToast />
+                  </ShopDownGate>
                 </AdminEditProvider>
               </CheckoutStateProvider>
             </CartProvider>

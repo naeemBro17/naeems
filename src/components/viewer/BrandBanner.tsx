@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../../lib/protectImage';
 import { useTheme } from '../../contexts/ThemeContext';
 import { extractYouTubeId, youtubeBannerUrl } from '../../lib/youtube';
@@ -25,6 +25,11 @@ function prefersStillBanner(): boolean {
  * frame, else the banner image, else the logo on a calm surface — and the
  * video fades in over it (250 ms) only once it is really playing. If it
  * never plays (blocked autoplay, slow network), the still simply stays.
+ *
+ * Batch 40: nothing of the video downloads until the banner is on screen
+ * (preload="none", no autoplay) — it plays while on screen and pauses when
+ * scrolled away. The offline helper keeps the whole (small) file after the
+ * first time, so a later visit plays it from the phone.
  */
 export function BrandBanner({ brand }: { brand: Brand }) {
   const { theme } = useTheme();
@@ -48,16 +53,41 @@ export function BrandBanner({ brand }: { brand: Brand }) {
 
   // React sets `muted` as a property only; some phones decide autoplay from
   // the attribute itself, so it is written onto the element as well.
+  const videoEl = useRef<HTMLVideoElement | null>(null);
   const videoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoEl.current = el;
     if (!el) return;
     el.muted = true;
     el.defaultMuted = true;
     el.setAttribute('muted', '');
   }, []);
+  const mediaRef = useRef<HTMLDivElement>(null);
+
+  // Play only while the banner is on screen (Batch 40).
+  useEffect(() => {
+    const box = mediaRef.current;
+    if (!video || !box) return;
+    const play = () => void videoEl.current?.play().catch(() => undefined);
+    if (typeof IntersectionObserver === 'undefined') {
+      play();
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const onScreen = entries.some((entry) => entry.isIntersecting);
+        if (onScreen) play();
+        else videoEl.current?.pause();
+      },
+      { threshold: 0.2 }
+    );
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [video]);
 
   return (
     <div className="brand-banner" data-testid="brand-banner">
       <div
+        ref={mediaRef}
         className={`brand-banner__media${!hasVideo && !youtube && !image ? ' brand-banner__media--empty' : ''}`}
         data-testid="brand-banner-media"
       >
@@ -105,10 +135,9 @@ export function BrandBanner({ brand }: { brand: Brand }) {
             poster={image ?? undefined}
             onPlaying={() => setPlaying(true)}
             muted
-            autoPlay
             loop
             playsInline
-            preload="auto"
+            preload="none"
             disablePictureInPicture
             disableRemotePlayback
             controlsList="nodownload nofullscreen noremoteplayback"

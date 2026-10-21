@@ -4,7 +4,7 @@ import type { Product, ProductVariant, VariantOption } from '../../types';
 import { useCart } from '../../contexts/CartContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka } from '../../lib/format';
-import { productImages } from '../../lib/productImages';
+import { productImages, smallImageFor } from '../../lib/productImages';
 import {
   isVariantInStock,
   optionGalleryImages,
@@ -48,7 +48,8 @@ export function VariantPickerSheet({
     if (isOpen) setSelected(options[0]);
   }, [isOpen, options]);
 
-  const image = optionGalleryImages(productImages(product), selected, variants)[0] ?? null;
+  const large = optionGalleryImages(productImages(product), selected, variants)[0] ?? null;
+  const image = large === null ? null : smallImageFor(large, product, variants);
   const inStock = isVariantInStock(selected);
   const { mainPrice, strikePrice, savePercent } = variantDisplayPrice(selected);
 
@@ -72,7 +73,7 @@ export function VariantPickerSheet({
       <div className="variant-picker">
         <div className="variant-picker__head">
           <div className="variant-picker__thumb">
-            {image && <img src={image} alt="" loading="lazy" decoding="async" />}
+            {image && <img src={image} alt="" width={72} height={72} loading="lazy" decoding="async" />}
           </div>
           <div className="variant-picker__summary">
             <p className="variant-picker__name">{product.name}</p>

@@ -4,6 +4,10 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
+  /** Batch 40: the WhatsApp number / Messenger link the "shop is being
+   *  updated" page uses (they can't come from the database). Optional. */
+  readonly VITE_FALLBACK_WHATSAPP?: string;
+  readonly VITE_FALLBACK_MESSENGER?: string;
 }
 
 interface ImportMeta {

@@ -35,6 +35,15 @@ export default defineConfig({
     // they stay as separate files fetched on demand.
     assetsInlineLimit: (filePath: string) =>
       filePath.includes('flag-icons') ? false : undefined,
+    rollupOptions: {
+      output: {
+        // Batch 40: the video tool (Admin → Brands, ~590 kB) in a file of its
+        // own name, so the offline helper never pre-downloads it to a
+        // customer's phone (globIgnores below). Only an admin making a
+        // video small loads it.
+        manualChunks: (id: string) => (id.includes('/node_modules/mediabunny/') ? 'mediabunny' : undefined),
+      },
+    },
   },
   plugins: [
     react(),
@@ -91,8 +100,14 @@ export default defineConfig({
         // they're cached at runtime as reviewers' countries actually appear.
         // Every emitted assets/*.svg is a flag-icons country flag — the app's
         // own icons are inline JSX, and its PNG/ICO assets live in public/.
-        globIgnores: ['**/assets/*.svg'],
+        globIgnores: ['**/assets/*.svg', '**/assets/mediabunny-*.js'],
         navigateFallback: '/index.html',
+        // Batch 40: the helper takes charge of the page on the very first
+        // visit (once it has installed, a few seconds after load), so the
+        // pictures that load after that are kept from the first visit on,
+        // instead of being downloaded again on the second. An update still
+        // waits for src/lib/appUpdate.ts to switch it on (prompt mode).
+        clientsClaim: true,
         // Old versions' precached files are removed when a new one switches on.
         // (Runtime caches — images, brand videos, fonts — are kept.)
         cleanupOutdatedCaches: true,
@@ -109,22 +124,41 @@ export default defineConfig({
             },
           },
           {
-            // Brand banner videos (Batch 29 Part 6): the whole file is kept
-            // once it has been downloaded in full (the shop pre-loads it),
-            // and the video player's byte-range requests are answered from
-            // that copy — a second visit starts at once, even offline. Must
-            // stay above the general Storage rule (first match wins).
-            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/brand-media\/videos\/[^?]+\.(mp4|webm)(\?.*)?$/i,
+            // Brand banner videos (Batch 29 Part 6; Batch 40): the video
+            // player asks for pieces ("byte ranges"), which used to be
+            // answered by Supabase every visit and never kept (only whole
+            // files are kept) — 3 MB per brand page visit. Now the helper
+            // asks for the whole (small, ≤ 1.5 MB) file once, keeps it, and
+            // answers the player's pieces from that copy: a second visit
+            // plays from the phone, even offline. Must stay above the
+            // general Storage rule (first match wins). An admin's one-off
+            // download (small-copy-source=) is never kept.
+            urlPattern: ({ url }) =>
+              /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/brand-media\/videos\/[^?]+\.(mp4|webm)$/i.test(
+                url.origin + url.pathname
+              ) && !url.searchParams.has('small-copy-source'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'brand-videos',
               rangeRequests: true,
-              expiration: { maxEntries: 12, maxAgeSeconds: 2592000 },
+              expiration: { maxEntries: 30, maxAgeSeconds: 5184000 },
               cacheableResponse: { statuses: [200] },
+              plugins: [
+                {
+                  // The whole file, not the piece the player asked for.
+                  requestWillFetch: async ({ request }: { request: Request }) =>
+                    new Request(request.url, { mode: 'cors', credentials: 'omit' }),
+                },
+              ],
             },
           },
           {
-            // Supabase Storage images: CacheFirst, 150 entries, 30 days.
+            // Supabase Storage images: CacheFirst, 300 entries, 60 days
+            // (Batch 40: was 150 / 30 days — Home alone shows ~135 pictures,
+            // so a phone kept dropping and re-downloading them). Every file
+            // now has its own name and never changes, so a kept copy is
+            // always right. An admin's one-off download (small-copy-source=)
+            // is never kept.
             // Batch 33: an <img> asks in "no-cors" mode, so the worker got an
             // opaque answer (status 0) it could not read — a missing file or
             // a passing error (Storage answers 400) looked the same as a real
@@ -134,11 +168,12 @@ export default defineConfig({
             // fails it falls back to the original request. New cache name so
             // anything stored the old way is never served again (the app
             // deletes the old cache on start).
-            urlPattern: /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/.*/i,
+            urlPattern: ({ url }) =>
+              /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\//i.test(url.href) && !url.searchParams.has('small-copy-source'),
             handler: 'CacheFirst',
             options: {
               cacheName: 'supabase-storage-images-v2',
-              expiration: { maxEntries: 150, maxAgeSeconds: 2592000 },
+              expiration: { maxEntries: 300, maxAgeSeconds: 5184000 },
               cacheableResponse: { statuses: [200] },
               plugins: [
                 {

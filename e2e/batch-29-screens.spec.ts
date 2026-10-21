@@ -146,7 +146,7 @@ for (const theme of ['light', 'dark'] as const) {
     test.skip(!slug, 'no brand has an uploaded video');
     await page.route(/\/brand-media\/videos\/[^?]+\.(mp4|webm)(\?.*)?$/, async (route: Route) => {
       await new Promise((resolve) => setTimeout(resolve, 4000));
-      await route.continue();
+      await route.fallback();
     });
     await start(page, theme);
     await page.goto(`/brand/${slug}`);

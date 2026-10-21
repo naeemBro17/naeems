@@ -25,7 +25,7 @@ function SuggestionRow({
         onClick={onSelect}
       >
         {image ? (
-          <img {...protectedImageProps} className={`search-suggestion__thumb ${PROTECTED_IMAGE_CLASS}`} src={image} alt="" loading="lazy" />
+          <img {...protectedImageProps} className={`search-suggestion__thumb ${PROTECTED_IMAGE_CLASS}`} src={image} alt="" width={32} height={32} loading="lazy" decoding="async" />
         ) : (
           <span className="search-suggestion__thumb search-suggestion__thumb--empty" aria-hidden="true" />
         )}

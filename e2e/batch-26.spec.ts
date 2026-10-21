@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { allowStorageFile } from './helpers/storageGuard';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL } from './helpers/env';
@@ -307,9 +308,13 @@ test('banner video: muted, looping, inline, no controls; picture only under redu
   await page.goto(`/brand/${ALPHA.slug}`);
   const video = page.locator('[data-testid="brand-banner-video"]');
   await expect(video).toHaveCount(1);
-  for (const attr of ['muted', 'loop', 'playsinline', 'autoplay']) {
+  for (const attr of ['muted', 'loop', 'playsinline']) {
     expect(await video.evaluate((el, a) => el.hasAttribute(a), attr), attr).toBe(true);
   }
+  // Batch 40: nothing downloads before the banner is on screen — no
+  // autoplay attribute, preload="none"; the page starts it when visible.
+  expect(await video.evaluate((el) => el.hasAttribute('autoplay'))).toBe(false);
+  await expect(video).toHaveAttribute('preload', 'none');
   expect(await video.evaluate((el) => el.hasAttribute('controls'))).toBe(false);
   expect(await video.evaluate((el) => (el as HTMLVideoElement).muted)).toBe(true);
   await expect(video).toHaveAttribute('poster', BANNER);
@@ -362,6 +367,9 @@ test('admin: add a brand with a logo — the stored logo has no empty border', a
   );
   const logoUrl = saved.data![0].logo_url;
   expect(logoUrl).toContain('/brand-media/logos/');
+  // Batch 40: this test's own tiny upload is read back for real (the
+  // pixels are checked); every other Storage file stays a placeholder.
+  allowStorageFile(page.context(), logoUrl);
   expect(saved.data![0].slug).toBe('e2e-brand-upload');
   const box = await page.evaluate(async (url) => {
     const img = new Image();

@@ -121,7 +121,12 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
               className={`product-card__image ${PROTECTED_IMAGE_CLASS}`}
               src={cover ?? ''}
               alt={product.name}
+              // The 480 px card copy; the box is square in CSS, so the size
+              // only tells the browser the shape before the photo arrives.
+              width={480}
+              height={480}
               loading="lazy"
+              decoding="async"
               onError={() => setImageFailed(true)}
             />
           ) : (

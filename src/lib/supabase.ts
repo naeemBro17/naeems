@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { resizeImage } from './imageResize';
+import { startFirstLoadWatch, watchedFetch } from './backendStatus';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -10,20 +11,46 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Batch 40 Part 3: every call is watched, so a blocked or unreachable
+// Supabase shows the "shop is being updated" page (lib/backendStatus.ts).
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { fetch: watchedFetch } });
+
+// While Supabase is unreachable: one tiny question every 30 s, "are you back?"
+startFirstLoadWatch(async () => {
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/app_settings?select=key&limit=1`, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+      cache: 'no-store',
+    });
+    return res.status !== 402 && res.status < 500;
+  } catch {
+    return false;
+  }
+});
 
 export const STORAGE_BUCKET = 'product-images';
+
+/**
+ * Batch 40: how long phones and Supabase's CDN may keep a stored file —
+ * one year. Safe because every upload gets a new file name, so a stored
+ * file never changes. (Supabase writes this as "public, max-age=31536000";
+ * it has no way to add "immutable", which a new name makes unnecessary.)
+ */
+export const LONG_CACHE_SECONDS = '31536000';
+
+/** A random id for a new file name. */
+export function randomFileId(): string {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 /**
  * Storage path for a newly uploaded product image. Random name so paths are
  * stable across SKU renames and multiple images never collide.
  */
 export function newProductImagePath(): string {
-  const id =
-    typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `products/${id}.webp`;
+  return `products/${randomFileId()}.webp`;
 }
 
 /**
@@ -40,32 +67,49 @@ export function storagePathFromUrl(url: string): string | null {
 }
 
 /**
- * The small "card" version of a full-size product image path lives one
- * folder deeper, same filename — products/{id}.webp's card copy is
- * products/thumb/{id}.webp. Keeping the same filename means a full image's
- * thumb is always derivable from its own path, no separate id needed.
+ * A small copy of a stored photo lives one folder deeper, same filename:
+ * products/{id}.webp → products/card/{id}.webp (Batch 40: the 480 px card
+ * copy; Batch 19–39 copies are in thumb/) or categories/thumb/{id}.webp
+ * (Browse circles). The same filename means a photo's copy is always
+ * derivable from its own path, and since every photo has its own new name,
+ * so does its copy.
  */
-export function productThumbPath(fullPath: string): string {
+export function smallCopyPath(fullPath: string, folder: 'card' | 'thumb'): string {
   const slashIndex = fullPath.lastIndexOf('/');
   return slashIndex === -1
-    ? `thumb/${fullPath}`
-    : `${fullPath.slice(0, slashIndex)}/thumb/${fullPath.slice(slashIndex + 1)}`;
+    ? `${folder}/${fullPath}`
+    : `${fullPath.slice(0, slashIndex)}/${folder}/${fullPath.slice(slashIndex + 1)}`;
+}
+
+/** The card copy of a product photo (see smallCopyPath). */
+export function productCardPath(fullPath: string): string {
+  return smallCopyPath(fullPath, 'card');
+}
+
+/**
+ * "banners/{id}.webp" → "banners/{id}-{random}.webp": the same place, a new
+ * name for every upload (Batch 40 — a stored file never changes, so it can
+ * be kept for a year).
+ */
+export function uniqueImagePath(path: string): string {
+  const dot = path.lastIndexOf('.');
+  const stem = dot > path.lastIndexOf('/') ? path.slice(0, dot) : path;
+  return `${stem}-${randomFileId().slice(0, 8)}.webp`;
 }
 
 /**
  * Shared single-image upload used by every admin "one photo" field (banner
- * slide image, category image, expert photo) — resizes client-side, then
- * upserts to a fixed path in the product-images bucket so replacing a photo
- * overwrites in place instead of leaving the old upload orphaned. Returns a
- * cache-busted public URL so the new photo shows immediately despite the
- * stable path.
+ * slide image, category image, variant photo, expert photo) — resizes
+ * client-side, then uploads under a new name next to `path` (Batch 40:
+ * never over an old file, which phones may keep for a year). The old file
+ * stays in Storage.
  */
 export async function uploadAdminImage(path: string, file: File): Promise<string> {
   const blob = await resizeImage(file);
+  const uniquePath = uniqueImagePath(path);
   const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
-    .upload(path, blob, { contentType: 'image/webp', upsert: true });
+    .upload(uniquePath, blob, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS });
   if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-  return `${data.publicUrl}?v=${Date.now()}`;
+  return supabase.storage.from(STORAGE_BUCKET).getPublicUrl(uniquePath).data.publicUrl;
 }
