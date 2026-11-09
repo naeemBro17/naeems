@@ -15,16 +15,19 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** The supabase command: $SUPABASE_CLI, else the copy npx keeps in its cache. */
+/** The supabase command: $SUPABASE_CLI, else the copy npx keeps in its cache
+ *  (Windows: AppData\Local\npm-cache\_npx; Mac / Linux: ~/.npm/_npx). */
 export function supabaseCli(): string | null {
   if (process.env.SUPABASE_CLI && existsSync(process.env.SUPABASE_CLI)) return process.env.SUPABASE_CLI;
-  const cache = join(homedir(), 'AppData', 'Local', 'npm-cache', '_npx');
-  const local = join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'supabase.cmd' : 'supabase');
+  const name = process.platform === 'win32' ? 'supabase.cmd' : 'supabase';
+  const local = join(root, 'node_modules', '.bin', name);
   if (existsSync(local)) return local;
-  if (!existsSync(cache)) return null;
-  for (const dir of readdirSync(cache)) {
-    const bin = join(cache, dir, 'node_modules', '.bin', process.platform === 'win32' ? 'supabase.cmd' : 'supabase');
-    if (existsSync(bin)) return bin;
+  for (const cache of [join(homedir(), 'AppData', 'Local', 'npm-cache', '_npx'), join(homedir(), '.npm', '_npx')]) {
+    if (!existsSync(cache)) continue;
+    for (const dir of readdirSync(cache)) {
+      const bin = join(cache, dir, 'node_modules', '.bin', name);
+      if (existsSync(bin)) return bin;
+    }
   }
   return null;
 }
@@ -72,6 +75,23 @@ export function testResult<T>(output: string): T | null {
   if (!match) return null;
   try {
     return JSON.parse(match[1]) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Batch 41: a script that ends with
+ *    SELECT 'TEST_RESULT' AS tag, <json>::text AS results … ; ROLLBACK;
+ *  hands its results back as a row (long error messages are cut short by
+ *  the command line). */
+export function rowResult<T>(output: string): T | null {
+  const start = output.indexOf('{');
+  const end = output.lastIndexOf('}');
+  if (start < 0 || end < start) return null;
+  try {
+    const body = JSON.parse(output.slice(start, end + 1)) as { rows?: { tag?: string; results?: string }[] };
+    const row = body.rows?.find((r) => r.tag === 'TEST_RESULT');
+    return row?.results ? (JSON.parse(row.results) as T) : null;
   } catch {
     return null;
   }
