@@ -15,7 +15,7 @@ import {
   useSessionInPage,
   type TestSession,
 } from './helpers/api';
-import { runSql, sqlError, sqlSteps, supabaseCli, testResult } from './helpers/sqlRunner';
+import { rowResult, runSql, sqlError, sqlSteps, supabaseCli, testResult } from './helpers/sqlRunner';
 import { OPENING_COLUMNS } from '../src/lib/inventory/opening';
 
 // Batch 39: units, sales from lots, profit, the Inventory mode switch.
@@ -133,7 +133,7 @@ test('database: units, earliest expiry first, cancel / return / edits, sell with
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
   const output = await runSql(script);
-  const results = testResult<{ name: string; ok: boolean; detail: string }[]>(output);
+  const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
   expect(failed).toEqual([]);
