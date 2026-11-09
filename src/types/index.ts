@@ -244,6 +244,9 @@ export interface AppSettings {
   /** Batch 38: 'true' = sales use lots. Stays 'false' until Batch 39 (the
    *  database refuses 'true'). While Off, lots never touch stock. */
   inventory_mode: string;
+  /** Batch 41: the WhatsApp due reminder ({name} {due} {date} {link});
+   *  blank = the default text. */
+  due_reminder_template: string;
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
@@ -656,7 +659,8 @@ export type StaffPermission =
   | 'edit_customer_notes'
   | 'edit_orders'
   | 'manage_customers'
-  | 'view_profit_costs';
+  | 'view_profit_costs'
+  | 'add_money_entries';
 
 /** The signed-in staff member's own row (Super Admin or moderator). */
 export interface StaffMember {

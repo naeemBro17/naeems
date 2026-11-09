@@ -82,3 +82,26 @@ export const CIRCLE_IMAGE_WIDTH = 160;
 export function resizeImageCircle(file: Blob): Promise<Blob> {
   return resizeToWidth(file, CIRCLE_IMAGE_WIDTH, CARD_WEBP_QUALITY);
 }
+
+/** Batch 41: a bill photo is kept under this size (WebP). */
+export const BILL_PHOTO_MAX_BYTES = 150 * 1024;
+
+/** The sizes tried for a bill photo, largest first: readable text first,
+ *  smaller until it fits. */
+export const BILL_PHOTO_TRIES: readonly { width: number; quality: number }[] = [
+  { width: 1200, quality: 0.7 },
+  { width: 1000, quality: 0.6 },
+  { width: 800, quality: 0.55 },
+  { width: 640, quality: 0.5 },
+  { width: 480, quality: 0.45 },
+];
+
+/** Batch 41: a bill photo as WebP under BILL_PHOTO_MAX_BYTES (the first
+ *  size of BILL_PHOTO_TRIES that fits). */
+export async function resizeBillPhoto(file: Blob): Promise<Blob> {
+  for (const t of BILL_PHOTO_TRIES) {
+    const blob = await resizeToWidth(file, t.width, t.quality);
+    if (blob.size <= BILL_PHOTO_MAX_BYTES) return blob;
+  }
+  throw new Error('This photo could not be made small enough. Try a photo of just the bill.');
+}
