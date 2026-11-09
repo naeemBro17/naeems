@@ -52,6 +52,8 @@ import { toPaisa } from '../../../../supabase/functions/_shared/steadfastPayouts
 import '../../../styles/adminPayouts.css';
 import { fetchOrderPayout, shortDhakaDate, takaExact, takaWhole, type LoadState, type OrderPayoutInfo } from '../../../lib/payouts';
 import { adminPath } from '../../../lib/adminPages';
+import { useProducts } from '../../../contexts/ProductContext';
+import { markReturnedDamaged } from '../../../lib/money/api';
 
 interface OrderPageProps {
   orderNumber: string;
@@ -94,6 +96,8 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   // Batch 36 Part 1: "Steadfast paid ৳X on 8 Oct" — only with View profit
   // & costs (the database refuses everyone else).
   const canSeeCosts = can('view_profit_costs');
+  const { settings } = useProducts();
+  const canMarkDamaged = canSeeCosts && settings.inventory_mode === 'true';
   const [payoutInfo, setPayoutInfo] = useState<LoadState<OrderPayoutInfo | null> | null>(null);
 
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -116,6 +120,8 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [transitOpen, setTransitOpen] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  // Batch 41 Part 5.2: items ticked "Damaged" (units per order line).
+  const [damaged, setDamaged] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let alive = true;
@@ -217,13 +223,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
 
   const handleMarkReturned = async () => {
     if (!order) return;
-    const { error } = await adminMarkOrderReturned(order.id, null);
+    const broken = Object.entries(damaged)
+      .filter(([, n]) => n > 0)
+      .map(([order_item_id, units]) => ({ order_item_id, units }));
+    const { error } = broken.length > 0 ? await markReturnedDamaged(order.id, null, broken) : await adminMarkOrderReturned(order.id, null);
     if (error) {
       showToast(error, 'error');
       return;
     }
     setReturnOpen(false);
-    showToast('Order marked Returned: its goods are back in stock');
+    setDamaged({});
+    showToast(broken.length > 0 ? 'Order marked Returned: damaged items written off, the rest back in stock' : 'Order marked Returned: its goods are back in stock');
     await reload();
   };
 
@@ -968,6 +978,40 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
               {`${units} item${units === 1 ? '' : 's'} go${units === 1 ? 'es' : ''} back to stock.`} The order counts no sale; the
               courier charge counts as a loss. This can&apos;t be undone.
             </p>
+            {canMarkDamaged && (
+              <div className="money-damaged" data-testid="return-damaged">
+                {order.items.map((item) => (
+                  <div key={item.id} className="money-damaged__row">
+                    <label className="inv-check">
+                      <input
+                        type="checkbox"
+                        checked={(damaged[item.id] ?? 0) > 0}
+                        onChange={(e) => setDamaged((prev) => ({ ...prev, [item.id]: e.target.checked ? item.quantity : 0 }))}
+                        data-testid="return-damaged-tick"
+                      />{' '}
+                      {item.product_name}
+                      {item.variant_label ? ` (${item.variant_label})` : ''}: Damaged — do not put back in stock
+                    </label>
+                    {(damaged[item.id] ?? 0) > 0 && item.quantity > 1 && (
+                      <label className="form-field">
+                        <span className="form-label">How many damaged (of {item.quantity})</span>
+                        <input
+                          className="form-input"
+                          inputMode="numeric"
+                          value={String(damaged[item.id])}
+                          onChange={(e) => {
+                            const n = Math.max(0, Math.min(item.quantity, Math.floor(Number(e.target.value) || 0)));
+                            setDamaged((prev) => ({ ...prev, [item.id]: n }));
+                          }}
+                          aria-label={`Damaged units of ${item.product_name}`}
+                        />
+                      </label>
+                    )}
+                  </div>
+                ))}
+                <p className="inv-muted">Ticked units are written off as damaged (a loss at their cost) instead of going back to stock.</p>
+              </div>
+            )}
           </ConfirmSheet>
 
           <ConfirmSheet
