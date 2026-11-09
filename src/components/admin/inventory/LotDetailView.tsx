@@ -7,6 +7,7 @@ import type { LotDetail, StockMovement, StockUnit } from '../../../lib/inventory
 import type { LoadState } from '../../../lib/payouts';
 import { AdminPageHeader, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { formatLotDate, movementLabel, sourceLabel, taka2 } from './invFormat';
+import { LotPaymentsCard } from '../money/LotPayments';
 
 /**
  * Batch 38 Part 3: one lot — its rows with the cost shared out, its bills,
@@ -208,6 +209,9 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
             <p className="inv-error">Allocated total does not match the lot total — open Edit and save again.</p>
           ))}
       </div>
+
+      {/* Batch 41 Part 3.3: what was paid and what is still owed. */}
+      <LotPaymentsCard lotId={lotId} isOpening={isOpening} />
 
       <h2 className="inv-section">Products</h2>
       <div className="inv-stack">

@@ -4,6 +4,8 @@ import { normalizeText } from '../../../lib/format';
 import { takaExact } from '../../../lib/payouts';
 import { allocateLot, rowUnits } from '../../../lib/inventory/allocation';
 import { dhakaToday, fetchLot, fetchStockUnits, fetchSuppliers, saveLot, saveSupplier, unitName } from '../../../lib/inventory/api';
+import { fetchLotPayments, saveLotPayments } from '../../../lib/money/api';
+import { LotPaymentRows, newPayDraft, payRowsFrom, usePayAccounts, type PayDraft } from '../money/LotPayments';
 import type { CostType, EntryUnit, LotCurrency, LotSavePayload, LotSourceType, StockUnit, StockUnitWord, Supplier } from '../../../lib/inventory/types';
 import { AdminPageHeader, ChipRow, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { AdminIcon } from '../ui/AdminIcon';
@@ -85,6 +87,10 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Batch 41 Part 3.3: "Paid for this lot" (account + amount + date rows).
+  const payAccounts = usePayAccounts();
+  const [payDrafts, setPayDrafts] = useState<PayDraft[]>([]);
+  const [payLoaded, setPayLoaded] = useState('[]');
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -110,6 +116,12 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
           return;
         }
         setCode(d.code);
+        const pays = await fetchLotPayments(d.id);
+        if (pays.kind === 'ready') {
+          const drafts = pays.data.rows.map((r) => ({ ...newPayDraft(r.account_id, r.date), amount: String(r.amount) }));
+          setPayDrafts(drafts);
+          setPayLoaded(JSON.stringify(payRowsFrom(drafts).rows));
+        }
         setSource(d.source_type ?? 'import');
         setCountry(d.country);
         setSupplierId(d.supplier_id ?? '');
@@ -240,6 +252,11 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
       setSaveError(preview.error);
       return;
     }
+    const payments = payRowsFrom(payDrafts);
+    if (payments.error) {
+      setSaveError(payments.error);
+      return;
+    }
     const chosen = suppliers.find((s) => s.id === supplierId) ?? null;
     const payload: LotSavePayload = {
       ...(lotId ? { id: lotId } : {}),
@@ -279,6 +296,14 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
     if (!answer.ok || !answer.data) {
       setSaveError(answer.error ?? 'Could not save the lot.');
       return;
+    }
+    if (JSON.stringify(payments.rows) !== payLoaded) {
+      const paid = await saveLotPayments(answer.data, payments.rows);
+      if (!paid.ok) {
+        showToast(`The lot was saved, but not its payments: ${paid.error ?? 'try again on the lot page'}`, 'error');
+        onSaved(answer.data);
+        return;
+      }
     }
     showToast(lotId ? 'Lot saved' : 'Lot created');
     onSaved(answer.data);
@@ -604,6 +629,17 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
             )}
           </>
         )}
+      </div>
+
+      <div className="adm-ocard inv-stack" data-testid="inv-lot-paid">
+        <h2 className="adm-ocard__title">Paid for this lot</h2>
+        <p className="inv-muted">What you paid, from which account. The rest is owed to the supplier (pay it later with Money → Add money → Pay what I owe).</p>
+        <LotPaymentRows
+          drafts={payDrafts}
+          accounts={payAccounts}
+          onChange={setPayDrafts}
+          landed={preview && preview.ok ? Number(preview.buyTotalPaisa + preview.allocatedWeightPaisa + preview.allocatedOtherPaisa) / 100 : null}
+        />
       </div>
 
       {saveError && (
