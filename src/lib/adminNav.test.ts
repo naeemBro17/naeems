@@ -18,7 +18,7 @@ describe('admin navigation', () => {
   it('Super Admin: sidebar groups in the mockup order, Brands in its reserved place (Batch 26)', () => {
     const groups = groupNavItems(visibleNavItems(superAdmin)).map((g) => [g.group.label, g.items.map((i) => i.label)]);
     expect(groups).toEqual([
-      ['', ['Home', 'Orders', 'Steadfast payouts', 'Customers']],
+      ['', ['Home', 'Orders', 'Steadfast payouts', 'Money', 'Customers']],
       ['CATALOG', ['Products', 'Inventory', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Wholesalers', 'Reviews']],
       ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
@@ -31,7 +31,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'payouts', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
+      'payouts', 'money', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
     ]);
   });
 

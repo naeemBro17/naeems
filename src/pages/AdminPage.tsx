@@ -22,6 +22,7 @@ import { BannerTextsTab } from '../components/admin/BannerTextsTab';
 import { BrandsTab } from '../components/admin/BrandsTab';
 import { PayoutsTab } from '../components/admin/PayoutsTab';
 import { InventoryTab } from '../components/admin/inventory/InventoryTab';
+import { MoneyTab } from '../components/admin/money/MoneyTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
 import { fetchOwnRoleName } from '../lib/staff';
@@ -267,6 +268,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
           />
         )}
         {active === 'inventory' && <InventoryTab />}
+        {active === 'money' && <MoneyTab />}
         {active === 'customers' && <CustomersTab />}
         {active === 'reviews' && <ReviewsTab />}
         {active === 'bento' && <BentoTilesTab />}
