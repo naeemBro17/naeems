@@ -23,6 +23,7 @@ import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
 import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
 import { TwoStepCard } from './TwoStepCard';
+import { DueReminderPanel } from './money/DueReminderPanel';
 import { InvoiceSettingsPanel } from './InvoiceSettingsPanel';
 import { SubPages, type SubPage } from './ui/SubPages';
 
@@ -1076,6 +1077,8 @@ export function SettingsTab() {
     { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
     // Batch 37.
     { id: 'invoice', group: 'ORDERS', label: 'Invoice', icon: 'receipt', render: () => <InvoiceSettingsPanel /> },
+    // Batch 41 Part 4.
+    { id: 'due-reminder', group: 'ORDERS', label: 'Due reminder message', icon: 'phone', render: () => <DueReminderPanel /> },
     { id: 'courier', group: 'COURIER', label: 'Steadfast', icon: 'truck', render: () => <CourierPanel /> },
     { id: 'delivery', group: 'DELIVERY', label: "Rider's phone for customers", icon: 'truck', render: () => <DeliveryTrackingPanel /> },
     // Batch 38.

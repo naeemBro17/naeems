@@ -11,6 +11,8 @@ import { formatTakaBd } from '../../lib/adminNav';
 import { AdminPageHeader, AdminSearch, ChipRow, EmptyState, SkeletonRows } from './ui/AdminUi';
 import { CustomerTagChips } from './CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../lib/brandAdmin';
+import { fetchCustomerDues } from '../../lib/money/api';
+import type { CustomerDue } from '../../lib/money/types';
 
 // Batch 32 Part 4: hidden customers only with "Hidden"; "Due" (also from
 // Admin Home's due row) shows everyone who still owes money, hidden or not,
@@ -65,6 +67,21 @@ export function CustomersTab() {
 
   const tags = useMemo(() => knownTags(notes), [notes]);
 
+  // Batch 41 Part 4: with "View profit & costs" the due also counts a
+  // customer's previous balance (opening dues from Kaarbar).
+  const [moneyDues, setMoneyDues] = useState<Map<string, CustomerDue>>(() => new Map());
+  const canSeeMoney = can('view_profit_costs');
+  useEffect(() => {
+    if (!canSeeMoney) return;
+    let alive = true;
+    void fetchCustomerDues().then((map) => {
+      if (alive) setMoneyDues(map);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canSeeMoney]);
+
   useEffect(() => {
     let alive = true;
     void fetchCustomersV3().then((result) => {
@@ -83,12 +100,13 @@ export function CustomersTab() {
   // Batch 30: what each customer still owes (registered or phone-only).
   const showDue = rows.some((r) => r.total_due !== null);
   const notesFor = (c: CustomerRow) => (c.id ? (notes.get(c.id)?.tags ?? []) : []);
+  const dueOf = (c: CustomerRow): number => (c.total_due ?? 0) + (moneyDues.get(c.key)?.previous_left ?? 0);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     const real = hideTestCustomers ? rows.filter((r) => !isTestCustomer({ name: r.full_name, email: r.email })) : rows;
     const shown = real.filter((r) =>
-      show === 'hidden' ? r.hidden : show === 'due' ? (r.total_due ?? 0) > 0 : !r.hidden
+      show === 'hidden' ? r.hidden : show === 'due' ? dueOf(r) > 0 : !r.hidden
     );
     const tagged = tagFilter
       ? shown.filter((r) => notesFor(r).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
@@ -105,13 +123,15 @@ export function CustomersTab() {
     const sorted = [...list];
     const time = (iso: string | null) => (iso ? new Date(iso).getTime() : 0);
     sorted.sort((a, b) => {
+      // Batch 41 Part 4: "To receive" lists the largest due first.
+      if (show === 'due') return dueOf(b) - dueOf(a);
       switch (sort) {
         case 'orders':
           return b.order_count - a.order_count;
         case 'spent':
           return (b.total_spent ?? 0) - (a.total_spent ?? 0);
         case 'due':
-          return (b.total_due ?? 0) - (a.total_due ?? 0);
+          return dueOf(b) - dueOf(a);
         case 'joined':
           return time(b.joined_at) - time(a.joined_at);
         case 'name':
@@ -121,11 +141,12 @@ export function CustomersTab() {
       }
     });
     return sorted;
-  }, [rows, search, sort, tagFilter, notes, hideTestCustomers, show]);
+  }, [rows, search, sort, tagFilter, notes, hideTestCustomers, show, moneyDues]);
 
   const realRows = hideTestCustomers ? rows.filter((r) => !isTestCustomer({ name: r.full_name, email: r.email })) : rows;
   const hiddenCount = realRows.filter((r) => r.hidden).length;
-  const dueCount = realRows.filter((r) => (r.total_due ?? 0) > 0).length;
+  const dueCount = realRows.filter((r) => dueOf(r) > 0).length;
+  const dueTotal = visible.reduce((s, r) => s + Math.max(dueOf(r), 0), 0);
   const canAdd = canManage && (isAdmin === true || can('create_orders') || can('manage_customers'));
 
   return (
@@ -183,10 +204,17 @@ export function CustomersTab() {
           onSelect={(id) => setShow(id as ShowFilter)}
           chips={[
             { id: 'all', label: 'All' },
-            ...(showDue ? [{ id: 'due', label: 'Due', count: dueCount }] : []),
+            ...(showDue ? [{ id: 'due', label: 'To receive', count: dueCount }] : []),
             ...(canManage ? [{ id: 'hidden', label: 'Hidden', count: hiddenCount }] : []),
           ]}
         />
+      )}
+
+      {show === 'due' && showDue && !isLoading && (
+        <p className="adm-list-foot money-total" data-testid="customers-to-receive-total">
+          To receive: <b>{formatTakaBd(dueTotal)}</b>
+          {canSeeMoney ? ' (site orders + previous balances)' : ''}
+        </p>
       )}
 
       <div className="adm-spacer" />
@@ -231,9 +259,9 @@ export function CustomersTab() {
                     {c.last_order_at ? `, last ${dayMonth(c.last_order_at)}` : ''}
                   </span>
                 </span>
-                {showDue && c.total_due ? (
+                {showDue && dueOf(c) ? (
                   <span className="adm-orow2__money" data-testid="customer-due">
-                    {formatTakaBd(c.total_due)} due
+                    {formatTakaBd(dueOf(c))} due
                   </span>
                 ) : null}
               </button>
