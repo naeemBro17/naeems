@@ -1,0 +1,380 @@
+BATCH 41 — Money: accounts, expenses, investors, owner, dues, opening balances, write-offs
+Version 1.41.0 · Branch feature/batch-41-money (pushed; no PR opened)
+
+INVENTORY MODE IS STILL OFF, AND YOUR BOOKS ARE NOT STARTED YET.
+Nothing about orders, checkout, stock or prices changed. The Money section
+starts counting from the day you confirm your opening balances.
+
+====================================================================
+WHAT WAS BUILT (short)
+====================================================================
+A new admin section "Money" (in the menu after Steadfast payouts). Only you
+(View profit & costs) can see it.
+
+- Accounts: Cash, bKash, Bank (rename them or add more, e.g. Nagad), plus
+  "With Steadfast", which you never type into: the COD money Steadfast
+  collects goes in, and each payout goes out.
+- Add money: one form. Big buttons at the top: Expense · Move money ·
+  Investor · Me · Not shop money · Pay what I owe. Amount, account, date
+  (today), note, Save. The form stays on the same kind and account after
+  saving, so the next entry is quick.
+- Expenses: a list by month and category, the total at the top and each
+  category's share. You can add a bill photo; it is made small (under
+  150 KB) on your phone before it is saved.
+- Investors and what I owe: each investor's capital in, returned, still
+  owed and profit share (this month, this year, all time); what you owe each
+  supplier; other people you owe.
+- Lots: "Paid for this lot" (account + amount + date, one or more rows) on
+  the lot form and the lot page. Whatever is not paid is owed to the lot's
+  supplier.
+- Customers: a "To receive" filter (largest due first, the total at the
+  top). On a customer: their due, "Send due reminder" (opens WhatsApp with
+  your message and a link to their own order page on your site), "Copy
+  message", and the list of reminders already sent.
+- Remove stock (on a product) and "Damaged — do not put back in stock" (in
+  Mark returned). Both work only while Inventory mode is On.
+- Opening balances: one screen you use once, on your start date.
+- The Money page: Your profit (every line shown), the return on money in
+  the business, Money now, and a balance check that says "Books balance" in
+  green, or shows a red line with the difference.
+
+====================================================================
+PART 0 — WHAT ALREADY EXISTED (no changes made there)
+====================================================================
+- Customer payments live in ONE table, order_payments (Batch 30/32). Each
+  row is a payment or a refund, with a method: bKash, Nagad, Cash, Bank,
+  "COD via Steadfast", or Other. It also says where it came from: typed by
+  you, "Mark fully paid", the old "paid" switch, or Steadfast. There is no
+  separate "advance" method: a bKash advance is simply a bKash payment made
+  before delivery.
+- A COD payment collected by Steadfast is recorded automatically, once per
+  order, as "COD via Steadfast" when Steadfast says the parcel was
+  delivered.
+- Batch 36 stores, for Steadfast:
+  * the current balance (what Steadfast holds for you; today ৳0);
+  * every payout: date, amount and the parcels in it (31 payouts so far,
+    ৳1,51,058 in total);
+  * for each parcel: COD collected, delivery charge, 1% COD fee, anything
+    else kept, net paid;
+  * for each order: what the courier kept (order_courier_costs). Batch 39's
+    order profit already uses this.
+  * It did NOT store which account a payout landed in. That is new now.
+- Customer dues are worked out on the fly: for every order, the total minus
+  what was paid (a cancelled order owes nothing). They are added up per
+  customer: by their account, or by phone number when they have none.
+- Batch 39 profit: order_profit (one order) and inventory_sales_profit
+  (dates: sales, cost of goods, delivery, courier + COD fee, cost
+  adjustments). The Money page builds on inventory_sales_profit. Nothing
+  was copied.
+
+====================================================================
+SQL NAEEM MUST RUN IN SUPABASE
+====================================================================
+None. As you allowed, I tested the database step
+(supabase/migration-043-batch41-money.sql) in a run that was undone
+afterwards, then applied it myself.
+
+It only adds things. Nothing was dropped or renamed. It adds:
+- 11 new tables and 1 new view (money_ledger);
+- 44 new functions;
+- a private storage space for bill photos (money-bills);
+- the new staff switch "Add money entries" (Off for every role and person);
+- one setting (the due reminder text).
+
+Two existing functions were replaced, behaving the same as before plus one
+small change each:
+- The customer due: a Returned order now owes nothing, like a Cancelled one.
+  This was missed in Batch 39. You have no Returned orders yet, so no number
+  changed.
+- The staff switch list: one more name at the end.
+
+Checked afterwards: Inventory mode is still Off, the opening balances are
+not confirmed, and no role has the new switch.
+
+====================================================================
+TESTS
+====================================================================
+npm run verify — the full run, once at the end (23.8 min):
+- Build: passed, zero errors.
+- Unit tests (vitest): 482 of 482 passed.
+- Browser tests (e2e): 296 passed, 141 skipped (on purpose, as in earlier
+  batches), 8 failed. What I did about the 8:
+  * 1 was caused by this batch: the Batch 39 database test. Before, it was
+    skipped on this Mac (the test helper looked for the Supabase command
+    line only in the Windows folder). Now it runs, and the command line cut
+    its long result message short. I changed it to send its results back
+    the same way as the new Batch 41 test (as a row, still inside a
+    transaction that is always undone). Then I ran the whole batch-39 file
+    again: 70 passed, 0 failed.
+  * 1 was a timing flake in a file this batch did not touch: batch-40
+    "every live photo is there" ran out of time once. Run on its own 3
+    times: 16 of 16 passed each time.
+  * 6 fail every time and were already failing before this batch. Each of
+    those files was run on its own 3 times, then once more on main WITHOUT
+    Batch 41 — the same 6 failed there too:
+    - batch-23 and batch-27: the YouTube review video never starts playing
+      in the test browser (the same 2 as in the Batch 40 report);
+    - batch-27: "card cart button stays in sync" expects to add a 5th piece
+      of a live product that has only 4 left;
+    - batch-32: Home "Nothing needs attention" — the live shop has a
+      pending and an in-transit order, so it can't show "nothing";
+    - batch-33: "a photo that cannot load shows a placeholder" — the
+      Batch 40 Storage guard answers missing photos differently; this
+      test was skipped on this Mac before (no .env.e2e), so it shows up now;
+    - batch-35: "Show rider's phone is Off by default" — your live setting
+      is On, the test expects Off.
+    None of these is about money, and none was changed. Worth a small fix
+    batch for the test files themselves.
+- The quick check during the batch (npm run verify:quick): build OK,
+  482/482 unit tests, 27/27 browser tests in the touched files.
+
+New tests:
+- Database (e2e/sql/batch-41-money.sql): 62 checks, run inside ONE
+  database transaction that is always undone. The opening balances, money
+  entries, test products, a lot, orders, a pretend Steadfast payout and the
+  write-offs exist only during the test. All 62 passed. They check:
+  * Ledger: a customer payment appears exactly once (bKash +৳200); a move
+    is always a pair (−৳1,000 bKash, +৳1,000 Bank) adding up to 0; the
+    account balances are right after a mix of every kind of entry.
+  * Not expenses: investor money in, profit share, capital back, your
+    withdrawal, your money put in, moves between accounts and not-shop
+    money never change net profit. Net − profit share = Your profit;
+    − withdrawals = Left in the business.
+  * No double counting:
+    - courier + COD fee (৳64.80) is only in order profit, never an expense;
+    - buying a lot is not an expense;
+    - a lot of ৳2,600 with ৳2,000 paid shows ৳600 owed to its supplier
+      once, and that ৳600 is gone after a ৳600 supplier payment.
+  * Steadfast: the COD waits in "With Steadfast"; placing the payout moves
+    ৳415.20 to Bank; Bank is remembered for the next payout.
+  * Write-offs:
+    - 1 unit leaves the earliest-expiry lot at its landed cost (৳120);
+    - a damaged return does not go back in stock and is a ৳200 loss;
+    - write-offs are their own line, not expenses.
+  * Profit: 600 − 240 + 80 − 64.80 − 500 = −৳124.80, then −৳444.80 after
+    the write-offs.
+  * Dues: a previous balance of ৳1,500 minus ৳500 paid = ৳1,000 left;
+    paying more than is left is refused; a reminder is written in the
+    customer's history and the Activity Log.
+  * Opening balances:
+    - phones typed as +880 / 880 / without the 0 / with spaces all match;
+    - a bad phone and the same phone twice are flagged;
+    - a new customer is added to the Customers list;
+    - the three "already has a due" choices give the right amounts:
+      Kaarbar ৳1,000 − site ৳380 = ৳620, "keep the site due" adds nothing,
+      "add both" adds the whole Kaarbar due;
+    - the start date must be the opening stock's date;
+    - you can confirm only once;
+    - undo needs the Safety Lock, is refused while previous-balance
+      payments exist, and is logged.
+  * Balance check:
+    - green after every step;
+    - red with exactly −৳120 when a write-off record is removed behind its
+      back, with the first day it went wrong.
+  * Permissions:
+    - a customer and the public can read nothing and add nothing;
+    - staff with only "Add money entries" can add an expense, but can't
+      read profit, balances or any list, and can't record owner or
+      investor money;
+    - the new switch is Off for everyone.
+  * Edits are logged with before and after. A delete is refused unless
+    the amount is typed.
+- Unit tests (src/lib/batch41.money.test.ts): 21 tests.
+  * Amounts and typed amounts, including Bangla digits.
+  * The six buttons and which ones staff without profit access see.
+  * Periods and category shares (always adding up to 100%).
+  * The exact reminder text, the "no link" version, and the WhatsApp link
+    from any phone format.
+  * Reading the dues file, and the three "already has a due" rules.
+  * Bill photo names.
+  * Who can open Money.
+- Browser tests (e2e/batch-41.spec.ts): 18 tests at phone width (360 px).
+  They check:
+  * a ৳1 expense saved in a few taps, then deleted;
+  * Move money and Investor;
+  * the Money page (green and red);
+  * a 3-row Kaarbar file previewed with nothing saved;
+  * the reminder: WhatsApp link, text, your own link, and the history line;
+  * the "To receive" order and total;
+  * the Settings message;
+  * "Paid for this lot";
+  * Remove stock while Off;
+  * the Damaged ticks;
+  * staff with only "Add money entries";
+  * the customer's "Previous balance" line;
+  * a bill photo from a 4000 × 3000 phone picture ending up under 150 KB,
+    with a new name and the one-year cache.
+  Where a screen needs numbers that only exist after the opening balances
+  (for example "Books balance"), the test gives the browser a made-up
+  answer, so your real books stay empty.
+- Two old tests list the admin menu exactly; "Money" was added to both
+  (src/lib/adminNav.test.ts, e2e/batch-25.spec.ts). Nothing else in the old
+  tests changed.
+
+Screenshots (360 px): reports/batch-41-screens/
+  01 add expense · 02 move money · 03 investor · 04 Money page (Books
+  balance) · 05 Money page (red line) · 06 opening preview · 07 customer
+  due + reminder · 08 Customers "To receive" · 09 Settings reminder text ·
+  10 Paid for this lot · 11 Remove stock while Off · 12 Mark returned with
+  Damaged · 13 staff with "Add money entries" only · 14 customer's
+  "Previous balance"
+
+====================================================================
+CHOICES I MADE FOR YOU (and why)
+====================================================================
+1. Suppliers: I did not make a second supplier list. The lots already use
+   the Batch 39 suppliers list, so "To give" reads suppliers from there. A
+   new small list (parties_payable) holds only investors and "other people"
+   you owe.
+2. The books start at the BEGINNING of your start date: what you count is
+   "as of the morning". Payments, payouts and entries dated on the start
+   date or later count; everything before is in the opening balances. After
+   you confirm, an entry dated before the start date is refused.
+3. Paying for a lot is its own kind of entry ("Paid for a lot"). Paying the
+   rest later is "Pay what I owe" (a supplier payment). Neither is an
+   expense.
+4. A payout that has arrived but is not placed yet stays counted in "With
+   Steadfast". The Money page lists it with a Place button and offers the
+   last account you used. So the books stay balanced until you place it.
+5. A customer payment with a method no account takes ("Other", or Nagad
+   before you add a Nagad account) goes to Cash. You can change which
+   account takes which payments in Accounts.
+6. A count difference (end-of-day count) is shown as its own line in the
+   balance check. It is not inside Net profit: your profit formula is fixed
+   and has no such line.
+7. Money that is not the shop's (your consultancy) is the same: its own
+   line in the balance check, never in profit.
+8. A staff member with only "Add money entries" can add an expense or move
+   money, nothing else. They see account names and categories (needed for
+   the form), but no balance, list or profit.
+9. Deleting an entry asks you to type the amount (Careful actions). Opening
+   balances can only be removed by "Undo the opening", which needs the
+   Safety Lock.
+10. "Use the Kaarbar due" means Kaarbar's number is the whole due. The site
+    orders' own due is taken off it, so nothing is counted twice. "Add both"
+    adds the whole Kaarbar amount on top. "Keep the site due" adds nothing.
+11. The balance check, in plain words:
+    - What the business has: accounts + With Steadfast + what customers owe
+      + previous balances + stock at landed cost + goods packed for orders
+      not yet delivered.
+    - Minus what it owes: To give + customers' advance payments + the price
+      of orders not yet delivered (they become a sale only when delivered)
+      + "sold without stock" costs still to come.
+    - This must equal: opening net worth + net profit − investor profit
+      share − your withdrawals + your money put in ± not-shop money ± count
+      differences ± changes on old orders from before Inventory mode (shown
+      as their own line, because those orders are left out of profit as in
+      Batch 39).
+    - "Show the sums" lists every line.
+    - Deleting a whole entry (with its money) keeps the books balanced. The
+      check catches money or stock that moved without its matching record.
+12. "The date it first went wrong" is the first day the Money page found
+    the books off by more than ৳1 (one result is kept per day). A wrong
+    entry can't be traced back to a day it was never looked at.
+13. Return on money in the business = net profit ÷ the average of the money
+    in the business at the start and at the end of the period.
+14. The reminder link opens the customer's own order page on your site
+    (Batch 35). Only a customer who has an account and is signed in can open
+    it; for others it shows the sign-in. Customers who ordered through you
+    by phone may not have an account.
+15. Write-offs use units (pcs / ml / g), like lots. A damaged return is
+    written off at the cost the sale took from the lot.
+
+====================================================================
+WHAT I SHOULD CHECK ON MY PHONE (step by step)
+====================================================================
+Use Admin → More → Money. Every entry below can be deleted again: open it →
+Careful actions → Delete (type the amount).
+ 1. Add an expense: Add money → Expense → type 50, Cash, category Food →
+    Save. It shows in Money → Expenses for this month.
+ 2. Move ৳1,000 from bKash to Bank: Add money → Move money → 1000, From
+    bKash, To Bank → Save. Money → Accounts: bKash −1,000, Bank +1,000.
+ 3. Add an investor and ৳10,000 in: Add money → Investor → "Money in" →
+    type a name under "New investor's name" → Add investor → 10000, Bank →
+    Save. Money → Investors and what I owe shows them with ৳10,000 capital
+    owed.
+ 4. Record your own withdrawal: Add money → Me → "I took money out" → 500,
+    Cash → Save. It does NOT change Net profit; it shows under "Your
+    withdrawals".
+ 5. Open the Money page and look at Your profit. Until you confirm the
+    opening balances it says "Opening balances not confirmed yet", and the
+    balance check starts after that ("Books balance" in green).
+ 6. Send a due reminder to yourself:
+    - Customers → Add customer with your own number;
+    - make a small manual order for that customer (not paid);
+    - open the customer: the due card shows the due;
+    - tap "Send due reminder": WhatsApp opens with the message and the
+      link;
+    - the "Reminders" list then shows "Due reminder sent, ৳…, today".
+    - Cancel the test order afterwards.
+ 7. Opening balances, preview only:
+    - Money → Opening balances → Download template;
+    - fill 3 rows (phone, name, due);
+    - Upload filled file and read the preview: totals, new customers,
+      "already has a due on the site";
+    - do NOT tap Confirm.
+ 8. Settings → Due reminder message: read or change the text.
+After these tests, delete the test entries (step 1–4) so your books start
+clean.
+
+====================================================================
+TO START USING INVENTORY (checklist)
+====================================================================
+ 1. Pick your start date (for example the 1st of next month) and count all
+    stock on that morning.
+ 2. Fill the opening stock file (Inventory → Opening stock → Download
+    template) and upload it, dated the start date. Check the preview, then
+    Confirm (this makes L-000).
+ 3. Fill the opening dues file from Kaarbar (Money → Opening balances →
+    Download template). Upload it, check the totals against Kaarbar's
+    "To Receive", and choose for each "already has a due" row.
+ 4. Type Cash, bKash and Bank as counted on the start date, and add "What I
+    owe" (investors, suppliers) — match the total with Kaarbar's "To Give".
+ 5. Confirm the opening balances (once).
+ 6. Turn Inventory mode On (Inventory → Turn on Inventory mode → check
+    screen → your password).
+ 7. From then on, add expenses, lot payments, investor money and
+    withdrawals on Add money, and place each Steadfast payout. Look at the
+    Money page: it should say "Books balance".
+
+====================================================================
+WHAT I COULD NOT FINISH
+====================================================================
+Nothing from the brief was left out. Limits to know:
+- The money rules with real numbers were tested inside an undone database
+  transaction; your live books were never confirmed. Screens that need
+  confirmed books were tested with made-up numbers in the browser.
+- Remove stock and Damaged returns can't be tried on the live shop until
+  Inventory mode is On (they explain this while Off).
+
+====================================================================
+WHAT I FOUND ALONG THE WAY
+====================================================================
+- Fixed (small, needed for correct dues): a Returned order still counted
+  its full total as "due" (from Batch 39). Now it owes nothing, like a
+  Cancelled order.
+- 145 parcels in old Steadfast payouts match no site order (from before the
+  site). They are all before your start date, so they don't affect the new
+  books. A parcel like that AFTER the start date is shown as its own line
+  in the balance check.
+- This Mac had no Supabase login. You signed in once; the database test
+  helper now also finds the Supabase command line on a Mac (it only looked
+  in the Windows folder).
+- The Supabase command line cuts long error messages short, so the new
+  database test returns its results as normal rows, inside a transaction
+  that is rolled back.
+
+====================================================================
+INDUSTRY-LEVEL SUGGESTIONS (not built)
+====================================================================
+1. Monthly close (medium): lock a month once it is checked, so an old entry
+   can't be changed by mistake. Edits after that become a correction dated
+   today.
+2. Profit by month chart (small): Your profit and expenses for the last 12
+   months, to see the trend at a glance.
+3. bKash statement import (medium): upload the bKash statement and match it
+   to payments, instead of typing them.
+4. Due reminder schedule (small): a list of who was not reminded in 7 days
+   and still owes, sorted by amount.
+5. Investor statement (small): a one-page PDF per investor (capital, profit
+   share paid) to send them, instead of the separate Ledger app.
