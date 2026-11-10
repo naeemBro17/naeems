@@ -278,6 +278,12 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
     </>
   ),
+  reports: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 17v-3M12 17V9M16 17v-5" />
+    </>
+  ),
   video: (
     <>
       <rect x="3" y="6" width="13" height="12" rx="2" />
