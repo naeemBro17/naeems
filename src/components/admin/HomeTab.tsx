@@ -8,6 +8,14 @@ import { AdminPageHeader, EmptyState, ListGroup, ListRow } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import { SalesChart } from './SalesChart';
 import { fetchUnpaidOrders, overdueOrders, UNPAID_AFTER_DAYS } from '../../lib/payouts';
+import { fetchDashboard as fetchMoneyDashboard } from '../../lib/reports/api';
+import { dashboardRanges, type DashboardPeriod } from '../../lib/reports/periods';
+import type { DashboardData as MoneyDashboard } from '../../lib/reports/types';
+import { dhakaToday } from '../../lib/inventory/api';
+import { DashboardTop } from './DashboardTop';
+import '../../styles/adminInventory.css';
+import '../../styles/adminMoney.css';
+import '../../styles/adminReports.css';
 
 interface HomeTabProps {
   /** "NAEEM'S SUPER ADMIN" / "NAEEM'S <ROLE>". */
@@ -38,6 +46,28 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
   const canSeeCosts = can('view_profit_costs');
   const [unpaidCount, setUnpaidCount] = useState(0);
 
+  // Batch 42 Part 1: for "View profit & costs" Home is the Dashboard — the
+  // Money page's own numbers (money_summary) for Today / This month / This
+  // year, and more "Needs attention" lines. Everyone else keeps this Home.
+  const [period, setPeriod] = useState<DashboardPeriod>('month');
+  const [money, setMoney] = useState<MoneyDashboard | null>(null);
+  const [moneyError, setMoneyError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canSeeCosts) return;
+    let alive = true;
+    setMoney(null);
+    setMoneyError(null);
+    const ranges = dashboardRanges(period, dhakaToday());
+    void fetchMoneyDashboard(ranges.current, ranges.previous).then((answer) => {
+      if (!alive) return;
+      if (answer.kind === 'ready') setMoney(answer.data);
+      else setMoneyError(answer.kind === 'error' ? answer.message : 'The Batch 42 database step has not been run.');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canSeeCosts, period]);
+
   const load = useCallback(async () => {
     const [result, customers, unpaid] = await Promise.all([
       fetchDashboard(),
@@ -64,7 +94,7 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
 
   const attention: {
     key: string;
-    icon: 'orders' | 'low-stock' | 'reviews' | 'wholesalers' | 'receipt' | 'payouts';
+    icon: 'orders' | 'low-stock' | 'reviews' | 'wholesalers' | 'receipt' | 'payouts' | 'clock' | 'alert' | 'restock' | 'products' | 'customers';
     count?: number;
     text: string;
     open: () => void;
@@ -85,6 +115,63 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
       count: data.low_stock,
       text: `product${data.low_stock === 1 ? '' : 's'} low on stock`,
       open: () => onOpen('products', { pstock: 'low' }),
+    });
+  }
+  const att = money?.attention;
+  if (att && att.expiring > 0) {
+    attention.push({
+      key: 'expiring',
+      icon: 'clock',
+      count: att.expiring,
+      text: `product${att.expiring === 1 ? '' : 's'} expiring before ${att.expiring === 1 ? 'it sells' : 'they sell'}`,
+      open: () => onOpen('reports', { r: 'stock' }),
+    });
+  }
+  if (att && att.sold_without_stock > 0) {
+    attention.push({
+      key: 'shortfalls',
+      icon: 'alert',
+      count: att.sold_without_stock,
+      text: `sold without stock (still open)`,
+      open: () => onOpen('inventory', { inv: 'shortfalls' }),
+    });
+  }
+  if (att && att.dues_over_30 > 0) {
+    attention.push({
+      key: 'dues30',
+      icon: 'customers',
+      count: att.dues_over_30,
+      text: `customer${att.dues_over_30 === 1 ? '' : 's'} owing for over 30 days (${formatTakaBd(att.dues_over_30_amount)})`,
+      open: () => onOpen('reports', { r: 'customers' }),
+    });
+  }
+  if (att && att.no_buy_price > 0) {
+    attention.push({
+      key: 'nocost',
+      icon: 'products',
+      count: att.no_buy_price,
+      text: `product${att.no_buy_price === 1 ? '' : 's'} with no buy price (in no lot yet)`,
+      open: () => onOpen('inventory'),
+    });
+  }
+  if (att && att.no_weight > 0) {
+    attention.push({
+      key: 'noweight',
+      icon: 'products',
+      count: att.no_weight,
+      text: `product${att.no_weight === 1 ? '' : 's'} with no weight`,
+      open: () => onOpen('inventory', { inv: 'weights' }),
+    });
+  }
+  if (att && att.count_due) {
+    attention.push({
+      key: 'count',
+      icon: 'restock',
+      text:
+        att.count_planned > 0
+          ? `Monthly stock count: ${att.count_done} of ${att.count_planned} counted`
+          : 'Monthly stock count is due',
+      open: () => onOpen('money', { m: 'stock-count' }),
     });
   }
   if (due && due.customers > 0) {
@@ -123,6 +210,38 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
     });
   }
 
+  const attentionList = (
+    <>
+      <h2 className="adm-home__section-title">Needs attention</h2>
+      <ListGroup>
+        {attention.length === 0 ? (
+          <p className="adm-caught-up" data-testid="home-nothing">
+            <AdminIcon name="check" />
+            Nothing needs attention
+          </p>
+        ) : (
+          attention.map((row) => (
+            <ListRow
+              key={row.key}
+              icon={row.icon}
+              count={row.count}
+              label={
+                row.key === 'due' ? (
+                  <span data-testid="home-due-row">{row.text}</span>
+                ) : row.key === 'payouts' ? (
+                  <span data-testid="home-unpaid-row">{row.text}</span>
+                ) : (
+                  row.text
+                )
+              }
+              onClick={row.open}
+            />
+          ))
+        )}
+      </ListGroup>
+    </>
+  );
+
   const hasOrderCards = data?.today_orders !== undefined;
 
   return (
@@ -147,6 +266,11 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
         />
       ) : (
         <>
+          {canSeeCosts && (
+            <DashboardTop data={money} error={moneyError} period={period} onPeriod={setPeriod} onOpen={onOpen} />
+          )}
+          {canSeeCosts && attentionList}
+          {canSeeCosts && hasOrderCards && <h2 className="adm-home__section-title">Orders</h2>}
           {hasOrderCards && data && (
             <div className="adm-kpis">
               <button type="button" className="adm-kpi" onClick={() => onOpen('orders')} data-testid="kpi-today">
@@ -207,33 +331,7 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
 
           {sales && <SalesChart />}
 
-          <h2 className="adm-home__section-title">Needs attention</h2>
-          <ListGroup>
-            {attention.length === 0 ? (
-              <p className="adm-caught-up" data-testid="home-nothing">
-                <AdminIcon name="check" />
-                Nothing needs attention
-              </p>
-            ) : (
-              attention.map((row) => (
-                <ListRow
-                  key={row.key}
-                  icon={row.icon}
-                  count={row.count}
-                  label={
-                    row.key === 'due' ? (
-                      <span data-testid="home-due-row">{row.text}</span>
-                    ) : row.key === 'payouts' ? (
-                      <span data-testid="home-unpaid-row">{row.text}</span>
-                    ) : (
-                      row.text
-                    )
-                  }
-                  onClick={row.open}
-                />
-              ))
-            )}
-          </ListGroup>
+          {!canSeeCosts && attentionList}
         </>
       )}
     </section>
