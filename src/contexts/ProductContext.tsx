@@ -99,6 +99,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shop_bkash_number: '',
   show_rider_phone: 'false',
   inventory_mode: 'false',
+  due_reminder_template: '',
 
   fb_pixel_id: '',
   ga_measurement_id: '',
@@ -157,6 +158,7 @@ const TEXT_SETTING_KEYS = [
   'shop_bkash_number',
   'show_rider_phone',
   'inventory_mode',
+  'due_reminder_template',
   'fb_pixel_id',
   'ga_measurement_id',
   'text_checkout_signin_title',

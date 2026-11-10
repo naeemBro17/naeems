@@ -9,7 +9,10 @@
 -- Super Admin) and {{CUSTOMER_EMAIL}} (the test customer), by setting the
 -- same login claims the website sends.
 --
--- Result: the last line raises 'TEST_RESULT:[{name, ok, detail}, …]'.
+-- Result: the rows (name, ok, detail) of the SELECT before the ROLLBACK
+-- (Batch 41: the Supabase command line cuts a long error message short, so
+-- the results come back as a row; the transaction is still always undone).
+BEGIN;
 DO $test$
 DECLARE
   v_admin   uuid;
@@ -43,7 +46,7 @@ DECLARE
   v_opening boolean;
   v_tag     text := to_char(clock_timestamp(), 'HH24MISSMS');
 BEGIN
-  EXECUTE 'CREATE TEMP TABLE t_res (n serial, name text, ok boolean, detail text) ON COMMIT DROP';
+  EXECUTE 'CREATE TEMP TABLE t_res (n serial, name text, ok boolean, detail text)';
   EXECUTE $f$CREATE FUNCTION pg_temp.ck(p_name text, p_ok boolean, p_detail text DEFAULT '') RETURNS void
     LANGUAGE sql AS 'INSERT INTO t_res (name, ok, detail) VALUES (p_name, COALESCE(p_ok, false), COALESCE(p_detail, ''''))'$f$;
   -- qty_remaining = sum of movements, and units out = sum of order_item_lots,
@@ -525,6 +528,7 @@ BEGIN
 
   PERFORM pg_temp.ck('Ledger: qty_remaining = sum of movements at the end', pg_temp.ledger_ok(v_ids));
 
-  RAISE EXCEPTION 'TEST_RESULT:%', (SELECT json_agg(json_build_object('name', name, 'ok', ok, 'detail', detail) ORDER BY n) FROM t_res);
 END
 $test$;
+SELECT 'TEST_RESULT' AS tag, json_agg(json_build_object('name', name, 'ok', ok, 'detail', detail) ORDER BY n)::text AS results FROM t_res;
+ROLLBACK;

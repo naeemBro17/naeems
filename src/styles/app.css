@@ -11040,3 +11040,15 @@ html.vt-fade::view-transition-new(root) {
   width: 16px;
   height: 16px;
 }
+
+/* Batch 41: a customer's previous balance on My Orders (one line only). */
+.orders-list__previous {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-primary);
+}

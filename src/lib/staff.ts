@@ -22,7 +22,8 @@ export const STAFF_PERMISSIONS: { id: StaffPermission; label: string; hint: stri
   { id: 'edit_customer_notes', label: 'Edit customer notes', hint: 'Write private notes and tags on customers. Needs View customers to see them.' },
   { id: 'edit_orders', label: 'Edit orders', hint: 'Change name, phone, address, items, quantities and delivery fee on any order, at any stage. Prices and discounts stay with you.' },
   { id: 'manage_customers', label: 'Manage customers', hint: 'Add customers, hide or unhide them, and delete a customer who has no orders. Needs View customers to see the list.' },
-  { id: 'view_profit_costs', label: 'View profit & costs', hint: 'See Steadfast payouts (what the courier kept, fees, what you received) and Inventory: lots, buy prices and landed cost. Off by default.' },
+  { id: 'view_profit_costs', label: 'View profit & costs', hint: 'See Steadfast payouts (what the courier kept, fees, what you received), Inventory (lots, buy prices, landed cost) and Money (accounts, expenses, investors, profit). Off by default.' },
+  { id: 'add_money_entries', label: 'Add money entries', hint: 'Add an expense or move money between accounts, without seeing any profit, balance or list. Off by default.' },
 ];
 
 /** Order permissions that are useless without "View orders" — switching

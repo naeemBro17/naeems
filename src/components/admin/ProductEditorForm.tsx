@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { LONG_TEXTS, cleanLongText, emptiedLongTexts } from '../../lib/richText';
 import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
+import { RemoveStockPanel } from './money/RemoveStockPanel';
 import { PackSizePanel } from './inventory/PackSizePanel';
 import type { Product, ProductFormData, FormImage } from '../../types';
 
@@ -845,6 +846,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           a newly-created one has no id to attach them to yet. */}
       {product && <VariantEditor productId={product.id} />}
       {product && <PackSizePanel productId={product.id} />}
+      {/* Batch 41 Part 5. */}
+      {product && <RemoveStockPanel productId={product.id} />}
 
       <div className="form-field form-field--toggle">
         <span className="toggle-label">Featured (shown in the bento grid)</span>

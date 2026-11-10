@@ -10,6 +10,7 @@ export type AdminSection =
   | 'home'
   | 'orders'
   | 'payouts'
+  | 'money'
   | 'customers'
   | 'products'
   | 'inventory'
@@ -86,6 +87,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'orders', label: 'Orders', icon: 'orders', group: 'main' },
   // Batch 36 Part 1: under Orders; only with "View profit & costs".
   { id: 'payouts', label: 'Steadfast payouts', tabLabel: 'Payouts', icon: 'payouts', group: 'main' },
+  // Batch 41: accounts, expenses, investors, profit; "View profit & costs"
+  // (or only the Add money form with "Add money entries").
+  { id: 'money', label: 'Money', icon: 'payouts', group: 'main' },
   { id: 'customers', label: 'Customers', icon: 'customers', group: 'main' },
   { id: 'products', label: 'Products', icon: 'products', group: 'catalog' },
   // Batch 38: lots, landed cost, opening stock; only with "View profit & costs".
@@ -126,6 +130,8 @@ export function canOpenSection(section: AdminSection, access: NavAccess): boolea
     case 'payouts':
     case 'inventory':
       return can('view_profit_costs');
+    case 'money':
+      return can('view_profit_costs') || can('add_money_entries');
     case 'customers':
       return can('view_customers');
     case 'products':

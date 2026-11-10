@@ -12,6 +12,7 @@ import { fetchMyOrders } from '../lib/orders';
 import { formatTaka } from '../lib/format';
 import { TRACK_STATUS, fetchLatestSteps, savedTrack, type TrackStatus } from '../lib/orderTracking';
 import type { Order } from '../types';
+import { fetchMyPreviousBalance } from '../lib/money/api';
 
 function OrdersSkeleton() {
   return (
@@ -30,6 +31,9 @@ export function OrdersListPage() {
   const [isLoading, setIsLoading] = useState(true);
   // Batch 35: the newest stored courier step (Out for delivery), when known.
   const [steps, setSteps] = useState<Map<string, TrackStatus>>(() => new Map());
+  // Batch 41 Part 6: an older due from before the site (one number only —
+  // no invoices, items or prices behind it).
+  const [previousBalance, setPreviousBalance] = useState(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -48,6 +52,9 @@ export function OrdersListPage() {
     void fetchLatestSteps().then((map) => {
       if (!cancelled) setSteps(map);
     });
+    void fetchMyPreviousBalance().then((amount) => {
+      if (!cancelled) setPreviousBalance(amount);
+    });
     return () => {
       cancelled = true;
     };
@@ -62,6 +69,12 @@ export function OrdersListPage() {
       </header>
 
       <main className="detail-main">
+        {previousBalance > 0 && !isLoading && (
+          <p className="orders-list__previous" data-testid="previous-balance">
+            <span>Previous balance</span>
+            <b>{formatTaka(previousBalance)}</b>
+          </p>
+        )}
         {isLoading || authLoading ? (
           <OrdersSkeleton />
         ) : orders.length === 0 ? (

@@ -14,6 +14,7 @@ import { AdminIcon } from '../ui/AdminIcon';
 import { CustomerNotesEditor } from '../CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../../lib/brandAdmin';
 import type { OrderStatus } from '../../../types';
+import { CustomerDueCard } from '../money/CustomerDueCard';
 
 function shortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -167,6 +168,16 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
               </div>
             )}
           </div>
+
+          {/* Batch 41 Part 4: dues, previous balance and the WhatsApp reminder. */}
+          {can('view_profit_costs') && (
+            <CustomerDueCard
+              customerKey={customer.key}
+              name={customer.full_name}
+              phone={customer.phone}
+              orderDue={customer.total_due ?? 0}
+            />
+          )}
 
           {customer.id && (
             <CustomerNotesEditor
