@@ -1,0 +1,121 @@
+/* Batch 43: smart helpers — Give an offer, Buying list, Below cost on order
+   lines, the investor report card. Neutral by default; red / amber only for
+   the status badges and the below-cost line (warnings, not actions). */
+
+.smart-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: var(--adm-r-pill);
+  font-size: var(--adm-fs-micro);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.smart-badge--red {
+  background: var(--adm-red-bg);
+  color: var(--adm-red-text);
+}
+
+.smart-badge--amber {
+  background: var(--adm-amber-bg);
+  color: var(--adm-amber-text);
+}
+
+.smart-badge--grey {
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+}
+
+.smart-reason {
+  margin: 2px 0 6px;
+  font-size: var(--adm-fs-label);
+  line-height: 1.4;
+  color: var(--adm-text);
+}
+
+.smart-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-amber-bg);
+  color: var(--adm-text);
+  font-size: var(--adm-fs-label);
+  line-height: 1.4;
+}
+
+.smart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.smart-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.smart-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.smart-total {
+  margin-bottom: 12px;
+}
+
+.smart-skip {
+  opacity: 0.72;
+}
+
+.smart-packs {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.smart-packs .form-field {
+  max-width: 140px;
+  margin: 0;
+}
+
+.smart-packs__money {
+  font-family: var(--font-price);
+  font-weight: 800;
+  padding-bottom: 10px;
+}
+
+/* "Below cost" under an order line. */
+.smart-below {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--adm-fs-small, 12px);
+  font-weight: 600;
+  color: var(--adm-red-text, #d33);
+}
+
+/* Reports → Investors: the PDF card. */
+.smart-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.smart-pdf__title {
+  margin: 0;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+}
+
+.smart-pdf__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
