@@ -1,0 +1,246 @@
+BATCH 43 — Smart helpers: offer suggestions, next-trip buying list, low-price warning, investor PDF
+Version 1.43.0 · Branch feature/batch-43-smart (pushed; no PR opened)
+
+NOTHING IN YOUR SHOP OR BOOKS WAS CHANGED. The database step only adds 6
+functions that READ numbers. Inventory mode is still Off. These helpers are
+plain rules on your own numbers — they are not "AI" and the screens never
+say so. Every suggestion shows the simple reason behind it.
+
+IMPORTANT TODAY: sales speed comes from sales taken from lots, and that only
+happens while Inventory mode is On. Your mode is Off and you have no lots
+yet, so Give an offer and the Buying list are empty now and say why. They
+start working on their own once your opening stock is in and the mode is On.
+
+====================================================================
+WHAT WAS BUILT (short)
+====================================================================
+1. Give an offer (Inventory → Tools → "Give an offer (expiring stock)").
+   For every lot row with units left and an expiry date:
+   - speed = units sold in the last 90 days ÷ 3 (a month) — the SAME speed
+     as the Stock report. A product with less than 30 days of history uses
+     what exists (units so far scaled to 30 days) and is marked "new".
+   - months to sell out = units ÷ speed. Units from lots that expire
+     earlier sell first, so they are counted too (the card says so).
+   - Needs more months than (months to expiry − 1) → "Give offer" (red).
+     Within one month of that → "Watch" (amber). Otherwise not listed.
+     No sale at all in 90 days → "Give offer".
+   - Each card: product, lot, expiry, units left, speed, time to sell vs
+     time to expiry, the price now, the LOWEST price (landed cost of a pack,
+     rounded up to whole taka) and the suggestion: 5–10% off for Watch,
+     10–20% for Give offer, as taka prices — never below the lowest price.
+     If even the smallest discount would go below cost it says "At most N%
+     off before it goes below cost"; if the price is already at cost, "No
+     room".
+   - The reason in one line, e.g. "Sells 2 a month, 14 left, expires in
+     5 months (Mar 2027), needs about 7 months to sell."
+   - "Open product" opens the product editor (to set an offer price).
+   - "Already expired": units whose expiry month has ended, with their
+     landed cost and a "Write off" button (the Batch 41 write-off, reason
+     Expired, from that exact lot; type the number of units to confirm).
+     It works only while Inventory mode is On, like Remove stock.
+
+2. Buying list (Inventory → Tools → "Buying list (next trip)").
+   - Pick Supplier or Country (from your lists), "Next stock arrives in
+     about N weeks" (default 6) and "Keep stock for M months after it
+     arrives" (default 3).
+   - Products shown = the ones USUALLY bought there: the supplier / country
+     of most of that product's purchase lots (a tie → the newest).
+   - Suggested = speed × (N weeks + M months) − units left − units on the
+     way, rounded UP to whole packs. "On the way" = lots marked "costs
+     pending" with a date after today.
+   - No sale in 120 days → "Skip — not moving" (0).
+   - Each row: the reason, last landed cost, the suggestion, a box to change
+     the number, and its money. At the top: estimated money needed in total
+     (packs × newest landed cost) and how many products to buy.
+   - "Download Excel" (product, packs, units, last buy price, landed cost,
+     money needed, notes; your changed numbers, marked "Changed from 8").
+
+3. Below cost on New order and Edit order.
+   Under a line whose price (after that line's discount) is lower than the
+   landed cost of the lot that sells next (earliest expiry first, the same
+   order sales take stock in): "Below cost". You (and staff with "View
+   profit & costs") see "Below cost — cost ৳X each, loss ৳Y". Staff without
+   it see only "Below cost — check with Naeem" — the database does not even
+   send them the taka. It is only a line of text: saving is never blocked.
+
+4. Investor report PDF (Reports → Investors → "Investor report (PDF)").
+   Pick the investor and a month (or use the report's dates) → one A4 page
+   in English: NAEEM'S, the period, sales, net profit, return on money in
+   the business %, that investor's capital put in / returned / still owed,
+   profit share paid in the period, and the year by month (sales and net
+   profit, with a total). Black text on white; the only colour is a small
+   orange mark on the logo line. No product costs, no customer names.
+   Buttons: Download PDF and Share (a phone opens the share sheet —
+   WhatsApp etc.; a computer downloads it).
+   A sample made by the tests: reports/batch-43-samples/investor-report-sample.pdf
+
+====================================================================
+WHERE THE NUMBERS COME FROM
+====================================================================
+Nothing works profit out a second way:
+- Investor PDF: sales, net profit and return % = money_summary for the same
+  dates (the Money page's call). The investor's numbers = the row of
+  Reports → Investors. The months = money_profit_parts per month (the same
+  as Profit & loss's month columns). The database test checks each equals.
+- Give an offer: the Stock report's own rows (units, landed cost, the
+  "sells first" order) — the test checks every row equals the Stock report.
+- Below cost / Buying list: the lot rows' landed cost per unit (Batch 39).
+
+====================================================================
+SQL NAEEM MUST RUN IN SUPABASE
+====================================================================
+None. supabase/migration-045-batch43-smart.sql (6 new read-only functions;
+nothing dropped, renamed or changed) was first tried together with all the
+database tests in one transaction that was undone (31 of 31 passed, nothing
+stayed), then applied by me, as your brief allows. Afterwards I checked: all
+6 functions exist, the public cannot call any of them, and the 2 inner
+helpers cannot be called from the website at all.
+
+One change on this computer you should know about: the Supabase command
+line updated itself to version 3.1, which refuses SQL on your live project
+from an agent unless it is confirmed with --yes. You allowed --yes (11 Nov
+2026), so I used it for the trial, the apply and the database tests, and the
+test helper (e2e/helpers/sqlRunner.ts) now passes it too — those test
+scripts always end in ROLLBACK.
+
+====================================================================
+TESTS
+====================================================================
+npm run verify — the full run, once at the end (23.5 min):
+- Build: passed, zero errors.
+- Unit tests: 527 of 527 passed (24 new).
+- Browser tests: 329 passed, 134 skipped, 6 failed. The 6 are the SAME 6
+  old failures listed in the Batch 42 report (YouTube video ×2 — batch 23
+  and 27, the card cart stepper — batch 28, Home "Nothing needs attention"
+  — batch 32, photo placeholder — batch 33, rider's phone — batch 35). None
+  of those files was changed by this batch and none is a timing flake, so
+  nothing was re-run. Every batch's database tests (39, 40, 41, 42, 43)
+  passed with the new confirm flag.
+
+New tests for this batch:
+- Database (e2e/sql/batch-43-smart.sql, one transaction always undone):
+  31 of 31 passed. Offer rows (cream: 8 left, 2 sold, 90 days, ৳1,000,
+  cost ৳100; a later lot counts the 8 that sell first; offer price used
+  when lower; the expired toner listed; every row equals the Stock report).
+  Buying rows (usual supplier = 2 lots against 1; left 24, on the way 7;
+  newest cost ৳70; opening-only products left out). Below cost (৳50 vs
+  ৳100 → loss ৳100 for 2; pack of 10 = ৳200; loose units; never bought →
+  no warning; at cost → not below; staff with Create / Edit orders see
+  "below" without taka; with View profit & costs they see taka).
+  Investor report (sales, net profit, return % = money_summary; the row =
+  Reports → Investors; ৳10,000 in, ৳1,000 back, ৳9,000 owed, ৳500 share;
+  one row per month, this month = money_profit_parts; unknown investor and
+  wrong dates refused; no customer or product names). Permissions:
+  customers and the public get nothing.
+- Unit tests (src/lib/batch43.smart.test.ts): 24 of 24 — speed, expiry
+  month end, Give offer / Watch / sells in time, units that sell first, no
+  sales, "new", the price never below cost (tried with 6 costs), the pack
+  floor rounded up, the expired list; buying maths (8 packs; packs of 3 → 3;
+  exactly 6 in packs of 3 → 2, not 3; on the way; skip; source filter;
+  total ৳10,804; a changed number); below-cost words (no ৳ without the
+  permission); the PDF: one A4 page, every character drawn, its numbers =
+  Reports → Investors.
+- Browser tests at 360 px (e2e/batch-43.spec.ts): 10 of 10 — the database
+  file above; permissions; Give an offer (badges, reason, ৳800–৳900 and
+  floor ৳700; ৳900–৳950 and floor ৳850 for Watch; Open product); Expired
+  + Write off (call mocked: nothing removed); the Mode Off note; Buying
+  list (8 / 4 / Skip, total ৳10,804 → ৳3,301 after typing 2; the Excel file
+  read back with the same numbers; by country); Below cost on New order
+  (with taka, then without any ৳) and on Edit order (opened, never saved);
+  the investor PDF downloaded and read back (one page; the same ৳5,00,000 /
+  ৳1,00,000 / ৳4,00,000 as the table on screen); a read-only check of the
+  real screens.
+- Screenshots: reports/batch-43-screens/ (7 pictures at 360 px).
+
+====================================================================
+CHOICES I MADE FOR YOU (and why)
+====================================================================
+1. "Time to expiry" runs to the END of the expiry month (Mar 2027 = good
+   until 31 Mar), and a product is "expired" once that month has ended —
+   the same as the Stock report and the Dashboard.
+2. Units from lots that expire earlier count before a later lot (sales take
+   the earliest expiry first), so a later lot can need an offer even if it
+   is small.
+3. Speed for products with 30–90 days of history is still ÷ 3, exactly as
+   the brief and the Stock report say; under 30 days it uses what exists
+   and says "new". So speeds never differ between screens.
+4. Discount prices are rounded to whole taka; the lowest price is rounded
+   UP, so a price at the floor is never a loss.
+5. Below cost uses the line's own price (its discount included). An order
+   discount on the whole order is not spread over the lines — it would
+   change the warning every time the discount box changes. If a product has
+   no units left in any lot, the newest landed cost is used; a product
+   never bought gives no warning.
+6. A product that only exists in the opening stock (L-000) has no supplier,
+   so it is on no buying list until it is bought in a purchase lot once.
+7. The buying list's money uses the newest LANDED cost (with shipping), not
+   just the buy price, because that is the money the trip really needs; the
+   Excel shows both.
+8. The investor PDF uses the invoice's font (Plus Jakarta Sans) so ৳ and
+   Bangladeshi number grouping (1,48,250) print correctly on every phone.
+   The monthly table is the calendar year of the period's end, up to this
+   month.
+9. Give an offer and Buying list sit in Inventory → Tools (they are about
+   stock); the investor PDF sits on the Investors report it comes from.
+
+====================================================================
+WHAT TO CHECK ON YOUR PHONE (step by step)
+====================================================================
+Nothing below changes your books if you follow it exactly.
+ 1. Admin → Inventory. Under TOOLS there are two new rows: "Give an offer
+    (expiring stock)" and "Buying list (next trip)".
+ 2. Open Give an offer. Today it says Inventory mode is Off and shows
+    nothing (you have no lots yet). Tap the chips All / Give offer / Watch
+    / Expired; Back returns to Inventory.
+ 3. Open Buying list. Tap Supplier, then Country; the lists are your
+    suppliers / countries (empty until you save a lot). Change the weeks to
+    8 and back to 6.
+ 4. Orders → New order. Add any product. No "Below cost" line appears while
+    you have no lots (there is no cost to compare with). Leave without
+    saving.
+ 5. Reports → Investors. Scroll down to "Investor report (PDF)". If you
+    have added an investor in Money, pick them and a month, tap Download
+    PDF, open it: one page, NAEEM'S at the top. Tap Share: the share sheet
+    opens (WhatsApp). Until you add an investor the card does not show.
+ Later, once the opening stock is in and Inventory mode is On:
+ 6. Give an offer lists the expiring products with a reason; open one with
+    "Open product" and set an offer price no lower than the "Lowest price".
+ 7. In a manual order, type a price under the cost on purpose: the red
+    "Below cost — cost ৳X each, loss ৳Y" line appears; remove the line.
+
+====================================================================
+WHAT I COULD NOT FINISH
+====================================================================
+Nothing from the brief was left out. Limits to know:
+- With Inventory mode Off every speed is 0, so the helpers can only be
+  checked with real numbers after you turn it On (the tests use test data).
+- The screenshots are at 360 px (phone) as asked; the Edit order picture
+  shows only the item line, so no real customer's name or phone is in it.
+
+====================================================================
+WHAT I FOUND ALONG THE WAY
+====================================================================
+- The Supabase command-line change above: without --yes every batch's
+  database tests (39–43) would have failed in the full run.
+- This computer's terminal now starts with Node 20 (from nvm). The PDF
+  and Excel tests need a newer Node (they ran on Node 25 from Homebrew, as
+  in earlier batches). If you run the tests yourself and see "Promise.
+  withResolvers is not a function", run "nvm use 22" (or newer) first.
+- The same 6 old browser-test failures as in Batch 41 and 42 are still
+  there (see TESTS); they are not about this batch.
+
+====================================================================
+INDUSTRY-LEVEL SUGGESTIONS (not built)
+====================================================================
+1. One-tap offer (small): a "Set this price" button on a Give an offer card
+   that sets the product's offer price (with an end date) — today you open
+   the product and type it.
+2. Offer end date (medium): offer prices that switch back by themselves on
+   a date, so a clearance price is never forgotten.
+3. Buying list from the supplier's price list (medium): upload the
+   supplier's Excel, and the buying list uses their current prices instead
+   of your last landed cost.
+4. Investor portal (large): each investor logs in and sees only their own
+   report, instead of PDFs sent by WhatsApp.
+5. Margin floor for staff (small): optionally BLOCK staff (not you) from
+   saving a line below cost, with your approval by password.

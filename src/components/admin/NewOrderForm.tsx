@@ -20,6 +20,9 @@ import { adminCreateOrder, findCustomerMatches, type ManualOrderItemInput } from
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
 import type { StockUnitWord } from '../../lib/inventory/types';
 import { useAuth } from '../../contexts/AuthContext';
+import { belowCostText, type BelowCostInput } from '../../lib/smart/belowCost';
+import { useBelowCost } from '../../lib/smart/useBelowCost';
+import '../../styles/adminSmart.css';
 import {
   MANUAL_ORDER_SOURCES,
   DISCOUNT_REASONS,
@@ -106,7 +109,8 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // Batch 24: custom prices, "Free" and order discounts are money changes —
   // Super Admin only. A moderator's manual order is always at the real
   // price (admin_create_order() refuses anything else from them).
-  const { isAdmin, staff } = useAuth();
+  const { isAdmin, staff, can } = useAuth();
+  const canSeeCost = can('view_profit_costs');
   const hideTestCustomers = !isTestViewer(staff);
   const { products, variantsFor, settings } = useProducts();
   const { showToast } = useToast();
@@ -130,6 +134,21 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   const [altPhone, setAltPhone] = useState('');
   const [query, setQuery] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
+  // Batch 43 Part 3: "Below cost" under a line whose price is under the
+  // landed cost of the lot that sells next. It never blocks saving.
+  const belowInputs = useMemo<BelowCostInput[]>(
+    () =>
+      lines.map((l) => ({
+        key: l.key,
+        product_id: l.productId,
+        variant_id: l.variantId,
+        sold_unit: l.soldUnit,
+        price: l.soldPrice,
+        quantity: l.quantity,
+      })),
+    [lines]
+  );
+  const belowCost = useBelowCost(belowInputs, true);
 
   const [zone, setZone] = useState<DeliveryZoneChoice>('inside_dhaka');
   const [feeInput, setFeeInput] = useState(() => settings.delivery_fee_inside_dhaka || '70');
@@ -890,6 +909,11 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                       Free
                     </button>
                   </div>
+                  )}
+                  {belowCostText(belowCost.get(line.key), canSeeCost) && (
+                    <span className="smart-below" role="status" data-testid="line-below-cost">
+                      {belowCostText(belowCost.get(line.key), canSeeCost)}
+                    </span>
                   )}
                   {isAdmin && lineNeedsReason(line.listPrice, line.soldPrice) && (
                     <div className="chip-group" role="group" aria-label="Reason for discount">

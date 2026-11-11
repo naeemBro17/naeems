@@ -29,6 +29,10 @@ import { useProducts } from '../../contexts/ProductContext';
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
 import type { StockWarning } from '../../lib/manualOrders';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { useAuth } from '../../contexts/AuthContext';
+import { belowCostText, type BelowCostInput } from '../../lib/smart/belowCost';
+import { useBelowCost } from '../../lib/smart/useBelowCost';
+import '../../styles/adminSmart.css';
 
 interface EditOrderFormProps {
   order: OrderWithDetails;
@@ -71,6 +75,24 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     };
   }, []);
   const [draft, setDraft] = useState<EditDraft | null>(null);
+  // Batch 43 Part 3: "Below cost" under a line priced under the landed cost
+  // of the lot that sells next. Taka only for "View profit & costs"; it
+  // never blocks saving.
+  const { can } = useAuth();
+  const canSeeCost = can('view_profit_costs');
+  const belowInputs = useMemo<BelowCostInput[]>(
+    () =>
+      (draft?.items ?? []).map((i) => ({
+        key: i.key,
+        product_id: i.productId,
+        variant_id: i.variantId,
+        sold_unit: i.soldUnit ?? null,
+        price: i.unitPrice,
+        quantity: i.quantity,
+      })),
+    [draft]
+  );
+  const belowCost = useBelowCost(belowInputs, true);
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -339,6 +361,11 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                       </label>
                     ) : (
                       <span className="edit-order__item-sub">{formatTaka(item.unitPrice)} each</span>
+                    )}
+                    {belowCostText(belowCost.get(item.key), canSeeCost) && (
+                      <span className="smart-below" role="status" data-testid="edit-line-below-cost">
+                        {belowCostText(belowCost.get(item.key), canSeeCost)}
+                      </span>
                     )}
                     {limit !== undefined && (
                       <span className="edit-order__stock" role="alert">

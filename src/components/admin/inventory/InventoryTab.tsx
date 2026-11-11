@@ -14,6 +14,8 @@ import { OpeningStockView } from './OpeningStockView';
 import { ShortfallsView } from './ShortfallsView';
 import { SalesProfitView } from './SalesProfitView';
 import { ModeView } from './ModeView';
+import { OffersView } from './OffersView';
+import { BuyingListView } from './BuyingListView';
 import { formatLotDate, sourceLabel } from './invFormat';
 import '../../../styles/adminInventory.css';
 
@@ -35,6 +37,8 @@ export function InventoryTab() {
   if (view === 'shortfalls') return <ShortfallsView onBack={back} />;
   if (view === 'profit') return <SalesProfitView onBack={back} />;
   if (view === 'mode') return <ModeView onBack={back} />;
+  if (view === 'offers') return <OffersView onBack={back} />;
+  if (view === 'buying') return <BuyingListView onBack={back} />;
   return <InventoryHome onOpen={open} />;
 }
 
@@ -85,6 +89,8 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
         <ListRow icon="chart" label="Compare stock (shop vs lots)" onClick={() => onOpen('compare')} />
         <ListRow icon="chart" label="Sales profit" onClick={() => onOpen('profit')} />
         <ListRow icon="alert" label="Sold without stock" onClick={() => onOpen('shortfalls')} />
+        <ListRow icon="alert" label="Give an offer (expiring stock)" onClick={() => onOpen('offers')} />
+        <ListRow icon="restock" label="Buying list (next trip)" onClick={() => onOpen('buying')} />
         <ListRow icon="restock" label={modeOn ? 'Inventory mode: On' : 'Turn on Inventory mode (check first)'} detail={modeOn ? 'On' : 'Off'} onClick={() => onOpen('mode')} />
       </ListGroup>
 
