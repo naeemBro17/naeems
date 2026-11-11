@@ -1,0 +1,375 @@
+BATCH 42 — Dashboard, reports, monthly stock count and month lock
+Version 1.42.0 · Branch feature/batch-42-dashboard-reports (pushed; no PR opened)
+
+NOTHING WAS LOCKED, COUNTED OR CHANGED IN YOUR BOOKS. Inventory mode is still
+Off and the opening balances are still not confirmed. Until you confirm them,
+most money numbers on the Dashboard and in the reports are ৳0.
+
+====================================================================
+WHAT WAS BUILT (short)
+====================================================================
+1. Dashboard. For you (and anyone with "View profit & costs"), Admin → Home
+   is now the Dashboard. At the top there are only four things:
+   - Your profit for the period (big). Below it: ▲/▼ % against the period
+     before, "You took ৳…" and "Left in the business ৳…".
+   - Return on money in the business, with the same formula as the Money
+     page.
+   - Money now: Cash, bKash, Bank, With Steadfast, To receive, To give and
+     Stock value, with the green "Books balance" badge (or a red "Off by
+     ৳…").
+   - Needs attention: one line per problem, and each line opens the right
+     screen. There are new lines for:
+     * products expiring before they sell;
+     * sold without stock (still open);
+     * customers owing for over 30 days;
+     * products with no buy price;
+     * products with no weight;
+     * the monthly stock count when it is due.
+     The lines you already had are still there (orders to confirm, low
+     stock, dues, Steadfast not paid, reviews, wholesalers).
+   - The period switch is Today / This month / This year.
+   - On a computer (1024 px and wider) there is the left menu, and the
+     cards sit side by side in 3 columns (the page is at most 1,240 px
+     wide).
+   Staff without "View profit & costs" keep the old Home exactly as it was.
+
+2. Reports: a new "Reports" item in the menu, right after Money. It has 10
+   reports. Each one has the dates Today / Yesterday / This week / This
+   month / Last month / This year / All time / Custom, plus "Download
+   Excel" and "Print / PDF".
+   - Profit & loss: every step, from Sales down to Left in the business,
+     with each expense category under Expenses. For more than one month
+     (e.g. This year) there is one column per month plus Total. A locked
+     month is marked "(locked)".
+   - Sales (like Kaarbar): entries, total, received, unpaid; by source
+     (Website / Manual — Facebook / WhatsApp / Phone …, from the order's
+     source field); the list of orders (tap one to open it).
+   - Products: units sold, sales, cost, profit, margin %. Tabs: Best
+     sellers · Slow (no sale in 60 days) · Low margin (under 15%) · Not
+     moving, stock left.
+   - Lots: per lot, units bought / sold / on orders / removed / left; buy
+     price, trip costs (weight and other bills), landed cost, sales, profit
+     so far, margin, value of the stock left.
+   - Stock: every lot row with units, expiry and value at landed cost. The
+     "Expiring (90 days)" tab says "sells N a month → will (NOT) sell in
+     time".
+   - Expenses: by category with its share %, and by month.
+   - Customers: who owes what, split into 0–30 / 31–60 / over 60 days;
+     top customers by what they bought and by profit.
+   - Day book: every money movement, per account, with the balance before,
+     the running balance after each line, and the closing balance (like
+     Kaarbar's Day Book and Cash in Hand).
+   - Investors: capital in, returned, still owed, profit share paid (all
+     time and in the chosen dates).
+   - Charts: Your profit by month (bars, last 12 months) and Money in vs
+     money out by month. Labels are on the bars, there is no 3D and nothing
+     moves; the numbers are also in a table under the charts.
+   The Excel file has one sheet per table. Amounts are real numbers with a
+   ৳ format (Excel can add them up), and dates are real dates.
+
+3. Monthly routine (Money → Monthly stock count, and Money → Lock a month;
+   both are also at the bottom of Reports):
+   - Count. Each month the system picks 15–20 products:
+     * enough that every product with stock is counted at least once in
+       about 6 months: first the ones never counted, then the ones counted
+       longest ago;
+     * the rest of the list goes to expensive stock and fast sellers not
+       counted in the last 60 days, so they are counted more often.
+     The screen shows "System says N" and you type what you counted (packs
+     + loose units for products like fish oil in ml). When you save:
+     * fewer than the system → a write-off "Count difference" at landed
+       cost;
+     * more → the extra units go back into the newest lot of that product.
+     You can also count any other product any time ("Count another
+     product"). Like Remove stock, saving works only while Inventory mode
+     is On.
+   - Lock. First a checklist:
+     * the month is over;
+     * the books balance;
+     * no order from that month is still To confirm / Confirmed / In
+       transit;
+     * every Steadfast payout of that month is placed in an account;
+     * the month's count is done.
+     When every line is ticked, the Careful actions box has "Lock
+     September 2026…", which asks for your password.
+     After that, nothing dated in that month can be added, changed or
+     deleted: orders, order items, payments, money entries, lots (and
+     their bills), write-offs, cost adjustments and opening balances. The
+     database itself refuses, with this message: "September 2026 is
+     locked: … Add a correction dated today with the note 'correction for
+     September 2026'."
+   - Unlock: only the Super Admin, with the password and a written reason.
+     The reason goes into the Activity Log, and so does every lock.
+
+====================================================================
+WHERE THE NUMBERS COME FROM (the brief's main rule)
+====================================================================
+Nothing works profit out a second way:
+- Dashboard: exactly the Money page's database call (money_summary). The
+  "period before" uses money_profit_parts (Batch 41).
+- Profit & loss, its month columns and the charts: money_profit_parts for
+  each date range (Batch 41), which is built on inventory_sales_profit
+  (Batch 39).
+- Expenses by category: the same expense rows money_profit_parts adds up.
+- Products: inventory_sales_profit's own per-product table.
+- Lots: each delivered line's sale is shared over its lots by units, with
+  the same discount sharing as Batch 39. The test checks that the lots'
+  sales and costs add up to Sales profit's totals.
+- Stock: the same lot rows as the Money page's "Stock at landed cost".
+- Customers: the same per-customer dues as Customers → To receive (Batch
+  41).
+- Day book: the same money ledger the account balances add up.
+- Investors: the same rows as the Investors page.
+The database test checks every one of these against the Batch 39 / 41
+functions for the same dates (see TESTS).
+
+The one report that answers a different question on purpose is Sales. It
+counts orders on the day they were PLACED, like Kaarbar, while profit counts
+an order on the day it is DELIVERED. The screen says this under the title.
+
+====================================================================
+SQL NAEEM MUST RUN IN SUPABASE
+====================================================================
+None. As you allowed, I applied supabase/migration-044-batch42-reports-
+lock.sql myself, after two checks passed:
+- a "try and undo" run (dry run);
+- the full database test with the new step inside one transaction that
+  was undone afterwards.
+
+It only adds things. Nothing was dropped, renamed or replaced:
+- 3 new tables (month locks, count lists, counts);
+- 1 new column (stock_write_offs.added_back);
+- new functions;
+- 13 new "lock" checks on the tables listed above. Each one first asks
+  "is any month locked?" and, while none is, does nothing at all.
+
+Checked afterwards on the live database: 17 new functions and 13 lock
+checks are there; no month is locked; nothing is counted; Inventory mode is
+still Off; the opening balances are still not confirmed.
+
+Network note: during this batch the office network blocked the database
+port (and SSH to GitHub). You switched the network, and then I applied and
+tested. The branch was pushed over HTTPS.
+
+====================================================================
+TESTS
+====================================================================
+npm run verify — the full run, once at the end (23.3 min):
+- Build: passed, zero errors.
+- Unit tests (vitest): 503 of 503 passed.
+- Browser tests (e2e): 309 passed, 144 skipped (on purpose, as in earlier
+  batches), 6 failed. What I did about the 6:
+  * 4 are the same old failures as in Batch 41. They also fail on main
+    without these batches:
+    - batch-23 and batch-27: the YouTube review video never starts in the
+      test browser;
+    - batch-33: the photo placeholder;
+    - batch-35: "Show rider's phone is Off" (your live setting is On).
+  * 2 were timing flakes in files this batch did not touch. Each file was
+    run on its own 3 times:
+    - batch-40 "every live photo is there": 16 of 16 passed, 3 times;
+    - batch-32 "Edit order switches the mode": the page arrived at the
+      order's own address a moment early; passed 3 times out of 3.
+  * Two old failures from Batch 41 passed this time: batch-27 "card cart
+    stays in sync" and batch-32 "Nothing needs attention".
+- Found during those re-runs, and fixed:
+  * An old Batch 39 test left a hidden test product ("E2E B39 Fish Oil
+    1000mg", is_active = false) and its lot behind in the live database.
+    Its clean-up looked for test lots by the supplier's typed name. Since
+    Batch 39 the supplier is picked from a list (the typed name is empty),
+    so the lot slipped through. The clean-up now also finds lots by their
+    test products.
+  * I removed the leftover through the app's own "delete lot" function
+    (written to the Activity Log), and checked afterwards: 0 lots, 0 test
+    products, 0 test suppliers. Inventory mode is Off, so the shop never
+    showed it.
+  * That leftover had also made my new count test pick 3 products instead
+    of 2. The test now checks only its own products.
+  * Then the quick check over every file this branch touched (batch-25,
+    batch-39, batch-42): build OK, 503/503 unit tests, 31/31 browser
+    tests, and nothing was left behind in the database.
+
+New tests:
+- Database (e2e/sql/batch-42-reports.sql): 52 checks, all inside ONE
+  database transaction that is always undone. One shared set of test data
+  is used: opening stock and books dated 3 years back, a second lot,
+  expenses, 3 orders (one in the old month, one 45 days old), a payment.
+  The checks:
+  * Every report agrees with the Batch 39 / 41 functions for the same
+    dates:
+    - P&L lines equal money_profit_parts;
+    - the months add up to the total;
+    - categories add up to Expenses;
+    - the Dashboard equals money_summary, and its "period before" equals
+      money_profit_parts;
+    - Charts equal money_profit_parts per month;
+    - Products equal Sales profit's table;
+    - the lots' sales and costs equal Sales profit's totals;
+    - Stock equals the Money page's stock value;
+    - the customers' dues equal To receive, and every customer's age
+      columns add up;
+    - every Day book account closes at its balance;
+    - Investors match the Investors page.
+  * Count:
+    - a product counted 1 short → a ৳100 write-off;
+    - a product counted 2 over → 2 units back into the newest lot, a
+      −৳120 row;
+    - profit's write-off line is −৳20 and the books still balance;
+    - a count below 0 is refused;
+    - with Inventory mode Off it explains why.
+  * Lock:
+    - an open order from the month blocks it;
+    - this month can't be locked;
+    - the password is needed;
+    - once locked, 20 kinds of change are all refused: add / change /
+      delete a money entry, add / delete a payment, change / return /
+      delete / add an order, change its items, change a lot / a lot row /
+      its bills / delete it, add a write-off, a cost adjustment, change the
+      opening balances, undo the opening;
+    - a note on an old order can still change, today's sales still take
+      stock from the old lot, and a correction dated today works;
+    - the P&L marks the month locked;
+    - unlock is refused for staff and without a reason; with a reason it
+      works and is in the Activity Log.
+  * Permissions:
+    - a customer gets "Not authorized." from all 14 new database calls;
+    - the public can't call them at all;
+    - staff with "View profit & costs" can open the reports.
+- Unit tests (src/lib/batch42.reports.test.ts): 21. They cover the date
+  presets (week from Saturday, last month in January, February), the
+  Dashboard's "period before", the ▲/▼ %, the age buckets, reading counts
+  (packs + loose, Bangla digits), the 15–20 rule, Excel cells (real numbers,
+  ৳ format, real dates, sheet names), and every report table's totals.
+- Browser tests (e2e/batch-42.spec.ts): 14, at 360 px and 1440 px. They
+  cover:
+  * the Dashboard on a phone and a computer, and that it shows the same
+    numbers as the Money page;
+  * the Reports menu, every report and its tabs;
+  * Excel: the P&L and Sales files are opened and their totals equal the
+    screen;
+  * Print hides the menus;
+  * a test count of 2 products (the save call is mocked);
+  * the lock checklist and lock with password (the lock call is mocked,
+    nothing was locked);
+  * permissions for the public and a customer;
+  * a live, read-only pass over the Dashboard, every report, the count and
+    the lock screens.
+  The screens use made-up numbers where real ones would need confirmed
+  books.
+- Two old tests list the admin menu exactly; "Reports" was added to both
+  (src/lib/adminNav.test.ts, e2e/batch-25.spec.ts). The Batch 39 test's
+  clean-up was fixed (see above).
+- The quick check during the batch: build OK, 503/503 unit tests, 23/23
+  browser tests in the touched files (31/31 after the Batch 39 clean-up
+  fix).
+
+Screenshots (reports/batch-42-screens/), 360 px unless marked:
+  01 Dashboard (phone) · 02 Dashboard (1440 px, books off) · 03 Reports menu
+  · 04 P&L this month · 05 P&L this year (month columns, locked month) ·
+  06 the same at 1440 px · 07 Sales · 08 Products · 09 Lots · 10 Stock
+  expiring · 11 Expenses · 12 Customers · 13 Day book · 14 Charts · 15 Charts
+  (1440 px) · 16 Count · 17 Lock checklist · 18 Locked
+
+====================================================================
+CHOICES I MADE FOR YOU (and why)
+====================================================================
+1. The ▲/▼ % compares like with like: today vs yesterday; this month so far
+   vs the same days of last month (1–10 Nov vs 1–10 Oct); this year so far
+   vs the same days of last year. A whole last month would always look
+   bigger in the middle of a month.
+2. Home keeps your order tiles (Today / To confirm / With courier / This
+   month) and the 7-day sales chart, under "Orders" BELOW the Dashboard.
+   They are daily work, not profit, and removing them would have broken
+   working features and their tests. The four Dashboard items are at the
+   top as the brief asks.
+3. "This week" starts on Saturday (the first working day in Bangladesh).
+4. Counted MORE than the system: the extra units go back into the newest
+   lot at its landed cost. They are recorded as a write-off row with a
+   negative cost (marked "added back"), so "Stock removed (write-offs)" in
+   profit is losses minus finds and the books stay balanced. I did not
+   widen the old cost-adjustment reasons, because that would have meant
+   dropping and re-creating a database rule.
+5. How many to count: ceil(products with stock ÷ 6), at least 15, at most
+   20. With more than 120 products in stock, 20 a month takes a little
+   longer than 6 months to go round (150 products ≈ 7.5 months). The 20
+   cap is from the brief.
+6. A month whose count list was never made (the count screen was not
+   opened in it, e.g. before Inventory mode) does not block its lock for
+   ever: the line says "No count list was made that month." A list not
+   finished by the end of the month can be finished early in the next one;
+   those counts belong to the old list.
+7. An order is "in" a month if it was placed in it, or became Delivered /
+   Returned in it (the day its profit counts). After the lock only the
+   things money depends on are refused (status, prices, discount,
+   delivery, total, the date, items); a note or tracking number can still
+   change. Today's sales can still take stock from an old lot; only the
+   lot itself (what was bought, prices, bills, expiry) is locked.
+8. Who can lock: anyone with "View profit & costs", with their password.
+   Unlock: only the Super Admin, with the password and a reason.
+9. Steadfast's own automatic records (courier fees, payout lines) are not
+   refused by the lock, so the Steadfast sync can never break. The
+   checklist line "Steadfast payouts recorded" makes sure they are placed
+   before you lock.
+10. Download Excel is the one orange button on every report. Print / PDF
+    uses the phone's or computer's own print (Save as PDF); on paper the
+    menus and buttons are hidden.
+
+====================================================================
+WHAT TO CHECK ON YOUR PHONE AND ON A PC (step by step)
+====================================================================
+Nothing below changes your books if you follow it exactly.
+ 1. Open Admin. Home is now the Dashboard. Look at Your profit, Return on
+    money, Money now and Needs attention. (Until the opening balances are
+    confirmed most numbers are ৳0 and the badge says "No check yet".)
+ 2. Tap Today, This month, This year. The numbers change and the ▲/▼ line
+    says what it compares with.
+ 3. Tap a Needs attention line (e.g. "products with no weight"); it opens
+    the right screen. Go Back.
+ 4. Menu → Reports. Open each of the 10 reports. Try the dates (This year
+    on Profit & loss shows one column per month).
+ 5. On Profit & loss tap "Download Excel" and open the file. Check the
+    Net profit total is the same as on the screen.
+ 6. Tap "Print / PDF" once and cancel (or Save as PDF).
+ 7. Money → Monthly stock count. Read the list and "System says N". While
+    Inventory mode is Off it says so and saving is off. Once Inventory mode
+    is On: count 2 products, type what you counted, tap Save; any
+    difference shows in Money → Stock removed.
+ 8. Money → Lock a month. Pick last month and READ the checklist. Do NOT
+    tap Lock.
+ 9. On a computer, open Home and two reports. The left menu shows, the
+    Dashboard cards sit side by side, and the tables fit the page.
+
+====================================================================
+WHAT I COULD NOT FINISH
+====================================================================
+Nothing from the brief was left out. Limits to know:
+- Your books are not confirmed and Inventory mode is Off, so with real data
+  the reports show little until you start (Batch 41 checklist). Every rule
+  was tested with real numbers inside the undone database transaction.
+- The count can be saved only while Inventory mode is On (the same rule as
+  Remove stock).
+
+====================================================================
+WHAT I FOUND ALONG THE WAY
+====================================================================
+- The dry run caught one missing bracket in the customers report before
+  anything was applied. It was fixed, then the database test passed.
+- The 6 old test failures from Batch 41 (YouTube video ×2, card cart
+  stepper, Home "Nothing needs attention", photo placeholder, rider's phone)
+  are not about this batch. "Nothing needs attention" can now never show
+  for you on the Dashboard while products have no buy price, so that old
+  test checks something that no longer applies to the Super Admin.
+
+====================================================================
+INDUSTRY-LEVEL SUGGESTIONS (not built)
+====================================================================
+1. Monthly close reminder (small): on the 3rd of each month a Needs
+   attention line "Lock October 2026" with the checklist status.
+2. Report e-mail / Telegram (medium): the Profit & loss Excel sent to you
+   on the 1st of every month automatically.
+3. Budget per expense category (small): a monthly limit with a warning line
+   when a category goes over it.
+4. Count by scanning (medium): scan a product's barcode on the count screen
+   instead of finding it in the list.
+5. Year-end pack (medium): one Excel with every report for the year, for an
+   accountant or tax return.
