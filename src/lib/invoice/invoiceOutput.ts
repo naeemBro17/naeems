@@ -11,7 +11,8 @@ const FONT_BASE = '/fonts/invoice/';
 
 let fontsPromise: Promise<InvoiceFontFiles> | null = null;
 
-function loadInvoiceFonts(): Promise<InvoiceFontFiles> {
+/** Batch 43: also used by the investor report PDF. */
+export function loadInvoiceFonts(): Promise<InvoiceFontFiles> {
   if (!fontsPromise) {
     const bytesByFile = new Map<string, Promise<Uint8Array>>();
     const read = (file: string) => {

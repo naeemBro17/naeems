@@ -36,6 +36,7 @@ import { ChipRow } from '../ui/AdminUi';
 import { BarChart } from './BarChart';
 import { ReportShell, useReport, useReportRange } from './ReportShell';
 import { ReportTable } from './ReportTable';
+import { InvestorPdfCard } from './InvestorPdfCard';
 
 interface ViewProps {
   onBack: () => void;
@@ -387,6 +388,14 @@ export function InvestorsView({ onBack }: ViewProps) {
             <Big label="Profit share in these dates" value={moneyText(sum(data.map((r) => r.share_range)))} testId="inv-share" />
           </div>
           <ReportTable sheet={sheet} testId="investors-table" empty="No investors yet." />
+          {period.valid && (
+            <InvestorPdfCard
+              investors={data}
+              range={period.range}
+              today={period.today}
+              onPickMonth={(r) => period.set({ preset: 'custom', from: r.from, to: r.to })}
+            />
+          )}
         </>
       )}
     </ReportShell>
