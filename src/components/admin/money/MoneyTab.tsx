@@ -13,6 +13,8 @@ import { PeopleView } from './PeopleView';
 import { OpeningView } from './OpeningView';
 import { CountView } from './CountView';
 import { WriteOffsView } from './WriteOffsView';
+import { StockCountView } from './StockCountView';
+import { MonthLockView } from './MonthLockView';
 import '../../../styles/adminInventory.css';
 import '../../../styles/adminMoney.css';
 
@@ -54,6 +56,10 @@ export function MoneyTab() {
       return <CountView onBack={back} />;
     case 'writeoffs':
       return <WriteOffsView onBack={back} onOpenOrder={openOrder} />;
+    case 'stock-count':
+      return <StockCountView onBack={back} />;
+    case 'lock':
+      return <MonthLockView onBack={back} />;
     default:
       return <MoneyPage onOpen={open} />;
   }

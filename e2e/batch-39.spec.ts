@@ -80,7 +80,16 @@ async function shot(page: Page, name: string): Promise<void> {
 async function cleanUp(): Promise<void> {
   await freshAdmin();
   const lots = await select<{ id: string; supplier: string; kind: string }[]>(admin.accessToken, 'lots?select=id,supplier,kind');
-  const mine = (lots.data ?? []).filter((l) => l.kind === 'purchase' && l.supplier.startsWith(SUPPLIER));
+  // Batch 42: a lot whose supplier was picked from the list has an empty
+  // supplier text, so the test lots are also found by their test products.
+  const testProducts = await select<{ id: string }[]>(admin.accessToken, `products?select=id&sku=like.${SKU_PREFIX}*`);
+  const productIds = (testProducts.data ?? []).map((p) => p.id);
+  const items =
+    productIds.length > 0
+      ? await select<{ lot_id: string }[]>(admin.accessToken, `lot_items?select=lot_id&product_id=in.(${productIds.join(',')})`)
+      : { data: [] as { lot_id: string }[] };
+  const withTestItems = new Set((items.data ?? []).map((i) => i.lot_id));
+  const mine = (lots.data ?? []).filter((l) => l.kind === 'purchase' && (l.supplier.startsWith(SUPPLIER) || withTestItems.has(l.id)));
   if (mine.length > 0 || orderIds.length > 0) {
     await withLock(async () => {
       if (orderIds.length > 0) await rpc(admin.accessToken, 'admin_delete_orders', { p_order_ids: orderIds });

@@ -223,6 +223,8 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
         <ListRow icon="customers" label="Investors and what I owe" detail={pos ? moneyText(pos.to_give) : undefined} onClick={() => onOpen('people')} />
         <ListRow icon="chart" label="End-of-day count" onClick={() => onOpen('count')} />
         <ListRow icon="restock" label="Stock removed (write-offs)" onClick={() => onOpen('writeoffs')} />
+        <ListRow icon="restock" label="Monthly stock count" onClick={() => onOpen('stock-count')} />
+        <ListRow icon="lock" label="Lock a month" onClick={() => onOpen('lock')} />
         <ListRow icon="settings" label="Expense categories" onClick={() => onOpen('categories')} />
         <ListRow icon="lock" label="Opening balances" detail={data ? (data.confirmed ? `Since ${dayText(pos?.start_date ?? null)}` : 'Not confirmed') : undefined} onClick={() => onOpen('opening')} />
       </ListGroup>

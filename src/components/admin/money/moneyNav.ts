@@ -17,9 +17,11 @@ export type MoneyView =
   | 'people'
   | 'opening'
   | 'count'
-  | 'writeoffs';
+  | 'writeoffs'
+  | 'stock-count'
+  | 'lock';
 
-const VIEWS: readonly MoneyView[] = ['home', 'add', 'accounts', 'account', 'entry', 'expenses', 'categories', 'people', 'opening', 'count', 'writeoffs'];
+const VIEWS: readonly MoneyView[] = ['home', 'add', 'accounts', 'account', 'entry', 'expenses', 'categories', 'people', 'opening', 'count', 'writeoffs', 'stock-count', 'lock'];
 
 export function useMoneyNav() {
   const [searchParams] = useSearchParams();
