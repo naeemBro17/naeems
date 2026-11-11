@@ -2,7 +2,7 @@
 -- Batch 43 — Smart helpers: offer suggestions, next-trip buying list,
 -- low-price warning on manual orders, investor report PDF
 -- =============================================================================
--- Additive only: 5 new read-only functions. No table, column, trigger or
+-- Additive only: 6 new read-only functions. No table, column, trigger or
 -- existing function is changed, dropped or renamed. Nothing here writes.
 --
 -- These are plain rules on the shop's own numbers (no "AI"):

@@ -41,7 +41,10 @@ export function runSql(sql: string): Promise<string> {
   writeFileSync(file, sql);
   return new Promise((resolvePromise) => {
     let out = '';
-    const child = spawn(`"${cli}"`, ['db', 'query', '--linked', '-f', `"${file}"`], { cwd: root, shell: true });
+    // Batch 43: Supabase CLI 3 refuses SQL on the hosted project from an
+    // agent run unless it is confirmed. Naeem allowed --yes for these test
+    // scripts (they always end in ROLLBACK) on 11 Nov 2026.
+    const child = spawn(`"${cli}"`, ['db', 'query', '--linked', '--yes', '-f', `"${file}"`], { cwd: root, shell: true });
     child.stdout.on('data', (d: Buffer) => (out += d.toString()));
     child.stderr.on('data', (d: Buffer) => (out += d.toString()));
     child.on('close', () => resolvePromise(out));
