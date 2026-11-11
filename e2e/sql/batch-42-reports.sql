@@ -318,7 +318,8 @@ BEGIN
   PERFORM set_config('request.jwt.claims', c_admin, true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   v_json := stock_count_pick(NULL);
-  v_txt := (SELECT string_agg(r ->> 'why', ',' ORDER BY r ->> 'why') FROM jsonb_array_elements(v_json -> 'rows') r);
+  v_txt := (SELECT string_agg(r ->> 'why', ',' ORDER BY r ->> 'why') FROM jsonb_array_elements(v_json -> 'rows') r
+             WHERE (r ->> 'product_id')::uuid IN (v_pa, v_pb));
   v_sum := money_summary(v_today, v_today);
   v_json := stock_count_save(jsonb_build_array(
     jsonb_build_object('product_id', v_pa, 'variant_id', NULL, 'counted', 6),
@@ -327,8 +328,8 @@ BEGIN
   v_pos := money_summary(v_today, v_today);
   v_rep := stock_count_pick(NULL);
   EXECUTE 'RESET ROLE';
-  PERFORM pg_temp.ck('Count: with 2 products in stock both are picked — 1 by rotation (never counted) and 1 as expensive / fast',
-    v_txt IN ('fast,never', 'never,value'), v_txt);
+  PERFORM pg_temp.ck('Count: both test products are on this month''s list (never counted, or expensive / fast)',
+    v_txt IN ('fast,never', 'never,value', 'never,never', 'fast,value', 'fast,fast', 'value,value'), v_txt);
   PERFORM pg_temp.ck('Count: cream system 7, counted 6 → a ৳100 write-off "Count difference"',
     EXISTS (SELECT 1 FROM jsonb_array_elements(v_json) r WHERE (r ->> 'product_id')::uuid = v_pa
             AND (r ->> 'system_units')::int = 7 AND (r ->> 'difference')::int = -1)
@@ -342,8 +343,8 @@ BEGIN
   PERFORM pg_temp.ck('Count: profit "Stock removed (write-offs)" is the net ৳100 − ৳120 = −৳20; books still balance',
     (v_parts ->> 'write_offs')::numeric = -20 AND (v_pos -> 'position' ->> 'balanced')::boolean,
     format('%s · %s', v_parts ->> 'write_offs', v_pos -> 'position' ->> 'difference'));
-  PERFORM pg_temp.ck('Count: the month''s list now shows both counted', (SELECT bool_and((r ->> 'counted')::boolean)
-    FROM jsonb_array_elements(v_rep -> 'rows') r) AND jsonb_array_length(v_rep -> 'rows') = 2);
+  PERFORM pg_temp.ck('Count: the month''s list now shows both counted', (SELECT bool_and((r ->> 'counted')::boolean) AND count(*) = 2
+    FROM jsonb_array_elements(v_rep -> 'rows') r WHERE (r ->> 'product_id')::uuid IN (v_pa, v_pb)));
   PERFORM pg_temp.ck('Count: the pick rule — 150 products → 20 a month, 90 → 15, 2 → 2',
     LEAST(150, LEAST(20, GREATEST(15, ceil(150 / 6.0)::int))) = 20 AND LEAST(90, LEAST(20, GREATEST(15, ceil(90 / 6.0)::int))) = 15
     AND LEAST(2, LEAST(20, GREATEST(15, ceil(2 / 6.0)::int))) = 2);
