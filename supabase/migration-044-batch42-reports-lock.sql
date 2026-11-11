@@ -1487,8 +1487,9 @@ BEGIN
                  'phone', COALESCE(n.customer_phone, ''), 'bought', s.bought, 'profit', COALESCE(s.profit, 0), 'orders', s.orders)
                ORDER BY s.bought DESC)
         FROM sold s LEFT JOIN names n ON n.customer_key = s.customer_key
-        WHERE s.orders > 0), '[]'::jsonb));
-  END;
+        WHERE s.orders > 0), '[]'::jsonb))
+  );
+END;
 $$;
 
 REVOKE ALL ON FUNCTION report_customers(date, date) FROM PUBLIC, anon;
