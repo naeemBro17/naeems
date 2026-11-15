@@ -18,7 +18,7 @@ ACTION REQUIRED — run these in the Supabase SQL Editor, in order
                                            anon has no SELECT on the table)
 
 DECISIONS MADE WITHOUT ASKING
------------------------------
+----------------------------- 
 1. Context file lives at src/contexts/AdminEditContext.tsx, not src/context/.
    The project already has src/contexts/ (Auth, Product, Theme); a second
    folder differing by one letter would be a trap.
