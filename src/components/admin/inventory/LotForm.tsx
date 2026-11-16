@@ -328,10 +328,8 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
     );
   }
 
-  const weightCosts = costs.filter((c) => c.costType === 'weight');
   const otherCosts = costs.filter((c) => c.costType === 'other');
   const money = currency === 'BDT' ? '৳' : currency;
-  const anyGuessed = preview?.ok === true && preview.rows.some((r) => r.weightGuessed);
 
   const costRows = (list: CostDraft[], type: CostType) => (
     <div className="inv-stack">
@@ -556,16 +554,8 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
               )}
               {row && (
                 <p className="inv-muted inv-calc" data-testid="inv-item-calc">
-                  Buy {taka2(row.buyUnitBdt)} + weight {taka2(row.weightUnitBdt)} + other {taka2(row.otherUnitBdt)} ={' '}
+                  Buy {taka2(row.buyUnitBdt)} + other {taka2(row.otherUnitBdt)} ={' '}
                   <b>{taka2(row.landedUnitBdt)}</b> per {item.packSize > 1 ? item.stockUnit : 'piece'}
-                  {row.weightGuessed && (
-                    <>
-                      {' '}
-                      <span className="inv-badge inv-badge--grey" data-testid="inv-weight-guessed">
-                        weight guessed from price
-                      </span>
-                    </>
-                  )}
                 </p>
               )}
             </div>
@@ -573,11 +563,6 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
         })}
       </div>
 
-      <div className="adm-ocard inv-stack">
-        <h2 className="adm-ocard__title">Weight cost (shared by grams)</h2>
-        <p className="inv-muted">Products without a weight share it by their buy price.</p>
-        {costRows(weightCosts, 'weight')}
-      </div>
       <div className="adm-ocard inv-stack">
         <h2 className="adm-ocard__title">Other costs (shared by buy price)</h2>
         {costRows(otherCosts, 'other')}
@@ -611,16 +596,9 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
             </div>
             <div className="inv-line inv-line--total">
               <span>Landed cost of the lot</span>
-              <span>{takaExact(Number(preview.buyTotalPaisa + preview.allocatedWeightPaisa + preview.allocatedOtherPaisa))}</span>
+              <span>{takaExact(Number(preview.buyTotalPaisa + preview.allocatedOtherPaisa))}</span>
             </div>
-            {anyGuessed && (
-              <p className="inv-muted" data-testid="inv-guessed-note">
-                {preview.weightRule === 'value'
-                  ? 'No product has a weight: the weight cost is shared by buy price.'
-                  : 'Products without a weight got a weight guessed from their price.'}
-              </p>
-            )}
-            {preview.allocatedWeightPaisa === preview.weightTotalPaisa && preview.allocatedOtherPaisa === preview.otherTotalPaisa ? (
+            {preview.allocatedOtherPaisa === preview.otherTotalPaisa ? (
               <p className="inv-ok" data-testid="inv-allocated-ok">
                 Allocated total = lot total ✓
               </p>

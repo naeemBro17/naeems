@@ -18,7 +18,7 @@ import { LotPaymentsCard } from '../money/LotPayments';
  */
 export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: string; onBack: () => void; onEdit: () => void; onDeleted: () => void }) {
   const { showToast } = useToast();
-  const { openUntil } = useSafetyLock();
+  useSafetyLock(); // keep context subscription; DB still enforces the lock
   const [lot, setLot] = useState<LoadState<LotDetail | null> | null>(null);
   const [units, setUnits] = useState<Map<string, StockUnit>>(new Map());
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -114,14 +114,9 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
           <p>
             Delete lot <b>{data.code}</b> and its {totals.pieces} pieces? This can&apos;t be undone.
           </p>
-          {!openUntil && (
-            <p className="inv-muted">
-              First turn off the Safety Lock: Settings → Safety Locks (it asks your password and turns itself back on after 15 minutes).
-            </p>
-          )}
           {deleteError && <p className="inv-error">{deleteError}</p>}
           <div className="inv-actions">
-            <button type="button" className="adm-btn adm-btn--danger" onClick={() => void handleDelete()} disabled={isDeleting || !openUntil} data-testid="inv-delete-lot">
+            <button type="button" className="adm-btn adm-btn--danger" onClick={() => void handleDelete()} disabled={isDeleting} data-testid="inv-delete-lot">
               {isDeleting ? <span className="spinner" aria-hidden="true" /> : 'Delete lot'}
             </button>
             <button type="button" className="adm-btn adm-btn--ghost" onClick={() => setConfirmDelete(false)}>

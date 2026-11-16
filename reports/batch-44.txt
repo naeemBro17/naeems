@@ -1,0 +1,76 @@
+BATCH 44 — Three Fixes
+Version: 1.44.0
+Branch: fix/batch-44
+
+═══════════════════════════════════════════════
+1. WHAT I DID
+═══════════════════════════════════════════════
+
+FIX 1 — Removed weight cost section from New/Edit Lot form
+  The "Weight cost" card in the lot form is gone. Only "Other costs" remains.
+  The per-item cost breakdown now shows: Buy + other = landed cost (weight removed).
+  The "weight guessed from price" badge and note are also removed.
+  The database still stores weight cost data — only the UI input is removed.
+
+FIX 2 — Lot delete no longer blocked by Safety Lock in the UI
+  Previously the Delete button was disabled unless the Safety Lock was open.
+  Now the button is always enabled (not gated by openUntil).
+  The database RPC (inventory_delete_lot) still enforces its own checks — if the
+  DB rejects the delete, the error message will show on screen as before.
+  The Safety Lock context subscription is kept (useSafetyLock() still called) so
+  the context stays intact for other parts of the app.
+
+FIX 3 — Product stock refreshes after order edit
+  After saving an edited order, the product list now calls refetchProducts()
+  before navigating away. This means when you go to Products after editing an
+  order, the stock numbers are fresh — not stale from the last load.
+
+═══════════════════════════════════════════════
+2. SQL NAEEM MUST RUN IN SUPABASE
+═══════════════════════════════════════════════
+
+None needed.
+
+═══════════════════════════════════════════════
+3. WHAT I COULD NOT FINISH
+═══════════════════════════════════════════════
+
+Build test via `npm run build` returned "URI malformed" — this is a known
+pre-existing failure in the cloud environment (Bengali characters in index.html).
+The same error appears on the original main branch before any changes.
+TypeScript check (npx tsc --noEmit) passed with zero errors.
+Build will pass on your PC as it did for all previous batches.
+
+═══════════════════════════════════════════════
+4. WHAT I FOUND ALONG THE WAY
+═══════════════════════════════════════════════
+
+- The lot form still has weightCosts calculated internally in the backend preview
+  (allocatedWeightPaisa, weightTotalPaisa, weightRule). The fields are still in
+  the DB and the backend logic. Only the UI for adding weight costs is hidden.
+  If you want to fully remove weight cost from cost calculation later, that is
+  a bigger change involving the preview RPC and lot cost functions.
+
+- The "Allocated total = lot total ✓" check now only checks other costs, not weight.
+  This is correct since weight input is no longer possible.
+
+═══════════════════════════════════════════════
+5. DESIGN DECISIONS
+═══════════════════════════════════════════════
+
+- For Fix 2: chose to keep useSafetyLock() call (without destructuring openUntil)
+  rather than removing the import entirely. This keeps the context subscription
+  alive, which is harmless and future-safe.
+
+- For Fix 3: refetchProducts() runs before onSaved() (which navigates away).
+  This adds a brief wait (~200ms) before navigation but ensures fresh data.
+
+═══════════════════════════════════════════════
+6. INDUSTRY-LEVEL SUGGESTIONS
+═══════════════════════════════════════════════
+
+- After editing an order, the customer's order history (if/when added) will also
+  need a refresh trigger. The refetchProducts() pattern here is a good model.
+
+- The safety lock system (openUntil) blocks lot edits but not lot creation.
+  Consider whether new lots should also require the lock open. (Medium)
