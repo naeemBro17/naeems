@@ -59,7 +59,7 @@ const emptyErrors = {};
 export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAddPayment, onUnchanged, onSaved }: EditOrderFormProps) {
   const { showToast } = useToast();
   const { options, stockFor } = useSellableOptions();
-  const { settings } = useProducts();
+  const { settings, refetch: refetchProducts } = useProducts();
   // Batch 39: while Inventory mode is On the database checks stock in lots
   // and asks "sell anyway?"; the shop's number is not the limit here.
   const inventoryOn = settings.inventory_mode === 'true';
@@ -263,6 +263,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     }
     setIsSaving(false);
     showToast('Order updated');
+    await refetchProducts();
     await onSaved();
   };
 
