@@ -1,0 +1,28 @@
+BATCH 45 — WORK IN PROGRESS (NOT FINISHED, DO NOT MERGE, DO NOT RUN THE SQL YET)
+Branch: fix/batch-45-inventory
+
+Done so far:
+- Investigation (root causes):
+  * CeraVe refill: the order (NM-3887) was placed and shipped on 12 Nov, BEFORE
+    Inventory mode was turned on (13 Nov 00:26). Its unit came off the plain
+    stock number, never from a lot. On delete nothing went back to a lot, and
+    the "+1 to stock" step was overwritten by the trigger that forces stock =
+    lots.
+  * L-011: the hand-replaced inventory_delete_lot refuses lots with sales.
+  * Niacinamide ৳1,152.75: L-000 was saved with 45% weight (795 x 1.45). The
+    lot rows were later hand-edited back to ৳795, but the sale snapshots still
+    hold ৳1,152.75. L-000's kind was also changed from 'opening' to 'purchase'
+    (Money then treats its whole value as owed to a supplier).
+  * Cart: a product's own size goes into the cart with option id = product
+    id; the stock check and place_order can't find that "option" and say
+    sold out / no longer available. Inventory also refused lots for a
+    multi-size product's own size.
+  * New order search lists each option separately and never the own size.
+- Draft migration: supabase/migration-046-batch45-inventory.sql (dry-run on
+  live inside BEGIN/ROLLBACK passed; nothing stuck). Not yet final.
+- src/lib/inventory/allocation.ts without weight; types.ts additions.
+
+Left to do: API + screens (Parts 2,4,8-12), cart fix, profit notes, tests,
+old weight tests, CLAUDE.md section 6, version 1.45.0, full verify, report.
+The app build is currently BROKEN on this branch (LotForm still uses removed
+weight fields).
