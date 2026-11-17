@@ -2423,6 +2423,30 @@ e2e.admin@staff.naeems.internal were reset through the Supabase Admin API
   L-000 is the opening lot again).
 
 ====================================================================
+NOTE — STOCK SET TO 0 FOR SIX ON-DEMAND PRODUCTS (17 Nov, on live)
+====================================================================
+Naeem asked for these to be set to 0: they are ordered on demand only and
+never stocked, but still had stock numbers from before Inventory mode.
+In every case it is the product's OWN size (the product row), not one of
+its options; the options were not touched.
+  CeraVe Foaming Cleanser USA — USA · 237 ml            5 → 0
+  Kose Cosmeport Softymo Speedy Cleansing Oil — KOREA · 60ml   4 → 0
+  Nivea Men Body Wash 3 In 1 Shower Gel — PURE IMPACT · 500 ml 5 → 0
+  SKIN1004 Madagascar Centella Light Cleansing Oil — KOREA · 30 ml 5 → 0
+  Skin1004 Madagascar Centella Soothing Cream — KOREA · 30 ml  1 → 0
+  Vasline Lip Therapy — PINK · 20g                      5 → 0
+All six had 0 units in lots. Each is now stock 0, "out of stock". First a
+SELECT confirmed exactly these six rows; then one UPDATE by their ids, in
+one transaction. Inventory mode's stock trigger was let through with the
+same "system sync" flag the inventory code itself uses
+(set_config('inventory.syncing', 'on', true)) — it lasts only for that
+transaction; the trigger works as before afterwards. Already done on
+live; nothing for Naeem to run. They no longer appear in Stock check /
+Compare stock (shop 0 = lots 0). To sell one on demand later, either add
+it to a lot when it arrives, or sell it from New order with "sell anyway"
+(it is then listed under "Sold without stock" until a lot fills it).
+
+====================================================================
 4. WHAT I FOUND ALONG THE WAY
 ====================================================================
 - L-000 had been switched from "opening" to "purchase" by hand. Besides
@@ -2436,11 +2460,9 @@ e2e.admin@staff.naeems.internal were reset through the Supabase Admin API
   from the start of the test", and those tests that truly need it Off now
   skip with a clear reason (their rules stay covered by the rolled-back
   database tests).
-- 6 products that have sizes also show stock on their own size (e.g.
-  CeraVe Foaming Cleanser USA: 5), but no lot holds that size. In Inventory
-  mode those can't actually be sold (checkout refuses). They will appear in
-  Stock check as "in stock in the shop but has no lot at all" — add them
-  to a lot (or L-000), or set their stock to 0.
+- 6 products that have sizes also showed stock on their own size (e.g.
+  CeraVe Foaming Cleanser USA: 5) with no lot behind it. Resolved: set to
+  0 on your request (see the NOTE above).
 - The Money page keeps leaving out orders placed before 13 Nov that were
   not taken from lots: their sale is already inside its opening balance,
   and counting it again would make "Books balance" show a difference.
