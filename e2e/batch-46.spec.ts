@@ -16,6 +16,10 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 
 const SHOTS = 'reports/batch-46-screens';
 
+// Batch 47: the offline helper (service worker) caches Supabase reads;
+// once it controls the page it answers the second page itself and the
+// made-up payout data below never reaches it.
+test.use({ serviceWorkers: 'block' });
 test.skip(!E2E_ADMIN_EMAIL || !E2E_ADMIN_PASSWORD || !E2E_EMAIL || !E2E_PASSWORD, 'Needs the test accounts in .env.e2e.');
 
 test('database: payouts add up (delivered, prepaid, returned, courier only, deleted order), COD payment follows the payout, promo counted only by a real order and given back on cancel / delete (one rolled-back transaction)', async () => {
