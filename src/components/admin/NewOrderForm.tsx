@@ -531,7 +531,9 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     paidTrxId: paidTrxId.trim() || null,
     collectMode: plan.remaining > 0 ? collectMode : 'cod',
     altPhone: altPhone.trim() || null,
-    linkedCustomerId: null,
+    // Batch 47: a picked customer with an account owns the order, so it
+    // shows in her My Orders (Batch 30 linked it in the admin only).
+    linkedCustomerId: pickedCustomer && pickedCustomer !== 'new' ? pickedCustomer.profileId : null,
     markDelivered: zone === 'hand_delivered' && isPaidNow && markDelivered,
     adminNote: adminNote.trim() || null,
     allowNegativeStock,

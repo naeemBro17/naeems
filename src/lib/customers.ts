@@ -53,6 +53,15 @@ export async function linkOrderCustomer(orderId: string, profileId: string): Pro
   return { error: error?.message ?? null };
 }
 
+/** Batch 47: move an order to another customer's account (Super Admin).
+ *  Only who owns it changes — never its money, stock, lots or payouts. */
+export async function moveOrderToCustomer(orderId: string, profileId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_move_order_customer', { p_order_id: orderId, p_profile_id: profileId });
+  if (!error) return { error: null };
+  if (error.code === FUNCTION_NOT_FOUND) return { error: 'Moving an order needs the Batch 47 database update (migration-048).' };
+  return { error: error.message || 'Could not move the order.' };
+}
+
 /* ---------- Batch 32 Part 4: add / hide / delete (migration-035) ---------- */
 
 export interface NewCustomerInput {

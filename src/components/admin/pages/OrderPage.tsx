@@ -19,6 +19,7 @@ import { lineQuantityText, orderItemCount, soldInUnits } from '../../../lib/orde
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { DeleteOrdersDialog } from '../DeleteOrdersDialog';
+import { MoveOrderSheet } from '../MoveOrderSheet';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { formatTaka } from '../../../lib/format';
 import { invoiceFromOrder } from '../../../lib/invoice/invoiceData';
@@ -113,6 +114,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [steadfastConfirmOpen, setSteadfastConfirmOpen] = useState(false);
   const [isBookingSteadfast, setIsBookingSteadfast] = useState(false);
   const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
@@ -423,6 +425,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       explain: order.steadfast_consignment_id ? 'Stock goes back. Booked with Steadfast — cancel there too.' : 'Stock goes back to the shop.',
       button: 'Cancel…',
       onOpen: () => setCancelOpen(true),
+    });
+  }
+  // Batch 47 Task 6b: an order in the wrong account (Super Admin only; the
+  // database checks it too).
+  if (order && isAdmin) {
+    careful.push({
+      key: 'move',
+      title: 'Move order to another customer',
+      explain: 'For an order in the wrong account. Money, stock and Steadfast stay as they are.',
+      button: 'Move…',
+      onOpen: () => setMoveOpen(true),
     });
   }
   if (order && (isAdmin || (canDeleteEarly && canDeleteNow))) {
@@ -925,6 +938,21 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
 
       {order && (
         <DeleteOrdersDialog isOpen={deleteOpen} orders={[order]} onConfirm={handleDelete} onClose={() => setDeleteOpen(false)} />
+      )}
+
+      {order && isAdmin && (
+        <MoveOrderSheet
+          isOpen={moveOpen}
+          orderId={order.id}
+          orderNumber={order.order_number}
+          currentOwnerId={order.customer_id}
+          onClose={() => setMoveOpen(false)}
+          onMoved={async (to) => {
+            setMoveOpen(false);
+            showToast(`${order.order_number} moved to ${to}`);
+            await reload();
+          }}
+        />
       )}
 
       {order && (

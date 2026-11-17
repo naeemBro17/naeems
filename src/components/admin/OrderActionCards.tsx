@@ -192,7 +192,7 @@ export function CarefulActionsCard({ actions }: { actions: CarefulAction[] }) {
             </span>
             <button
               type="button"
-              className={`adm-btn adm-btn--sm adm-careful__btn${a.key === 'deliver' || a.key === 'transit' ? '' : ' adm-careful__btn--red'}`}
+              className={`adm-btn adm-btn--sm adm-careful__btn${a.key === 'deliver' || a.key === 'transit' || a.key === 'move' ? '' : ' adm-careful__btn--red'}`}
               onClick={a.onOpen}
               disabled={a.disabled}
               data-testid={`careful-${a.key}`}

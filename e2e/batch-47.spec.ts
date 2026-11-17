@@ -1,14 +1,17 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 import { passwordSession, select, useSessionInPage, type TestSession } from './helpers/api';
+import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 
 // Batch 47: admin and customer bug fixes.
 //
 // The live shop is never changed: screens are checked at 390 px and nothing
 // is saved — no order is deleted, placed or moved. Database functions that
-// would change something are answered in the browser.
+// would change something are answered in the browser. The database rules
+// run in e2e/sql/batch-47.sql together with the whole Batch 47 migration,
+// inside ONE transaction that is always rolled back.
 // Steadfast is mocked by ./fixtures; no real Storage file is downloaded.
 
 test.describe.configure({ mode: 'serial' });
@@ -237,4 +240,59 @@ test('Task 5: a product with sizes is one search row in New order and Edit order
   await expect(picker).toBeHidden();
   expect(await page.locator('.edit-order .checkout-cart__row, .edit-order li').count()).toBeGreaterThan(before);
   await expect(page.getByTestId('edit-order-sheet')).toContainText(product!.name);
+});
+
+/* ------------------------------------------- the database rules (4, 6, 12) */
+
+test('database: source change, admin orders in My Orders, move an order (money untouched), settle / undo a payout line (one rolled-back transaction)', async () => {
+  test.setTimeout(300_000);
+  test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
+  const migration = readFileSync('supabase/migration-048-batch47.sql', 'utf8').replace(/\r\n/g, '\n');
+  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
+  const tests = readFileSync('e2e/sql/batch-47.sql', 'utf8')
+    .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
+    .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
+  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
+  expect(results, sqlError(output) ?? 'no result').not.toBeNull();
+  const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
+  expect(failed).toEqual([]);
+  expect((results ?? []).length).toBeGreaterThanOrEqual(40);
+  // Nothing of it stayed.
+  const left = await select<unknown[]>(admin.accessToken, 'products?select=id&sku=like.E2E-B47-*');
+  expect(left.data).toHaveLength(0);
+});
+
+/* --------------------------------------- Task 6b: Move order (the screen) */
+
+test('Task 6b: Move order to another customer — only accounts are offered, the confirm says what moves and what does not (move answered in the browser)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const number = await latestOrderNumber();
+  test.skip(!number, 'No order to open.');
+  const accountId = '00000000-0000-4000-8000-000000000047';
+  await mockRpc(page, 'admin_find_customers_v2', [
+    { customer_key: `p:${accountId}`, profile_id: accountId, full_name: 'Ayesha Rahman', phone: '01711000047', alt_phone: null, division: 'Dhaka', district: 'Dhaka', thana: 'Gulshan', address_line: 'Road 1', order_count: 2, total_due: 0 },
+    { customer_key: 'ph:1711000048', profile_id: null, full_name: 'No Account', phone: '01711000048', alt_phone: null, division: 'Dhaka', district: 'Dhaka', thana: 'Gulshan', address_line: 'Road 2', order_count: 1, total_due: 0 },
+  ]);
+  const sent: unknown[] = [];
+  await page.route(/\/rest\/v1\/rpc\/admin_move_order_customer/, async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ moved: true, to: 'Ayesha Rahman' }) });
+  });
+  await adminAt(page, `/admin/orders/${number}`);
+  await expect(page.getByTestId('admin-order-page')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('careful-move').click();
+  const sheet = page.getByTestId('move-order-sheet');
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId('move-order-search').fill('Ayesha');
+  const results = sheet.getByTestId('move-order-result');
+  await expect(results).toHaveCount(1);
+  await expect(results).toContainText('Ayesha Rahman');
+  await results.click();
+  await expect(sheet.getByTestId('move-order-confirm-text')).toContainText('Its money, payments, stock and Steadfast stay exactly as they are');
+  await page.screenshot({ path: `${SHOTS}/07-move-order-confirm.png` });
+  await sheet.getByTestId('move-order-yes').click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]).toMatchObject({ p_profile_id: accountId });
+  await expect(sheet).toBeHidden();
 });
