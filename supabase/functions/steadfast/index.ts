@@ -107,7 +107,7 @@ interface OrderRow {
   thana: string;
   address_line: string;
   total: number;
-  payment_method: 'cod' | 'bkash' | 'cash' | 'due';
+  payment_method: 'cod' | 'bkash' | 'nagad' | 'cash' | 'due';
   payment_status: 'unpaid' | 'pending_verification' | 'paid';
   status: string;
   customer_note: string | null;
@@ -197,10 +197,11 @@ async function handleCreate(
   // is already 'paid' (nothing left to collect on delivery). bKash keeps
   // its own extra guard: 'pending_verification' must never fall through to
   // "already paid" just because it isn't 'unpaid' either.
-  if (order.payment_method === 'bkash' && order.payment_status !== 'paid') {
+  // Batch 48: a Nagad advance gets the same guard.
+  if ((order.payment_method === 'bkash' || order.payment_method === 'nagad') && order.payment_status !== 'paid') {
     return json({
       ok: false,
-      error: 'This bKash payment has not been verified yet — mark it as paid before booking with Steadfast.',
+      error: `This ${order.payment_method === 'nagad' ? 'Nagad' : 'bKash'} payment has not been verified yet — mark it as paid before booking with Steadfast.`,
     });
   }
   // Batch 30: COD = what is still due (total minus every payment recorded

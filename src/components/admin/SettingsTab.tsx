@@ -25,6 +25,7 @@ import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from 
 import { TwoStepCard } from './TwoStepCard';
 import { DueReminderPanel } from './money/DueReminderPanel';
 import { InvoiceSettingsPanel } from './InvoiceSettingsPanel';
+import { AdvanceDiscountPanel } from './AdvanceDiscountPanel';
 import { SubPages, type SubPage } from './ui/SubPages';
 
 const PASSWORD_MIN_LENGTH = 8;
@@ -522,13 +523,14 @@ function OrderPaymentSettingsPanel() {
     <div className="admin-panel">
       <h3 className="admin-panel__title">Orders: Payment &amp; Delivery</h3>
       <p className="admin-panel__description">
-        The bKash number customers send advance payment to (leave blank to hide the bKash
-        option at checkout), and the delivery fee for each zone.
+        The number customers send advance payment to with bKash or Nagad — the shop gets both on
+        this one number (leave blank to hide bKash and Nagad at checkout), and the delivery fee for
+        each zone.
       </p>
       <form onSubmit={handleSave} className="form" noValidate>
         <div className="form-field">
           <label className="form-label" htmlFor="settings-bkash-number">
-            bKash number
+            bKash / Nagad number
           </label>
           <input
             id="settings-bkash-number"
@@ -1072,7 +1074,19 @@ export function SettingsTab() {
   // banner, expert page and texts moved to Store design → Banner & Texts.
   const pages: SubPage[] = [
     { id: 'order-number', group: 'ORDERS', label: 'Order number format', icon: 'receipt', render: () => <OrderNumberPanel /> },
-    { id: 'payment', group: 'ORDERS', label: 'Delivery fees and bKash', icon: 'orders', render: () => <OrderPaymentSettingsPanel /> },
+    {
+      id: 'payment',
+      group: 'ORDERS',
+      label: 'Delivery fees and bKash',
+      icon: 'orders',
+      // Batch 48: the advance-payment discount card sits under the number.
+      render: () => (
+        <>
+          <OrderPaymentSettingsPanel />
+          <AdvanceDiscountPanel />
+        </>
+      ),
+    },
     { id: 'low-stock', group: 'ORDERS', label: 'Low-stock alert', icon: 'low-stock', render: () => <LowStockPanel /> },
     { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
     // Batch 37.

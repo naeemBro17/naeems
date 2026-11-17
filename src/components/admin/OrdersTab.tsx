@@ -22,10 +22,12 @@ import { useSafetyLock } from '../../contexts/SafetyLockContext';
 import { AdminPageHeader, AdminSearch, BulkBar, ChipRow, EmptyState, type MenuItem } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import type { Order, OrderStatus } from '../../types';
+import { PAYMENT_METHOD_LABELS } from '../../lib/orderStatus';
 
 // 'due' (Batch 30): orders with money still due, whatever their status.
 type StatusFilter = OrderStatus | 'all' | 'due';
 type SourceFilter = Order['source'] | 'all';
+type PaymentFilter = Order['payment_method'] | 'all';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -47,6 +49,16 @@ const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
   { value: 'shop', label: ORDER_SOURCE_LABELS.shop },
   { value: 'family', label: ORDER_SOURCE_LABELS.family },
   { value: 'other', label: ORDER_SOURCE_LABELS.other },
+];
+
+// Batch 48: how the order is paid (Nagad joins bKash).
+const PAYMENT_OPTIONS: { value: PaymentFilter; label: string }[] = [
+  { value: 'all', label: 'All payments' },
+  { value: 'cod', label: 'Cash on Delivery' },
+  { value: 'bkash', label: PAYMENT_METHOD_LABELS.bkash },
+  { value: 'nagad', label: PAYMENT_METHOD_LABELS.nagad },
+  { value: 'cash', label: PAYMENT_METHOD_LABELS.cash },
+  { value: 'due', label: PAYMENT_METHOD_LABELS.due },
 ];
 
 /** Batch 35 Part 4: the common filters as chips; every filter stays in
@@ -106,6 +118,11 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     'osource',
     'all',
     SOURCE_OPTIONS.map((opt) => opt.value)
+  );
+  const [paymentFilter, setPaymentFilter] = useUrlParam<PaymentFilter>(
+    'opay',
+    'all',
+    PAYMENT_OPTIONS.map((opt) => opt.value)
   );
   const [search, setSearch] = useUrlParam<string>('oq', '');
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
@@ -227,6 +244,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         if (!dueOf.has(o.id)) return false;
       } else if (statusFilter !== 'all' && o.status !== statusFilter) return false;
       if (sourceFilter !== 'all' && o.source !== sourceFilter) return false;
+      if (paymentFilter !== 'all' && o.payment_method !== paymentFilter) return false;
       if (term === '') return true;
       return (
         o.order_number.toLowerCase().includes(term) ||
@@ -235,7 +253,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
         o.customer_name.toLowerCase().includes(term)
       );
     });
-  }, [orders, statusFilter, sourceFilter, search, dueOf]);
+  }, [orders, statusFilter, sourceFilter, paymentFilter, search, dueOf]);
 
   // Batch 20: every shipped order that's actually been booked with
   // Steadfast (a shipped order without a consignment id was marked shipped
@@ -418,6 +436,19 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
           aria-label="Filter by source"
         >
           {SOURCE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="adm-select adm-orders__source"
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value as PaymentFilter)}
+          aria-label="Filter by payment"
+          data-testid="orders-payment-filter"
+        >
+          {PAYMENT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
