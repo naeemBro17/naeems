@@ -31,7 +31,27 @@ export interface PayoutItem {
   match_reason: MatchReason | null;
   note: string | null;
   line_kind: PayoutLineKind;
+  /** Batch 47: settled by hand — why, his note, who and when (null when
+   *  not settled, or before migration-048). */
+  settle_reason?: SettleReason | null;
+  settle_note?: string | null;
+  settled_by_username?: string | null;
+  settled_at?: string | null;
 }
+
+/** Batch 47: why a payout line was settled by hand. */
+export type SettleReason = 'courier_charge' | 'returned' | 'paid_direct' | 'not_shop_sale' | 'order_deleted' | 'other';
+
+export const SETTLE_REASONS: { id: SettleReason; label: string; hint: string }[] = [
+  { id: 'courier_charge', label: 'Courier charge only', hint: 'No money was collected for this parcel.' },
+  { id: 'returned', label: 'Returned parcel', hint: 'Nothing collected.' },
+  { id: 'paid_direct', label: 'Paid to me directly', hint: 'I already received the money myself.' },
+  { id: 'not_shop_sale', label: 'Not a shop sale', hint: "A friend's parcel — never counted as sales." },
+  { id: 'order_deleted', label: 'Order deleted', hint: 'The order was removed from the site.' },
+  { id: 'other', label: 'Other', hint: 'Write a short note.' },
+];
+
+const SETTLE_IDS = new Set<string>(SETTLE_REASONS.map((r) => r.id));
 
 export interface Payout {
   id: string;
@@ -70,6 +90,8 @@ const ITEM_COLUMNS =
 /** The same plus line_kind (migration-047). Until it is run the column is
  *  missing and the page reads without it. */
 const ITEM_COLUMNS_B46 = `${ITEM_COLUMNS}, line_kind`;
+/** Plus the settle columns (migration-048). */
+const ITEM_COLUMNS_B47 = `${ITEM_COLUMNS_B46}, settle_reason, settle_note, settled_by_username, settled_at`;
 
 /** A column the query asked for is not there yet. */
 function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
@@ -109,6 +131,10 @@ function toItem(row: Record<string, unknown>): PayoutItem {
     match_reason: (row.match_reason as MatchReason | null) ?? null,
     note: (row.note as string | null) ?? null,
     line_kind: row.line_kind === 'courier_only' || row.line_kind === 'returned' ? row.line_kind : 'order',
+    settle_reason: typeof row.settle_reason === 'string' && SETTLE_IDS.has(row.settle_reason) ? (row.settle_reason as SettleReason) : null,
+    settle_note: (row.settle_note as string | null | undefined) ?? null,
+    settled_by_username: (row.settled_by_username as string | null | undefined) ?? null,
+    settled_at: (row.settled_at as string | null | undefined) ?? null,
   };
 }
 
@@ -132,7 +158,10 @@ function payoutsQuery(columns: string) {
 }
 
 export async function fetchPayouts(): Promise<LoadState<Payout[]>> {
-  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B46).order('paid_at', { ascending: false, nullsFirst: false });
+  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B47).order('paid_at', { ascending: false, nullsFirst: false });
+  if (isMissingColumn(error)) {
+    ({ data, error } = await payoutsQuery(ITEM_COLUMNS_B46).order('paid_at', { ascending: false, nullsFirst: false }));
+  }
   if (isMissingColumn(error)) {
     ({ data, error } = await payoutsQuery(ITEM_COLUMNS).order('paid_at', { ascending: false, nullsFirst: false }));
   }
@@ -141,12 +170,46 @@ export async function fetchPayouts(): Promise<LoadState<Payout[]>> {
 }
 
 export async function fetchPayout(id: string): Promise<LoadState<Payout | null>> {
-  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B46).eq('id', id).maybeSingle();
+  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B47).eq('id', id).maybeSingle();
+  if (isMissingColumn(error)) {
+    ({ data, error } = await payoutsQuery(ITEM_COLUMNS_B46).eq('id', id).maybeSingle());
+  }
   if (isMissingColumn(error)) {
     ({ data, error } = await payoutsQuery(ITEM_COLUMNS).eq('id', id).maybeSingle());
   }
   if (error) return isMissingSchema(error) ? { kind: 'no-db' } : { kind: 'error', message: error.message };
   return { kind: 'ready', data: data ? toPayout(data as unknown as Record<string, unknown>) : null };
+}
+
+/** Batch 47: a line settled — by hand (this screen) or by Batch 46. */
+export function isSettled(item: Pick<PayoutItem, 'line_kind' | 'settled_at' | 'settle_reason'>): boolean {
+  return item.line_kind !== 'order' || Boolean(item.settled_at) || Boolean(item.settle_reason);
+}
+
+/** "Settled by naeem · 17 Nov" (who / when, as far as known). */
+export function settledByText(item: Pick<PayoutItem, 'settled_by_username' | 'settled_at'>): string | null {
+  const parts = [item.settled_by_username ? `by ${item.settled_by_username}` : null, item.settled_at ? shortDhakaDate(item.settled_at) : null].filter(
+    (p): p is string => p !== null
+  );
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+const SETTLE_NEEDS_UPDATE = 'Settling a line needs the Batch 47 database update (migration-048).';
+
+/** Batch 47: settle a payout line (Super Admin; checked by the database). */
+export async function settlePayoutLine(itemId: string, reason: SettleReason, note: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_settle_payout_line', { p_item_id: itemId, p_reason: reason, p_note: note.trim() || null });
+  if (!error) return { error: null };
+  if (isMissingSchema(error)) return { error: SETTLE_NEEDS_UPDATE };
+  return { error: error.message || 'Could not settle this line.' };
+}
+
+/** Batch 47: undo a settle — the line goes back to what it was. */
+export async function unsettlePayoutLine(itemId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_unsettle_payout_line', { p_item_id: itemId });
+  if (!error) return { error: null };
+  if (isMissingSchema(error)) return { error: SETTLE_NEEDS_UPDATE };
+  return { error: error.message || 'Could not undo this.' };
 }
 
 export async function fetchSyncState(): Promise<SyncState | null> {
@@ -335,8 +398,12 @@ export const LINE_KIND_TEXT: Record<Exclude<PayoutLineKind, 'order'>, string> = 
   returned: 'Returned parcel (order deleted): its charge counts as a delivery cost',
 };
 
-export function reasonText(item: Pick<PayoutItem, 'match_reason' | 'note' | 'invoice' | 'line_kind'>): string | null {
+export function reasonText(
+  item: Pick<PayoutItem, 'match_reason' | 'note' | 'invoice' | 'line_kind' | 'settled_at' | 'settle_reason'>
+): string | null {
   if (item.line_kind !== 'order') return item.note ?? LINE_KIND_TEXT[item.line_kind];
+  // Batch 47: settled by hand but still linked to its order.
+  if (isSettled(item)) return item.note;
   if (!item.match_reason) return null;
   if (isOutsideParcel(item)) return 'Booked directly on Steadfast, not from this site';
   return item.note ?? MATCH_REASON_TEXT[item.match_reason];

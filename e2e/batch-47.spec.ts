@@ -464,3 +464,82 @@ test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, eve
   await page.locator('.checkout-summary-card').first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/10-order-summary-390.png` });
 });
+
+/* ------------------------------------ Task 12: settle a payout line (screen) */
+
+function b47Line(id: string, invoice: string, cod: number, charge: number, extra: Record<string, unknown> = {}) {
+  return {
+    id, payout_id: 'p-b47', consignment_id: `c-${id}`, invoice, order_id: null, cod_collected: cod, delivery_charge: charge,
+    cod_fee: 0, other_deduction: 0, net_paid: cod - charge, expected_cod: null, match_status: 'to_check',
+    match_reason: 'order_not_found', note: 'Order not found', line_kind: 'order',
+    settle_reason: null, settle_note: null, settled_by_username: null, settled_at: null, ...extra,
+  };
+}
+
+test('Task 12: Settle on an unmatched payout line — pick a reason, it turns green with who / when, the total still adds up, Undo puts it back (answered in the browser)', async ({ page }) => {
+  test.setTimeout(120_000);
+  let settled = false;
+  const payout = () => ({
+    id: 'p-b47', steadfast_payment_id: 'SFC-B47', paid_at: new Date(Date.now() - 3600_000).toISOString(),
+    total_amount: 2000 - 60 - 50 - 75, parcel_count: 3,
+    steadfast_payout_items: [
+      b47Line('1', 'NM-5101', 2000, 60, { order_id: 'o-1', match_status: 'matched', match_reason: null, note: null }),
+      b47Line('2', 'NM-5102', 0, 50, settled
+        ? { line_kind: 'returned', match_status: 'matched', match_reason: null, note: 'Returned parcel (nothing collected): the charge counts as a delivery cost — came back 3 Nov', settle_reason: 'returned', settle_note: 'came back 3 Nov', settled_by_username: 'naeem', settled_at: new Date().toISOString() }
+        : {}),
+      b47Line('3', 'NM-3315', 0, 75, { line_kind: 'courier_only', match_status: 'matched', match_reason: null, note: 'Not a shop sale: courier only', settle_reason: 'not_shop_sale', settled_by_username: 'Batch 46' }),
+    ],
+  });
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+  await page.route(/\/rest\/v1\/steadfast_payouts\?/, (route) => {
+    const one = (route.request().headers()['accept'] ?? '').includes('vnd.pgrst.object');
+    return route.fulfill(json(one ? payout() : [payout()]));
+  });
+  const calls: { fn: string; body: unknown }[] = [];
+  await page.route(/\/rest\/v1\/rpc\/admin_(un)?settle_payout_line/, async (route) => {
+    const fn = route.request().url().includes('unsettle') ? 'unsettle' : 'settle';
+    calls.push({ fn, body: route.request().postDataJSON() });
+    settled = fn === 'settle';
+    await route.fulfill(json(fn === 'settle' ? { line_kind: 'returned' } : null));
+  });
+
+  await adminAt(page, '/admin/payouts/p-b47');
+  const table = page.getByTestId('payout-table');
+  await expect(table).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('payout-total')).toHaveText('৳1,815');
+  await expect(page.getByTestId('payout-pill')).toHaveText('1 to check');
+  // Settle only on the line that does not match; the Batch 46 line shows as settled.
+  await expect(table.getByTestId('payout-settle')).toHaveCount(1);
+  await expect(table.getByTestId('payout-line').nth(2)).toContainText('Settled: Not a shop sale');
+  await expect(table.getByTestId('payout-line').nth(2)).toContainText('by Batch 46');
+
+  await table.getByTestId('payout-settle').click();
+  const sheet = page.getByTestId('settle-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByTestId('settle-reason')).toHaveCount(6);
+  // "Other" needs a note.
+  await sheet.getByTestId('settle-reason').filter({ hasText: 'Other' }).click();
+  await expect(sheet.getByTestId('settle-confirm')).toBeDisabled();
+  await sheet.getByTestId('settle-reason').filter({ hasText: 'Returned parcel' }).click();
+  await sheet.getByTestId('settle-note').fill('came back 3 Nov');
+  await page.screenshot({ path: `${SHOTS}/11-settle-dialog.png` });
+  await sheet.getByTestId('settle-confirm').click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual({ fn: 'settle', body: { p_item_id: '2', p_reason: 'returned', p_note: 'came back 3 Nov' } });
+
+  await expect(sheet).toBeHidden();
+  const line = table.getByTestId('payout-line').nth(1);
+  await expect(line).toHaveClass(/is-settled/);
+  await expect(line).toContainText('Settled: Returned parcel');
+  await expect(line).toContainText('by naeem');
+  await expect(page.getByTestId('payout-pill')).toHaveText('Matched');
+  await expect(page.getByTestId('payout-total')).toHaveText('৳1,815');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, 'no sideways scroll at phone width').toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `${SHOTS}/12-payout-settled.png`, fullPage: true });
+
+  await line.getByTestId('payout-undo').click();
+  await expect.poll(() => calls.length).toBe(2);
+  expect(calls[1]).toEqual({ fn: 'unsettle', body: { p_item_id: '2' } });
+  await expect(page.getByTestId('payout-pill')).toHaveText('1 to check');
+});
