@@ -7,7 +7,7 @@ import { isHandOverSource, sendsByCourier } from './manualOrders';
 import { productSearchGroups, searchProductGroups } from './manualOrderSearch';
 import { variantOptionLabel, variantOptionsFor } from './variants';
 import { loginReturnPath, safeReturnPath } from './loginReturn';
-import type { Product, ProductVariant } from '../types';
+import type { OrderItem, Product, ProductVariant } from '../types';
 import { mockOrder } from '../../e2e/helpers/invoiceFixtures';
 import { fontFilesFromDisk, pdfPageText } from '../../e2e/helpers/invoicePdf';
 
@@ -94,4 +94,75 @@ describe('Batch 47 Task 7: where the customer goes after logging in', () => {
     expect(loginReturnPath({ from: '//evil.com' })).toBe('/');
     expect(loginReturnPath(null)).toBe('/');
   });
+});
+
+/* ------------------------------------------- Task 11: invoice page breaks */
+
+const NM3893 = [
+  ["L'Oreal Elvive Hyaluron Pure Conditioner 340mL", 1450, 1950],
+  ["L'Oreal Paris Elvive Extraordinary Oil Hair Serum Treatment 100ml", 1599, 2099],
+  ['ILLIYOON Ceramide Ato Soothing Gel 30ml', 749, 749],
+  ['CeraVe Foaming Cleanser Eco-Recharge Refill 473mL', 3100, 3699],
+] as const;
+
+function invoiceItem(i: number, name: string, price: number, listPrice: number): OrderItem {
+  return {
+    id: `b47-${i}`, order_id: 'o', product_id: `p-${i}`, variant_id: null, product_name: name, variant_label: null,
+    image_url: null, list_price: listPrice, unit_price: price, quantity: 1, line_total: price,
+    reason: listPrice > price ? 'promotion' : null, reason_note: null,
+  } as OrderItem;
+}
+
+function itemsOf(count: number): OrderItem[] {
+  return Array.from({ length: count }, (_, i) => {
+    const [name, price, list] = NM3893[i % NM3893.length];
+    return invoiceItem(i, `${name} (${i + 1})`, price, list);
+  });
+}
+
+describe('Batch 47 Task 11: the invoice breaks pages where the content runs out', () => {
+  /** The lowest a row may end on a page before the next row moves over
+   *  (the page's row limit minus the tallest row). */
+  const FULL_PAGE_FROM = 790 - 40;
+
+  async function layoutOf(items: OrderItem[]) {
+    // NM-3893's shape: a 70-character address in Tejgaon, booked, COD.
+    const order = mockOrder({
+      items,
+      delivery_fee: 102,
+      steadfast_consignment_id: '321957858',
+      thana: 'Tejgaon',
+      district: 'Dhaka',
+      address_line: '82, Ideal International School & College, Green Road, Farmgate, Dhaka.',
+    });
+    const pdf = await buildInvoicePdf([invoiceFromOrder(order, [])], shop, fonts);
+    return { pdf, pages: pdf.layout[0] };
+  }
+
+  it('NM-3893 (4 items, one name a line longer — the old layout had only 6.5 pt to spare): one page, all 4 items and the totals on it', async () => {
+    const items = NM3893.map(([name, price, list], i) => invoiceItem(i, i === 2 ? `${name} Twin Pack Value Bundle Edition` : name, price, list));
+    const { pdf, pages } = await layoutOf(items);
+    expect(pdf.pageCount).toBe(1);
+    expect(pages).toEqual([expect.objectContaining({ rows: 4, tail: true })]);
+    const text = (await pdfPageText(pdf.bytes, 1)).join(' ');
+    for (const [name] of NM3893) expect(text).toContain(name.slice(0, 20));
+  });
+
+  for (const count of [1, 3, 4, 8, 25]) {
+    it(`${count} item${count === 1 ? '' : 's'}: every item once, no early break, totals never alone`, async () => {
+      const { pdf, pages } = await layoutOf(itemsOf(count));
+      expect(pages.reduce((n, p) => n + p.rows, 0)).toBe(count);
+      expect(pages.filter((p) => p.tail)).toHaveLength(1);
+      const last = pages[pages.length - 1];
+      expect(last.tail).toBe(true);
+      expect(last.rows).toBeGreaterThanOrEqual(1);
+      for (const p of pages.slice(0, -1)) {
+        expect(p.rows).toBeGreaterThan(0);
+        expect(p.rowsBottom, 'a page before the last is filled to the bottom').toBeGreaterThanOrEqual(FULL_PAGE_FROM);
+      }
+      if (count <= 8) expect(pdf.pageCount).toBe(1);
+      else expect(pdf.pageCount).toBeGreaterThan(1);
+      expect(pdf.pageCount).toBe(pages.length);
+    });
+  }
 });
