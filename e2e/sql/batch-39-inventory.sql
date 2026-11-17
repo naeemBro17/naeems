@@ -87,6 +87,11 @@ BEGIN
   v_ids := ARRAY[v_pa, v_pb, v_pc, v_pf, v_pv];
 
   -- ======================================================= Mode OFF: as today
+  -- Batch 45: the live shop's mode is On since 13 Nov; switch it Off for
+  -- this transaction only (it is always rolled back).
+  PERFORM set_config('inventory.mode_change', 'on', true);
+  UPDATE app_settings SET value = 'false' WHERE key = 'inventory_mode';
+  PERFORM set_config('inventory.mode_change', '', true);
   PERFORM set_config('inventory.test_mode', '', true);
   PERFORM set_config('request.jwt.claims', c_cust, true);
   EXECUTE 'SET LOCAL ROLE authenticated';
@@ -301,9 +306,12 @@ BEGIN
   PERFORM pg_temp.ck('Late bill: unsold units take the new cost (৳510.001)',
     (SELECT landed_unit_cost_bdt FROM lot_items WHERE lot_id = v_lot) = 510.001,
     (SELECT landed_unit_cost_bdt::text FROM lot_items WHERE lot_id = v_lot));
-  PERFORM pg_temp.ck('Late bill: adjustment = 10.001 × 4 sold = ৳40.00, dated the bill''s date',
-    (SELECT amount_bdt = 40.00 AND adj_date = '2026-10-05' AND reason = 'late_bill' FROM cost_adjustments WHERE lot_id = v_lot),
-    (SELECT format('%s %s', amount_bdt, adj_date) FROM cost_adjustments WHERE lot_id = v_lot));
+  -- Batch 45: a sale's cost is stored on the sale and follows the lot's
+  -- new cost directly; no separate correction row is written.
+  PERFORM pg_temp.ck('Late bill: the sale''s stored cost follows the new cost (৳510.001), no correction row',
+    (SELECT bool_and(c.unit_cost_bdt = 510.001) FROM order_items oi JOIN order_item_costs c ON c.order_item_id = oi.id WHERE oi.order_id = v_o4)
+    AND NOT EXISTS (SELECT 1 FROM cost_adjustments WHERE lot_id = v_lot),
+    (SELECT string_agg(c.unit_cost_bdt::text, ',') FROM order_items oi JOIN order_item_costs c ON c.order_item_id = oi.id WHERE oi.order_id = v_o4));
   PERFORM pg_temp.ck('Late bill: the lot''s shares still add up to the bill to the paisa',
     (SELECT sum(alloc_other_paisa) FROM lot_items WHERE lot_id = v_lot) = 10001);
 
@@ -338,15 +346,14 @@ BEGIN
       jsonb_build_object('product_id', v_pb, 'qty', 7, 'unit_price_foreign', '41.17')),
     'costs', jsonb_build_array(jsonb_build_object('cost_type', 'weight', 'amount_bdt', '500.05'))));
   EXECUTE 'RESET ROLE';
-  PERFORM pg_temp.ck('Weight: a row without weight is guessed from price and marked',
-    (SELECT array_agg(weight_guessed ORDER BY sort_order) FROM lot_items WHERE lot_id = v_lot) = ARRAY[false, true]);
-  PERFORM pg_temp.ck('Weight: guessed share = 1000 × 12000000·20000 / (20000·2000000 + 12000000·20000) → ৳857.14 + ৳142.86, exact',
-    (SELECT array_agg(alloc_weight_paisa ORDER BY sort_order) FROM lot_items WHERE lot_id = v_lot) = ARRAY[14286::bigint, 85714::bigint],
-    (SELECT array_agg(alloc_weight_paisa ORDER BY sort_order)::text FROM lot_items WHERE lot_id = v_lot));
-  PERFORM pg_temp.ck('Weight: no row weighted → shared by buy value, totals exact to the paisa',
-    (SELECT sum(alloc_weight_paisa) FROM lot_items WHERE lot_id = v_lot2) = 50005
-    AND (SELECT bool_and(weight_guessed) FROM lot_items WHERE lot_id = v_lot2),
-    (SELECT array_agg(alloc_weight_paisa ORDER BY sort_order)::text FROM lot_items WHERE lot_id = v_lot2));
+  -- Batch 45: weight is not part of product cost; a weight bill is history only.
+  PERFORM pg_temp.ck('Weight (Batch 45): a weight bill adds nothing — landed = buy price (৳100, ৳3 a pc)',
+    (SELECT array_agg(landed_unit_cost_bdt ORDER BY sort_order) FROM lot_items WHERE lot_id = v_lot) = ARRAY[100::numeric, 3::numeric],
+    (SELECT array_agg(landed_unit_cost_bdt ORDER BY sort_order)::text FROM lot_items WHERE lot_id = v_lot));
+  PERFORM pg_temp.ck('Weight (Batch 45): no weight share and nothing marked as guessed',
+    NOT EXISTS (SELECT 1 FROM lot_items WHERE lot_id IN (v_lot, v_lot2) AND (alloc_weight_paisa <> 0 OR weight_guessed)));
+  PERFORM pg_temp.ck('Weight (Batch 45): a new weight bill is not saved on the lot (it is an ordinary expense)',
+    (SELECT count(*) FROM lot_costs WHERE lot_id = v_lot2 AND cost_type = 'weight') = 0);
 
   -- An old lot in another currency still works out the same.
   PERFORM set_config('request.jwt.claims', c_admin, true);
@@ -356,8 +363,8 @@ BEGIN
     'items', jsonb_build_array(jsonb_build_object('product_id', v_pb, 'qty', 3, 'unit_price_foreign', '12.35', 'weight_grams', '271')),
     'costs', jsonb_build_array(jsonb_build_object('cost_type', 'weight', 'amount_bdt', '100'))));
   EXECUTE 'RESET ROLE';
-  PERFORM pg_temp.ck('Currency: an AUD lot is still 12.35 × 78.4567 = ৳968.9402 + share per unit',
-    (SELECT unit_price_bdt = 968.9402 AND alloc_weight_paisa = 10000 AND landed_unit_cost_bdt = 1002.273533
+  PERFORM pg_temp.ck('Currency: an AUD lot is still 12.35 × 78.4567 = ৳968.9402 (its weight bill adds nothing)',
+    (SELECT unit_price_bdt = 968.9402 AND alloc_weight_paisa = 0 AND landed_unit_cost_bdt = 968.9402
      FROM lot_items WHERE lot_id = v_lot),
     (SELECT format('%s %s %s', unit_price_bdt, alloc_weight_paisa, landed_unit_cost_bdt) FROM lot_items WHERE lot_id = v_lot));
 

@@ -125,6 +125,7 @@ test.beforeAll(async () => {
 });
 
 test('database: offer and buying rows, below cost (who sees taka), the investor report equals the Money page (one rolled-back transaction)', async () => {
+  const modeBefore = (await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode')).data?.[0]?.value ?? 'false';
   test.skip(!supabaseCli(), 'The Supabase command line is not on this computer.');
   test.setTimeout(300_000);
   const script = readFileSync('e2e/sql/batch-43-smart.sql', 'utf8')
@@ -142,8 +143,9 @@ test('database: offer and buying rows, below cost (who sees taka), the investor 
   expect(products.data).toHaveLength(0);
   const lots = await select<unknown[]>(admin.accessToken, 'lots?select=id&notes=eq.e2e%20b43');
   expect(lots.data).toHaveLength(0);
+  // Batch 45: the live switch is unchanged by the test (On on the live shop since 13 Nov).
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(modeBefore);
 });
 
 test('permissions: the public and a customer get nothing from the smart helpers', async () => {
@@ -350,7 +352,9 @@ test('live: Give an offer, Buying list and Investors open with the real database
   await adminAt(page, '/admin?tab=inventory&inv=offers');
   await expect(page.getByRole('heading', { name: 'Give an offer' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('Could not load')).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.getByTestId('offers-mode-note')).toBeVisible();
+  // The Off note shows only while the live Inventory mode is Off (Batch 45: it is On).
+  const liveMode = (await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode')).data?.[0]?.value;
+  await expect(page.getByTestId('offers-mode-note')).toHaveCount(liveMode === 'true' ? 0 : 1);
   await page.goto('/admin?tab=inventory&inv=buying');
   await expect(page.getByTestId('buying-source')).toBeVisible({ timeout: 20_000 });
   await page.goto('/admin?tab=reports&r=investors');
