@@ -36,6 +36,7 @@ import {
 import { OrderTrackingCard, type CustomerTrackingView } from '../components/orders/OrderTrackingCard';
 import { LineIcon } from '../components/orders/TrackIcons';
 import { lineQuantityText, orderItemCount, soldInUnits } from '../lib/orderLines';
+import { advanceLineLabel, orderDiscountParts } from '../lib/advanceDiscount';
 
 function DetailSkeleton() {
   return (
@@ -159,6 +160,7 @@ export function OrderDetailPage() {
   const chatHref = order ? orderHelpWhatsAppUrl(settings, order.order_number) : null;
 
   const methodRows = paidByMethod(stored?.payments ?? []);
+  const discountParts = order ? orderDiscountParts(order) : null;
   const isDelivered = view?.track.status === 'delivered';
   const paidTotal = payment?.paid ?? 0;
   const due = payment ? payment.due : order?.payment_status === 'paid' ? 0 : (order?.total ?? 0);
@@ -232,10 +234,17 @@ export function OrderDetailPage() {
                   <span>Delivery</span>
                   <span>{order.delivery_fee > 0 ? formatTakaBd(order.delivery_fee) : 'Free'}</span>
                 </div>
-                {order.discount > 0 && (
+                {discountParts && discountParts.other > 0 && (
                   <div className="ot-totals__row">
                     <span>{order.promo_code ? `Discount (${order.promo_code})` : 'Discount'}</span>
-                    <span>&minus;{formatTakaBd(order.discount)}</span>
+                    <span>&minus;{formatTakaBd(discountParts.other)}</span>
+                  </div>
+                )}
+                {/* Batch 48: paying in advance with bKash / Nagad. */}
+                {discountParts && discountParts.advance > 0 && (
+                  <div className="ot-totals__row" data-testid="order-advance-discount">
+                    <span>{advanceLineLabel(order.advance_discount_type, order.advance_discount_value)}</span>
+                    <span>&minus;{formatTakaBd(discountParts.advance)}</span>
                   </div>
                 )}
                 {order.status !== 'cancelled' &&

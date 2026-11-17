@@ -95,6 +95,14 @@ export interface OrderSnapshot {
   paymentMethod: OrderPaymentMethod;
   bkashTrxId: string | null;
   placedAt: string;
+  /** Batch 48: the advance-payment discount (bKash / Nagad) — separate
+   *  from `discount` (the promo code's) here; 0 / undefined = none. */
+  advanceDiscount?: number;
+  /** The rule it was worked out with, for its label. */
+  advanceRule?: { type: 'percent' | 'fixed'; value: number } | null;
+  /** True once the Order placed animation has played (a reload shows the
+   *  final state without playing it again). */
+  celebrated?: boolean;
   /** Why the order-level discount was given (Batch 22) — undefined/null for
    *  a real checkout order (its discount, if any, is always a promo code). */
   orderDiscountReason?: DiscountReason | null;

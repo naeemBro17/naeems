@@ -18,13 +18,16 @@ import {
   buildOrderChanges,
   draftFromOrder,
   draftTotals,
+  EDITABLE_PAYMENT_METHODS,
   stockProblems,
   type EditDraft,
 } from '../../lib/orderEdit';
 import { PaymentSection } from './PaymentSection';
+import { advanceLineLabel } from '../../lib/advanceDiscount';
+import { PAYMENT_METHOD_LABELS } from '../../lib/orderStatus';
 import { planPayment, type CollectMode } from '../../lib/paymentPlan';
 import { addOrderPayment, summarizePayments, type OrderPayment, type PaymentMethodId } from '../../lib/payments';
-import { adminSetCollectMode, adminSetOrderSource, isCollectModeReady } from '../../lib/orders';
+import { adminSetCollectMode, adminSetOrderPaymentMethod, adminSetOrderSource, isCollectModeReady } from '../../lib/orders';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
 import { useProducts } from '../../contexts/ProductContext';
@@ -234,8 +237,9 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     if (allowShort) changes.allow_short = true;
     const modeChanged = collectMode !== order.collect_mode;
     const sourceChanged = draft.source !== order.source;
+    const methodChanged = draft.paymentMethod !== order.payment_method;
     const paidNow = plan?.paidNow ?? 0;
-    if (Object.keys(changes).length === 0 && !modeChanged && !sourceChanged && paidNow <= 0) {
+    if (Object.keys(changes).length === 0 && !modeChanged && !sourceChanged && !methodChanged && paidNow <= 0) {
       showToast('Nothing changed');
       onUnchanged();
       return;
@@ -249,6 +253,11 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     };
     if (sourceChanged) {
       const result = await adminSetOrderSource(order.id, draft.source);
+      if (result.error) return fail(result.error);
+    }
+    // Batch 48: first, so the discount below is compared with what is saved.
+    if (methodChanged && (draft.paymentMethod === 'cod' || draft.paymentMethod === 'bkash' || draft.paymentMethod === 'nagad')) {
+      const result = await adminSetOrderPaymentMethod(order.id, draft.paymentMethod);
       if (result.error) return fail(result.error);
     }
     if (Object.keys(changes).length > 0) {
@@ -532,6 +541,32 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
             />
           </div>
 
+          {EDITABLE_PAYMENT_METHODS.includes(order.payment_method) && (
+            <div className="form-field">
+              <span className="form-label" id="edit-order-method-label">
+                Payment method
+              </span>
+              <div className="chip-group" role="group" aria-labelledby="edit-order-method-label" data-testid="edit-order-method">
+                {EDITABLE_PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    className={`chip-select${draft.paymentMethod === method ? ' chip-select--on' : ''}`}
+                    aria-pressed={draft.paymentMethod === method}
+                    onClick={() => update({ paymentMethod: method })}
+                  >
+                    {method === 'cod' ? 'Cash on Delivery' : PAYMENT_METHOD_LABELS[method]}
+                  </button>
+                ))}
+              </div>
+              {draft.advanceDiscount > 0 && draft.paymentMethod === 'cod' && order.payment_method !== 'cod' && (
+                <p className="admin-panel__description" role="status" data-testid="edit-order-advance-removed">
+                  The advance payment discount ({formatTaka(draft.advanceDiscount)}) comes off — the total goes up by that much.
+                </p>
+              )}
+            </div>
+          )}
+
           {paymentReady && plan && (
             <>
               <h3 className="edit-order__heading">Payment</h3>
@@ -568,6 +603,12 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
               <div className="checkout-summary-card__row">
                 <span>Discount</span>
                 <span>-{formatTaka(totals.discount)}</span>
+              </div>
+            )}
+            {totals.advanceDiscount > 0 && (
+              <div className="checkout-summary-card__row" data-testid="edit-order-advance">
+                <span>{advanceLineLabel(order.advance_discount_type, order.advance_discount_value)}</span>
+                <span>-{formatTaka(totals.advanceDiscount)}</span>
               </div>
             )}
             <div className="checkout-summary-card__row checkout-summary-card__row--total">

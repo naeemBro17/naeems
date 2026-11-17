@@ -40,7 +40,7 @@ interface OrderRow {
   thana: string;
   address_line: string;
   total: number;
-  payment_method: 'cod' | 'bkash' | 'cash' | 'due';
+  payment_method: 'cod' | 'bkash' | 'nagad' | 'cash' | 'due';
   bkash_trx_id: string | null;
   status: string;
   steadfast_status: string | null;
@@ -117,8 +117,9 @@ function buildNewOrderMessage(order: OrderRow, items: OrderItemRow[]): string {
   }
   lines.push('');
   lines.push(`💰 <b>Total: ${formatTaka(order.total)}</b>`);
-  if (order.payment_method === 'bkash') {
-    lines.push(`💳 bKash — TrxID: ${order.bkash_trx_id ?? '-'}`);
+  if (order.payment_method === 'bkash' || order.payment_method === 'nagad') {
+    // Batch 48: a Nagad TrxID is kept in the same column as bKash's.
+    lines.push(`💳 ${order.payment_method === 'nagad' ? 'Nagad' : 'bKash'} — TrxID: ${order.bkash_trx_id ?? '-'}`);
   } else {
     lines.push('💳 Cash on Delivery');
   }

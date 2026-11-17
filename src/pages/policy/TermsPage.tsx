@@ -11,7 +11,7 @@ export function TermsPage() {
         <li>After it is confirmed but before it is sent, message us on WhatsApp to cancel.</li>
         <li>Once it has been handed to the courier, it can no longer be cancelled.</li>
         <li>
-          If an order paid in advance with bKash is cancelled before it is sent, the full amount will
+          If an order paid in advance with bKash or Nagad is cancelled before it is sent, the full amount will
           be refunded within 3 working days.
         </li>
       </ul>

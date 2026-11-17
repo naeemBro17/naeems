@@ -15,7 +15,7 @@ export function PrivacyPolicyPage() {
       <ul>
         <li>From Google login: your name, email and profile photo</li>
         <li>What you give us: your phone number and delivery address</li>
-        <li>Order details: what you bought, how much, and how you paid (including the bKash Transaction ID)</li>
+        <li>Order details: what you bought, how much, and how you paid (including the bKash or Nagad Transaction ID)</li>
         <li>Site usage: which pages you viewed and which products you added to your cart</li>
       </ul>
 

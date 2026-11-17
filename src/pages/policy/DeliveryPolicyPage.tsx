@@ -41,7 +41,7 @@ export function DeliveryPolicyPage() {
           courier problems can cause some delay.
         </li>
         <li>Once your parcel is sent, its tracking number appears on your "My Orders" page.</li>
-        <li>Payment: Cash on Delivery (pay when you receive it), or pay in advance with bKash.</li>
+        <li>Payment: Cash on Delivery (pay when you receive it), or pay in advance with bKash or Nagad.</li>
       </ul>
 
       <h2>If delivery fails</h2>
@@ -52,7 +52,7 @@ export function DeliveryPolicyPage() {
         </li>
         <li>
           If you refuse the parcel without a valid reason, you will have to pay the delivery and return
-          cost. If you paid in advance with bKash, we will deduct that cost and refund the rest.
+          cost. If you paid in advance with bKash or Nagad, we will deduct that cost and refund the rest.
         </li>
       </ul>
     </PolicyLayout>

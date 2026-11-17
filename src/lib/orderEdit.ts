@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import type { OrderSource, OrderWithDetails } from '../types';
+import type { OrderPaymentMethod, OrderSource, OrderWithDetails } from '../types';
+import { orderDiscountParts } from './advanceDiscount';
 import type { PaymentSummary } from './payments';
 import { courierCod } from '../../supabase/functions/_shared/cod';
 import { parseStockWarning, type StockWarning } from './manualOrders';
@@ -50,9 +51,24 @@ export interface EditDraft {
   /** Batch 47: saved by admin_set_order_source(), not admin_edit_order(). */
   source: OrderSource;
   deliveryFee: string;
+  /** Batch 48: the promo / hand-typed part of the discount only. */
   discount: string;
   discountNote: string;
+  /** Batch 48: saved by admin_set_order_payment_method() (only offered for
+   *  Cash on Delivery / bKash / Nagad orders). */
+  paymentMethod: OrderPaymentMethod;
+  /** The order's advance-payment discount (read only). It comes off when
+   *  the payment method becomes Cash on Delivery. */
+  advanceDiscount: number;
   items: EditDraftItem[];
+}
+
+/** Payment methods Edit order may switch between (website-style). */
+export const EDITABLE_PAYMENT_METHODS: readonly OrderPaymentMethod[] = ['cod', 'bkash', 'nagad'];
+
+/** The advance discount the order keeps with the draft's payment method. */
+export function keptAdvance(draft: Pick<EditDraft, 'paymentMethod' | 'advanceDiscount'>): number {
+  return draft.paymentMethod === 'bkash' || draft.paymentMethod === 'nagad' ? draft.advanceDiscount : 0;
 }
 
 export function draftFromOrder(order: OrderWithDetails, stockFor: (productId: string | null, variantId: string | null) => number | null): EditDraft {
@@ -67,8 +83,10 @@ export function draftFromOrder(order: OrderWithDetails, stockFor: (productId: st
     courierNote: order.courier_note ?? '',
     source: order.source,
     deliveryFee: String(order.delivery_fee),
-    discount: String(order.discount),
+    discount: String(orderDiscountParts(order).other),
     discountNote: order.discount_note ?? '',
+    paymentMethod: order.payment_method,
+    advanceDiscount: orderDiscountParts(order).advance,
     items: order.items.map((item) => ({
       key: item.id,
       id: item.id,
@@ -122,7 +140,13 @@ export function buildOrderChanges(order: OrderWithDetails, draft: EditDraft): Re
   if (!sameText(draft.addressLine, order.address_line)) changes.address_line = draft.addressLine.trim();
   if (!sameText(draft.courierNote, order.courier_note)) changes.courier_note = draft.courierNote.trim();
   if (money(draft.deliveryFee) !== Number(order.delivery_fee)) changes.delivery_fee = money(draft.deliveryFee);
-  if (money(draft.discount) !== Number(order.discount)) changes.discount = money(draft.discount);
+  // Batch 48: orders.discount holds the promo / hand-typed part plus the
+  // advance part. The payment method is saved first (to Cash on Delivery
+  // it takes the advance part off), so compare with what will be saved.
+  const advance = keptAdvance(draft);
+  const wanted = Math.round((money(draft.discount) + advance) * 100) / 100;
+  const baseline = Math.round((orderDiscountParts(order).other + advance) * 100) / 100;
+  if (wanted !== baseline) changes.discount = wanted;
   if (!sameText(draft.discountNote, order.discount_note)) changes.discount_note = draft.discountNote.trim();
 
   const savedIds = new Set(order.items.map((i) => i.id));
@@ -146,11 +170,18 @@ export function buildOrderChanges(order: OrderWithDetails, draft: EditDraft): Re
 }
 
 /** What the draft's totals will be (the database recalculates the real ones). */
-export function draftTotals(draft: EditDraft): { subtotal: number; deliveryFee: number; discount: number; total: number } {
+export function draftTotals(draft: EditDraft): {
+  subtotal: number;
+  deliveryFee: number;
+  discount: number;
+  advanceDiscount: number;
+  total: number;
+} {
   const subtotal = draft.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
   const deliveryFee = Math.max(money(draft.deliveryFee) || 0, 0);
   const discount = Math.min(Math.max(money(draft.discount) || 0, 0), subtotal);
-  return { subtotal, deliveryFee, discount, total: Math.max(subtotal + deliveryFee - discount, 0) };
+  const advanceDiscount = Math.min(keptAdvance(draft), Math.max(subtotal - discount, 0));
+  return { subtotal, deliveryFee, discount, advanceDiscount, total: Math.max(subtotal + deliveryFee - discount - advanceDiscount, 0) };
 }
 
 /** Batch 39: while Inventory mode is On, an edit that needs more units than

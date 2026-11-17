@@ -1,0 +1,873 @@
+/* ============================================================
+   Batch 48 — checkout finish: the slim stepper, the payment method
+   section (Cash on Delivery, the "Pay in advance" group with bKash and
+   Nagad) and the Order placed screen. Sizes, colours and timings follow
+   docs/design/batch-48-checkout-mockup.html. Motion: transform and
+   opacity only; prefers-reduced-motion gets the final state at once.
+   ============================================================ */
+
+:root {
+  --cf-good: #18A957;
+  --cf-good-2: #8ADBAA;
+  --cf-good-soft: #E8F6EE;
+  --cf-good-ink: #0E7A3E;
+  --cf-good-line: #BFE6CF;
+  --cf-sheen: rgba(24, 169, 87, 0.13);
+  --cf-dark-good: #6FD69B;
+  /* The two wallets' own colours — Naeem's explicit exception to the
+     "no new accent colour" rule, used ONLY inside the wallet's send-money
+     box and its selected row. */
+  --cf-bk: #E2136E;
+  --cf-bk-soft: #FDEDF4;
+  --cf-bk-line: #F5C2D8;
+  --cf-bk-ink: #B80F59;
+  --cf-ng: #EE4F23;
+  --cf-ng-soft: #FEF0EA;
+  --cf-ng-line: #F8CDB9;
+  --cf-ng-ink: #C23A12;
+}
+
+:root[data-theme='dark'] {
+  --cf-good: #34C774;
+  --cf-good-2: #1F7A47;
+  --cf-good-soft: #16261C;
+  --cf-good-ink: #5FDC94;
+  --cf-good-line: #24563A;
+  --cf-sheen: rgba(52, 199, 116, 0.14);
+  --cf-dark-good: #5FDC94;
+  --cf-bk: #F0418C;
+  --cf-bk-soft: #2B1520;
+  --cf-bk-line: #5A2340;
+  --cf-bk-ink: #F579AE;
+  --cf-ng: #FF6A3D;
+  --cf-ng-soft: #2B1A13;
+  --cf-ng-line: #5C2E1C;
+  --cf-ng-ink: #FF8E66;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --cf-good: #34C774;
+    --cf-good-2: #1F7A47;
+    --cf-good-soft: #16261C;
+    --cf-good-ink: #5FDC94;
+    --cf-good-line: #24563A;
+    --cf-sheen: rgba(52, 199, 116, 0.14);
+    --cf-dark-good: #5FDC94;
+    --cf-bk: #F0418C;
+    --cf-bk-soft: #2B1520;
+    --cf-bk-line: #5A2340;
+    --cf-bk-ink: #F579AE;
+    --cf-ng: #FF6A3D;
+    --cf-ng-soft: #2B1A13;
+    --cf-ng-line: #5C2E1C;
+    --cf-ng-ink: #FF8E66;
+  }
+}
+
+/* ---------- Slim labelled stepper ---------- */
+
+.checkout-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.checkout-stepper__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.checkout-stepper__dot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  display: grid;
+  place-items: center;
+}
+
+.checkout-stepper__dot svg {
+  width: 9px;
+  height: 9px;
+}
+
+.checkout-stepper__step--done {
+  color: var(--color-text-secondary);
+}
+
+.checkout-stepper__step--done .checkout-stepper__dot {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg);
+}
+
+.checkout-stepper__step--on {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.checkout-stepper__step--on .checkout-stepper__dot {
+  border-color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 3px var(--color-bg), inset 0 0 0 8px var(--color-text-primary);
+}
+
+.checkout-stepper__line {
+  flex: 1;
+  min-width: 10px;
+  height: 1.5px;
+  background: var(--color-text-primary);
+}
+
+.checkout-stepper__line--off {
+  background: var(--color-border);
+}
+
+/* ---------- Order card: the advance discount line ---------- */
+
+.checkout-summary-card__row--advance {
+  color: var(--cf-dark-good);
+  font-weight: 600;
+}
+
+.cf-row-in {
+  animation: cf-row-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes cf-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.checkout-summary-card__row--total span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Payment method ---------- */
+
+.cf-pay {
+  margin: 20px 0 12px;
+}
+
+.cf-pay__title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.cf-pay__opts {
+  display: grid;
+  gap: 10px;
+}
+
+.cf-opt {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 34px 1fr 20px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px 11px 11px;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cf-opt[aria-checked='true'] {
+  border-color: var(--color-text-primary);
+}
+
+.cf-opt__radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-muted);
+  display: block;
+}
+
+.cf-opt[aria-checked='true'] .cf-opt__radio {
+  border-color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  box-shadow: inset 0 0 0 4px var(--color-surface);
+}
+
+.cf-opt--bkash[aria-checked='true'] {
+  border-color: var(--cf-bk);
+}
+
+.cf-opt--bkash[aria-checked='true'] .cf-opt__radio {
+  border-color: var(--cf-bk);
+  background: var(--cf-bk);
+}
+
+.cf-opt--nagad[aria-checked='true'] {
+  border-color: var(--cf-ng);
+}
+
+.cf-opt--nagad[aria-checked='true'] .cf-opt__radio {
+  border-color: var(--cf-ng);
+  background: var(--cf-ng);
+}
+
+.cf-opt__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-secondary);
+}
+
+.cf-opt__icon svg {
+  width: 19px;
+  height: 19px;
+  color: var(--color-text-secondary);
+}
+
+.cf-opt__icon--logo {
+  background: #FFFFFF;
+  border: 1px solid var(--color-border);
+}
+
+.cf-opt__icon--logo img {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+/* The "Pay in advance" group. Soft green while the offer is waiting; a
+   slow sheen sweeps across it (transform only). Neutral once a wallet is
+   picked. */
+.cf-adv {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--cf-good-line);
+  background: var(--cf-good-soft);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.cf-adv--plain {
+  border: 0;
+  background: none;
+  padding: 0;
+  gap: 10px;
+}
+
+.cf-adv__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 4px 0;
+}
+
+.cf-adv__head b {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cf-good-ink);
+}
+
+.cf-adv__badge {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--cf-good);
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-adv:not(.cf-adv--plain)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 32%, var(--cf-sheen) 50%, transparent 68%);
+  transform: translateX(-110%);
+  animation: cf-sheen 3.4s ease-in-out 1.4s infinite;
+}
+
+.cf-adv--picked:not(.cf-adv--plain) {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.cf-adv--picked:not(.cf-adv--plain)::after {
+  animation: none;
+  opacity: 0;
+}
+
+@keyframes cf-sheen {
+  0% {
+    transform: translateX(-110%);
+  }
+  40%,
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+/* The send-money box, in the picked wallet's own colours. */
+.cf-wallet {
+  --c: var(--cf-bk);
+  --c-soft: var(--cf-bk-soft);
+  --c-line: var(--cf-bk-line);
+  --c-ink: var(--cf-bk-ink);
+  position: relative;
+  z-index: 1;
+  border-radius: 14px;
+  background: var(--c-soft);
+  border: 1.5px solid var(--c-line);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.cf-wallet--nagad {
+  --c: var(--cf-ng);
+  --c-soft: var(--cf-ng-soft);
+  --c-line: var(--cf-ng-line);
+  --c-ink: var(--cf-ng-ink);
+}
+
+.cf-wallet__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+.cf-wallet__head img {
+  width: 20px;
+  height: 20px;
+}
+
+.cf-wallet__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.cf-wallet__text b {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-wallet__number {
+  border: 1.5px dashed var(--c);
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.cf-wallet__field {
+  display: grid;
+  gap: 6px;
+}
+
+.cf-wallet__field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cf-wallet__field label i {
+  color: var(--c);
+  font-style: normal;
+}
+
+.cf-wallet__field input {
+  width: 100%;
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.cf-wallet__field input:focus {
+  border-color: var(--c);
+  box-shadow: 0 0 0 3px var(--c-line);
+}
+
+.cf-wallet__field .form-error {
+  margin: 0;
+}
+
+/* ---------- Order placed ---------- */
+
+.cf-placed {
+  padding: 0 16px 28px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.cf-burst {
+  height: 196px;
+  display: grid;
+  place-items: center;
+  padding-top: 48px;
+}
+
+.cf-burst > * {
+  grid-area: 1 / 1;
+}
+
+.cf-halo {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--cf-good-soft);
+  display: block;
+}
+
+.cf-ring {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 2px solid var(--cf-good);
+  display: block;
+  opacity: 0;
+}
+
+.cf-disc {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--cf-good);
+  box-shadow: 0 10px 24px -10px rgba(24, 169, 87, 0.7);
+}
+
+.cf-arm {
+  position: absolute;
+  height: 7px;
+  transform-origin: 3.5px 50%;
+}
+
+.cf-arm--a {
+  left: 22px;
+  top: 40px;
+  width: 23px;
+  transform: rotate(45deg);
+}
+
+.cf-arm--b {
+  left: 33.5px;
+  top: 51.5px;
+  width: 40px;
+  transform: rotate(-47.2deg);
+}
+
+.cf-arm i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: #FFFFFF;
+  transform-origin: 0 50%;
+}
+
+.cf-pip {
+  width: 13px;
+  height: 36px;
+  opacity: 0;
+  background: linear-gradient(90deg, var(--color-border), var(--color-surface) 45%, var(--color-border));
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 64% 100%, 36% 100%, 0 68%);
+}
+
+.cf-fallw {
+  opacity: 0;
+}
+
+.cf-drop {
+  width: 22px;
+  height: 29px;
+  transform-origin: 50% 0;
+}
+
+.cf-drop svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cf-parts {
+  position: relative;
+  width: 0;
+  height: 0;
+}
+
+.cf-pt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.cf-pt--1 {
+  background: var(--cf-good);
+}
+
+.cf-pt--2 {
+  background: var(--cf-good-2);
+}
+
+.cf-thx {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.cf-name {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 0.26em;
+  margin: 2px 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cf-name--long {
+  font-size: 20px;
+}
+
+.cf-name__w {
+  display: inline-flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  padding-bottom: 0.06em;
+}
+
+.cf-name__w span {
+  display: inline-block;
+}
+
+.cf-placed__text {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.cf-onum {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.cf-onum span {
+  background: var(--color-bg-secondary);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.cf-onum b {
+  color: var(--color-text-primary);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cf-sum {
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 2px 14px;
+}
+
+.cf-sr {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-bg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-sr:last-child {
+  border-bottom: 0;
+}
+
+.cf-sr b {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+.cf-sr--saved b {
+  color: var(--cf-good-ink);
+}
+
+.cf-sr--due span {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.cf-sr--due b {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.cf-note {
+  margin: 12px 0 14px;
+  background: var(--color-bg-secondary);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.cf-acts {
+  display: grid;
+  gap: 9px;
+}
+
+.cf-cta {
+  display: block;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  text-align: center;
+  background: var(--color-accent);
+  color: #FFFFFF;
+  border-radius: 999px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cf-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.cf-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: 999px;
+  padding: 11px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.cf-ghost svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.cf-ghost:disabled {
+  opacity: 0.6;
+}
+
+.cf-link {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: center;
+  padding: 8px 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.cf-invoice-error {
+  margin: 0;
+  text-align: center;
+}
+
+/* The sequence (from the mockup; the one place allowed to be slow). */
+.cf-placed {
+  --t0: 2.05s;
+}
+
+.cf-play .cf-pip {
+  animation: cf-pip 1.6s ease-in-out both;
+}
+
+.cf-play .cf-fallw {
+  animation: cf-dropfall 1.42s linear both;
+}
+
+.cf-play .cf-drop {
+  animation: cf-swell 1.5s ease-in-out both;
+}
+
+.cf-play .cf-disc {
+  animation: cf-bloom 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) 1.43s both;
+}
+
+.cf-play .cf-halo {
+  animation: cf-pop 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) 1.6s both;
+}
+
+.cf-play .cf-ring--1 {
+  animation: cf-splashring 1s cubic-bezier(0.2, 0.7, 0.3, 1) 1.42s both;
+}
+
+.cf-play .cf-ring--2 {
+  animation: cf-splashring 1s cubic-bezier(0.2, 0.7, 0.3, 1) 1.66s both;
+}
+
+.cf-play .cf-arm--a i {
+  animation: cf-draw 0.2s ease-out 1.9s both;
+}
+
+.cf-play .cf-arm--b i {
+  animation: cf-draw 0.24s ease-out 2.08s both;
+}
+
+.cf-play .cf-pt {
+  animation: cf-splash 0.85s cubic-bezier(0.2, 0.7, 0.4, 1) var(--d) both;
+}
+
+.cf-play .cf-fu {
+  animation: cf-fu 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--t0) + var(--o, 0s)) both;
+}
+
+.cf-play .cf-name__w span {
+  animation: cf-slot 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.15) calc(var(--t0) + 0.1s + var(--i) * 32ms) both;
+}
+
+/* The final state (a reload, or reduced motion): no pipette or drop. */
+.cf-placed:not(.cf-play) .cf-pip,
+.cf-placed:not(.cf-play) .cf-fallw,
+.cf-placed:not(.cf-play) .cf-pt,
+.cf-placed:not(.cf-play) .cf-ring {
+  display: none;
+}
+
+@keyframes cf-pip {
+  0% { opacity: 0; transform: translateY(-104px); }
+  16%, 66% { opacity: 1; transform: translateY(-92px); }
+  86%, 100% { opacity: 0; transform: translateY(-100px); }
+}
+
+@keyframes cf-dropfall {
+  0% { opacity: 0; transform: translateY(-59px); }
+  14% { opacity: 1; transform: translateY(-59px); }
+  66% { opacity: 1; transform: translateY(-59px); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.55); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cf-swell {
+  0%, 16% { transform: scale(0.12); opacity: 1; }
+  52% { transform: scale(0.96, 1.04); }
+  58% { transform: scale(1.04, 0.97); }
+  63% { transform: scale(0.97, 1.05); }
+  68% { transform: scale(0.94, 1.14); }
+  92% { transform: scale(0.9, 1.18); opacity: 1; }
+  95% { transform: scale(1.6, 0.32); opacity: 0.9; }
+  100% { transform: scale(1.9, 0.14); opacity: 0; }
+}
+
+@keyframes cf-bloom {
+  0% { opacity: 0; transform: scale(0.12); }
+  3% { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cf-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cf-splashring {
+  0% { opacity: 0; transform: scale(0.25); }
+  3% { opacity: 0.7; }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+@keyframes cf-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes cf-splash {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  12% { opacity: 1; }
+  50% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.25), calc(var(--dy) + 28px)) scale(0.6); }
+}
+
+@keyframes cf-fu {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes cf-slot {
+  from { opacity: 0; transform: translateY(85%); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-play *,
+  .cf-adv::after,
+  .cf-row-in {
+    animation: none !important;
+  }
+
+  .cf-pt,
+  .cf-ring,
+  .cf-fallw,
+  .cf-pip {
+    display: none;
+  }
+}
