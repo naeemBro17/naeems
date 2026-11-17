@@ -7,7 +7,13 @@
 // snapshot and the cart is cleared; on failure the cart is left exactly as
 // it was so the customer can fix whatever was wrong (out of stock, a promo
 // that just expired) and try again.
-import { useState, type FormEvent } from 'react';
+//
+// Batch 48: this is the "Payment" step. Cash on Delivery first, then the
+// "Pay in advance" group (bKash and Nagad — same shop number). Paying in
+// advance takes the advance-payment discount off the products (after the
+// promo code; never off delivery). The amount shown here is only a
+// preview: place_order() works it out again from the setting.
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { PAY_ON_DELIVERY_LABEL } from '../../lib/checkoutCopy';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
@@ -22,7 +28,67 @@ import { StockNotice } from '../../components/checkout/StockNotice';
 import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
-import type { OrderPaymentMethod } from './types';
+import {
+  WALLET_NAMES,
+  advanceLineLabel,
+  advanceOfferActive,
+  advanceOfferBadge,
+  advanceRuleFromSettings,
+  computeAdvanceDiscount,
+  isWalletMethod,
+  promoDiscountRounded,
+  type WalletMethod,
+} from '../../lib/advanceDiscount';
+import { useCountTo } from '../../hooks/useCountTo';
+import '../../styles/checkoutFinish.css';
+
+type CheckoutPaymentMethod = 'cod' | WalletMethod;
+
+const WALLET_LOGOS: Record<WalletMethod, string> = {
+  bkash: '/payment/bkash.png',
+  nagad: '/payment/nagad.png',
+};
+
+function CashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M6 9.5v5M18 9.5v5" />
+    </svg>
+  );
+}
+
+/** One payment row: icon or logo on the left, the name, the round select
+ *  button on the right. */
+function PaymentOption({
+  method,
+  checked,
+  onSelect,
+  icon,
+  label,
+}: {
+  method: CheckoutPaymentMethod;
+  checked: boolean;
+  onSelect: () => void;
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      className={`cf-opt cf-opt--${method}`}
+      onClick={onSelect}
+      data-testid={`pay-option-${method}`}
+    >
+      {icon}
+      <span>{label}</span>
+      <i className="cf-opt__radio" aria-hidden="true" />
+    </button>
+  );
+}
 
 /** BD mobile numbers only — same rule as the delivery phone field
  *  (components/checkout/AddressFormFields.tsx), kept local here since a
@@ -43,7 +109,6 @@ export function OrderSummaryPage() {
     promo,
     setPromo,
     discount,
-    total,
     finalizeOrder,
     resetAfterOrder,
   } = useCheckoutState();
@@ -55,7 +120,7 @@ export function OrderSummaryPage() {
   const [promoSuccess, setPromoSuccess] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
-  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>('cod');
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>('cod');
   const [bkashTrxId, setBkashTrxId] = useState('');
   const [bkashSender, setBkashSender] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ trxId?: string; sender?: string }>({});
@@ -66,6 +131,23 @@ export function OrderSummaryPage() {
   const { recheck } = useCartStockCheck();
 
   const bkashAvailable = settings.shop_bkash_number.trim() !== '';
+  // Nagad arrives with migration-049 (its setting rows); before that
+  // place_order() refuses it, so it is not offered.
+  const nagadAvailable = bkashAvailable && settings.advance_discount_type.trim() !== '';
+  const rule = advanceRuleFromSettings(settings);
+  const offer = advanceOfferActive(rule);
+  // The promo code first (to the paisa, as the database keeps it), then the
+  // advance discount on what is left of the products.
+  const promoPart = promoDiscountRounded(discount);
+  const advance = computeAdvanceDiscount(rule, subtotal - promoPart, paymentMethod);
+  const payTotal = Math.max(0, subtotal + zone.fee - promoPart - advance);
+  const shownTotal = useCountTo(payTotal);
+  const wallet = isWalletMethod(paymentMethod) ? paymentMethod : null;
+
+  const choose = (method: CheckoutPaymentMethod) => {
+    setPaymentMethod(method);
+    setFieldErrors({});
+  };
 
   // See DeliveryDetailsPage's identical guard — items resolve against the
   // product catalog, which is still empty on a cold load.
@@ -112,11 +194,11 @@ export function OrderSummaryPage() {
     if (isPlacing) return; // guards against a double-tap firing two orders
     setPlaceError(null);
 
-    if (paymentMethod === 'bkash') {
+    if (wallet) {
       const errors: { trxId?: string; sender?: string } = {};
       if (bkashTrxId.trim() === '') errors.trxId = 'Transaction ID is required';
       if (bkashSender.trim() === '') {
-        errors.sender = 'Your bKash number is required';
+        errors.sender = `Your ${WALLET_NAMES[wallet]} number is required`;
       } else if (!isValidBangladeshiPhone(bkashSender)) {
         errors.sender = 'Enter a valid Bangladeshi phone number';
       }
@@ -133,8 +215,8 @@ export function OrderSummaryPage() {
       address,
       deliveryZone: zone.id,
       paymentMethod,
-      bkashTrxId: paymentMethod === 'bkash' ? bkashTrxId.trim() : undefined,
-      bkashSender: paymentMethod === 'bkash' ? bkashSender.trim() : undefined,
+      bkashTrxId: wallet ? bkashTrxId.trim() : undefined,
+      bkashSender: wallet ? bkashSender.trim() : undefined,
       promoCode: promo?.code ?? null,
     });
 
@@ -160,7 +242,10 @@ export function OrderSummaryPage() {
       orderId: result.orderId,
       orderNumber: result.orderNumber,
       paymentMethod,
-      bkashTrxId: paymentMethod === 'bkash' ? bkashTrxId.trim() : null,
+      bkashTrxId: wallet ? bkashTrxId.trim() : null,
+      advanceDiscount: advance,
+      advanceRule: advance > 0 ? { type: rule.type, value: rule.value } : null,
+      saved: result.saved ? { total: result.saved.total, advanceDiscount: result.saved.advanceDiscount } : null,
     });
     resetAfterOrder();
     navigate('/checkout/success');
@@ -259,98 +344,137 @@ export function OrderSummaryPage() {
             <span>Subtotal</span>
             <span>{formatTaka(subtotal)}</span>
           </div>
+          {promo && (
+            <div className="checkout-summary-card__row checkout-summary-card__row--discount">
+              <span>Promo ({promo.code})</span>
+              <span>&minus;{formatTaka(promoPart)}</span>
+            </div>
+          )}
+          {advance > 0 && (
+            <div className="checkout-summary-card__row checkout-summary-card__row--advance cf-row-in" data-testid="summary-advance">
+              <span>{advanceLineLabel(rule.type, rule.value)}</span>
+              <span>&minus;{formatTaka(advance)}</span>
+            </div>
+          )}
           <div className="checkout-summary-card__row">
             <span>Delivery ({zone.label})</span>
             <span>{formatTaka(zone.fee)}</span>
           </div>
-          {promo && (
-            <div className="checkout-summary-card__row checkout-summary-card__row--discount">
-              <span>Promo ({promo.code})</span>
-              <span>&minus;{formatTaka(discount)}</span>
-            </div>
-          )}
           <div className="checkout-summary-card__row checkout-summary-card__row--total" data-testid="summary-total">
             {/* Batch 47: cash on delivery is paid to the rider, not now. */}
             <span>{paymentMethod === 'cod' ? PAY_ON_DELIVERY_LABEL : 'Total payment'}</span>
-            <span>{formatTaka(total)}</span>
+            <span data-total={payTotal}>{formatTaka(shownTotal)}</span>
           </div>
         </div>
 
-        <section className="checkout-payment" aria-label="Payment method">
-          <h2 className="checkout-payment__title">Payment method</h2>
+        <section className="cf-pay" aria-label="Payment method">
+          <h2 className="cf-pay__title">Payment method</h2>
 
-          <div className="checkout-payment__options">
-            <button
-              type="button"
-              className={`checkout-payment__option${paymentMethod === 'cod' ? ' checkout-payment__option--selected' : ''}`}
-              onClick={() => setPaymentMethod('cod')}
-              aria-pressed={paymentMethod === 'cod'}
-            >
-              <span className="checkout-payment__option-radio" aria-hidden="true" />
-              <span className="checkout-payment__option-label">Cash on Delivery</span>
-            </button>
+          <div className="cf-pay__opts" role="radiogroup" aria-label="Payment method">
+            <PaymentOption
+              method="cod"
+              checked={paymentMethod === 'cod'}
+              onSelect={() => choose('cod')}
+              label="Cash on Delivery"
+              icon={
+                <span className="cf-opt__icon">
+                  <CashIcon />
+                </span>
+              }
+            />
 
             {bkashAvailable && (
-              <button
-                type="button"
-                className={`checkout-payment__option${paymentMethod === 'bkash' ? ' checkout-payment__option--selected' : ''}`}
-                onClick={() => setPaymentMethod('bkash')}
-                aria-pressed={paymentMethod === 'bkash'}
+              <div
+                className={`cf-adv${offer ? '' : ' cf-adv--plain'}${wallet ? ' cf-adv--picked' : ''}`}
+                data-testid="pay-advance-group"
               >
-                <span className="checkout-payment__option-radio" aria-hidden="true" />
-                <span className="checkout-payment__option-label">Pay in advance with bKash</span>
-              </button>
+                {offer && (
+                  <div className="cf-adv__head">
+                    <b>Pay in advance</b>
+                    <span className="cf-adv__badge" data-testid="advance-badge">
+                      {advanceOfferBadge(rule)}
+                    </span>
+                  </div>
+                )}
+                <PaymentOption
+                  method="bkash"
+                  checked={paymentMethod === 'bkash'}
+                  onSelect={() => choose('bkash')}
+                  label={WALLET_NAMES.bkash}
+                  icon={
+                    <span className="cf-opt__icon cf-opt__icon--logo">
+                      <img src={WALLET_LOGOS.bkash} alt="" width={22} height={22} />
+                    </span>
+                  }
+                />
+                {nagadAvailable && (
+                  <PaymentOption
+                    method="nagad"
+                    checked={paymentMethod === 'nagad'}
+                    onSelect={() => choose('nagad')}
+                    label={WALLET_NAMES.nagad}
+                    icon={
+                      <span className="cf-opt__icon cf-opt__icon--logo">
+                        <img src={WALLET_LOGOS.nagad} alt="" width={22} height={22} />
+                      </span>
+                    }
+                  />
+                )}
+
+                {wallet && (
+                  <div key={wallet} className={`cf-wallet cf-wallet--${wallet} cf-row-in`} data-testid="wallet-box">
+                    <p className="cf-wallet__head">
+                      <img src={WALLET_LOGOS[wallet]} alt="" width={20} height={20} />
+                      Pay with {WALLET_NAMES[wallet]}
+                    </p>
+                    <p className="cf-wallet__text">
+                      Send Money <b data-testid="wallet-amount">{formatTaka(payTotal)}</b> to this number, then enter the
+                      Transaction ID below.
+                    </p>
+                    <div className="cf-wallet__number">{settings.shop_bkash_number}</div>
+
+                    <div className="cf-wallet__field">
+                      <label htmlFor="wallet-trx-id">
+                        Transaction ID <i aria-hidden="true">*</i>
+                      </label>
+                      <input
+                        id="wallet-trx-id"
+                        type="text"
+                        autoComplete="off"
+                        value={bkashTrxId}
+                        onChange={(e) => setBkashTrxId(e.target.value.toUpperCase())}
+                        placeholder="e.g. 9AK2XYZ1AB"
+                      />
+                      {fieldErrors.trxId && (
+                        <p className="form-error" role="alert">
+                          {fieldErrors.trxId}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="cf-wallet__field">
+                      <label htmlFor="wallet-sender">
+                        Your {WALLET_NAMES[wallet]} number <i aria-hidden="true">*</i>
+                      </label>
+                      <input
+                        id="wallet-sender"
+                        type="tel"
+                        inputMode="tel"
+                        value={bkashSender}
+                        onChange={(e) => setBkashSender(e.target.value)}
+                        placeholder="01XXXXXXXXX"
+                      />
+                      {fieldErrors.sender && (
+                        <p className="form-error" role="alert">
+                          {fieldErrors.sender}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
-
-          {paymentMethod === 'bkash' && bkashAvailable && (
-            <div className="checkout-bkash">
-              <p className="checkout-bkash__instructions">
-                Send Money <strong>{formatTaka(total)}</strong> to this number, then enter the
-                Transaction ID below.
-              </p>
-              <div className="checkout-bkash__number">{settings.shop_bkash_number}</div>
-
-              <div className="form-field">
-                <label className="form-label" htmlFor="bkash-trx-id">
-                  Transaction ID <span className="form-required" aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="bkash-trx-id"
-                  type="text"
-                  className="form-input"
-                  value={bkashTrxId}
-                  onChange={(e) => setBkashTrxId(e.target.value.toUpperCase())}
-                  placeholder="e.g. 9AK2XYZ1AB"
-                />
-                {fieldErrors.trxId && (
-                  <p className="form-error" role="alert">
-                    {fieldErrors.trxId}
-                  </p>
-                )}
-              </div>
-
-              <div className="form-field">
-                <label className="form-label" htmlFor="bkash-sender">
-                  Your bKash number <span className="form-required" aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="bkash-sender"
-                  type="tel"
-                  inputMode="tel"
-                  className="form-input"
-                  value={bkashSender}
-                  onChange={(e) => setBkashSender(e.target.value)}
-                  placeholder="01XXXXXXXXX"
-                />
-                {fieldErrors.sender && (
-                  <p className="form-error" role="alert">
-                    {fieldErrors.sender}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </section>
 
         {placeError && (

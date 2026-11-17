@@ -83,6 +83,8 @@ interface CheckoutStateValue {
   updateQuantity: (productId: string, quantity: number, variantId?: string | null) => void;
   removeItem: (productId: string, variantId?: string | null) => void;
   lastOrder: OrderSnapshot | null;
+  /** Batch 48: the Order placed animation has played for lastOrder. */
+  markCelebrated: () => void;
   /** Captures the current cart/zone/address/promo plus the real order id/
    *  number place_order() just returned into lastOrder — called the instant
    *  it succeeds, before the cart is cleared. */
@@ -91,6 +93,11 @@ interface CheckoutStateValue {
     orderNumber: string;
     paymentMethod: OrderSnapshot['paymentMethod'];
     bkashTrxId: string | null;
+    /** Batch 48: the advance discount shown at checkout, and the rule. */
+    advanceDiscount: number;
+    advanceRule: OrderSnapshot['advanceRule'];
+    /** What the database saved (null before migration-049). */
+    saved: { total: number; advanceDiscount: number } | null;
   }) => OrderSnapshot;
   /** Empties the live cart and resets zone/address/promo for a fresh visit.
    *  Leaves lastOrder in place so OrderSuccessPage keeps its snapshot. */
@@ -179,7 +186,12 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       orderNumber: string;
       paymentMethod: OrderSnapshot['paymentMethod'];
       bkashTrxId: string | null;
+      advanceDiscount: number;
+      advanceRule: OrderSnapshot['advanceRule'];
+      saved: { total: number; advanceDiscount: number } | null;
     }): OrderSnapshot => {
+      // The saved amounts win: the database works the discount out itself.
+      const advanceDiscount = result.saved ? result.saved.advanceDiscount : result.advanceDiscount;
       const snapshot: OrderSnapshot = {
         orderId: result.orderId,
         orderNumber: result.orderNumber,
@@ -189,16 +201,23 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
         promo,
         subtotal,
         discount,
-        total,
+        total: result.saved ? result.saved.total : Math.max(0, total - advanceDiscount),
         paymentMethod: result.paymentMethod,
         bkashTrxId: result.bkashTrxId,
         placedAt: new Date().toISOString(),
+        advanceDiscount,
+        advanceRule: advanceDiscount > 0 ? result.advanceRule : null,
+        celebrated: false,
       };
       setLastOrder(snapshot);
       return snapshot;
     },
     [items, zone, address, promo, subtotal, discount, total]
   );
+
+  const markCelebrated = useCallback(() => {
+    setLastOrder((order) => (order && !order.celebrated ? { ...order, celebrated: true } : order));
+  }, []);
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
@@ -224,6 +243,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       updateQuantity,
       removeItem,
       lastOrder,
+      markCelebrated,
       finalizeOrder,
       resetAfterOrder,
     }),
@@ -240,6 +260,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       updateQuantity,
       removeItem,
       lastOrder,
+      markCelebrated,
       finalizeOrder,
       resetAfterOrder,
     ]
