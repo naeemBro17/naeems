@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchLots, lotTotals } from '../../../lib/inventory/api';
 import type { LotSummary } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
@@ -27,7 +28,7 @@ import '../../../styles/adminInventory.css';
  * purpose: correct numbers first, design later.
  */
 export function InventoryTab() {
-  const { view, lotId, open, back } = useInvNav();
+  const { view, lotId, open, back, href } = useInvNav();
 
   if (view === 'new') return <LotForm lotId={null} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
   if (view === 'edit' && lotId) return <LotForm lotId={lotId} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
@@ -41,10 +42,10 @@ export function InventoryTab() {
   if (view === 'buying') return <BuyingListView onBack={back} />;
   if (view === 'check') return <StockCheckView onBack={back} onOpenLot={(id) => open('lot', id)} />;
   if (view === 'prices') return <BuyingPricesView onBack={back} />;
-  return <InventoryHome onOpen={open} />;
+  return <InventoryHome onOpen={open} lotHref={href} />;
 }
 
-function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'] }) {
+function InventoryHome({ onOpen, lotHref }: { onOpen: ReturnType<typeof useInvNav>['open']; lotHref: ReturnType<typeof useInvNav>['href'] }) {
   const { settings } = useProducts();
   const [lots, setLots] = useState<LoadState<LotSummary[]> | null>(null);
 
@@ -108,7 +109,8 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
             const t = lotTotals(lot.lot_items);
             const where = [lot.country, lot.supplier].filter((s) => s.trim() !== '').join(' · ');
             return (
-              <button key={lot.id} type="button" className="inv-lot" onClick={() => onOpen('lot', lot.id)}>
+              // Batch 47: a real link (Ctrl+click / "Open in new tab" work).
+              <Link key={lot.id} to={lotHref('lot', lot.id)} className="inv-lot" onClick={() => window.scrollTo(0, 0)} data-testid="inv-lot-link">
                 <span className="inv-lot__main">
                   <span className="inv-lot__title">
                     {lot.code}
@@ -127,7 +129,7 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
                   <b title={takaExact(t.landedPaisa)}>{takaWhole(t.landedPaisa)}</b>
                   <span className="inv-muted">landed</span>
                 </span>
-              </button>
+              </Link>
             );
           })}
         </div>

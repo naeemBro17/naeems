@@ -631,6 +631,14 @@ export async function adminSetCollectMode(orderId: string, mode: CollectMode): P
   return { error: error.message || 'Could not save the payment choice.' };
 }
 
+/** Batch 47: change an order's Source (Edit order). */
+export async function adminSetOrderSource(orderId: string, source: OrderSource): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_set_order_source', { p_order_id: orderId, p_source: source });
+  if (!error) return { error: null };
+  if (error.code === FUNCTION_NOT_FOUND) return { error: 'Changing the source needs the Batch 47 database update (migration-048).' };
+  return { error: error.message || 'Could not save the source.' };
+}
+
 export const COLLECT_MODE_NEEDS_UPDATE =
   '"Customer pays later" needs the Batch 32 database update (migration-035). Until then the courier collects what is due.';
 

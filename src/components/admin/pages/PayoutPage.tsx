@@ -1,16 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   fetchPayout,
   isOutsideParcel,
+  isSettled,
   itemFeesPaisa,
   payoutOrderCount,
   payoutPill,
   reasonText,
+  settledByText,
   takaExact,
   takaWhole,
+  unsettlePayoutLine,
   type LoadState,
   type Payout,
+  type PayoutItem,
 } from '../../../lib/payouts';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useToast } from '../../../hooks/useToast';
+import { SettleLineSheet } from '../SettleLineSheet';
 import { formatDhakaDateTime } from '../../../../supabase/functions/_shared/orderTracking';
 import { toPaisa } from '../../../../supabase/functions/_shared/steadfastPayouts';
 import { AdminPageHeader, EmptyState, SkeletonRows } from '../ui/AdminUi';
@@ -28,6 +35,8 @@ interface PayoutPageProps {
  */
 export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
   const [state, setState] = useState<LoadState<Payout | null> | null>(null);
+  // Batch 47: settling is the Super Admin's (the database checks it too).
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     let alive = true;
@@ -37,6 +46,10 @@ export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
     return () => {
       alive = false;
     };
+  }, [payoutId]);
+
+  const reload = useCallback(async () => {
+    setState(await fetchPayout(payoutId));
   }, [payoutId]);
 
   const payout = state?.kind === 'ready' ? state.data : null;
@@ -54,14 +67,39 @@ export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
       ) : !payout ? (
         <EmptyState icon="payouts" title="Payout not found" />
       ) : (
-        <PayoutDetail payout={payout} onOpenOrder={onOpenOrder} />
+        <PayoutDetail payout={payout} onOpenOrder={onOpenOrder} canSettle={isAdmin} onChanged={reload} />
       )}
     </section>
   );
 }
 
-function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (orderNumber: string) => void }) {
+function PayoutDetail({
+  payout,
+  onOpenOrder,
+  canSettle,
+  onChanged,
+}: {
+  payout: Payout;
+  onOpenOrder: (orderNumber: string) => void;
+  canSettle: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const { showToast } = useToast();
+  const [settling, setSettling] = useState<PayoutItem | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
   const pill = payoutPill(payout);
+
+  const undo = async (item: PayoutItem) => {
+    setUndoing(item.id);
+    const result = await unsettlePayoutLine(item.id);
+    setUndoing(null);
+    if (result.error) {
+      showToast(result.error, 'error');
+      return;
+    }
+    showToast('Settle undone');
+    await onChanged();
+  };
   const orders = payoutOrderCount(payout);
   const sum = payout.items.reduce(
     (t, i) => ({
@@ -103,14 +141,17 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
           </thead>
           <tbody>
             {payout.items.map((item) => {
-              // Booked on Steadfast's website, or settled (courier only /
-              // returned parcel whose order was deleted): grey, never "to check".
-              const outside = isOutsideParcel(item) || item.line_kind !== 'order';
+              // Booked on Steadfast's website: grey, never "to check".
+              // Batch 47: settled (by hand or Batch 46): green, with why,
+              // who and when; anything not matched can be settled.
+              const settled = isSettled(item);
+              const outside = isOutsideParcel(item) && !settled;
               const toCheck = item.match_status === 'to_check' && !outside;
               const label = item.invoice ?? (item.consignment_id ? `Parcel ${item.consignment_id}` : '—');
               const reason = reasonText(item);
+              const by = settled ? settledByText(item) : null;
               return (
-                <tr key={item.id} className={toCheck ? 'is-check' : undefined}>
+                <tr key={item.id} className={toCheck ? 'is-check' : settled ? 'is-settled' : undefined} data-testid="payout-line">
                   <td>
                     {item.order_id && item.invoice ? (
                       <button type="button" className="adm-payouts__link" onClick={() => onOpenOrder(item.invoice ?? '')}>
@@ -121,11 +162,28 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
                     )}
                     {reason && (
                       <span
-                        className={`adm-payouts__reason${outside ? ' adm-payouts__reason--outside' : ''}`}
+                        className={`adm-payouts__reason${settled ? ' adm-payouts__reason--settled' : outside ? ' adm-payouts__reason--outside' : ''}`}
                         data-testid="payout-reason"
                       >
-                        {toCheck ? `To check: ${reason}` : reason}
+                        {toCheck ? `To check: ${reason}` : settled ? `Settled: ${reason}` : reason}
                       </span>
+                    )}
+                    {by && <span className="adm-payouts__settled-by">{by}</span>}
+                    {canSettle && item.match_status === 'to_check' && !settled && (
+                      <button type="button" className="adm-payouts__action" onClick={() => setSettling(item)} data-testid="payout-settle">
+                        Settle
+                      </button>
+                    )}
+                    {canSettle && settled && (
+                      <button
+                        type="button"
+                        className="adm-payouts__action"
+                        onClick={() => void undo(item)}
+                        disabled={undoing === item.id}
+                        data-testid="payout-undo"
+                      >
+                        Undo
+                      </button>
                     )}
                   </td>
                   <td title={takaExact(toPaisa(item.cod_collected))}>{takaWhole(toPaisa(item.cod_collected))}</td>
@@ -152,6 +210,16 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
           total is exact. Each order page now shows “Steadfast paid ৳… on …”.
         </p>
       </div>
+
+      <SettleLineSheet
+        item={settling}
+        onClose={() => setSettling(null)}
+        onSettled={async () => {
+          setSettling(null);
+          showToast('Line settled');
+          await onChanged();
+        }}
+      />
     </>
   );
 }

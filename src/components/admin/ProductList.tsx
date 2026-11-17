@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
@@ -7,7 +7,7 @@ import { useToast } from '../../hooks/useToast';
 import { normalizeText } from '../../lib/format';
 import { productImages, cardImage, productNeedsCardCopies } from '../../lib/productImages';
 import { findShortCacheFiles, findSmallImagesWork, refreshStoredFiles, runSmallImages, workCount } from '../../lib/smallImages';
-import { adminPath } from '../../lib/adminPages';
+import { adminPath, isNewTabClick, openInNewTab } from '../../lib/adminPages';
 import { CombineProductsSheet } from './CombineProductsSheet';
 import { RestockSheet } from './RestockSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -510,7 +510,11 @@ export function ProductList() {
                 role="listitem"
                 className={`adm-lrow adm-prow${isSelected ? ' adm-lrow--selected' : ''}`}
                 data-testid="product-row"
-                onClick={() => (selectMode ? toggleSelected(product.id) : openEditor(product))}
+                onClick={(e) => {
+                  if (selectMode) toggleSelected(product.id);
+                  else if (isNewTabClick(e)) openInNewTab(adminPath.editProduct(product.id));
+                  else openEditor(product);
+                }}
               >
                 <span className="adm-prow__check" onClick={(e) => e.stopPropagation()}>
                   <input
@@ -529,18 +533,23 @@ export function ProductList() {
                   )}
                 </span>
                 <div className="adm-lrow__main">
-                  <button
-                    type="button"
+                  {/* Batch 47: a real link (Ctrl+click / "Open in new tab"
+                      work); while selecting, a tap only ticks the row. */}
+                  <Link
+                    to={adminPath.editProduct(product.id)}
+                    state={{ fromList: true }}
                     className="adm-lrow__open"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (selectMode) toggleSelected(product.id);
-                      else openEditor(product);
+                      if (selectMode) {
+                        e.preventDefault();
+                        toggleSelected(product.id);
+                      }
                     }}
                     aria-label={`Edit ${product.name}`}
                   >
                     <span className="adm-lrow__name">{product.name}</span>
-                  </button>
+                  </Link>
                   <p className="adm-lrow__sub adm-only-desktop-block">{subLine(product)}</p>
                   <p className="adm-lrow__meta adm-mobile-meta">
                     <span className="adm-price">{formatTakaBd(product.retail_price)}</span>

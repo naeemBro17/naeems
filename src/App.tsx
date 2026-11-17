@@ -39,6 +39,7 @@ import {
   AboutPage,
 } from './lib/routePages';
 import { forgetScroll } from './lib/scrollMemory';
+import { rememberShopPage } from './lib/loginReturn';
 import { useToast } from './hooks/useToast';
 import { consumeUpdatedFlag } from './lib/appUpdate';
 
@@ -104,9 +105,19 @@ function GlobalBottomNav() {
         forgetScroll(location.key);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }}
-      onAccount={() => navigate('/account')}
+      onAccount={() => navigate('/account', { state: { from: `${location.pathname}${location.search}` } })}
     />
   );
+}
+
+/** Batch 47: remembers the last shop page, so logging in from the account
+ *  page returns there. */
+function LoginReturnTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    rememberShopPage(`${location.pathname}${location.search}`);
+  }, [location.pathname, location.search]);
+  return null;
 }
 
 export default function App() {
@@ -123,6 +134,7 @@ export default function App() {
                       while the database can't be reached. */}
                   <ShopDownGate>
                     <AnalyticsTracker />
+                    <LoginReturnTracker />
                     <PageTransition>
                       <Suspense fallback={<RouteFallback />}>
                         <Routes>

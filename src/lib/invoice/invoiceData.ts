@@ -8,6 +8,7 @@ import { PAYMENT_METHOD_NAMES, summarizePayments, type OrderPayment } from '../p
 import { formatInvoicePhone } from './invoiceShop';
 import { amountInWords } from './amountInWords';
 import { lineNameWithUnits, orderItemCount, soldInUnits } from '../orderLines';
+import { sendsByCourier } from '../manualOrders';
 
 /** Steadfast parcels are booked as their standard home delivery. */
 export const STEADFAST_DELIVERY_TYPE = 'Regular';
@@ -41,6 +42,9 @@ export interface InvoiceData {
   /** Pieces in the parcel. */
   itemCount: number;
   consignmentId: string | null;
+  /** Batch 47: handed over in person (Shop/in person, hand delivered) —
+   *  the label shows the order number, never "Book with Steadfast". */
+  byHand?: boolean;
   trackingCode: string | null;
   deliveryType: string;
   customer: {
@@ -185,6 +189,7 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     date: invoiceDate(order.created_at),
     itemCount: orderItemCount(order.items),
     consignmentId: order.steadfast_consignment_id ? String(order.steadfast_consignment_id).trim() : null,
+    byHand: !sendsByCourier(order),
     trackingCode: order.steadfast_tracking_code,
     deliveryType: STEADFAST_DELIVERY_TYPE,
     customer: {

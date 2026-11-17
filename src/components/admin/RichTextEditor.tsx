@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { DOMParser as PMDOMParser, Slice } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import { findWrapping } from '@tiptap/pm/transform';
+import type { EditorProps } from '@tiptap/pm/view';
 import {
   RT_BOX_LABELS,
   RT_COLOR_LABELS,
@@ -558,10 +559,17 @@ export default function RichTextEditor({ id, value, onChange, placeholder, label
   // Empty state class for the placeholder.
   const [empty, setEmpty] = useState(value.trim() === '');
 
-  const editor = useEditor({
-    extensions: richTextExtensions(),
-    content: toEditorHtml(value),
-    editorProps: {
+  // Batch 47: every option handed to useEditor must keep the same identity
+  // from one render to the next. Tiptap compares them on every render (and
+  // every keystroke re-renders the form); a new extensions list, a new
+  // editorProps object or a changed `content` made it push setProps +
+  // updateState into the live editor each time, rewriting the editable
+  // element under the person typing — on a phone that closed the keyboard.
+  // Text that arrives later is loaded by the effect below, not by `content`.
+  const [extensions] = useState(richTextExtensions);
+  const [initialContent] = useState(() => toEditorHtml(value));
+  const editorProps = useMemo<EditorProps>(
+    () => ({
       attributes: {
         id,
         class: 'rich-text rt-editor__content',
@@ -580,7 +588,14 @@ export default function RichTextEditor({ id, value, onChange, placeholder, label
         const parsed = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom, { preserveWhitespace: true, context: $context });
         return Slice.maxOpen(parsed.content);
       },
-    },
+    }),
+    [id, labelledBy, placeholder]
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent,
+    editorProps,
     onUpdate: ({ editor: e }) => {
       typedRef.current = true;
       markDirty();

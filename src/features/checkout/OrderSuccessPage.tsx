@@ -14,6 +14,9 @@ import { invoiceFromSnapshot } from '../../lib/invoice/invoiceData';
 import { downloadInvoice, makeInvoiceFile } from '../../lib/invoice/invoiceOutput';
 import { useProducts } from '../../contexts/ProductContext';
 import { trackPurchase } from '../../lib/analytics';
+import { placedTotalLabel } from '../../lib/checkoutCopy';
+import { openExternal, orderHelpWhatsAppUrl } from '../../lib/expertLinks';
+import { WhatsAppIcon } from '../../components/expert/SocialLinks';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 
@@ -36,6 +39,9 @@ export function OrderSuccessPage() {
   if (!lastOrder) {
     return <Navigate to="/cart" replace />;
   }
+
+  // Batch 47: no dead end — WhatsApp to the shop with the order number.
+  const helpHref = orderHelpWhatsAppUrl(settings, lastOrder.orderNumber);
 
   // Batch 37: the same A4 invoice the shop prints (the customer's copy).
   const handleDownloadInvoice = async () => {
@@ -91,8 +97,9 @@ export function OrderSuccessPage() {
             <span>Payment</span>
             <span>{lastOrder.paymentMethod === 'bkash' ? 'bKash' : 'Cash on Delivery'}</span>
           </div>
-          <div className="checkout-success__receipt-row checkout-success__receipt-row--total">
-            <span>Total paid</span>
+          <div className="checkout-success__receipt-row checkout-success__receipt-row--total" data-testid="placed-total">
+            {/* Batch 47: cash on delivery has not been paid yet. */}
+            <span>{placedTotalLabel(lastOrder.paymentMethod)}</span>
             <span>{formatTaka(lastOrder.total)}</span>
           </div>
         </div>
@@ -123,6 +130,19 @@ export function OrderSuccessPage() {
             View my order
           </button>
         </div>
+
+        {helpHref && (
+          <button
+            type="button"
+            className="button button--secondary button--full checkout-success__help"
+            onClick={() => openExternal(helpHref)}
+            data-testid="placed-need-help"
+            data-href={helpHref}
+          >
+            <WhatsAppIcon />
+            Need help?
+          </button>
+        )}
 
         <button
           type="button"

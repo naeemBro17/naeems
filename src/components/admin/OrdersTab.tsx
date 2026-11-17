@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { adminPath } from '../../lib/adminPages';
+import { Link, useNavigate } from 'react-router-dom';
+import { adminPath, isNewTabClick, openInNewTab } from '../../lib/adminPages';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
@@ -196,12 +196,16 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     }
   }, [orders.length]);
 
-  const openOrder = (order: Order) => {
+  const rememberScroll = () => {
     try {
       window.sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
     } catch {
       // Storage blocked: Back starts at the top of the list.
     }
+  };
+
+  const openOrder = (order: Order) => {
+    rememberScroll();
     navigate(adminPath.order(order.order_number), { state: { fromList: true } });
   };
 
@@ -467,7 +471,10 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                 role="listitem"
                 className="adm-lrow adm-orow2"
                 data-testid="order-row"
-                onClick={() => openOrder(order)}
+                onClick={(e) => {
+                  if (isNewTabClick(e)) openInNewTab(adminPath.order(order.order_number));
+                  else openOrder(order);
+                }}
               >
                 {printMode && (
                   <span className="adm-orow2__check" onClick={(e) => e.stopPropagation()}>
@@ -494,14 +501,18 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                     )}
                   </span>
                 )}
-                <button
-                  type="button"
+                {/* Batch 47: a real link, so Ctrl+click, middle click and a
+                    long-press "Open in new tab" work. */}
+                <Link
+                  to={adminPath.order(order.order_number)}
+                  state={{ fromList: true }}
                   className="adm-orow2__open"
                   onClick={(e) => {
                     e.stopPropagation();
-                    openOrder(order);
+                    if (!isNewTabClick(e)) rememberScroll();
                   }}
                   aria-label={`Open order ${order.order_number}`}
+                  data-testid="order-row-link"
                 >
                   <span className="adm-orow2__line">
                     <span className="adm-orow2__name">{order.customer_name}</span>
@@ -526,7 +537,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
                       Printed
                     </span>
                   )}
-                </button>
+                </Link>
               </div>
             );
           })}

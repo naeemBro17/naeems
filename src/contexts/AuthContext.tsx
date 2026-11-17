@@ -61,7 +61,7 @@ interface AuthContextValue {
   ) => Promise<AuthResult>;
   /** Starts the Google OAuth redirect. redirectTo is where Supabase sends the
    *  browser back to after Google — defaults to the current page. */
-  signInWithGoogle: (redirectTo?: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: (redirectTo?: string, options?: { replace?: boolean }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   /** Re-read the current user's profile (e.g. after an admin status change). */
   refreshProfile: () => Promise<void>;
@@ -356,14 +356,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signInWithGoogle = useCallback(
-    async (redirectTo?: string): Promise<{ error: string | null }> => {
-      const { error } = await supabase.auth.signInWithOAuth({
+    async (redirectTo?: string, options?: { replace?: boolean }): Promise<{ error: string | null }> => {
+      // Batch 47: replace = the page that started the login is swapped for
+      // Google's, so after coming back Back does not land on it again.
+      const replace = options?.replace === true;
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: redirectTo ?? window.location.href },
+        options: { redirectTo: redirectTo ?? window.location.href, skipBrowserRedirect: replace },
       });
       if (error) {
         return { error: 'Could not start Google sign-in. Please try again.' };
       }
+      if (replace && data.url) window.location.replace(data.url);
       // Success navigates the whole page away to Google immediately — there
       // is no "return value" to give the caller beyond "the redirect started".
       return { error: null };

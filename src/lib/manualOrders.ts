@@ -22,6 +22,26 @@ export const MANUAL_ORDER_SOURCES: SourceOption[] = [
   { id: 'other', label: 'Other' },
 ];
 
+/** Batch 47: sources where the goods are handed over in person — no
+ *  courier, so no delivery charge by default and no Steadfast. ("Shop/in
+ *  person" is the only such source the shop has.) */
+export const HAND_OVER_SOURCES: readonly OrderSource[] = ['shop'];
+
+export function isHandOverSource(source: OrderSource | null | undefined): boolean {
+  return source !== null && source !== undefined && HAND_OVER_SOURCES.includes(source);
+}
+
+/**
+ * Batch 47: whether an order goes by courier (Steadfast). Not for an order
+ * handed over in person (Shop/in person, or "No delivery (hand
+ * delivered)") — unless it was booked on Steadfast anyway, so a booked
+ * parcel never disappears from the screen.
+ */
+export function sendsByCourier(order: Pick<Order, 'source' | 'delivery_zone' | 'steadfast_consignment_id'>): boolean {
+  if (order.steadfast_consignment_id) return true;
+  return !isHandOverSource(order.source) && order.delivery_zone !== 'hand_delivered';
+}
+
 /** Plain-language label for any order's source, including 'web' — shared by
  *  the Orders list badge/filter and the invoice. */
 export const ORDER_SOURCE_LABELS: Record<OrderSource, string> = {

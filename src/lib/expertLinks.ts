@@ -16,3 +16,18 @@ export function whatsAppUrl(raw: string): string | null {
 export function openExternal(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
+
+/**
+ * Batch 47: "Questions about this order?" — WhatsApp to the shop's number
+ * (the expert's WhatsApp link when the shop number is not set), with the
+ * order number already written. Used by the order page and the "Order
+ * placed" page. Null when no WhatsApp is set up.
+ */
+export function orderHelpWhatsAppUrl(
+  settings: { shop_whatsapp_number?: string | null; expert_whatsapp_url?: string | null },
+  orderNumber: string
+): string | null {
+  const base = whatsAppChatUrl(settings.shop_whatsapp_number) ?? whatsAppUrl(settings.expert_whatsapp_url ?? '');
+  if (!base) return null;
+  return `${base}${base.includes('?') ? '&' : '?'}text=${encodeURIComponent(`Hi, I have a question about order ${orderNumber}`)}`;
+}

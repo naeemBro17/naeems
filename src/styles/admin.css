@@ -3584,3 +3584,19 @@ html[data-admin] .toast--info .toast__icon {
   font-size: 0.75rem;
   color: var(--adm-text-2, #6e6e73);
 }
+
+/* Batch 47: list rows that open a page are real links (<a>) so they can be
+   opened in a new tab; they look exactly like the buttons they replaced. */
+a.adm-orow2__open,
+a.adm-lrow__open,
+a.inv-lot {
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+a.adm-orow2__open:focus-visible,
+a.adm-lrow__open:focus-visible {
+  outline: 2px solid var(--adm-text);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

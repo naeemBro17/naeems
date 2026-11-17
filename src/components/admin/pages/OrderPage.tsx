@@ -19,13 +19,14 @@ import { lineQuantityText, orderItemCount, soldInUnits } from '../../../lib/orde
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { DeleteOrdersDialog } from '../DeleteOrdersDialog';
+import { MoveOrderSheet } from '../MoveOrderSheet';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { formatTaka } from '../../../lib/format';
 import { invoiceFromOrder } from '../../../lib/invoice/invoiceData';
 import { CarefulActionsCard, ConfirmSheet, OrderInvoiceCard, ReopenCard, orderDigits, type CarefulAction } from '../OrderActionCards';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../lib/orderStatus';
-import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../../lib/manualOrders';
+import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS, sendsByCourier } from '../../../lib/manualOrders';
 import type { OrderStatus, OrderWithDetails } from '../../../types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../../lib/steadfastLink';
 import { orderHistoryNote } from '../../../lib/orderHistoryNotes';
@@ -113,6 +114,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [steadfastConfirmOpen, setSteadfastConfirmOpen] = useState(false);
   const [isBookingSteadfast, setIsBookingSteadfast] = useState(false);
   const [isRefreshingSteadfast, setIsRefreshingSteadfast] = useState(false);
@@ -368,11 +370,15 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const ended = order?.status === 'cancelled' || order?.status === 'delivered' || order?.status === 'returned';
   const payLater = order?.collect_mode === 'pay_later';
 
+  // Batch 47: Shop/in person (and hand delivered) orders go by hand — no
+  // Steadfast card and no "Book with Steadfast".
+  const byCourier = order ? sendsByCourier(order) : true;
+
   // The one main action (orange) for this status.
   let primary: PagePrimaryAction | undefined;
   if (order && canChangeStatus && order.status === 'pending') {
     primary = { label: 'Confirm order', onClick: () => void handleStatusChange('confirmed'), busy: isChangingStatus };
-  } else if (order && canBook && order.status === 'confirmed' && !order.steadfast_consignment_id && steadfastCodAmount !== null) {
+  } else if (order && byCourier && canBook && order.status === 'confirmed' && !order.steadfast_consignment_id && steadfastCodAmount !== null) {
     primary = { label: 'Book with Steadfast', onClick: () => setSteadfastConfirmOpen(true), busy: isBookingSteadfast };
   }
 
@@ -419,6 +425,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       explain: order.steadfast_consignment_id ? 'Stock goes back. Booked with Steadfast — cancel there too.' : 'Stock goes back to the shop.',
       button: 'Cancel…',
       onOpen: () => setCancelOpen(true),
+    });
+  }
+  // Batch 47 Task 6b: an order in the wrong account (Super Admin only; the
+  // database checks it too).
+  if (order && isAdmin) {
+    careful.push({
+      key: 'move',
+      title: 'Move order to another customer',
+      explain: 'For an order in the wrong account. Money, stock and Steadfast stay as they are.',
+      button: 'Move…',
+      onOpen: () => setMoveOpen(true),
     });
   }
   if (order && (isAdmin || (canDeleteEarly && canDeleteNow))) {
@@ -705,7 +722,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
 
           <div className="adm-opage__col">
             {/* 4. Steadfast */}
-            {(order.steadfast_consignment_id || order.status === 'confirmed') && (
+            {byCourier && (order.steadfast_consignment_id || order.status === 'confirmed') && (
               <section className="adm-ocard" aria-label="Steadfast">
                 <h2 className="adm-ocard__title">Steadfast</h2>
                 {order.steadfast_consignment_id ? (
@@ -921,6 +938,21 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
 
       {order && (
         <DeleteOrdersDialog isOpen={deleteOpen} orders={[order]} onConfirm={handleDelete} onClose={() => setDeleteOpen(false)} />
+      )}
+
+      {order && isAdmin && (
+        <MoveOrderSheet
+          isOpen={moveOpen}
+          orderId={order.id}
+          orderNumber={order.order_number}
+          currentOwnerId={order.customer_id}
+          onClose={() => setMoveOpen(false)}
+          onMoved={async (to) => {
+            setMoveOpen(false);
+            showToast(`${order.order_number} moved to ${to}`);
+            await reload();
+          }}
+        />
       )}
 
       {order && (

@@ -32,6 +32,21 @@ export function useInvNav() {
     [location.search, navigate]
   );
 
+  /** Batch 47: the link of a screen (for a real <Link>, so it can be
+   *  opened in a new tab). */
+  const href = useCallback(
+    (next: InvView, lot?: string): string => {
+      const params = new URLSearchParams(location.search);
+      params.set('tab', 'inventory');
+      if (next === 'home') params.delete('inv');
+      else params.set('inv', next);
+      if (lot) params.set('lot', lot);
+      else params.delete('lot');
+      return `${location.pathname}?${params.toString()}`;
+    },
+    [location.pathname, location.search]
+  );
+
   /** Back: the previous screen when there is one, else the Inventory list. */
   const back = useCallback(() => {
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
@@ -42,5 +57,5 @@ export function useInvNav() {
     open('home', undefined, { replace: true });
   }, [navigate, open]);
 
-  return { view, lotId, open, back };
+  return { view, lotId, open, back, href };
 }

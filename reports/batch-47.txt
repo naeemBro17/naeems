@@ -1,0 +1,763 @@
+BATCH 47 — Admin and customer bug fixes + settle a payout line by hand
+Version 1.47.0 · branch fix/batch-47-bugs
+
+All 12 tasks are done. Each has its own commit, except Tasks 8, 9 and 10,
+which change the same two checkout pages and share one commit.
+
+IMPORTANT: Tasks 4 (changing Source on an existing order), 6 and 12 need
+the SQL in section 2. Until you run it, the site keeps working as before,
+and those buttons say "needs the Batch 47 database update (migration-048)".
+
+============================================================
+1. WHAT I DID
+============================================================
+
+TASK 1 — Safety Lock code field could not be typed into
+  Cause: the pop-up box (used by every confirm dialog) never put the cursor
+  in its field when it opened. Worse, while the Safety Lock countdown is
+  running, the order page refreshes every second, and every refresh made
+  the box move the cursor to its Close (X) button. So on a PC your typing
+  went to the X button, and on a phone the keyboard closed again at once.
+  Paste "worked" only because it was quick enough.
+  Fix: the box now puts the cursor in the field once it is open, and never
+  moves it again while it is open. The same repair is in the side menu.
+  Tested: typed the order number one digit every 1.2 seconds with the lock
+  countdown running — the field kept the cursor and took every digit
+  (screenshot 01).
+
+TASK 2 — Keyboard closed by itself while typing the product description
+  Cause: the description editor was not re-created, but on every key press
+  the page handed it a "new" set of settings, so the editor rebuilt its
+  settings and pushed them into the text box under your finger — on
+  Android that interrupts the keyboard. Measured: 81 key presses caused 81
+  of these rebuilds. After the fix: 0. Same editor as before, nothing
+  replaced (screenshot 02).
+
+TASK 3 — Admin links could not be opened in a new tab
+  Order, product, customer and lot rows are now real links. Ctrl+click,
+  middle click and long-press "Open in new tab" work. They look exactly as
+  before. Rows that do something else (tick boxes, the live switch, the
+  ⋯ menu, select mode in Products) still do that.
+  Tested: Ctrl+click on an order row opened that order in a new tab and the
+  list stayed where it was.
+
+TASK 4 — Shop / in-person orders: no delivery charge, no Steadfast
+  The shop has one such source: "Shop/in person" (stored as "shop"). There
+  is no separate "pickup" source in the code, so I did not invent one.
+  - New order: choosing Shop/in person switches Delivery to "No delivery
+    (hand delivered)" and the delivery fee to ৳0. The fee box stays, so you
+    can type another amount. Choosing another source puts the courier zone
+    back.
+  - Edit order: there is now a Source choice. Choosing Shop/in person sets
+    the fee to ৳0 (you can still change it).
+  - Order page: no Steadfast card and no "Book with Steadfast" for these
+    orders. (If an order was booked on Steadfast anyway, the card stays.)
+  - Invoice: shows the order number and "Handed over in person" instead of
+    "Not booked yet — Book with Steadfast". The totals, the invoice and the
+    order page all read the same stored delivery fee, so ৳0 is ৳0
+    everywhere.
+
+TASK 5 — New order: a product with sizes showed once per size
+  In New order this was already fixed by Batch 45. The same problem was
+  still in Edit order → "Add a product": every size was its own row and the
+  product's own first size could not be added at all. Now both screens show
+  ONE row per product; tapping a product with sizes opens the size picker,
+  and its own size is the first choice. The list of sizes is built with the
+  same code the customer product page uses, so it always matches the shop.
+  Products without sizes are added on one tap, as before.
+
+TASK 6 — Orders the admin makes for a customer were missing from her My Orders
+  What exists in the database (checked live, not assumed): an order has
+  TWO links to a person — customer_id (the login account; My Orders shows
+  these) and admin_customer_id (the admin's own link, used in Customers).
+  Batch 30 deliberately set only the admin link, so these orders never
+  reached the customer's My Orders.
+  6a. New order now attaches the order to the picked customer's account, so
+      it shows in her My Orders. Customers without an account: unchanged.
+      The SQL also fixes the one older order linked only on the admin side.
+  6b. Order page → Careful actions → "Move order to another customer"
+      (Super Admin only). You find the customer, check the message, tap
+      Move order. It moves all three links: the login, the admin link and
+      the due reminders. It does NOT touch money, payments, stock, lots,
+      Steadfast or payouts, nor the name/phone/address printed on the
+      order. Safe on delivered and paid orders, and the move is written in
+      the Activity Log.
+
+TASK 7 — After login the customer stayed on the login page
+  Logging in from the Account page now goes back to the page the customer
+  was on before (the shop home if they opened the Account page directly),
+  and the login page is taken out of the history, so Back does not return
+  to it. The cart is kept (it is stored on the phone). Logging in from the
+  cart's "Checkout" already went to checkout, and still does.
+
+TASK 8 — Cash-on-delivery orders said "Total paid"
+  The "Order placed" page said "Total paid" for every order. Now:
+    - cash on delivery: "ডেলিভারিতে দেবেন"
+    - bKash (paid in full when ordering): "Total paid"
+  The checkout summary's total line and the order page's "To pay on
+  delivery" line now say "ডেলিভারিতে দেবেন" too. The order page already showed
+  what was paid (by method) and what is due — that stays correct for a
+  part-paid order. The invoice never said "paid" for COD (it says "Amount
+  to collect"), so it needed no change. There is no WhatsApp order-summary
+  text in the code any more; the only WhatsApp texts are the "question
+  about order NM-…" messages, which mention no amount.
+
+TASK 9 — Order summary: names cut off, quantity missing
+  Cause: the name, size and "×2" were squeezed onto one line and anything
+  past the edge was cut — so the quantity disappeared completely on long
+  names. Now the name wraps onto a second line (two lines of height kept
+  for every item, cut only past two lines), the size sits under it, and
+  the quantity "× 2" sits under the price (screenshot 10).
+
+TASK 10 — "Need help?" on the Order placed page
+  Added a "Need help?" button (outlined, not orange — "View my order" stays
+  the one orange button). It opens WhatsApp to the shop's number with "Hi,
+  I have a question about order NM-…". It uses the same number and the
+  same message helper as the order page (I moved that helper into one
+  shared place; no second copy of the number).
+
+TASK 11 — Invoice PDF breaking badly (NM-3893)
+  I rebuilt NM-3893's invoice from its real data. The totals box fitted
+  under its 4 items with only 6.5 points (about 2 mm) to spare. Anything a
+  little taller at the time you printed (most likely one product name
+  wrapping onto one more line) did not fit, and the old rule then moved the
+  4th item to page 2 with the totals — leaving the big gap.
+  New rules:
+    - The roomy layout is used only when the whole invoice fits on one page
+      that way; otherwise the tighter layout (smaller rows, small community
+      box) is used, which keeps short orders on one page.
+    - Long invoices fill each page to the bottom.
+    - The totals and footer always share their page with at least one item.
+    - An item row is never split across pages.
+  Tested (each checks: right page count, every item exactly once, pages
+  before the last filled to the bottom, totals never alone):
+    1 item   → 1 page        ✓
+    3 items  → 1 page        ✓
+    4 items  → 1 page        ✓ (also NM-3893's exact items and address,
+                                with one name a line longer: the OLD rule
+                                gave 2 pages, the new one 1 page)
+    8 items  → 1 page        ✓
+    25 items → 2 pages, page 1 full, totals with items on page 2   ✓
+
+TASK 12 — Settle a payout line by hand
+  Steadfast payouts → open a payout. Every line that does not match has a
+  "Settle" button. Pick a reason (Courier charge only / Returned parcel /
+  Paid to me directly / Not a shop sale / Order deleted / Other + note),
+  add a note if you like, tap "Settle line". The line turns green and shows
+  the reason, your note, who settled it and when. "Undo" puts it back
+  exactly as it was. NM-3315 and NM-1721 (settled by Batch 46) show as
+  settled "by Batch 46" and can be undone too.
+  It uses the same mechanism and column as Batch 46 (line_kind), so the
+  money is booked the same way:
+    - Courier charge only / Returned / Paid to me directly / Order deleted
+      → Steadfast's charge counts as a delivery cost, no sale.
+    - Not a shop sale / Other → kept outside sales and profit.
+    - A line still linked to an order stays booked through that order.
+  No amount on any line changes, so every payout still adds up to what
+  Steadfast paid (tested). The database refuses a reason that would put
+  the books wrong — e.g. "Returned parcel" on a line where Steadfast
+  collected money (it tells you to pick "Not a shop sale" or "Other").
+  A settled line stays settled when Steadfast is read again.
+  Only the Super Admin can settle or undo; the database checks this itself,
+  so it cannot be done by hiding-and-guessing (tested: a customer and an
+  anonymous visitor are both refused; nobody can write to the table
+  directly). A month you have locked cannot be changed this way either.
+
+TESTS
+  New: e2e/batch-47.spec.ts (screens at phone width + one database test),
+  e2e/sql/batch-47.sql (the database rules, inside one transaction that is
+  always undone — nothing on the live shop changed), src/lib/batch47.test.ts.
+  Screenshots: reports/batch-47-screens/.
+
+FULL TEST RUN (npm run verify, once, 32.7 min)
+  Build: passed, zero errors.
+  Unit tests: 563 of 563 passed.
+  Browser tests: 278 passed, 175 skipped, 37 failed.
+  All 12 Batch 47 browser tests passed, including the database test
+  (40+ checks, all passed, all undone afterwards).
+
+  The 37 failures:
+  - 35 are in the same old files as the ~34 known live-shop-state failures
+    from Batch 46's run (batches 23, 26, 27, 28, 29, 30, 32, 33, 35, 40,
+    41, 42). Same reasons: old shop tests look for live products with
+    stock that now only lots hold (Inventory mode is On), Batch 35 expects
+    "show rider's phone" Off, Batch 41 expects unconfirmed opening
+    balances, Batch 42 expects the "Inventory mode is Off" note, Batch 40
+    finds one product photo missing in Storage. None of them are about
+    anything this batch changed.
+  - 2 were NOT in Batch 46's list, so I checked both:
+    1. Batch 25 "no emoji anywhere in the rendered admin" — a timing flake
+       (the admin header did not appear in time). Re-run alone 3 times:
+       passed 3 of 3.
+    2. Batch 46 "payout screen at 390 px" — failed again when re-run. Cause:
+       the shop's offline helper (service worker) stores Supabase data, and
+       once it takes over the page it answers the test's second page itself,
+       so the test's made-up payout numbers never arrive and real numbers
+       show. Proof it is not my code: the same test with the offline helper
+       switched off passed. I added one line to that test file to switch
+       the helper off (as the newer test files already do); Batch 46's file
+       then passed 2 of 2.
+  So: no new failure is caused by this batch's work.
+  I did not re-run the whole suite (testing rule).
+
+============================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+============================================================
+
+Supabase → SQL Editor → New query → paste EVERYTHING between the two lines
+below → Run. It is one transaction: either all of it applies, or nothing.
+Safe to run twice. It changes no amount of money, stock, lot or payout.
+It also links the one older admin order that was linked to a customer's
+account only on the admin side, so it shows in her My Orders.
+
+I tested it on the live database inside a transaction that was undone
+afterwards (it applied cleanly; nothing stayed).
+
+(Same text as the file supabase/migration-048-batch47.sql.)
+
+----------------------------- copy from here -----------------------------
+-- =====================================================================
+-- Batch 47 — admin and customer bug fixes + settle a payout line by hand
+--
+-- Paste the whole file into the Supabase SQL Editor and press Run.
+-- It is safe to run more than once. Nothing here changes any money,
+-- stock, lot or payout amount by itself.
+--
+--   1. admin_set_order_source   — change an order's Source (Shop/in person
+--                                  and the others) from Edit order.
+--   2. admin_link_order_customer — an order the admin makes for a customer
+--                                  with an account shows in her My Orders
+--                                  (and the 1 older such order is fixed).
+--   3. admin_move_order_customer — move an order to another customer
+--                                  (Super Admin only).
+--   4. admin_settle_payout_line / admin_unsettle_payout_line — settle a
+--                                  Steadfast payout line by hand, and undo
+--                                  it (Super Admin only).
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------
+-- 1. Change an order's Source (Task 4)
+--
+-- Same permission as editing an order. Only the source changes; the
+-- delivery charge is saved separately by admin_edit_order (the form puts
+-- 0 there when Shop/in person is picked, and he may type another amount).
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.admin_set_order_source(p_order_id uuid, p_source text)
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_order orders%ROWTYPE;
+BEGIN
+  IF NOT staff_can('edit_orders') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_source IS NULL OR p_source NOT IN ('web', 'facebook', 'whatsapp', 'phone', 'shop', 'family', 'other') THEN
+    RAISE EXCEPTION 'Invalid order source.';
+  END IF;
+  SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found.';
+  END IF;
+  IF v_order.source = p_source THEN
+    RETURN;
+  END IF;
+  UPDATE orders SET source = p_source, updated_at = now() WHERE id = p_order_id;
+  PERFORM write_activity(
+    'order.source', 'order', v_order.id::text, v_order.order_number,
+    format('Source %s → %s', v_order.source, p_source),
+    jsonb_build_object('source', jsonb_build_object('from', v_order.source, 'to', p_source))
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.admin_set_order_source(uuid, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.admin_set_order_source(uuid, text) TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- 2. An admin order for a customer with an account shows in her My Orders
+--    (Task 6a)
+--
+-- My Orders lists orders.customer_id (the login). Until now picking a
+-- customer in New order set only admin_customer_id (the admin's own link),
+-- so the order never reached her My Orders. Now both are set — never over
+-- an order that already belongs to another login (that is what "Move
+-- order to another customer" is for).
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.admin_link_order_customer(p_order_id uuid, p_profile_id uuid)
+  RETURNS boolean
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT (staff_can('create_orders') OR staff_can('edit_orders')) THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_profile_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profiles WHERE id = p_profile_id AND role = 'customer') THEN
+    RAISE EXCEPTION 'Customer not found.';
+  END IF;
+  PERFORM set_config('app.activity_quiet', 'on', true);
+  UPDATE orders
+     SET admin_customer_id = p_profile_id,
+         customer_id = CASE WHEN customer_id IS NULL THEN p_profile_id ELSE customer_id END
+   WHERE id = p_order_id;
+  PERFORM set_config('app.activity_quiet', 'off', true);
+  RETURN FOUND;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.admin_link_order_customer(uuid, uuid) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.admin_link_order_customer(uuid, uuid) TO authenticated;
+
+-- The older admin orders linked to a customer account in the admin only:
+-- they now show in that customer's My Orders too. Only the owner columns
+-- change — no money, stock or status — so no lock, alert or log fires.
+DO $$
+BEGIN
+  PERFORM set_config('app.activity_quiet', 'on', true);
+  UPDATE orders o
+     SET customer_id = o.admin_customer_id
+   WHERE o.customer_id IS NULL
+     AND o.admin_customer_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = o.admin_customer_id AND p.role = 'customer');
+  PERFORM set_config('app.activity_quiet', 'off', true);
+END;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 3. Move an order to another customer (Task 6b)
+--
+-- For an order that sits in the wrong account (placed while logged in as
+-- someone else). Super Admin only. Everything the order is linked to a
+-- person by moves: the login (customer_id, My Orders), the admin's
+-- customer link (admin_customer_id, the Customers list) and the order's
+-- due reminders (customer_key). Nothing else is touched — not the money,
+-- payments, stock, lots, Steadfast or payout rows, and not the delivery
+-- name / phone / address printed on it (that is where it was sent). Safe
+-- on a delivered and paid order, and in a locked month (only the owner
+-- columns change).
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.admin_move_order_customer(p_order_id uuid, p_profile_id uuid)
+  RETURNS jsonb
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_order   orders%ROWTYPE;
+  v_to      profiles%ROWTYPE;
+  v_from    text;
+  v_label   text;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  SELECT * INTO v_to FROM profiles WHERE id = p_profile_id AND role = 'customer';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Customer not found.';
+  END IF;
+  SELECT * INTO v_order FROM orders WHERE id = p_order_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found.';
+  END IF;
+  IF v_order.customer_id IS NOT DISTINCT FROM p_profile_id
+     AND v_order.admin_customer_id IS NOT DISTINCT FROM p_profile_id THEN
+    RETURN jsonb_build_object('order_number', v_order.order_number, 'moved', false);
+  END IF;
+
+  SELECT COALESCE(NULLIF(trim(p.full_name), ''), NULLIF(trim(u.email), ''), p.id::text) INTO v_from
+    FROM profiles p LEFT JOIN auth.users u ON u.id = p.id
+   WHERE p.id = COALESCE(v_order.customer_id, v_order.admin_customer_id);
+  v_label := COALESCE(NULLIF(trim(v_to.full_name), ''), NULLIF(trim((SELECT u.email FROM auth.users u WHERE u.id = v_to.id)), ''), v_to.id::text);
+
+  PERFORM set_config('app.activity_quiet', 'on', true);
+  UPDATE orders SET customer_id = p_profile_id, admin_customer_id = p_profile_id WHERE id = p_order_id;
+  UPDATE customer_due_reminders SET customer_key = 'p:' || p_profile_id WHERE order_id = p_order_id;
+  PERFORM set_config('app.activity_quiet', 'off', true);
+
+  PERFORM write_activity(
+    'order.customer', 'order', v_order.id::text, v_order.order_number,
+    format('Moved order %s from %s to %s', v_order.order_number, COALESCE(v_from, 'no account'), v_label),
+    jsonb_build_object(
+      'customer_id', jsonb_build_object('from', v_order.customer_id, 'to', p_profile_id),
+      'admin_customer_id', jsonb_build_object('from', v_order.admin_customer_id, 'to', p_profile_id)
+    )
+  );
+  RETURN jsonb_build_object('order_number', v_order.order_number, 'moved', true, 'to', v_label);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.admin_move_order_customer(uuid, uuid) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.admin_move_order_customer(uuid, uuid) TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- 4. Settle a payout line by hand (Task 12)
+--
+-- The same mechanism Batch 46 used for NM-3315 and NM-1721: the line's
+-- kind (line_kind) says how its money is booked, match_status becomes
+-- 'matched' and the note says why. Now Naeem does it from the payout
+-- screen, with a reason, his note, and who / when; and he can undo it.
+--
+--   Reason                 Line without an order          Line with an order
+--   Courier charge only    returned (charge = cost)       stays order
+--   Returned parcel        returned (charge = cost)       stays order
+--   Paid to me directly    returned (charge = cost)       stays order
+--   Order deleted          returned (charge = cost)       not allowed
+--   Not a shop sale        courier_only (outside sales)   not allowed
+--   Other (with a note)    courier_only (outside sales)   stays order
+--
+-- "returned" books only Steadfast's charge, so it is allowed only when
+-- Steadfast collected nothing for the parcel. No amount on the line ever
+-- changes, so every payout still adds up to what Steadfast paid. A line
+-- still linked to its order keeps being booked through that order.
+-- ---------------------------------------------------------------------
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settle_reason text;
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settle_note text;
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settled_by uuid;
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settled_by_username text;
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settled_at timestamptz;
+ALTER TABLE steadfast_payout_items ADD COLUMN IF NOT EXISTS settle_undo jsonb;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'steadfast_payout_items_settle_reason_check') THEN
+    ALTER TABLE steadfast_payout_items ADD CONSTRAINT steadfast_payout_items_settle_reason_check
+      CHECK (settle_reason IS NULL OR settle_reason IN
+        ('courier_charge', 'returned', 'paid_direct', 'not_shop_sale', 'order_deleted', 'other'));
+  END IF;
+END $$;
+
+-- The two lines Batch 46 settled get their reason (who: Batch 46).
+UPDATE steadfast_payout_items SET settle_reason = 'not_shop_sale', settled_by_username = 'Batch 46'
+ WHERE upper(trim(invoice)) = 'NM-3315' AND line_kind = 'courier_only' AND settle_reason IS NULL;
+UPDATE steadfast_payout_items SET settle_reason = 'order_deleted', settled_by_username = 'Batch 46'
+ WHERE upper(trim(invoice)) = 'NM-1721' AND line_kind = 'returned' AND settle_reason IS NULL;
+
+-- The Batch 46 guard, plus two things: a hand-settled line that is still
+-- linked to its order keeps its settlement when Steadfast is read again,
+-- and an undo never changes an order's payment.
+CREATE OR REPLACE FUNCTION public.steadfast_payout_item_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_pay   order_payments%ROWTYPE;
+  v_order orders%ROWTYPE;
+  v_text  text;
+BEGIN
+  -- A settled line (courier only / returned) keeps its settlement when
+  -- Steadfast is read again; only a deliberate change of kind changes it.
+  IF TG_OP = 'UPDATE' AND OLD.line_kind <> 'order' AND NEW.line_kind = OLD.line_kind THEN
+    NEW.order_id := OLD.order_id;
+    NEW.match_status := OLD.match_status;
+    NEW.match_reason := OLD.match_reason;
+    NEW.note := OLD.note;
+    RETURN NEW;
+  END IF;
+
+  -- Batch 47: a line settled by hand that is still linked to its order
+  -- (kind 'order') keeps its settlement too, the same way.
+  IF TG_OP = 'UPDATE' AND OLD.settled_at IS NOT NULL AND NEW.settled_at IS NOT DISTINCT FROM OLD.settled_at
+     AND NEW.line_kind = OLD.line_kind THEN
+    NEW.order_id := OLD.order_id;
+    NEW.match_status := OLD.match_status;
+    NEW.match_reason := OLD.match_reason;
+    NEW.note := OLD.note;
+    RETURN NEW;
+  END IF;
+
+  -- Batch 47: undoing a settle puts the line back exactly as it was; it
+  -- never changes an order's payment on the way.
+  IF COALESCE(current_setting('payout.unsettle', true), '') = 'on' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Steadfast collected a different COD than the order's "COD via
+  -- Steadfast" payment says: the payment becomes what was collected.
+  IF NEW.line_kind = 'order' AND NEW.order_id IS NOT NULL AND NEW.match_reason = 'cod_differs'
+     AND NEW.cod_collected > 0 THEN
+    SELECT * INTO v_pay FROM order_payments
+    WHERE order_id = NEW.order_id AND source = 'steadfast_cod' AND kind = 'payment';
+    IF FOUND THEN
+      v_text := format('Steadfast collected %s (booked %s); the order''s "COD via Steadfast" payment is %s',
+                       taka_text(NEW.cod_collected), taka_text(COALESCE(NEW.expected_cod, v_pay.amount)),
+                       taka_text(NEW.cod_collected));
+      IF v_pay.amount = NEW.cod_collected THEN
+        NEW.match_status := 'matched';
+        NEW.match_reason := NULL;
+        NEW.note := v_text;
+      ELSE
+        BEGIN
+          UPDATE order_payments
+          SET amount = NEW.cod_collected, updated_at = now(), updated_by_username = 'steadfast'
+          WHERE id = v_pay.id;
+          SELECT * INTO v_order FROM orders WHERE id = NEW.order_id;
+          PERFORM order_history_line(NEW.order_id, v_order.status,
+            format('COD via Steadfast changed from %s to %s: the Steadfast payout shows %s collected',
+                   taka_text(v_pay.amount), taka_text(NEW.cod_collected), taka_text(NEW.cod_collected)));
+          PERFORM write_activity('order.payment_changed', 'order', NEW.order_id::text, v_order.order_number,
+            format('%s: COD via Steadfast changed from %s to %s (Steadfast payout)', v_order.order_number,
+                   taka_text(v_pay.amount), taka_text(NEW.cod_collected)),
+            jsonb_build_object('payment_id', v_pay.id, 'amount',
+                               jsonb_build_object('from', v_pay.amount, 'to', NEW.cod_collected)));
+          PERFORM order_payments_sync(NEW.order_id);
+          NEW.match_status := 'matched';
+          NEW.match_reason := NULL;
+          NEW.note := v_text;
+        EXCEPTION WHEN OTHERS THEN
+          -- e.g. the month is locked: the line stays "to check" with why.
+          NEW.note := left(COALESCE(NEW.note, '') || ' (payment not changed: ' || SQLERRM || ')', 500);
+        END;
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.payout_settle_label(p_reason text)
+  RETURNS text
+  LANGUAGE sql
+  IMMUTABLE
+AS $function$
+  SELECT CASE p_reason
+    WHEN 'courier_charge' THEN 'Courier charge only (nothing collected)'
+    WHEN 'returned' THEN 'Returned parcel (nothing collected)'
+    WHEN 'paid_direct' THEN 'Paid to me directly'
+    WHEN 'not_shop_sale' THEN 'Not a shop sale'
+    WHEN 'order_deleted' THEN 'Order deleted'
+    WHEN 'other' THEN 'Other'
+  END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.admin_settle_payout_line(p_item_id uuid, p_reason text, p_note text DEFAULT NULL)
+  RETURNS jsonb
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item   steadfast_payout_items%ROWTYPE;
+  v_paid   timestamptz;
+  v_note   text := NULLIF(left(trim(COALESCE(p_note, '')), 200), '');
+  v_kind   text;
+  v_order  text;
+  v_text   text;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF payout_settle_label(p_reason) IS NULL THEN
+    RAISE EXCEPTION 'Pick a reason.';
+  END IF;
+  IF p_reason = 'other' AND v_note IS NULL THEN
+    RAISE EXCEPTION 'Write a short note for "Other".';
+  END IF;
+  SELECT * INTO v_item FROM steadfast_payout_items WHERE id = p_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Payout line not found.';
+  END IF;
+  IF v_item.line_kind <> 'order' OR v_item.settled_at IS NOT NULL THEN
+    RAISE EXCEPTION 'This line is already settled. Undo it first to pick another reason.';
+  END IF;
+  IF v_item.match_status <> 'to_check' THEN
+    RAISE EXCEPTION 'This line is already matched to its order.';
+  END IF;
+  SELECT paid_at INTO v_paid FROM steadfast_payouts WHERE id = v_item.payout_id;
+  IF v_paid IS NOT NULL AND money_any_month_locked() THEN
+    PERFORM money_lock_refuse(money_dhaka_date(v_paid), 'a Steadfast payout line');
+  END IF;
+
+  IF v_item.order_id IS NOT NULL THEN
+    SELECT order_number INTO v_order FROM orders WHERE id = v_item.order_id;
+    IF p_reason IN ('not_shop_sale', 'order_deleted') THEN
+      RAISE EXCEPTION 'This line belongs to order %, which is still there. Pick another reason.', COALESCE(v_order, '(an order)');
+    END IF;
+    v_kind := 'order';
+    v_text := payout_settle_label(p_reason);
+  ELSIF p_reason IN ('not_shop_sale', 'other') THEN
+    v_kind := 'courier_only';
+    v_text := payout_settle_label(p_reason) || ': kept outside sales';
+  ELSE
+    IF v_item.cod_collected <> 0 THEN
+      RAISE EXCEPTION 'Steadfast collected % for this parcel, so it is not "%". Pick "Not a shop sale" or "Other".',
+        taka_text(v_item.cod_collected), payout_settle_label(p_reason);
+    END IF;
+    v_kind := 'returned';
+    v_text := payout_settle_label(p_reason) || ': the charge counts as a delivery cost';
+  END IF;
+  IF v_note IS NOT NULL THEN
+    v_text := v_text || ' — ' || v_note;
+  END IF;
+
+  UPDATE steadfast_payout_items
+     SET settle_undo = jsonb_build_object('line_kind', line_kind, 'match_status', match_status,
+                                          'match_reason', match_reason, 'note', note),
+         line_kind = v_kind,
+         match_status = 'matched',
+         match_reason = NULL,
+         note = left(v_text, 500),
+         settle_reason = p_reason,
+         settle_note = v_note,
+         settled_by = auth.uid(),
+         settled_by_username = current_actor_username(),
+         settled_at = now()
+   WHERE id = p_item_id;
+
+  PERFORM write_activity(
+    'payout.settle', 'payout', v_item.payout_id::text, COALESCE(v_item.invoice, v_item.consignment_id),
+    format('Settled payout line %s: %s', COALESCE(v_item.invoice, v_item.consignment_id, v_item.item_key), v_text),
+    jsonb_build_object('item_id', v_item.id, 'reason', p_reason, 'note', v_note, 'line_kind', v_kind)
+  );
+  RETURN jsonb_build_object('line_kind', v_kind, 'note', v_text);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.admin_unsettle_payout_line(p_item_id uuid)
+  RETURNS void
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item  steadfast_payout_items%ROWTYPE;
+  v_paid  timestamptz;
+  v_undo  jsonb;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  SELECT * INTO v_item FROM steadfast_payout_items WHERE id = p_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Payout line not found.';
+  END IF;
+  IF v_item.line_kind = 'order' AND v_item.settled_at IS NULL THEN
+    RAISE EXCEPTION 'This line is not settled.';
+  END IF;
+  SELECT paid_at INTO v_paid FROM steadfast_payouts WHERE id = v_item.payout_id;
+  IF v_paid IS NOT NULL AND money_any_month_locked() THEN
+    PERFORM money_lock_refuse(money_dhaka_date(v_paid), 'a Steadfast payout line');
+  END IF;
+  -- Back to what it was; a line settled before Batch 47 (no saved state)
+  -- goes back to "to check: order not found".
+  v_undo := COALESCE(v_item.settle_undo, jsonb_build_object(
+    'line_kind', 'order', 'match_status', 'to_check',
+    'match_reason', CASE WHEN v_item.order_id IS NULL THEN 'order_not_found' END,
+    'note', CASE WHEN v_item.order_id IS NULL THEN 'Order not found' END));
+
+  PERFORM set_config('payout.unsettle', 'on', true);
+  UPDATE steadfast_payout_items
+     SET line_kind = COALESCE(v_undo ->> 'line_kind', 'order'),
+         match_status = COALESCE(v_undo ->> 'match_status', 'to_check'),
+         match_reason = v_undo ->> 'match_reason',
+         note = v_undo ->> 'note',
+         settle_reason = NULL,
+         settle_note = NULL,
+         settled_by = NULL,
+         settled_by_username = NULL,
+         settled_at = NULL,
+         settle_undo = NULL
+   WHERE id = p_item_id;
+  PERFORM set_config('payout.unsettle', '', true);
+
+  PERFORM write_activity(
+    'payout.unsettle', 'payout', v_item.payout_id::text, COALESCE(v_item.invoice, v_item.consignment_id),
+    format('Undid the settle of payout line %s (was: %s)', COALESCE(v_item.invoice, v_item.consignment_id, v_item.item_key), COALESCE(v_item.note, '-')),
+    jsonb_build_object('item_id', v_item.id, 'reason', v_item.settle_reason)
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.admin_settle_payout_line(uuid, text, text) FROM public, anon;
+REVOKE ALL ON FUNCTION public.admin_unsettle_payout_line(uuid) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.admin_settle_payout_line(uuid, text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_unsettle_payout_line(uuid) TO authenticated;
+
+COMMIT;
+------------------------------ copy to here ------------------------------
+
+============================================================
+3. WHAT I COULD NOT FINISH
+============================================================
+
+  Nothing left undone. Two notes:
+  - Task 7 relies on Supabase allowing Google to return to any page of the
+    site. Checkout already returns to /checkout/delivery, so this is very
+    likely already allowed. If a login ever lands on the home page instead
+    of the page before, check Supabase → Authentication → URL
+    Configuration → Redirect URLs contains your site with /** at the end.
+  - Task 11: I could not see the exact PDF you printed for NM-3893, so I
+    found the cause by rebuilding it from the live data (see Task 11).
+
+============================================================
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+============================================================
+
+  1. New order's payment box still says "Courier collects (COD)" on a
+     Shop/in person order. The money is right; only the wording assumes a
+     courier.
+  2. "Mark in transit (other courier)" is the only next step for a
+     confirmed Shop/in person order; there is no direct "Handed over" step.
+  3. The old "admin customer link only" choice from Batch 30 was a
+     privacy safeguard: if the wrong account is picked in New order, that
+     person now sees the order (name, phone, address) in their My Orders.
+     "Move order to another customer" fixes such a mistake, but care is
+     needed when picking.
+  4. 143 payout lines are "order not found" (78 with COD money). Most are
+     parcels from before the site or booked on Steadfast's own website.
+     You can now settle them one by one; a "settle all of these" would
+     save time (see suggestions).
+
+============================================================
+5. DESIGN DECISIONS
+============================================================
+
+  - Task 9: quantity "× 2" under the price (not "2 ×" before the name), so
+    the name keeps its full width and the price column already existed.
+  - Task 10: "Need help?" is an outlined button with a WhatsApp mark, under
+    the two main buttons, so the page keeps one orange action.
+  - Task 4: "Shop/in person" also selects "No delivery (hand delivered)",
+    which already existed, rather than a new kind of delivery. The fee box
+    now shows for hand delivered too (৳0 by default).
+  - Task 6b: only customers WITH an account can be picked (the request was
+    to move the order into that customer's account). Super Admin only.
+  - Task 12: "Other" is kept outside sales (like "Not a shop sale") because
+    that is always correct for the books whatever the amounts; the note
+    says what it was. Order-linked lines can't be "Not a shop sale" or
+    "Order deleted" (the order is still there).
+  - Task 7: Google login replaces the login page in the browser history
+    instead of adding to it.
+  - Settle / Undo are small neutral buttons; settled lines use the green
+    the payout screen already uses for "Matched".
+
+============================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+============================================================
+
+  1. Bulk settle for old payout lines (medium). 143 unmatched lines are a
+     long list to settle one at a time; a "settle all lines before the site
+     opened as Not a shop sale" button would clear them in one step and
+     make the payout screen trustworthy at a glance.
+  2. Confirm the right customer before attaching an order (small). Show
+     the account's email/phone next to the name in New order's customer
+     search and on the move sheet, so a wrong pick (which now shows the
+     order to that person) is less likely.
+  3. A "Handed over" step for Shop/in person orders (small). Today they go
+     through "in transit"; a direct "Handed over → Delivered" would keep the
+     order list honest and the stats cleaner.
+  4. WhatsApp order summary for the customer (medium). The "Order placed"
+     page could offer "Send my order to the shop on WhatsApp" with the items
+     and the amount to pay on delivery — reassuring for first-time buyers.
+  5. Invoice preview in the admin (small). A thumbnail before printing would
+     catch layout surprises like NM-3893's before paper is wasted.
+
+============================================================
+Branch: fix/batch-47-bugs (pushed to GitHub; not merged into main)
+============================================================

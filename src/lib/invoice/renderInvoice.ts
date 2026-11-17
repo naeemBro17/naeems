@@ -34,6 +34,18 @@ export interface InvoicePdfResult {
   /** Characters no embedded font could draw (printed as "?"). Empty = every
    *  character, Bengali included, has a real glyph. */
   missingCharacters: string[];
+  /** Batch 47: how each invoice was laid out, page by page (for checking
+   *  the page breaks). */
+  layout: InvoicePageLayout[][];
+}
+
+/** One page of one invoice: item rows on it, where the last row ends (pt
+ *  from the top), and whether the totals and footer are on it. */
+export interface InvoicePageLayout {
+  rows: number;
+  rowsBottom: number;
+  tail: boolean;
+  compact: boolean;
 }
 
 /* ---------- Page geometry (points, measured from the top) ---------- */
@@ -346,10 +358,11 @@ function drawLabel(page: PDFPage, w: Writer, inv: InvoiceData, shop: InvoiceShop
 
   // Left column: consignment.
   const leftW = BOX_X - M - 16;
-  if (inv.audience === 'customer') {
+  if (inv.audience === 'customer' || inv.byHand) {
     w.draw(page, 'ORDER NO.', M, 108, SMALL_LABEL);
     const fitted = w.fit(inv.orderNumber, leftW, { size: 28, weight: 'extrabold' }, 14);
     w.draw(page, fitted.text, M, 136, { size: fitted.size, weight: 'extrabold' });
+    if (inv.audience === 'admin') w.draw(page, 'Handed over in person (no courier)', M, 152, { size: 8.5, color: GREY });
   } else if (inv.consignmentId) {
     w.draw(page, 'CONSIGNMENT ID', M, 108, SMALL_LABEL);
     const fitted = w.fit(inv.consignmentId, leftW, { size: 28, weight: 'extrabold' }, 14);
@@ -636,8 +649,11 @@ function planPages(w: Writer, inv: InvoiceData, firstTableTop: number, shop: Inv
   }
   const tailH = tailHeight(w, inv, shop, compact) + 4 + (shop.community.show && !compact ? COMMUNITY_GAP + COMMUNITY_H : 0);
   if (y + tailH > tailLimit) {
+    // Batch 47: the totals never go to a page alone — the last row goes
+    // with them (a page left with no row is dropped, its row moving on).
     const last = pages[pages.length - 1];
-    const moved = last.rows.length >= 2 ? [last.rows.pop() as RowLayout] : [];
+    const moved = last.rows.length > 0 ? [last.rows.pop() as RowLayout] : [];
+    if (last.rows.length === 0 && pages.length > 1) pages.pop();
     pages.push({ rows: moved, tail: true });
   } else {
     pages[pages.length - 1].tail = true;
@@ -645,16 +661,26 @@ function planPages(w: Writer, inv: InvoiceData, firstTableTop: number, shop: Inv
   return pages;
 }
 
-function drawInvoice(doc: PDFDocument, w: Writer, inv: InvoiceData, shop: InvoiceShop) {
+function drawInvoice(doc: PDFDocument, w: Writer, inv: InvoiceData, shop: InvoiceShop): InvoicePageLayout[] {
   const first = doc.addPage([W, H]);
   drawLabel(first, w, inv, shop);
   const firstTableTop = drawParties(first, w, inv, shop);
-  const compact = inv.lines.length > COMPACT_AFTER;
-  const plan = planPages(w, inv, firstTableTop, shop, compact);
+  // Batch 47 (NM-3893): the roomy layout only when the whole invoice fits
+  // on one page that way; otherwise the compact one (smaller rows, small
+  // community box), which keeps a short order on one page and fills every
+  // page of a long one down to the bottom.
+  let compact = inv.lines.length > COMPACT_AFTER;
+  let plan = planPages(w, inv, firstTableTop, shop, compact);
+  if (!compact && plan.length > 1) {
+    compact = true;
+    plan = planPages(w, inv, firstTableTop, shop, compact);
+  }
+  const layout: InvoicePageLayout[] = [];
   plan.forEach((pagePlan, i) => {
     const page = i === 0 ? first : doc.addPage([W, H]);
     if (i > 0) drawContinuationHead(page, w, inv, shop, i + 1, plan.length);
     let y = i === 0 ? firstTableTop : CONT_TABLE_TOP;
+    const startY = y;
     if (pagePlan.rows.length > 0) {
       drawTableHead(page, w, y);
       y += TABLE_HEAD_H;
@@ -672,7 +698,9 @@ function drawInvoice(doc: PDFDocument, w: Writer, inv: InvoiceData, shop: Invoic
     } else {
       w.draw(page, `Continued on page ${i + 2} of ${plan.length}`, R, 812, { size: 7.5, color: GREY, align: 'right' });
     }
+    layout.push({ rows: pagePlan.rows.length, rowsBottom: pagePlan.rows.length > 0 ? y : startY, tail: pagePlan.tail, compact });
   });
+  return layout;
 }
 
 /** One PDF with every invoice in order (each starts on a new page). */
@@ -702,7 +730,7 @@ export async function buildInvoicePdf(
     for (const weight of weights) faces[family][weight] = await face(files[family][weight], family === 'bengali');
   }
   const writer = new Writer(faces);
-  for (const inv of invoices) drawInvoice(doc, writer, inv, shop);
+  const layout = invoices.map((inv) => drawInvoice(doc, writer, inv, shop));
 
   const title = invoices.length === 1 ? `Invoice ${invoices[0].invoiceNumber}` : `Invoices (${invoices.length})`;
   doc.setTitle(title);
@@ -712,5 +740,5 @@ export async function buildInvoicePdf(
   // Print at actual size (no "fit to page" shrinking the barcode).
   doc.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
   const bytes = await doc.save();
-  return { bytes, pageCount: doc.getPageCount(), missingCharacters: Array.from(writer.missing) };
+  return { bytes, pageCount: doc.getPageCount(), missingCharacters: Array.from(writer.missing), layout };
 }

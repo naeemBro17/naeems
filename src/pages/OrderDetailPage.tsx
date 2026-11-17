@@ -6,6 +6,7 @@
 // a mismatched/foreign id resolves to null exactly like a missing one and
 // gets the same "not found" state.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PAY_ON_DELIVERY_LABEL } from '../lib/checkoutCopy';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
@@ -14,8 +15,7 @@ import { useToast } from '../hooks/useToast';
 import { useProducts } from '../contexts/ProductContext';
 import { fetchOrderDetail, cancelOrder } from '../lib/orders';
 import { formatTakaBd } from '../lib/adminNav';
-import { openExternal, whatsAppUrl } from '../lib/expertLinks';
-import { whatsAppChatUrl } from '../lib/phone';
+import { openExternal, orderHelpWhatsAppUrl } from '../lib/expertLinks';
 import { isCancellableByCustomer } from '../lib/orderStatus';
 import type { OrderWithDetails } from '../types';
 import { fetchTracking, type TrackingAnswer } from '../lib/orderSteps';
@@ -154,12 +154,9 @@ export function OrderDetailPage() {
     void load();
   };
 
-  // The shop's WhatsApp number from settings (the existing phone helper),
-  // else the expert's WhatsApp link as before.
-  const chatBase = whatsAppChatUrl(settings.shop_whatsapp_number) ?? whatsAppUrl(settings.expert_whatsapp_url);
-  const chatHref = order && chatBase
-    ? `${chatBase}${chatBase.includes('?') ? '&' : '?'}text=${encodeURIComponent(`Hi, I have a question about order ${order.order_number}`)}`
-    : null;
+  // The shop's WhatsApp number from settings, else the expert's WhatsApp
+  // link, with the order number written (shared with "Order placed").
+  const chatHref = order ? orderHelpWhatsAppUrl(settings, order.order_number) : null;
 
   const methodRows = paidByMethod(stored?.payments ?? []);
   const isDelivered = view?.track.status === 'delivered';
@@ -173,7 +170,7 @@ export function OrderDetailPage() {
         ? { label: 'Total paid', amount: order.total }
         : order.collect_mode === 'pay_later' || isDelivered
           ? { label: 'Balance due', amount: due }
-          : { label: 'To pay on delivery', amount: due };
+          : { label: PAY_ON_DELIVERY_LABEL, amount: due };
 
   return (
     <div className="viewer-shell detail-shell">

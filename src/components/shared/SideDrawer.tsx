@@ -30,6 +30,12 @@ const CLOSE_ANIMATION_MS = 280;
 export function SideDrawer({ isOpen, onClose, title, children }: SideDrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Kept in a ref so a parent re-render (a new onClose arrow every render —
+  // e.g. the Safety Lock countdown re-renders the order page every second)
+  // does not re-run the focus effect below, which would pull focus off the
+  // field being typed in and close the phone keyboard (Batch 47).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -63,7 +69,7 @@ export function SideDrawer({ isOpen, onClose, title, children }: SideDrawerProps
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -90,7 +96,7 @@ export function SideDrawer({ isOpen, onClose, title, children }: SideDrawerProps
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isRendered) return null;
 

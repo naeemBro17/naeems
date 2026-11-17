@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
 import { SiteFooter } from '../components/shared/SiteFooter';
 import { Modal } from '../components/shared/Modal';
@@ -11,6 +11,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useToast } from '../hooks/useToast';
 import { initialsOf } from '../lib/format';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
+import { loginReturnPath } from '../lib/loginReturn';
 
 /** A soft skincare-adjacent brand mark — a droplet — built entirely from
  *  shapes, no external image or copyrighted artwork. */
@@ -48,13 +49,17 @@ function AccountSkeleton() {
 
 function LoggedOutWelcome() {
   const { signInWithGoogle } = useAuth();
+  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   const handleSignIn = async () => {
     setIsStarting(true);
     setError(null);
-    const { error: signInError } = await signInWithGoogle();
+    // Batch 47: back to the page they were on (the shop home if none), and
+    // this login page leaves the history so Back never returns to it.
+    const back = `${window.location.origin}${loginReturnPath(location.state)}`;
+    const { error: signInError } = await signInWithGoogle(back, { replace: true });
     if (signInError) {
       setError(signInError);
       setIsStarting(false);

@@ -29,6 +29,12 @@ export function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Kept in a ref so a parent re-render (a new onClose arrow every render —
+  // e.g. the Safety Lock countdown re-renders the order page every second)
+  // does not re-run the focus effect below, which would pull focus off the
+  // field being typed in and close the phone keyboard (Batch 47).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   // Stays mounted for one extra animation frame on close so it fades/scales
   // back out instead of vanishing — the same pattern as BottomSheet.
   const [isRendered, setIsRendered] = useState(isOpen);
@@ -53,19 +59,25 @@ export function Modal({
   }, [isOpen, isRendered]);
 
   // Focus trap + Escape to close + restore focus on close + scroll lock.
+  // Runs once the panel is actually drawn (isRendered): on the opening
+  // render the panel does not exist yet, so nothing used to get focus until
+  // some later re-render happened to re-run this (Batch 47).
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isRendered) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
 
     const panel = panelRef.current;
-    const firstFocusable = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    // A field marked data-autofocus (e.g. the delete dialog's confirm box)
+    // gets focus first; otherwise the first focusable control does.
+    const firstFocusable =
+      panel?.querySelector<HTMLElement>('[data-autofocus]') ?? panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     (firstFocusable ?? panel)?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panel) return;
@@ -92,7 +104,7 @@ export function Modal({
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, isRendered]);
 
   if (!isRendered) return null;
 

@@ -264,3 +264,79 @@
   background: var(--adm-tag-bg);
   color: var(--adm-tag-text);
 }
+
+/* Batch 47: a line settled by hand (or by Batch 46) — green, with why,
+   who and when; Settle / Undo are small neutral text buttons. */
+.adm-payouts__table tr.is-settled td:first-child {
+  box-shadow: inset 3px 0 0 var(--adm-green-text);
+  padding-left: 8px;
+}
+
+.adm-payouts__reason--settled {
+  color: var(--adm-green-text);
+}
+
+.adm-payouts__settled-by {
+  display: block;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.adm-payouts__action {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  background: var(--adm-card);
+  color: var(--adm-text);
+  font: inherit;
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.adm-payouts__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adm-settle__list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.adm-settle__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-md, 12px);
+  background: var(--adm-card);
+  color: var(--adm-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.adm-settle__row--on {
+  border-color: var(--adm-text);
+  box-shadow: inset 0 0 0 1px var(--adm-text);
+}
+
+.adm-settle__name {
+  font-weight: 600;
+}
+
+.adm-settle__hint {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}

@@ -8,6 +8,7 @@
 // it was so the customer can fix whatever was wrong (out of stock, a promo
 // that just expired) and try again.
 import { useState, type FormEvent } from 'react';
+import { PAY_ON_DELIVERY_LABEL } from '../../lib/checkoutCopy';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -200,17 +201,25 @@ export function OrderSummaryPage() {
                     <span className="checkout-summary-card__thumb-empty" aria-hidden="true" />
                   )}
                 </span>
-                <span className="checkout-summary-card__item-name">
-                  {item.product.name}
+                {/* Batch 47: the name wraps to two lines (never cut on one),
+                    and the quantity sits under the price. */}
+                <span className="checkout-summary-card__item-text">
+                  <span className="checkout-summary-card__item-name" data-testid="summary-item-name">
+                    {item.product.name}
+                  </span>
                   {item.variantLabel && (
                     <span className="checkout-summary-card__item-variant">
                       {item.variantLabel}
                     </span>
                   )}
-                  <span className="checkout-summary-card__item-qty">&times;{item.quantity}</span>
                 </span>
-                <span className="checkout-summary-card__item-price">
-                  {formatTaka(item.unitPrice * item.quantity)}
+                <span className="checkout-summary-card__item-side">
+                  <span className="checkout-summary-card__item-price">
+                    {formatTaka(item.unitPrice * item.quantity)}
+                  </span>
+                  <span className="checkout-summary-card__item-qty" data-testid="summary-item-qty">
+                    &times; {item.quantity}
+                  </span>
                 </span>
               </li>
             ))}
@@ -260,8 +269,9 @@ export function OrderSummaryPage() {
               <span>&minus;{formatTaka(discount)}</span>
             </div>
           )}
-          <div className="checkout-summary-card__row checkout-summary-card__row--total">
-            <span>Total payment</span>
+          <div className="checkout-summary-card__row checkout-summary-card__row--total" data-testid="summary-total">
+            {/* Batch 47: cash on delivery is paid to the rider, not now. */}
+            <span>{paymentMethod === 'cod' ? PAY_ON_DELIVERY_LABEL : 'Total payment'}</span>
             <span>{formatTaka(total)}</span>
           </div>
         </div>
