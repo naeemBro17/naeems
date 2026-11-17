@@ -195,3 +195,46 @@ test('Task 4: Shop/in person sets delivery to hand delivered at ৳0 (still edit
   await editSources.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await page.screenshot({ path: `${SHOTS}/05-edit-order-shop-in-person.png` });
 });
+
+/* ---------------------------- Task 5: sizes show once in New / Edit order */
+
+test('Task 5: a product with sizes is one search row in New order and Edit order; the picker adds the chosen size (nothing saved)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const withOptions = await select<{ product_id: string }[]>(null, 'product_variants_view?select=product_id&limit=50');
+  const ids = [...new Set((withOptions.data ?? []).map((v) => v.product_id))];
+  const found = await select<{ id: string; name: string }[]>(null, `products_view?select=id,name&is_active=eq.true&id=in.(${ids.join(',')})&limit=1`);
+  const product = found.data?.[0];
+  test.skip(!product, 'No active product with sizes in the shop.');
+  await page.route(/\/rest\/v1\/rpc\/(admin_create_order|admin_create_order_v2|admin_edit_order|admin_set_order_source)/, (route) => route.abort());
+
+  // New order: one row; the picker's first size is the product's own.
+  await adminAt(page, '/admin/orders/new');
+  const search = page.getByPlaceholder('Search product name...');
+  await expect(search).toBeVisible({ timeout: 20_000 });
+  await search.fill(product!.name);
+  await expect(page.getByTestId('manual-product-result').filter({ hasText: product!.name })).toHaveCount(1);
+
+  // Edit order: the same — before Batch 47 every size was its own row and
+  // the product's own size could not be added at all.
+  const number = await latestOrderNumber();
+  test.skip(!number, 'No order to open in Edit order.');
+  await page.goto(`/admin/orders/${number}/edit`);
+  const add = page.getByLabel('Add a product');
+  await expect(add).toBeVisible({ timeout: 20_000 });
+  const before = await page.locator('.edit-order .checkout-cart__row, .edit-order li').count();
+  await add.fill(product!.name);
+  const row = page.getByTestId('manual-product-result').filter({ hasText: product!.name });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText('sizes');
+  await row.click();
+  const picker = page.getByTestId('manual-option-picker');
+  await expect(picker).toBeVisible();
+  const options = picker.getByTestId('manual-option');
+  expect(await options.count()).toBeGreaterThanOrEqual(2);
+  await options.first().click();
+  await page.screenshot({ path: `${SHOTS}/06-edit-order-size-picker.png` });
+  await picker.getByTestId('manual-pick-add').click();
+  await expect(picker).toBeHidden();
+  expect(await page.locator('.edit-order .checkout-cart__row, .edit-order li').count()).toBeGreaterThan(before);
+  await expect(page.getByTestId('edit-order-sheet')).toContainText(product!.name);
+});

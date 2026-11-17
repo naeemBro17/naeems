@@ -9,8 +9,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import { AddressFormFields } from '../checkout/AddressFormFields';
 import { useToast } from '../../hooks/useToast';
-import { formatTaka, normalizeText } from '../../lib/format';
-import { useSellableOptions, type SellableOption } from '../../lib/sellable';
+import { formatTaka } from '../../lib/format';
+import { useSellableOptions } from '../../lib/sellable';
+import { productSearchGroups, searchProductGroups, type SellableOption } from '../../lib/manualOrderSearch';
+import { ProductResults } from './ManualOptionPicker';
 import {
   adminEditOrder,
   buildOrderChanges,
@@ -66,8 +68,8 @@ const emptyErrors = {};
  */
 export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAddPayment, onUnchanged, onSaved }: EditOrderFormProps) {
   const { showToast } = useToast();
-  const { options, stockFor } = useSellableOptions();
-  const { settings, refetch: refetchProducts } = useProducts();
+  const { stockFor } = useSellableOptions();
+  const { settings, products, variantsFor, refetch: refetchProducts } = useProducts();
   // Batch 39: while Inventory mode is On the database checks stock in lots
   // and asks "sell anyway?"; the shop's number is not the limit here.
   const inventoryOn = settings.inventory_mode === 'true';
@@ -131,11 +133,10 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     [draft, holdsStock, inventoryOn]
   );
   const totals = draft ? draftTotals(draft) : null;
-  const results = useMemo(() => {
-    const term = normalizeText(query.trim());
-    if (term === '') return [];
-    return options.filter((o) => normalizeText(o.label).includes(term)).slice(0, 12);
-  }, [query, options]);
+  // Batch 47: each product once; a product with sizes opens the same size
+  // picker as New order (its own size first, like the shop).
+  const sellableProducts = useMemo(() => productSearchGroups(products, variantsFor), [products, variantsFor]);
+  const results = useMemo(() => searchProductGroups(sellableProducts, query, 12), [query, sellableProducts]);
 
   const alreadyPaid = payments ? summarizePayments(order.total, payments).paid : 0;
   const plan = totals
@@ -149,12 +150,12 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     setDraft((d) => (d ? { ...d, items: d.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) } : d));
   const removeItem = (key: string) => setDraft((d) => (d ? { ...d, items: d.items.filter((i) => i.key !== key) } : d));
 
-  const addItem = (opt: SellableOption) => {
+  const addItem = (opt: SellableOption, quantity = 1) => {
     setDraft((d) => {
       if (!d) return d;
       const existing = d.items.find((i) => i.productId === opt.productId && i.variantId === opt.variantId);
       if (existing) {
-        return { ...d, items: d.items.map((i) => (i.key === existing.key ? { ...i, quantity: i.quantity + 1 } : i)) };
+        return { ...d, items: d.items.map((i) => (i.key === existing.key ? { ...i, quantity: i.quantity + quantity } : i)) };
       }
       const pack = packs.get(packKey(opt.productId, opt.variantId));
       return {
@@ -171,7 +172,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
             imageUrl: opt.imageUrl,
             listPrice: opt.listPrice,
             unitPrice: opt.listPrice,
-            quantity: 1,
+            quantity,
             originalQuantity: 0,
             originalUnitPrice: opt.listPrice,
             stockQuantity: opt.stockQuantity,
@@ -456,23 +457,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
               autoComplete="off"
             />
           </div>
-          {results.length > 0 && (
-            <ul className="picker-sheet__list edit-order__results">
-              {results.map((opt) => (
-                <li key={opt.key}>
-                  <button type="button" className="picker-sheet__row" onClick={() => addItem(opt)}>
-                    <span className="picker-sheet__row-label">
-                      {opt.label}
-                      <span className="picker-sheet__row-sub">
-                        {formatTaka(opt.listPrice)}
-                        {opt.stockQuantity !== null ? ` · stock ${opt.stockQuantity}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ProductResults results={results} onAdd={addItem} className="picker-sheet__list edit-order__results" />
 
           <h3 className="edit-order__heading">Delivery and money</h3>
           {/* Batch 47: Shop/in person is handed over by hand — picking it

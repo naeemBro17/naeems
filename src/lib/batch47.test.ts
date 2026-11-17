@@ -4,6 +4,9 @@ import { invoiceFromOrder } from './invoice/invoiceData';
 import { invoiceShop } from './invoice/invoiceShop';
 import { buildInvoicePdf } from './invoice/renderInvoice';
 import { isHandOverSource, sendsByCourier } from './manualOrders';
+import { productSearchGroups, searchProductGroups } from './manualOrderSearch';
+import { variantOptionLabel, variantOptionsFor } from './variants';
+import type { Product, ProductVariant } from '../types';
 import { mockOrder } from '../../e2e/helpers/invoiceFixtures';
 import { fontFilesFromDisk, pdfPageText } from '../../e2e/helpers/invoicePdf';
 
@@ -42,5 +45,33 @@ describe('Batch 47 Task 4: Shop/in person orders go by hand', () => {
   it('a courier order\'s invoice is unchanged (still asks to book)', () => {
     const inv = invoiceFromOrder(mockOrder({ source: 'facebook', steadfast_consignment_id: null }), []);
     expect(inv.byHand).toBe(false);
+  });
+});
+
+/* ------------------------------------------ Task 5: sizes in admin search */
+
+const cerave = { id: 'C', name: 'CeraVe Foaming Cleanser USA', is_active: true, retail_price: 1850, offer_price: 1750, stock_quantity: 4, region: 'USA', size: '237 ml', image_url: null, image_urls: [], image_urls_thumb: [] } as unknown as Product;
+const ceraveSizes = [
+  { id: 'C1', product_id: 'C', region: 'USA', size: '87 ml', retail_price: 950, offer_price: null, stock_quantity: 3, in_stock: true, image_url: null },
+  { id: 'C2', product_id: 'C', region: 'USA', size: '355 ml', retail_price: 2400, offer_price: 2300, stock_quantity: 0, in_stock: false, image_url: null },
+] as unknown as ProductVariant[];
+
+describe('Batch 47 Task 5: a product with sizes shows once in the admin search, with the shop size list', () => {
+  const groups = productSearchGroups([cerave], () => ceraveSizes);
+
+  it('one result for the mother product, whatever size is typed', () => {
+    for (const term of ['cerave foaming', '87 ml', '355', 'USA']) {
+      expect(searchProductGroups(groups, term).map((g) => g.productId)).toEqual(['C']);
+    }
+  });
+
+  it('the picker offers exactly what the customer product page offers, in the same order (own size first, so it is addable)', () => {
+    const shop = variantOptionsFor(cerave, ceraveSizes).map((o) => variantOptionLabel(o, ''));
+    expect(groups[0].options.map((o) => o.variantLabel)).toEqual(shop);
+    expect(groups[0].options.map((o) => [o.variantId, o.listPrice, o.stockQuantity])).toEqual([
+      [null, 1750, 4],
+      ['C1', 950, 3],
+      ['C2', 2300, 0],
+    ]);
   });
 });
