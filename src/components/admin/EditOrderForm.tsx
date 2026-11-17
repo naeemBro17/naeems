@@ -22,17 +22,25 @@ import {
 import { PaymentSection } from './PaymentSection';
 import { planPayment, type CollectMode } from '../../lib/paymentPlan';
 import { addOrderPayment, summarizePayments, type OrderPayment, type PaymentMethodId } from '../../lib/payments';
-import { adminSetCollectMode, isCollectModeReady } from '../../lib/orders';
+import { adminSetCollectMode, adminSetOrderSource, isCollectModeReady } from '../../lib/orders';
 import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
 import { useProducts } from '../../contexts/ProductContext';
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
-import type { StockWarning } from '../../lib/manualOrders';
+import { MANUAL_ORDER_SOURCES, ORDER_SOURCE_LABELS, isHandOverSource, type StockWarning } from '../../lib/manualOrders';
+import type { OrderSource } from '../../types';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { belowCostText, type BelowCostInput } from '../../lib/smart/belowCost';
 import { useBelowCost } from '../../lib/smart/useBelowCost';
 import '../../styles/adminSmart.css';
+
+/** The sources Edit order offers: the manual ones, plus the order's own
+ *  when it is not one of them (a web order). */
+function sourceChoices(current: OrderSource): { id: OrderSource; label: string }[] {
+  if (MANUAL_ORDER_SOURCES.some((o) => o.id === current)) return MANUAL_ORDER_SOURCES;
+  return [{ id: current, label: ORDER_SOURCE_LABELS[current] }, ...MANUAL_ORDER_SOURCES];
+}
 
 interface EditOrderFormProps {
   order: OrderWithDetails;
@@ -224,8 +232,9 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     const changes = buildOrderChanges(order, draft);
     if (allowShort) changes.allow_short = true;
     const modeChanged = collectMode !== order.collect_mode;
+    const sourceChanged = draft.source !== order.source;
     const paidNow = plan?.paidNow ?? 0;
-    if (Object.keys(changes).length === 0 && !modeChanged && paidNow <= 0) {
+    if (Object.keys(changes).length === 0 && !modeChanged && !sourceChanged && paidNow <= 0) {
       showToast('Nothing changed');
       onUnchanged();
       return;
@@ -237,6 +246,10 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
       setError(message);
       showToast(message, 'error');
     };
+    if (sourceChanged) {
+      const result = await adminSetOrderSource(order.id, draft.source);
+      if (result.error) return fail(result.error);
+    }
     if (Object.keys(changes).length > 0) {
       const result = await adminEditOrder(order.id, changes);
       if (result.stockWarnings) {
@@ -462,6 +475,24 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
           )}
 
           <h3 className="edit-order__heading">Delivery and money</h3>
+          {/* Batch 47: Shop/in person is handed over by hand — picking it
+              sets the delivery fee to 0 (he can still type another). */}
+          <div className="form-field">
+            <span className="form-label">Source</span>
+            <div className="chip-group" role="group" aria-label="Order source" data-testid="edit-order-source">
+              {sourceChoices(order.source).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`chip-select${draft.source === opt.id ? ' chip-select--on' : ''}`}
+                  aria-pressed={draft.source === opt.id}
+                  onClick={() => update({ source: opt.id, ...(isHandOverSource(opt.id) && opt.id !== draft.source ? { deliveryFee: '0' } : {}) })}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="form-row">
             <div className="form-field">
               <label className="form-label" htmlFor="edit-order-fee">

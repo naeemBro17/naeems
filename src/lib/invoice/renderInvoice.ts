@@ -346,10 +346,11 @@ function drawLabel(page: PDFPage, w: Writer, inv: InvoiceData, shop: InvoiceShop
 
   // Left column: consignment.
   const leftW = BOX_X - M - 16;
-  if (inv.audience === 'customer') {
+  if (inv.audience === 'customer' || inv.byHand) {
     w.draw(page, 'ORDER NO.', M, 108, SMALL_LABEL);
     const fitted = w.fit(inv.orderNumber, leftW, { size: 28, weight: 'extrabold' }, 14);
     w.draw(page, fitted.text, M, 136, { size: fitted.size, weight: 'extrabold' });
+    if (inv.audience === 'admin') w.draw(page, 'Handed over in person (no courier)', M, 152, { size: 8.5, color: GREY });
   } else if (inv.consignmentId) {
     w.draw(page, 'CONSIGNMENT ID', M, 108, SMALL_LABEL);
     const fitted = w.fit(inv.consignmentId, leftW, { size: 28, weight: 'extrabold' }, 14);

@@ -25,7 +25,7 @@ import { invoiceFromOrder } from '../../../lib/invoice/invoiceData';
 import { CarefulActionsCard, ConfirmSheet, OrderInvoiceCard, ReopenCard, orderDigits, type CarefulAction } from '../OrderActionCards';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../lib/orderStatus';
-import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS } from '../../../lib/manualOrders';
+import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS, sendsByCourier } from '../../../lib/manualOrders';
 import type { OrderStatus, OrderWithDetails } from '../../../types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../../lib/steadfastLink';
 import { orderHistoryNote } from '../../../lib/orderHistoryNotes';
@@ -368,11 +368,15 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const ended = order?.status === 'cancelled' || order?.status === 'delivered' || order?.status === 'returned';
   const payLater = order?.collect_mode === 'pay_later';
 
+  // Batch 47: Shop/in person (and hand delivered) orders go by hand — no
+  // Steadfast card and no "Book with Steadfast".
+  const byCourier = order ? sendsByCourier(order) : true;
+
   // The one main action (orange) for this status.
   let primary: PagePrimaryAction | undefined;
   if (order && canChangeStatus && order.status === 'pending') {
     primary = { label: 'Confirm order', onClick: () => void handleStatusChange('confirmed'), busy: isChangingStatus };
-  } else if (order && canBook && order.status === 'confirmed' && !order.steadfast_consignment_id && steadfastCodAmount !== null) {
+  } else if (order && byCourier && canBook && order.status === 'confirmed' && !order.steadfast_consignment_id && steadfastCodAmount !== null) {
     primary = { label: 'Book with Steadfast', onClick: () => setSteadfastConfirmOpen(true), busy: isBookingSteadfast };
   }
 
@@ -705,7 +709,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
 
           <div className="adm-opage__col">
             {/* 4. Steadfast */}
-            {(order.steadfast_consignment_id || order.status === 'confirmed') && (
+            {byCourier && (order.steadfast_consignment_id || order.status === 'confirmed') && (
               <section className="adm-ocard" aria-label="Steadfast">
                 <h2 className="adm-ocard__title">Steadfast</h2>
                 {order.steadfast_consignment_id ? (

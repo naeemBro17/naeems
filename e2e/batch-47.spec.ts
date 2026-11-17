@@ -158,3 +158,40 @@ test('Task 3: Ctrl+click on an order row opens that order in a new tab; order, p
   if ((await lots.count()) > 0) await expect(lots.first()).toHaveAttribute('href', /inv=lot&lot=/);
   await page.screenshot({ path: `${SHOTS}/03-lot-rows-links.png` });
 });
+
+/* -------------------------- Task 4: Shop/in person — no delivery charge */
+
+test('Task 4: Shop/in person sets delivery to hand delivered at ৳0 (still editable) in New order and ৳0 in Edit order; nothing saved', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.route(/\/rest\/v1\/rpc\/(admin_create_order|admin_create_order_v2|admin_edit_order|admin_set_order_source)/, (route) => route.abort());
+  await adminAt(page, '/admin/orders/new');
+  const sources = page.getByRole('group', { name: 'Order source' });
+  await expect(sources).toBeVisible({ timeout: 20_000 });
+  const fee = page.getByLabel('Delivery fee');
+  const handDelivered = page.getByRole('button', { name: 'No delivery (hand delivered)' });
+  await expect(fee).not.toHaveValue('0');
+  await sources.getByRole('button', { name: 'Shop/in person' }).click();
+  await expect(handDelivered).toHaveClass(/chip-select--on/);
+  await expect(fee).toHaveValue('0');
+  // A default, not a lock.
+  await fee.fill('50');
+  await expect(fee).toHaveValue('50');
+  await fee.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: `${SHOTS}/04-new-order-shop-in-person.png` });
+  // Another source puts the courier zone back.
+  await sources.getByRole('button', { name: 'Facebook' }).click();
+  await expect(handDelivered).not.toHaveClass(/chip-select--on/);
+  await expect(fee).not.toHaveValue('0');
+
+  const number = await latestOrderNumber('&source=neq.shop&delivery_fee=gt.0');
+  test.skip(!number, 'No courier order to open in Edit order.');
+  await page.goto(`/admin/orders/${number}/edit`);
+  const editSources = page.getByTestId('edit-order-source');
+  await expect(editSources).toBeVisible({ timeout: 20_000 });
+  const editFee = page.locator('#edit-order-fee');
+  await expect(editFee).not.toHaveValue('0');
+  await editSources.getByRole('button', { name: 'Shop/in person' }).click();
+  await expect(editFee).toHaveValue('0');
+  await editSources.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: `${SHOTS}/05-edit-order-shop-in-person.png` });
+});

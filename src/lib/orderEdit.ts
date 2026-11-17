@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { OrderWithDetails } from '../types';
+import type { OrderSource, OrderWithDetails } from '../types';
 import type { PaymentSummary } from './payments';
 import { courierCod } from '../../supabase/functions/_shared/cod';
 import { parseStockWarning, type StockWarning } from './manualOrders';
@@ -47,6 +47,8 @@ export interface EditDraft {
   thana: string;
   addressLine: string;
   courierNote: string;
+  /** Batch 47: saved by admin_set_order_source(), not admin_edit_order(). */
+  source: OrderSource;
   deliveryFee: string;
   discount: string;
   discountNote: string;
@@ -63,6 +65,7 @@ export function draftFromOrder(order: OrderWithDetails, stockFor: (productId: st
     thana: order.thana,
     addressLine: order.address_line,
     courierNote: order.courier_note ?? '',
+    source: order.source,
     deliveryFee: String(order.delivery_fee),
     discount: String(order.discount),
     discountNote: order.discount_note ?? '',

@@ -28,6 +28,7 @@ import {
   MANUAL_ORDER_SOURCES,
   DISCOUNT_REASONS,
   computeManualOrderTotals,
+  isHandOverSource,
   lineNeedsReason,
   type StockWarning,
 } from '../../lib/manualOrders';
@@ -349,8 +350,32 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     );
   };
 
+  // Batch 47: Shop/in person is handed over by hand — no courier, so the
+  // delivery becomes "No delivery (hand delivered)" at ৳0 (he can still
+  // type another amount). Picking another source afterwards puts back the
+  // zone the address gives, unless he had picked a zone himself.
+  const [zoneFromSource, setZoneFromSource] = useState(false);
+  const handlePickSource = (next: OrderSource) => {
+    setSource(next);
+    if (isHandOverSource(next)) {
+      if (zone !== 'hand_delivered') {
+        handlePickZone('hand_delivered');
+        setZoneFromSource(true);
+      }
+      return;
+    }
+    if (zoneFromSource && zone === 'hand_delivered') {
+      setZoneFromSource(false);
+      setZoneTouched(false);
+      const back = zoneForAddress(address.district || null, address.thana || null);
+      setZone(back);
+      setFeeInput(back === 'inside_dhaka' ? settings.delivery_fee_inside_dhaka : settings.delivery_fee_outside_dhaka);
+    }
+  };
+
   const handlePickZone = (next: DeliveryZoneChoice) => {
     setZoneTouched(true);
+    setZoneFromSource(false);
     setZone(next);
     if (next === 'hand_delivered') {
       setFeeInput('0');
@@ -471,7 +496,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     setCustomerResults([]);
   };
 
-  const deliveryFee = zone === 'hand_delivered' ? 0 : Math.max(0, Number(feeInput) || 0);
+  const deliveryFee = Math.max(0, Number(feeInput) || 0);
   const orderDiscount = Math.max(0, Number(orderDiscountInput) || 0);
 
   const totals = useMemo(
@@ -697,7 +722,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                 type="button"
                 className={`chip-select${source === opt.id ? ' chip-select--on' : ''}`}
                 aria-pressed={source === opt.id}
-                onClick={() => setSource(opt.id)}
+                onClick={() => handlePickSource(opt.id)}
               >
                 {opt.label}
               </button>
@@ -992,15 +1017,15 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
               No delivery (hand delivered)
             </button>
           </div>
-          {zone !== 'hand_delivered' && (
-            <MoneyInput
-              min="0"
-              style={{ marginTop: 8 }}
-              value={feeInput}
-              onChange={(e) => setFeeInput(e.target.value)}
-              aria-label="Delivery fee"
-            />
-          )}
+          {/* Batch 47: shown for hand delivered too (৳0 by default, any
+              other amount may be typed). */}
+          <MoneyInput
+            min="0"
+            style={{ marginTop: 8 }}
+            value={feeInput}
+            onChange={(e) => setFeeInput(e.target.value)}
+            aria-label="Delivery fee"
+          />
         </div>
 
         <div className="form-field">
