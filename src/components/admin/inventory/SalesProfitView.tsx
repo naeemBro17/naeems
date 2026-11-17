@@ -146,7 +146,7 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
                 <button key={o.order_id} type="button" className="inv-item inv-item--button" onClick={() => navigate(adminPath.order(o.order_number))}>
                   <span className="inv-item__head">
                     <span className="inv-item__name">{o.order_number}</span>
-                    <span className="inv-badge inv-badge--grey">{o.status === 'returned' ? 'Returned' : 'Delivered'}</span>
+                    <span className="inv-badge inv-badge--grey">{o.status === 'returned' ? 'Returned' : o.status === 'cancelled' ? 'Cancelled' : 'Delivered'}</span>
                   </span>
                   {!o.costed ? (
                     <span className="inv-muted">No cost (before inventory)</span>

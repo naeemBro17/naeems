@@ -245,6 +245,7 @@ function item(over: Partial<PayoutItem>): PayoutItem {
     match_status: 'matched',
     match_reason: null,
     note: null,
+    line_kind: 'order',
     ...over,
   };
 }
