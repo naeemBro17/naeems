@@ -280,7 +280,7 @@ export function KaarbarExpensesCard({ status, onChanged }: { status: KaarbarStat
               </p>
               <label className="form-field">
                 <span className="form-label">Set all to</span>
-                <select className="form-input" value="" onChange={(e) => e.target.value !== '-' && setAllWho(e.target.value)} data-testid="kb-share-all">
+                <select className="form-input" value="-" onChange={(e) => e.target.value !== '-' && setAllWho(e.target.value)} data-testid="kb-share-all">
                   <option value="-">Choose…</option>
                   {whoOptions.map((o) => (
                     <option key={o.value || 'out'} value={o.value}>

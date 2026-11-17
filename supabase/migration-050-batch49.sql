@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS kaarbar_imports (
   created_categories  uuid[] NOT NULL DEFAULT '{}',
   created_by          uuid,
   created_by_username text,
-  created_at          timestamptz NOT NULL DEFAULT now(),
+  -- clock time, so two imports in one transaction still come in order.
+  created_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
   undone_at           timestamptz,
   undone_by_username  text,
   undo_kept           jsonb
