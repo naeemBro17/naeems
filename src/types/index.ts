@@ -250,6 +250,15 @@ export interface AppSettings {
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
+  /** Batch 48: the advance-payment discount (bKash / Nagad). 'true' = On.
+   *  The three rows are added by migration-049; until it is run they are
+   *  missing, the offer stays off and Nagad is not offered at checkout
+   *  (place_order refuses it before then). Super Admin only. */
+  advance_discount_enabled: string;
+  /** 'percent' or 'fixed'; '' = migration-049 not run yet. */
+  advance_discount_type: string;
+  /** 0.5 = 0.5% (percent) or taka (fixed). */
+  advance_discount_value: string;
 
   /* --- Ad tracking (Batch 19) --- */
   /** Facebook Pixel ID. Blank = Pixel never loads, no errors. */
@@ -491,7 +500,8 @@ export interface PromoCodeFormData {
    Orders (Batch 18)
    ============================================================ */
 
-export type OrderPaymentMethod = 'cod' | 'bkash' | 'cash' | 'due';
+/** 'nagad' (Batch 48, migration-049) works exactly like 'bkash'. */
+export type OrderPaymentMethod = 'cod' | 'bkash' | 'nagad' | 'cash' | 'due';
 export type OrderPaymentStatus = 'unpaid' | 'pending_verification' | 'paid';
 /** 'returned' (Batch 39): sent, then came back; its goods are back in stock. */
 export type OrderStatus = 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
@@ -551,6 +561,11 @@ export interface Order {
   payment_method: OrderPaymentMethod;
   bkash_trx_id: string | null;
   bkash_sender: string | null;
+  /** Batch 48 (migration-049): the part of `discount` given for paying in
+   *  advance with bKash / Nagad (0 = none), and the rule used then. */
+  advance_discount: number;
+  advance_discount_type: 'percent' | 'fixed' | null;
+  advance_discount_value: number | null;
   payment_status: OrderPaymentStatus;
   status: OrderStatus;
   source: OrderSource;

@@ -11,6 +11,7 @@ import type {
   OrderWithDetails,
 } from '../types';
 import { parseStockWarning } from './manualOrders';
+import { isWalletMethod } from './advanceDiscount';
 import type { PaymentMethodId } from './payments';
 import type { CollectMode } from '../../supabase/functions/_shared/cod';
 import type { StockWarning } from './manualOrders';
@@ -25,6 +26,9 @@ const ORDER_SELECT_033 =
 
 // Batch 32 (migration-035): what happens to the rest of the money.
 const ORDER_SELECT_035 = `${ORDER_SELECT_033}, collect_mode`;
+
+// Batch 48 (migration-049): the advance-payment discount of each order.
+const ORDER_SELECT_049 = `${ORDER_SELECT_035}, advance_discount, advance_discount_type, advance_discount_value`;
 
 const ORDER_SELECT_030 =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, created_at, updated_at';
@@ -79,6 +83,11 @@ function normalizeOrderRow(row: Record<string, unknown>): Order {
       row.steadfast_cod_amount === null || row.steadfast_cod_amount === undefined ? null : Number(row.steadfast_cod_amount),
     steadfast_outdated: (row.steadfast_outdated as string[] | null | undefined) ?? [],
     collect_mode: row.collect_mode === 'pay_later' ? 'pay_later' : 'cod',
+    advance_discount: row.advance_discount === null || row.advance_discount === undefined ? 0 : Number(row.advance_discount),
+    advance_discount_type:
+      row.advance_discount_type === 'percent' || row.advance_discount_type === 'fixed' ? row.advance_discount_type : null,
+    advance_discount_value:
+      row.advance_discount_value === null || row.advance_discount_value === undefined ? null : Number(row.advance_discount_value),
   };
 }
 
@@ -95,6 +104,8 @@ function normalizeOrderItemRow(row: Record<string, unknown>): OrderItem {
 type OrdersQueryResult = { data: Record<string, unknown>[] | null; error: { code?: string; message: string } | null };
 
 async function selectOrdersList(): Promise<OrdersQueryResult> {
+  const b48 = await supabase.from('orders').select(ORDER_SELECT_049).order('created_at', { ascending: false });
+  if (b48.error?.code !== UNDEFINED_COLUMN) return b48;
   const b32 = await supabase.from('orders').select(ORDER_SELECT_035).order('created_at', { ascending: false });
   if (b32.error?.code !== UNDEFINED_COLUMN) return b32;
   const newest = await supabase.from('orders').select(ORDER_SELECT_033).order('created_at', { ascending: false });
@@ -114,6 +125,8 @@ type OrderQueryResult = {
 };
 
 async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const b48 = await supabase.from('orders').select(ORDER_SELECT_049).eq('id', orderId).maybeSingle();
+  if (b48.error?.code !== UNDEFINED_COLUMN) return b48;
   const b32 = await supabase.from('orders').select(ORDER_SELECT_035).eq('id', orderId).maybeSingle();
   if (b32.error?.code !== UNDEFINED_COLUMN) return b32;
   const newest = await supabase.from('orders').select(ORDER_SELECT_033).eq('id', orderId).maybeSingle();
@@ -150,6 +163,9 @@ export interface PlaceOrderResult {
   orderId: string | null;
   orderNumber: string | null;
   error: string | null;
+  /** Batch 48: what the database saved (null before migration-049, whose
+   *  place_order returns only the id and number). */
+  saved: { total: number; discount: number; advanceDiscount: number } | null;
 }
 
 /**
@@ -175,8 +191,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     p_address_line: input.address.fullAddress,
     p_delivery_zone: input.deliveryZone,
     p_payment_method: input.paymentMethod,
-    p_bkash_trx_id: input.paymentMethod === 'bkash' ? (input.bkashTrxId ?? null) : null,
-    p_bkash_sender: input.paymentMethod === 'bkash' ? (input.bkashSender ?? null) : null,
+    // Batch 48: a Nagad Transaction ID and sender go in the same two
+    // fields as bKash's (the shop gets both on the same number).
+    p_bkash_trx_id: isWalletMethod(input.paymentMethod) ? (input.bkashTrxId ?? null) : null,
+    p_bkash_sender: isWalletMethod(input.paymentMethod) ? (input.bkashSender ?? null) : null,
     p_promo_code: input.promoCode ?? null,
     p_customer_note: input.customerNote ?? null,
   });
@@ -190,14 +208,22 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     )
       ? error.message
       : 'Could not place your order. Please try again.';
-    return { orderId: null, orderNumber: null, error: friendly };
+    return { orderId: null, orderNumber: null, error: friendly, saved: null };
   }
 
-  const row = (data as { order_id: string; order_number: string }[] | null)?.[0];
+  const row = (
+    data as
+      | { order_id: string; order_number: string; total?: number | string; discount?: number | string; advance_discount?: number | string }[]
+      | null
+  )?.[0];
   if (!row) {
-    return { orderId: null, orderNumber: null, error: 'Could not place your order. Please try again.' };
+    return { orderId: null, orderNumber: null, error: 'Could not place your order. Please try again.', saved: null };
   }
-  return { orderId: row.order_id, orderNumber: row.order_number, error: null };
+  const saved =
+    row.total === undefined || row.total === null
+      ? null
+      : { total: Number(row.total), discount: Number(row.discount ?? 0), advanceDiscount: Number(row.advance_discount ?? 0) };
+  return { orderId: row.order_id, orderNumber: row.order_number, error: null, saved };
 }
 
 /** Cancel an order — customer's own while 'pending', or admin from
@@ -629,6 +655,19 @@ export async function adminSetCollectMode(orderId: string, mode: CollectMode): P
   if (!error) return { error: null };
   if (error.code === FUNCTION_NOT_FOUND) return { error: COLLECT_MODE_NEEDS_UPDATE };
   return { error: error.message || 'Could not save the payment choice.' };
+}
+
+/** Batch 48: Edit order -> Cash on Delivery / bKash / Nagad. bKash or Nagad
+ *  -> Cash on Delivery takes the advance discount off (the database
+ *  recalculates the total and writes the History line). */
+export async function adminSetOrderPaymentMethod(
+  orderId: string,
+  method: 'cod' | 'bkash' | 'nagad'
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_set_order_payment_method', { p_order_id: orderId, p_method: method });
+  if (!error) return { error: null };
+  if (error.code === FUNCTION_NOT_FOUND) return { error: 'Changing the payment method needs the Batch 48 database update (migration-049).' };
+  return { error: error.message || 'Could not save the payment method.' };
 }
 
 /** Batch 47: change an order's Source (Edit order). */
