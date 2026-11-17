@@ -3,7 +3,6 @@ import { useToast } from '../../../hooks/useToast';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
 import { useProducts } from '../../../contexts/ProductContext';
 import { takaExact } from '../../../lib/payouts';
-import { toScaled, scaledText } from '../../../lib/inventory/decimal';
 import {
   confirmOpening,
   dhakaToday,
@@ -20,7 +19,6 @@ import {
   openingTotals,
   openingUnits,
   readOpeningSheet,
-  weightPercentFromHistory,
   type OpeningIssue,
   type OpeningPreview,
 } from '../../../lib/inventory/opening';
@@ -53,8 +51,12 @@ function IssueList({ title, issues, tone, testId }: { title: string; issues: Ope
  * Batch 38 Part 4: opening stock. Download the template, fill it, upload
  * it, read the preview (nothing is saved), then Confirm — which creates the
  * one opening lot L-000. Undo is behind the Safety Lock and only while
- * Inventory mode is Off.
+ * Inventory mode is Off. Batch 45: no weight % — weight is not part of
+ * product cost; L-000 is edited and deleted like any lot.
  */
+
+/** Batch 45: the opening stock's landed cost is its buy price (0% added). */
+const NO_WEIGHT = 0n;
 export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; onOpenLot: (id: string) => void }) {
   const { showToast } = useToast();
   const { openUntil } = useSafetyLock();
@@ -62,9 +64,6 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
   const [units, setUnits] = useState<StockUnit[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opening, setOpening] = useState<LotDetail | null>(null);
-  const [percent, setPercent] = useState('');
-  const [pastBuy, setPastBuy] = useState('');
-  const [pastCosts, setPastCosts] = useState('');
   const [startDate, setStartDate] = useState(dhakaToday());
   const [draft, setDraft] = useState<{ fileName: string; preview: OpeningPreview } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -97,10 +96,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
     void load();
   }, [load]);
 
-  const percentE3 = toScaled(percent, 3);
-  const percentOk = percentE3 !== null && percentE3 >= 0n && percentE3 <= 500000n;
-  const totals = useMemo(() => (draft ? openingTotals(draft.preview.rows, percentOk ? percentE3 : 0n) : null), [draft, percentOk, percentE3]);
-  const helperPercent = weightPercentFromHistory(pastBuy, pastCosts);
+  const totals = useMemo(() => (draft ? openingTotals(draft.preview.rows, NO_WEIGHT) : null), [draft]);
 
   const download = async () => {
     if (!units) return;
@@ -135,10 +131,10 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
   };
 
   const confirm = async () => {
-    if (!draft || !percentOk || percentE3 === null) return;
+    if (!draft) return;
     setIsConfirming(true);
     setConfirmError(null);
-    const answer = await confirmOpening(startDate, scaledText(percentE3, 3), confirmPayload(draft.preview.rows), draft.fileName);
+    const answer = await confirmOpening(startDate, '0', confirmPayload(draft.preview.rows), draft.fileName);
     setIsConfirming(false);
     if (!answer.ok) {
       setConfirmError(answer.error ?? 'Could not save the opening stock.');
@@ -182,7 +178,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
 
   if (opening) {
     const pieces = opening.lot_items.reduce((a, i) => a + i.qty, 0);
-    const value = opening.lot_items.reduce((a, i) => a + Math.round(i.qty * Number(i.unit_price_bdt) * 100) + Number(i.alloc_weight_paisa), 0);
+    const value = opening.lot_items.reduce((a, i) => a + Math.round(i.qty * Number(i.unit_price_bdt) * 100) + Number(i.alloc_other_paisa), 0);
     return (
       <section className="inv" aria-label="Opening stock">
         <AdminPageHeader title="Opening stock" onBack={onBack} />
@@ -194,9 +190,6 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
             <span>Opening stock value</span>
             <span>{takaExact(value)}</span>
           </div>
-          <p className="inv-note-strong">
-            Weight cost moved from old expenses into opening stock: {takaExact(Math.round(Number(opening.opening_weight_added_bdt ?? 0) * 100))}
-          </p>
           <button type="button" className="adm-btn adm-btn--ghost" onClick={() => onOpenLot(opening.id)}>
             Open L-000
           </button>
@@ -204,8 +197,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
         <div className="adm-ocard inv-stack">
           <h2 className="adm-ocard__title">Undo opening stock</h2>
           <p className="inv-muted">
-            Removes L-000 and its stock movements, so you can upload again. Only while Inventory mode is Off. Product weights saved
-            from the file stay.
+            Removes L-000 and its stock movements, so you can upload again. Only while Inventory mode is Off. (Deleting L-000 from its lot page works at any time.)
           </p>
           {modeOn ? (
             <p className="inv-error">Inventory mode is On: the opening stock can&apos;t be undone.</p>
@@ -236,7 +228,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
   }
 
   const preview = draft?.preview ?? null;
-  const canConfirm = preview !== null && preview.problemCount === 0 && preview.rows.length > 0 && percentOk && startDate !== '';
+  const canConfirm = preview !== null && preview.problemCount === 0 && preview.rows.length > 0 && startDate !== '';
 
   return (
     <section className="inv" aria-label="Opening stock">
@@ -253,40 +245,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
       </div>
 
       <div className="adm-ocard inv-stack">
-        <h2 className="adm-ocard__title">2. Average weight % for imported goods</h2>
-        <p className="inv-muted">
-          Added to the buy price of rows marked &quot;import&quot; (wholesale rows get 0%). Example: 38 means a ৳1,000 product costs
-          ৳1,380 landed.
-        </p>
-        <label className="form-field">
-          <span className="form-label">Weight % for imports</span>
-          <input className="form-input" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} placeholder="e.g. 38" aria-label="Weight percent for imports" />
-        </label>
-        <details className="inv-helper">
-          <summary>Work it out from past lots</summary>
-          <div className="inv-fields">
-            <label className="form-field">
-              <span className="form-label">Total buy price of all past lots (৳)</span>
-              <input className="form-input" inputMode="decimal" value={pastBuy} onChange={(e) => setPastBuy(e.target.value)} aria-label="Total buy price of past lots" />
-            </label>
-            <label className="form-field">
-              <span className="form-label">Total weight + other costs of all past lots (৳)</span>
-              <input className="form-input" inputMode="decimal" value={pastCosts} onChange={(e) => setPastCosts(e.target.value)} aria-label="Total weight and other costs of past lots" />
-            </label>
-          </div>
-          {helperPercent !== null && (
-            <p data-testid="inv-percent-helper">
-              = <b>{helperPercent}%</b>{' '}
-              <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => setPercent(String(helperPercent))}>
-                Use this %
-              </button>
-            </p>
-          )}
-        </details>
-      </div>
-
-      <div className="adm-ocard inv-stack">
-        <h2 className="adm-ocard__title">3. Start date and file</h2>
+        <h2 className="adm-ocard__title">2. Start date and file</h2>
         <label className="form-field">
           <span className="form-label">Opening stock start date</span>
           <input className="form-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" />
@@ -314,7 +273,7 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
 
       {preview && totals && (
         <div className="adm-ocard inv-stack" data-testid="inv-opening-preview">
-          <h2 className="adm-ocard__title">4. Preview — {draft?.fileName}</h2>
+          <h2 className="adm-ocard__title">3. Preview — {draft?.fileName}</h2>
           <div className="inv-counts">
             <span data-testid="inv-count-ready">
               Ready <b>{preview.rows.length}</b>
@@ -353,10 +312,6 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
             <span>Buy price</span>
             <span>{takaExact(Number(totals.buyPaisa))}</span>
           </div>
-          <div className="inv-line">
-            <span>Weight % added (imports only)</span>
-            <span data-testid="inv-total-added">{percentOk ? takaExact(Number(totals.addedPaisa)) : 'Enter the %'}</span>
-          </div>
           <div className="inv-line inv-line--total">
             <span>Opening stock value</span>
             <span data-testid="inv-total-value">{takaExact(Number(totals.valuePaisa))}</span>
@@ -371,14 +326,13 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
                     ? `${r.pieces} packs${r.extraUnits ? ` + ${r.extraUnits} loose` : ''} = ${openingUnits(r)} units`
                     : `${openingUnits(r)} pcs`}{' '}
                   · {sourceLabel(r.source)} · expiry {monthYear(r.expiry)}
-                  {r.weightG !== null ? ` · ${r.weightG} g` : ''}
                 </span>
                 <div className="inv-line">
                   <span>
                     Buy {taka2(Number(r.priceE4) / 10000)}
                     {(r.packSize ?? 1) > 1 ? ' per pack' : ''} → landed per {(r.packSize ?? 1) > 1 ? 'unit' : 'piece'}
                   </span>
-                  <span>{percentOk && percentE3 !== null ? taka2(openingLandedUnit(r, percentE3)) : '—'}</span>
+                  <span>{taka2(openingLandedUnit(r, NO_WEIGHT))}</span>
                 </div>
               </div>
             ))}
@@ -389,7 +343,6 @@ export function OpeningStockView({ onBack, onOpenLot }: { onBack: () => void; on
             )}
           </div>
 
-          {!percentOk && <p className="inv-error">Enter the weight % (step 2) before confirming.</p>}
           {preview.problemCount > 0 && <p className="inv-error">Fix the rows marked &quot;must fix&quot; in the file and upload it again.</p>}
           {confirmError && (
             <p className="inv-error" role="alert" data-testid="inv-confirm-error">

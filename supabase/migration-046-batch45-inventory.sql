@@ -2031,6 +2031,57 @@ BEGIN
 END;
 $function$;
 
+-- Weight / cargo is now an ordinary expense (it is not part of product
+-- cost any more), so it may be an expense category.
+CREATE OR REPLACE FUNCTION money_category_name_ok(p_name text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT lower(p_name) !~ '(profit\s*share|courier|steadfast|investor|withdraw)';
+$function$;
+
+CREATE OR REPLACE FUNCTION money_save_category(p_id uuid, p_name text, p_archived boolean DEFAULT false)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_name text := btrim(COALESCE(p_name, ''));
+  v_id   uuid;
+  v_old  money_categories%ROWTYPE;
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF v_name = '' THEN
+    RAISE EXCEPTION 'Type a name.';
+  END IF;
+  IF NOT money_category_name_ok(v_name) THEN
+    RAISE EXCEPTION '"%" can''t be an expense category: courier and COD fees are in each order''s profit, and profit share, investor money, withdrawals and stock are not expenses.', v_name;
+  END IF;
+  IF EXISTS (SELECT 1 FROM money_categories WHERE lower(name) = lower(v_name) AND id IS DISTINCT FROM p_id) THEN
+    RAISE EXCEPTION 'That category already exists.';
+  END IF;
+  IF p_id IS NULL THEN
+    INSERT INTO money_categories (name, sort_order)
+    VALUES (v_name, COALESCE((SELECT max(sort_order) FROM money_categories), 0) + 1)
+    RETURNING id INTO v_id;
+    PERFORM write_activity('money.category_add', 'money_category', v_id::text, v_name, format('Added the expense category "%s"', v_name), '{}'::jsonb);
+    RETURN v_id;
+  END IF;
+  SELECT * INTO v_old FROM money_categories WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Category not found.';
+  END IF;
+  UPDATE money_categories SET name = v_name, archived = COALESCE(p_archived, false) WHERE id = p_id;
+  PERFORM write_activity('money.category_edit', 'money_category', p_id::text, v_name,
+    format('Changed the expense category "%s"', v_old.name), jsonb_build_object('before', to_jsonb(v_old)));
+  RETURN p_id;
+END;
+$function$;
+
 -- ---------------------------------------------------------------------------
 -- 10. Who may call what
 -- ---------------------------------------------------------------------------

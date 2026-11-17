@@ -142,8 +142,9 @@ export function ExpensesView({ onBack, onOpen }: { onBack: () => void; onOpen: M
 
 /**
  * Batch 41 Part 2.1: the expense categories — rename, add, archive (an
- * archived category keeps its old expenses). Profit share, courier and
- * weight / cargo can't be categories (the database refuses them too).
+ * archived category keeps its old expenses). Profit share and courier
+ * can't be categories (the database refuses them too). Batch 45: weight /
+ * cargo is an ordinary expense now (it is not part of product cost).
  */
 export function CategoriesView({ onBack }: { onBack: () => void }) {
   const { showToast } = useToast();
@@ -197,8 +198,8 @@ export function CategoriesView({ onBack }: { onBack: () => void }) {
         </ListGroup>
       )}
       <p className="inv-muted">
-        Not categories on purpose: courier and COD fees (they are in each order&apos;s profit), weight / cargo and trip costs (they belong to
-        the lot), investor profit share and your withdrawals (not expenses).
+        Not categories on purpose: courier and COD fees (they are in each order&apos;s profit), investor profit share and your withdrawals
+        (not expenses). Weight / cargo is an ordinary expense: add a category for it.
       </p>
       {editing && (
         <form className="adm-ocard inv-stack" onSubmit={save} noValidate>

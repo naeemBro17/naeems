@@ -96,7 +96,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   // Batch 36 Part 1: "Steadfast paid ৳X on 8 Oct" — only with View profit
   // & costs (the database refuses everyone else).
   const canSeeCosts = can('view_profit_costs');
-  const { settings } = useProducts();
+  // Batch 45: stock changes when an order is cancelled, returned, reopened
+  // or deleted; the admin screens get the new numbers right away.
+  const { settings, refetch: refetchProducts } = useProducts();
   const canMarkDamaged = canSeeCosts && settings.inventory_mode === 'true';
   const [payoutInfo, setPayoutInfo] = useState<LoadState<OrderPayoutInfo | null> | null>(null);
 
@@ -203,7 +205,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       return;
     }
     showToast(`Order marked ${SAVED_STATUS_NAME[next]}`);
-    await reload();
+    await Promise.all([reload(), next === 'cancelled' ? refetchProducts() : Promise.resolve()]);
   };
 
   const handleCancel = async () => {
@@ -234,7 +236,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
     setReturnOpen(false);
     setDamaged({});
     showToast(broken.length > 0 ? 'Order marked Returned: damaged items written off, the rest back in stock' : 'Order marked Returned: its goods are back in stock');
-    await reload();
+    await Promise.all([reload(), refetchProducts()]);
   };
 
   const handleReopen = async () => {
@@ -246,7 +248,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
     }
     setReopenOpen(false);
     showToast(`Order reopened: ${back ? SAVED_STATUS_NAME[back] : 'back'}`);
-    await reload();
+    await Promise.all([reload(), refetchProducts()]);
   };
 
   const handleMarkPaid = async () => {
@@ -331,6 +333,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       return;
     }
     showToast(`Order ${order.order_number} deleted`);
+    await refetchProducts();
     onChanged();
     onBack();
   };

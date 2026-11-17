@@ -93,6 +93,7 @@ test.afterAll(async () => {
 /* ------------------------------------------------------------ database */
 
 test('database: every money rule, in one transaction that is rolled back', async () => {
+  const modeBefore = (await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode')).data?.[0]?.value ?? 'false';
   test.skip(!supabaseCli(), 'The Supabase command line is not on this computer.');
   test.setTimeout(240_000);
   const script = readFileSync('e2e/sql/batch-41-money.sql', 'utf8')
@@ -110,8 +111,9 @@ test('database: every money rule, in one transaction that is rolled back', async
   if (!skipped) expect(books.data?.[0]?.confirmed_at ?? null).toBeNull();
   const products = await select<unknown[]>(admin.accessToken, 'products?select=id&sku=like.E2E-B41-*');
   expect(products.data).toHaveLength(0);
+  // Batch 45: the live switch is unchanged by the test (it is On on the live shop since 13 Nov).
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(modeBefore);
 });
 
 test('permissions: the public and a customer can read nothing about money', async () => {

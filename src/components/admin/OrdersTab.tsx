@@ -5,6 +5,7 @@ import { useUrlParam } from '../../hooks/useUrlParams';
 import { formatTaka } from '../../lib/format';
 import { ORDER_SOURCE_LABELS, computeMonthlySummary } from '../../lib/manualOrders';
 import { adminDeleteOrders, isEarlyStageOrder, refreshSteadfastStatus } from '../../lib/orders';
+import { useProducts } from '../../contexts/ProductContext';
 import { fetchAdminOrderDetail, fetchOrderNumberById } from '../../lib/adminData';
 import { fetchAllPayments, summarizePayments, type OrderPayment } from '../../lib/payments';
 import { formatTakaBd } from '../../lib/adminNav';
@@ -85,6 +86,7 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
   const { showToast } = useToast();
   const { isAdmin, can } = useAuth();
   const { openUntil } = useSafetyLock();
+  const { refetch: refetchProducts } = useProducts();
   const canDeleteEarly = can('delete_early_orders');
   const canSeeSales = can('see_sales');
   // Batch 24: a checkbox only on orders this person may delete right now —
@@ -338,7 +340,8 @@ export function OrdersTab({ orders, onReload, initialOrderId }: OrdersTabProps) 
     const deletedCount = results.filter((r) => r.deleted).length;
     const failed = results.filter((r) => !r.deleted);
     setSelectedForDelete(new Set());
-    await onReload();
+    // Batch 45: deleted orders give their stock back; refresh the numbers.
+    await Promise.all([onReload(), refetchProducts()]);
     if (failed.length === 0) {
       showToast(`${deletedCount} order${deletedCount === 1 ? '' : 's'} deleted permanently`, 'success');
     } else {

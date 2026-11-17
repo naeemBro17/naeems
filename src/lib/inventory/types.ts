@@ -107,7 +107,7 @@ export interface StockMovement {
 
 /** A lot in the list, with what it holds. */
 export interface LotSummary extends Lot {
-  lot_items: (Pick<LotItem, 'qty' | 'qty_remaining' | 'unit_price_bdt' | 'alloc_weight_paisa' | 'alloc_other_paisa' | 'product_id' | 'variant_id'> & {
+  lot_items: (Pick<LotItem, 'qty' | 'qty_remaining' | 'unit_price_bdt' | 'alloc_other_paisa' | 'product_id' | 'variant_id'> & {
     buy_value_bdt?: number;
   })[];
 }

@@ -12,7 +12,6 @@ import {
   readOpeningSheet,
   templateRows,
   unitKey,
-  weightPercentFromHistory,
   MISSING_COLUMNS_ERROR,
   type OpeningRow,
   type SheetCell,
@@ -68,14 +67,14 @@ describe('Batch 38 exact decimals', () => {
 /* ----------------------------------------------------------- allocation */
 
 describe('Batch 38 landed cost allocation', () => {
-  it('3 rows, ৳10,000 weight cost, uneven grams, AUD — exact to the paisa (same as the live database)', () => {
-    // The same lot was saved on the live database (in a rolled-back
-    // transaction) on 2026-10-10; these are the numbers it stored.
+  // Batch 45: weight is not part of product cost — a weight bill (an old
+  // one, kept as history) changes nothing; other costs are shared exactly.
+  it('3 rows, AUD, a ৳10,000 weight bill and ৳999.99 other costs — the weight bill counts nowhere', () => {
     const result = allocateLot(
       [
-        { qty: 3, unitPriceForeign: '12.35', weightGrams: 100, label: 'A' },
-        { qty: 7, unitPriceForeign: '8.99', weightGrams: 333, label: 'B' },
-        { qty: 11, unitPriceForeign: '4.1', weightGrams: 77, label: 'C' },
+        { qty: 3, unitPriceForeign: '12.35', label: 'A' },
+        { qty: 7, unitPriceForeign: '8.99', label: 'B' },
+        { qty: 11, unitPriceForeign: '4.1', label: 'C' },
       ],
       [
         { costType: 'weight', amountBdt: '10000' },
@@ -86,18 +85,16 @@ describe('Batch 38 landed cost allocation', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.rows.map((r) => scaledText(r.unitPriceBdtE4, 4))).toEqual(['968.9402', '705.3257', '321.6725']);
-    expect(result.rows.map((r) => r.weightPaisa)).toEqual([86256n, 670213n, 243531n]);
     expect(result.rows.map((r) => r.otherPaisa)).toEqual([25537n, 43376n, 31086n]);
-    expect(result.allocatedWeightPaisa).toBe(1_000_000n);
     expect(result.allocatedOtherPaisa).toBe(99_999n);
-    expect(result.rows[0].landedUnitBdt).toBeCloseTo(1341.583533, 5);
+    expect(result.rows[0].landedUnitBdt).toBeCloseTo(968.9402 + 255.37 / 3, 5);
   });
 
-  it('weight is shared by grams, other costs by buy value', () => {
+  it('a weight bill adds nothing; other costs are shared by buy value', () => {
     const result = allocateLot(
       [
-        { qty: 1, unitPriceForeign: 100, weightGrams: 300, label: 'Heavy cheap' },
-        { qty: 1, unitPriceForeign: 300, weightGrams: 100, label: 'Light dear' },
+        { qty: 1, unitPriceForeign: 100, label: 'Heavy cheap' },
+        { qty: 1, unitPriceForeign: 300, label: 'Light dear' },
       ],
       [
         { costType: 'weight', amountBdt: 400 },
@@ -107,50 +104,43 @@ describe('Batch 38 landed cost allocation', () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.rows.map((r) => r.weightPaisa)).toEqual([30000n, 10000n]);
     expect(result.rows.map((r) => r.otherPaisa)).toEqual([10000n, 30000n]);
-    expect(result.rows.map((r) => r.landedUnitBdt)).toEqual([500, 700]);
+    expect(result.rows.map((r) => r.landedUnitBdt)).toEqual([200, 600]);
   });
 
   it('foreign currency: buy price in taka = price × rate', () => {
-    const result = allocateLot([{ qty: 2, unitPriceForeign: '10.50', weightGrams: null, label: 'A' }], [], '80.25');
+    const result = allocateLot([{ qty: 2, unitPriceForeign: '10.50', label: 'A' }], [], '80.25');
     expect(result.ok && scaledText(result.rows[0].unitPriceBdtE4, 4)).toBe('842.6250');
   });
 
   it('a late bill re-shares the whole lot, still exact', () => {
     const items = [
-      { qty: 3, unitPriceForeign: 10, weightGrams: 50, label: 'A' },
-      { qty: 3, unitPriceForeign: 10, weightGrams: 50, label: 'B' },
-      { qty: 3, unitPriceForeign: 10, weightGrams: 50, label: 'C' },
+      { qty: 3, unitPriceForeign: 10, label: 'A' },
+      { qty: 3, unitPriceForeign: 10, label: 'B' },
+      { qty: 3, unitPriceForeign: 10, label: 'C' },
     ];
-    const first = allocateLot(items, [{ costType: 'weight', amountBdt: 100 }], 1);
-    const later = allocateLot(items, [{ costType: 'weight', amountBdt: 100 }, { costType: 'weight', amountBdt: '0.01' }], 1);
-    expect(first.ok && first.rows.map((r) => r.weightPaisa)).toEqual([3334n, 3333n, 3333n]);
-    expect(later.ok && later.rows.map((r) => r.weightPaisa)).toEqual([3334n, 3334n, 3333n]);
-    expect(later.ok && later.allocatedWeightPaisa).toBe(10001n);
+    const first = allocateLot(items, [{ costType: 'other', amountBdt: 100 }], 1);
+    const later = allocateLot(items, [{ costType: 'other', amountBdt: 100 }, { costType: 'other', amountBdt: '0.01' }], 1);
+    expect(first.ok && first.rows.map((r) => r.otherPaisa)).toEqual([3334n, 3333n, 3333n]);
+    expect(later.ok && later.rows.map((r) => r.otherPaisa)).toEqual([3334n, 3334n, 3333n]);
+    expect(later.ok && later.allocatedOtherPaisa).toBe(10001n);
   });
 
-  // Batch 39 Part 1 changed this rule on purpose: a missing weight no
-  // longer blocks saving — it is guessed from the price (batch39 tests).
-  it('missing weight no longer blocks saving: guessed from price, still exact', () => {
+  it('Batch 45: a lot with only a weight bill has landed cost = buy price', () => {
     const items = [
-      { qty: 1, unitPriceForeign: 10, weightGrams: 50, label: 'Has weight' },
-      { qty: 1, unitPriceForeign: 10, weightGrams: null, label: 'Toner' },
-      { qty: 1, unitPriceForeign: 10, weightGrams: '', label: 'Serum' },
+      { qty: 1, unitPriceForeign: 10, label: 'Toner' },
+      { qty: 1, unitPriceForeign: 10, label: 'Serum' },
     ];
-    const guessed = allocateLot(items, [{ costType: 'weight', amountBdt: 50 }], 1);
-    expect(guessed.ok).toBe(true);
-    if (!guessed.ok) return;
-    expect(guessed.rows.map((r) => r.weightGuessed)).toEqual([false, true, true]);
-    expect(guessed.allocatedWeightPaisa).toBe(5000n);
-    expect(allocateLot(items, [{ costType: 'other', amountBdt: 50 }], 1).ok).toBe(true);
+    const result = allocateLot(items, [{ costType: 'weight', amountBdt: 50 }], 1);
+    expect(result.ok && result.rows.map((r) => r.landedUnitBdt)).toEqual([10, 10]);
+    expect(result.ok && result.allocatedOtherPaisa).toBe(0n);
   });
 
   it('all buy prices 0 → other costs shared by pieces', () => {
     const result = allocateLot(
       [
-        { qty: 1, unitPriceForeign: 0, weightGrams: null, label: 'A' },
-        { qty: 2, unitPriceForeign: 0, weightGrams: null, label: 'B' },
+        { qty: 1, unitPriceForeign: 0, label: 'A' },
+        { qty: 2, unitPriceForeign: 0, label: 'B' },
       ],
       [{ costType: 'other', amountBdt: 3 }],
       1
@@ -291,12 +281,6 @@ describe('Batch 38 opening stock file', () => {
     expect(totals.valuePaisa).toBe(totals.buyPaisa + totals.addedPaisa);
   });
 
-  it('% helper from past lots: (weight + other) ÷ buy price', () => {
-    expect(weightPercentFromHistory('1,000,000', '380,000')).toBe(38);
-    expect(weightPercentFromHistory('300', '100')).toBe(33.33);
-    expect(weightPercentFromHistory('', '100')).toBeNull();
-  });
-
   it('a 200-row file is read quickly and correctly', () => {
     const units = Array.from({ length: 200 }, (_, i) => unit(`00000000-0000-0000-0000-${String(i).padStart(12, '0')}`, `P${i}`, 5000));
     const sheet: SheetCell[][] = [HEADER, ...units.map((u, i) => row(unitKey(u), 100 + i, (i % 9) + 1))];
@@ -324,11 +308,11 @@ describe('Batch 38 opening stock file', () => {
 describe('Batch 38 lot totals and access', () => {
   it('a lot\'s totals: pieces, pieces left, landed cost = buy value + shared bills', () => {
     const totals = lotTotals([
-      { qty: 3, qty_remaining: 3, unit_price_bdt: 968.9402, alloc_weight_paisa: 86256, alloc_other_paisa: 25537, product_id: P1, variant_id: null },
-      { qty: 7, qty_remaining: 5, unit_price_bdt: 705.3257, alloc_weight_paisa: 670213, alloc_other_paisa: 43376, product_id: P2, variant_id: null },
+      { qty: 3, qty_remaining: 3, unit_price_bdt: 968.9402, alloc_other_paisa: 25537, product_id: P1, variant_id: null },
+      { qty: 7, qty_remaining: 5, unit_price_bdt: 705.3257, alloc_other_paisa: 43376, product_id: P2, variant_id: null },
     ]);
     expect(totals).toMatchObject({ products: 2, pieces: 10, left: 8 });
-    expect(totals.costsPaisa).toBe(86256 + 25537 + 670213 + 43376);
+    expect(totals.costsPaisa).toBe(25537 + 43376);
   });
 
   it('Inventory is in the menu only with "View profit & costs"', () => {

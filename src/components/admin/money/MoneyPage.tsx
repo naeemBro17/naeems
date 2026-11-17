@@ -7,6 +7,7 @@ import type { MoneySummary } from '../../../lib/money/types';
 import { AdminPageHeader, ChipRow, EmptyState, ListGroup, ListRow, SkeletonRows } from '../ui/AdminUi';
 import { PayoutsToPlace } from './AccountsView';
 import type { MoneyOpen } from './moneyNav';
+import { MissingCostNote } from '../inventory/MissingCostNote';
 
 function Line({ label, value, sign, strong, testId }: { label: string; value: number; sign?: '+' | '−' | '='; strong?: boolean; testId?: string }) {
   const text = sign === '=' ? signedMoney(value) : `${Math.round(value * 100) === 0 ? '' : (sign ?? '')}${moneyText(Math.abs(value))}`;
@@ -126,9 +127,10 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
             <Line label="Left in the business" value={p.left_in_business} sign="=" strong testId="money-left" />
             {p.uncosted_orders > 0 && (
               <p className="inv-muted">
-                {p.uncosted_orders} order{p.uncosted_orders === 1 ? '' : 's'} from before Inventory mode (no lot cost) are left out, as in Sales profit.
+                {p.uncosted_orders} order{p.uncosted_orders === 1 ? '' : 's'} left out: placed before Inventory mode (already in the opening balance) or with no cost yet.
               </p>
             )}
+            <MissingCostNote count={p.items_missing_cost} />
           </div>
 
           <div className="adm-ocard inv-stack" data-testid="money-roi">

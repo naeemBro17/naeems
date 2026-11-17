@@ -119,3 +119,68 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Batch 45 Part 4: New order — pick a size of a product with options. */
+.manual-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 16px 16px;
+}
+
+.manual-pick__title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--adm-text, #16161a);
+}
+
+.manual-pick__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.manual-pick__row {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border: 1px solid var(--adm-line, #e3e3e8);
+  border-radius: 10px;
+  background: var(--adm-card, #fff);
+  color: var(--adm-text, #16161a);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manual-pick__row--on {
+  border-color: var(--adm-text, #16161a);
+  box-shadow: inset 0 0 0 1px var(--adm-text, #16161a);
+}
+
+.manual-pick__name {
+  font-weight: 600;
+}
+
+.manual-pick__meta {
+  font-size: 12.5px;
+  color: var(--adm-muted, #6e6e76);
+}
+
+.manual-pick__qty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.manual-pick__qty > span:first-child {
+  flex: 1 1 auto;
+}
