@@ -376,7 +376,7 @@ function placedSnapshot(paymentMethod: 'cod' | 'bkash') {
   };
 }
 
-test('Tasks 8 + 10: "Order placed" says ডেলিভারিতে দেবেন for cash on delivery (Total paid only for bKash) and has a neutral "Need help?" to the shop on WhatsApp with the order number', async ({ page }) => {
+test('Tasks 8 + 10: "Order placed" says Pay on delivery for cash on delivery (Total paid only for bKash) and has a neutral "Need help?" to the shop on WhatsApp with the order number', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: WIDTH, height: 844 });
   // A made-up order receipt in this tab only — no order is placed.
@@ -384,7 +384,7 @@ test('Tasks 8 + 10: "Order placed" says ডেলিভারিতে দেব
   await page.goto('/checkout/success');
   const total = page.getByTestId('placed-total');
   await expect(total).toBeVisible({ timeout: 20_000 });
-  await expect(total).toContainText('ডেলিভারিতে দেবেন');
+  await expect(total).toContainText('Pay on delivery');
   await expect(total).not.toContainText('paid');
   const help = page.getByTestId('placed-need-help');
   await expect(help).toBeVisible();
@@ -405,7 +405,7 @@ test('Tasks 8 + 10: "Order placed" says ডেলিভারিতে দেব
   await paid.close();
 });
 
-test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, every line shows its quantity, cash on delivery total says ডেলিভারিতে দেবেন (nothing ordered)', async ({ page }) => {
+test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, every line shows its quantity, cash on delivery total says Pay on delivery (nothing ordered)', async ({ page }) => {
   test.setTimeout(90_000);
   const list = await select<{ id: string; name: string; retail_price: number; offer_price: number | null; stock_quantity: number | null }[]>(
     null,
@@ -458,7 +458,7 @@ test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, eve
   });
   if (long.name.length > 30) expect(longLines).toBeGreaterThanOrEqual(2);
 
-  await expect(page.getByTestId('summary-total')).toContainText('ডেলিভারিতে দেবেন');
+  await expect(page.getByTestId('summary-total')).toContainText('Pay on delivery');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, 'no sideways scroll at phone width').toBeLessThanOrEqual(0);
   await page.locator('.checkout-summary-card').first().scrollIntoViewIfNeeded();
