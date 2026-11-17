@@ -71,7 +71,8 @@ export type LedgerType =
   | 'previous_balance_payment'
   | 'steadfast_payout_out'
   | 'courier_fees'
-  | 'steadfast_unmatched';
+  | 'steadfast_unmatched'
+  | 'steadfast_courier_only';
 
 /** What the "Add money" screen can add (a move is stored as a pair). */
 export type EntryKind =

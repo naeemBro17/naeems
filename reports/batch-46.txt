@@ -1,0 +1,289 @@
+BATCH 46 — Steadfast payouts add up, and promo codes count only real orders
+Version 1.46.0 · branch fix/batch-46-payouts-promo
+
+Batch 45 is merged into main (version 1.45.0). Three later commits on the
+Batch 45 branch (updated old tests for Inventory mode On, report notes) were
+NOT on main; I merged them into this branch so the full test run would not
+fail for reasons that have nothing to do with this batch.
+
+============================================================
+1. WHAT I DID
+============================================================
+
+WHY THE PAYOUT NUMBERS WERE WRONG (in two sentences)
+  Steadfast lists every parcel in a payout with the COD it was BOOKED with,
+  even a parcel it returned, and the site counted that booked amount as
+  "collected" and then invented "other charges" to make the payout total
+  still match. Separately, when Steadfast collected a different amount than
+  the order's "COD via Steadfast" payment said, the site only flagged it
+  and never corrected the order's paid amount.
+
+WHY THE PROMO COUNTS WERE WRONG (in two sentences)
+  Before Batch 18 (25 Sep) there were no real orders, and the success
+  screen counted a use as soon as it opened. The counting function stayed
+  open to anyone on the internet afterwards, so a code could be used up
+  without any order. Also, cancelling or deleting an order never gave the
+  use back.
+
+Payouts — what I checked on the real data (34 payouts, 14 Jan – 16 Nov 2026)
+  - Every payout's lines add up exactly to what Steadfast paid (34 of 34),
+    before and after the fix.
+  - No order is counted in two payouts.
+  - All site-order lines are matched to exactly one order, except the ones
+    listed below.
+
+Payout logic errors found and fixed
+  1. Returned parcel counted as cash collected.
+     Payout SFC-27728657 (14 Jan 2026): parcel 127690312 was "cancelled"
+     (returned) by Steadfast but recorded as ৳1,120 collected, and ৳1,120 of
+     made-up "other charges" was spread over 16 other parcels.
+       Before: COD collected ৳3,800, fees ৳2,473, paid ৳1,327
+       After:  COD collected ৳2,680, fees ৳1,353, paid ৳1,327
+     ৳2,680 is exactly what Steadfast says it collected. From now on, a
+     parcel Steadfast returned always counts ৳0 collected and only its
+     charge. That parcel was booked directly on Steadfast's website, so it
+     was never in sales or profit; only the payout screen was wrong.
+  2. The order's paid amount did not follow what Steadfast collected.
+     NM-3327: the order said Steadfast collected ৳8,935; Steadfast actually
+       collected ৳8,930 (the order total had been lowered to ৳8,930 after
+       booking). The payment is now ৳8,930, and the order is still fully paid.
+     NM-3329: the order said ৳1,199; Steadfast actually collected ৳1,150.
+       The payment is now ৳1,150, so the order shows ৳49 STILL DUE. Either
+       the rider gave the customer ৳49 off, or ৳49 is really owed. If you
+       let it go, add a ৳49 discount on that order.
+     From now on, whenever a payout shows a different COD than the order's
+     "COD via Steadfast" payment, the payment is set to what Steadfast
+     collected, the change is written in the order's history, and the line
+     shows as Matched. If the month is locked, the payment is left alone
+     and the line stays "to check" with the reason.
+  3. A returned parcel's order was "to check" for no reason. If a parcel
+     comes back and the order was marked returned, cancelled, or delivered
+     by hand (trouble case 3), it now matches, as long as the order does not
+     claim Steadfast collected cash. Steadfast's charge becomes that order's
+     courier cost.
+  4. A cancelled order's courier charge counted nowhere. Sales profit only
+     looked at delivered and returned orders. A cancelled order that
+     Steadfast still charged now shows in Sales profit with ৳0 sale and its
+     charge as a cost (on the payout date). No real order has this today.
+  5. Prepaid orders showed "Steadfast paid −৳61". An order paid in full in
+     advance (trouble case 2) shows nothing collected and only the delivery
+     charge kept, so its order page said "Steadfast paid −৳61". It now says
+     "Steadfast collected nothing and kept ৳61 in fees on 16 Oct". The
+     numbers were already right; only the wording was wrong. This was the
+     "showing wrongly" case. No payout itself showed ৳0: all 34 payouts
+     have their correct amount.
+  6. A credit could break the sum (has not happened yet). If Steadfast ever
+     pays MORE than COD minus fees (a credit), the old code dropped the
+     difference, so the lines would no longer add up. The difference is now
+     kept as a negative "other" amount, and the sum always matches.
+
+The two parcels settled quietly
+  NM-3315 (payout 1 Nov, SFC-32972012, ৳75 delivery charge): found by its
+    number. It is now marked "Not a shop sale: courier only". It is not in
+    sales, revenue, profit or order counts, and the ৳75 is not a loss.
+    The order was not re-created.
+  NM-1721 (payout 16 Oct, SFC-32659519, ৳47.50 charge): found by its
+    number. It is now marked "Returned parcel (order deleted)". There is no
+    sale, and the ৳47.50 counts as a courier cost in the same total as other
+    returned parcels' charges. October's Sales profit goes from ৳9,021.34 to
+    ৳8,973.84. The order was not re-created.
+  Both lines stay marked even when Steadfast is read again.
+
+Promo codes
+  - Applying, removing and re-applying a code in the cart only READS the
+    code. It never changes times_used (that was already true in today's
+    code; now there is a test for it).
+  - times_used goes up by one only inside place_order, the same server step
+    that creates the order. If the order fails, nothing is counted. Nobody
+    else (not visitors, not signed-in customers) can call the counter now.
+  - Cancelling or deleting an order that used a code gives the use back
+    (never below zero). Reopening a cancelled order counts it again.
+    A returned order still counts: it was a real order.
+  - The cart still shows only "Invalid or expired code".
+  - Orders DO store the code they used, so I recounted every code from real
+    orders that are not cancelled. Today there is only one code,
+    "11.11.OFFER1109": 1 use = 1 real order, so its count stays 1.
+    Older orders used codes that have since been deleted (BLIS26, SORRY50,
+    THANKYOU50, WELCOME200, WINTERASENAKNO); deleted codes have nothing left
+    to recount.
+  - Admin New order has no promo code field (it uses discount reasons), so
+    there was nothing to change there.
+
+Payouts whose totals changed
+  Payout date  | Old total | New total | Reason
+  14 Jan 2026  | ৳1,327    | ৳1,327    | Paid amount unchanged. COD ৳3,800 → ৳2,680 and
+               |           |           | fees ৳2,473 → ৳1,353 (returned parcel, error 1)
+  No other payout's numbers changed. On 16 Oct and 1 Nov only the line
+  labels changed (NM-1721, NM-3315), plus the matching on NM-3327 (7 Nov)
+  and NM-3329 (11 Nov).
+
+Payout lines I could not match (left "to check", not guessed)
+  16 Oct 2026 · payout SFC-32659519 · NM-3301 · ৳2,110
+    Steadfast collected ৳2,110 cash on delivery, but the order also has a
+    bKash payment of ৳2,110 ("Mark fully paid"). Either the customer paid
+    twice (and needs a refund), or the bKash payment was recorded by
+    mistake. Please check your bKash statement. If no bKash money came in,
+    delete that bKash payment; the line then matches on the next refresh.
+  Parcels booked directly on Steadfast's website (invoice "N/A", empty, or
+  Steadfast's own code) are not site orders. They stay in grey, as before.
+
+============================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+============================================================
+Open supabase/migration-047-batch46-payouts-promo.sql on GitHub (branch
+fix/batch-46-payouts-promo), copy ALL of it, paste it into the Supabase SQL
+Editor and press Run. It is one block (about 840 lines, because it has to
+include the full money and profit functions it changes).
+  - It runs inside one transaction: either everything happens or nothing does.
+  - Before changing anything, it copies the rows it will change into backup
+    tables (_b46_backup_payout_lines, _b46_backup_order_payments,
+    _b46_backup_promo_codes). Only you can read them; the website cannot.
+  - It is safe to run twice: the second run changes nothing and prints the
+    same counts.
+  - The last thing it prints is one row. You should see:
+      payout_lines_corrected          21
+      order_payments_corrected         2
+      unmatched_site_lines_remaining   0
+      lines_still_to_check             1   (NM-3301, see above)
+      payouts_that_add_up              34 of 34   (or more, if new payouts arrived)
+      promo_codes_recounted            1
+I tried the whole script on the live database inside a transaction that
+was undone, and it gave exactly these numbers. The Money balance check
+difference was ৳709.50 before and after, so the script does not move your
+books (see section 4 about that ৳709.50).
+
+WHAT NAEEM DOES AFTER MERGING
+  1) Run the SQL above.
+  2) Open Payouts and check the totals against your Steadfast statements.
+     Payout 14 Jan should now show COD ৳2,680 and ৳1,327 paid. 16 Oct and
+     1 Nov should show NM-1721 / NM-3315 in grey, not "to check".
+  3) Open Promo Codes and check the counts (11.11.OFFER1109 should say 1 used).
+  Also: decide about NM-3329 (৳49 due) and NM-3301 (paid twice?).
+  One step needs the computer: the Steadfast functions need redeploying so
+  FUTURE returned parcels are read the new way (see section 3).
+
+============================================================
+3. WHAT I COULD NOT FINISH
+============================================================
+  - The Steadfast functions on Supabase ("steadfast" and
+    "steadfast-refresh-all") are NOT redeployed. Deploying changes the live
+    shop, so it needs your yes. Until then:
+      * everything in the SQL already works (the two settlements, the
+        14 Jan fix, the COD payment correction for future payouts, keeping
+        settled lines settled, promo counting);
+      * only one rule waits for the deploy: a FUTURE parcel that Steadfast
+        returns would again be counted as collected (error 1). Tell me
+        "deploy the Steadfast functions" and I will do it from the computer
+        with: npx supabase functions deploy steadfast --use-api and
+        npx supabase functions deploy steadfast-refresh-all --use-api.
+  - NM-3301 is left "to check" on purpose (see above).
+
+============================================================
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+============================================================
+  - The Money balance check is already off by ৳709.50 today, before this
+    batch. It was the same before and after my SQL, so it comes from
+    something else. Money page → Show the sums will point at it.
+  - NM-1972 (৳3,230, ৳1,600 paid by bKash) and NM-3330 (৳4,227, ৳4,200 paid
+    by bank) are "pay later" orders showing "unpaid" with money still due.
+    That may be correct, but please check them.
+  - The promo_codes table still carries Supabase's default TRUNCATE /
+    TRIGGER / REFERENCES rights for visitors. The website cannot use them
+    (the API does not offer TRUNCATE), but cleaning them up would be tidier.
+  - On a payout's detail page, a ৳47.50 charge shows as "−48" under Fees
+    and "−৳47" under You get. Both are rounded to whole taka in different
+    directions; hover or long-press shows the exact ৳47.50.
+  - Payout lines only have a COD figure per parcel. Each parcel's delivery
+    charge and 1% fee are worked out from the payout totals, so per order
+    they are close, not exact (per payout they are exact). That is how
+    Steadfast reports them.
+  - New migration files in this repo live in supabase/ as
+    migration-NNN-*.sql, not in supabase/migrations/. I followed the repo's
+    own convention: supabase/migration-047-batch46-payouts-promo.sql.
+
+============================================================
+5. DESIGN DECISIONS
+============================================================
+  - A payout line now has a "kind": order / courier_only / returned. It is
+    one small column and the simplest way to mark NM-3315 and NM-1721
+    without inventing orders.
+  - Settled lines are protected by the database itself, not only by the
+    website code. The protection works even before the Steadfast functions
+    are redeployed.
+  - The COD correction trusts Steadfast's payout over the booked amount,
+    because the payout is the record of real cash. It only corrects an
+    existing "COD via Steadfast" payment. It never creates one and never
+    deletes one (that is why NM-3301 is left to you).
+  - A courier-only line stays out of profit entirely (no sale, no loss).
+    In the Money books it shows as "Courier only, not a shop sale", next to
+    unmatched parcels, so the Steadfast balance stays true. If the friend's
+    ৳75 went into an account you count, it may show up as a small count
+    difference. It is before your money start date (13 Nov), so today it
+    does not.
+  - Returned orders keep their promo use; only cancelled or deleted orders
+    give it back.
+  - Testing: everything ran against the live database inside one
+    transaction that was always undone. The payout screen test used
+    made-up payouts answered in the browser. I checked afterwards that no
+    test rows are left (no E2E-B46 product, code or payout), that the live
+    schema is unchanged, and that Inventory mode is still On. I created no
+    leftover rows, so nothing needed removing.
+
+============================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+============================================================
+  1. Reconcile Steadfast every month (medium). A one-line monthly check —
+     "Steadfast says it paid ৳X, you placed ৳X in accounts" — would catch
+     a missing or double-placed payout before the month is locked.
+  2. Single-use / per-customer promo codes (medium). Today a code has only
+     a total limit. A code meant for one person can still be used by
+     anyone who learns it. Tying a code to a phone number stops sharing.
+  3. Alert on COD shortfalls (small). When Steadfast collects less than
+     booked (like NM-3329), send a Telegram message straight away. Then you
+     can call the customer while the delivery is fresh.
+  4. A "parcel with no order" button (medium). Today, settling a parcel like
+     NM-3315 needs SQL. A small choice on the payout line (courier only /
+     returned) would let you do it yourself in future. Not built, because
+     this batch was asked to add no new screens or workflows.
+
+============================================================
+TESTS AND RESULT
+============================================================
+  New tests:
+    - src/lib/batch46.test.ts (13 unit tests): payout with a delivered,
+      prepaid, returned, courier-only and deleted-order line adds up
+      exactly; returned/prepaid/courier-only add no sale; a deleted order's
+      line is "to check" with no cost; a credit still adds up; screens count
+      orders right; applying a code 5 times only reads it; all bad codes
+      look the same; the cart has one message; the counter is closed.
+    - e2e/batch-46.spec.ts: (1) 33 database checks in one rolled-back
+      transaction (migration + promo counted only by a real order, failed
+      order counts nothing, cancel / reopen / delete, never below zero,
+      anonymous call and anonymous UPDATE refused, same message for
+      expired and unknown codes; payout adds up, COD payment follows the
+      payout, returned/courier-only/cancelled/deleted cases, the balance
+      check does not move, settled lines survive a re-read); (2) the payout
+      screen at 390 px plus the prepaid order line, with screenshots in
+      reports/batch-46-screens/.
+  During the batch: build passed, 549/549 unit tests, e2e/batch-46.spec.ts
+  2/2 passed.
+  Final full run (npm run verify, once, 36.6 min):
+    FAILED — build OK · unit tests 549 of 549 passed · browser tests:
+    parallel group 76 passed, 9 failed, 112 skipped, 11 did not run;
+    serial group 196 passed, 25 failed, 16 skipped, 34 did not run.
+    Both Batch 46 browser tests PASSED in that run.
+    The 34 failures are all in files this batch did not touch (batches 23,
+    26, 27, 28, 29, 30, 32, 33, 35, 40, 41, 42). They are the same group
+    that Batch 45's report lists as caused by the live shop's state, not by
+    code: old shop tests look for live products with stock that only lots
+    hold now (Inventory mode is On); Batch 35 expects "show rider's phone"
+    Off (it is On in your settings); Batch 41 expects unconfirmed opening
+    balances (yours are confirmed); Batch 42's live Dashboard check looks
+    for the "Inventory mode is Off" note, which correctly does not show
+    while the mode is On. None of them touch payouts or promo codes, and
+    none involve a timing flake in a file I changed, so following the
+    testing rule I did not re-run anything. They need the clean-up batch
+    Batch 45 already suggested: rewrite the old shop tests so they create
+    their own stocked test product.
+
+Branch: fix/batch-46-payouts-promo

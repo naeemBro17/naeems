@@ -7,6 +7,7 @@ import {
   monthLabel,
   monthOptions,
   monthTotals,
+  payoutOrderCount,
   overdueOrders,
   payoutFeesPaisa,
   payoutPill,
@@ -171,7 +172,7 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
             <div className="adm-payouts__list" data-testid="payouts-list">
               {list.map((p) => {
                 const pill = payoutPill(p);
-                const orders = p.items.length || p.parcel_count;
+                const orders = payoutOrderCount(p);
                 return (
                   <button key={p.id} type="button" className="adm-payouts__row" onClick={() => onOpenPayout(p.id)}>
                     <span className="adm-payouts__row-main">

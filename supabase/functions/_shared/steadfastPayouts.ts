@@ -180,7 +180,17 @@ export interface PayoutItem {
   feeEstimated: boolean;
   /** Steadfast gave this parcel's own delivery charge. */
   chargeGiven: boolean;
+  /** Batch 46: Steadfast returned / cancelled this parcel — nothing was
+   *  collected, whatever COD it was booked with; only its charge is kept. */
+  notDelivered: boolean;
   raw: Json;
+}
+
+/** Steadfast's parcel status for a parcel that went back to the shop
+ *  ("cancelled", "returned"). "partial_delivered" is not one: part was paid. */
+export function parcelNotDelivered(status: unknown): boolean {
+  const s = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  return /cancel/.test(s) || /^return(ed)?$/.test(s);
 }
 
 const COD_KEYS = ['cod_amount', 'collected_amount', 'cod', 'amount_to_collect', 'collection_amount'] as const;
@@ -198,7 +208,11 @@ export function readPayoutItem(obj: Json): PayoutItem | null {
   const consignmentId = text(pick(obj, ['consignment_id', 'cid', 'consignment']));
   const invoice = text(pick(obj, ['invoice', 'merchant_invoice', 'invoice_id', 'order_id']));
   if (!consignmentId && !invoice) return null;
-  const codPaisa = toPaisa(pick(obj, COD_KEYS));
+  // Batch 46: `cod_amount` is what the parcel was BOOKED with. On a parcel
+  // Steadfast returned, nothing was collected (the payout's own "amount"
+  // leaves it out), so it collected ৳0.
+  const notDelivered = parcelNotDelivered(obj.status);
+  const codPaisa = notDelivered ? 0 : toPaisa(pick(obj, COD_KEYS));
   const deliveryChargePaisa = Math.abs(toPaisa(pick(obj, CHARGE_KEYS)));
   const feeGiven = hasAny(obj, FEE_KEYS);
   let codFeePaisa = feeGiven ? Math.abs(toPaisa(pick(obj, FEE_KEYS))) : Math.round(codPaisa * COD_FEE_RATE);
@@ -227,6 +241,7 @@ export function readPayoutItem(obj: Json): PayoutItem | null {
     netPaisa,
     feeEstimated: !feeGiven,
     chargeGiven: hasAny(obj, CHARGE_KEYS),
+    notDelivered,
     raw: obj,
   };
 }
@@ -286,6 +301,8 @@ export interface OrderForMatch {
   /** The delivery fee on our order — the guide for splitting Steadfast's
    *  payout-level delivery charges between parcels. */
   delivery_fee?: number | null;
+  /** The order's "COD via Steadfast" payment row, if any (Batch 46). */
+  steadfast_cod_paid?: number;
 }
 
 /** Our order numbers ("NM-1979", migration-021); the site books every
@@ -341,8 +358,11 @@ export function allocatePayoutTotals<T extends PayoutItem>(
   const codSum = cods.reduce((a, b) => a + b, 0);
   const feeSum = fees.reduce((a, b) => a + b, 0);
   const deliverySum = delivery.reduce((a, b) => a + b, 0);
-  const otherTotal = Math.max(0, codSum - feeSum - deliverySum - summary.amountPaisa);
-  const others = otherTotal > 0 ? splitExactly(otherTotal, cods.some((c) => c > 0) ? cods : cods.map(() => 1)) : cods.map(() => 0);
+  // Batch 46: never clamped — if Steadfast paid MORE than COD − fee −
+  // delivery (a credit), "other" is negative, so the parcels still add up
+  // to exactly what was paid.
+  const otherTotal = codSum - feeSum - deliverySum - summary.amountPaisa;
+  const others = otherTotal !== 0 ? splitExactly(otherTotal, cods.some((c) => c > 0) ? cods : cods.map(() => 1)) : cods.map(() => 0);
   return items.map((item, i) => ({
     ...item,
     codFeePaisa: fees[i],
@@ -406,6 +426,16 @@ export function matchItems(
       return { ...base, status: 'to_check', reason: 'duplicate' };
     }
     seenOrders.add(order.id);
+    // Batch 46: a parcel Steadfast returned collected nothing, so nothing is
+    // expected — whatever the order became here (returned, cancelled, or
+    // delivered by hand). It only needs checking when the order still
+    // records cash "collected by Steadfast".
+    if (item.notDelivered) {
+      const recorded = toPaisa(order.steadfast_cod_paid ?? 0);
+      return recorded > 0
+        ? { ...base, expectedCodPaisa: recorded, status: 'to_check', reason: 'cod_differs' }
+        : { ...base, expectedCodPaisa: 0, status: 'matched', reason: null };
+    }
     if (order.status === 'cancelled') return { ...base, status: 'to_check', reason: 'order_cancelled' };
     if (expected !== item.codPaisa) return { ...base, status: 'to_check', reason: 'cod_differs' };
     return { ...base, status: 'matched', reason: null };

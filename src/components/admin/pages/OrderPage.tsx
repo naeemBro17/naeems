@@ -747,10 +747,22 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                     {canSeeCosts && payoutInfo?.kind === 'ready' && (
                       payoutInfo.data ? (
                         <p className="adm-payouts__paid" data-testid="order-steadfast-paid">
-                          Steadfast paid{' '}
-                          <b title={takaExact(toPaisa(payoutInfo.data.net_received))}>{takaWhole(toPaisa(payoutInfo.data.net_received))}</b>
-                          {payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''} (fees{' '}
-                          <span title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</span>)
+                          {toPaisa(payoutInfo.data.net_received) + toPaisa(payoutInfo.data.total_kept) > 0 ? (
+                            <>
+                              Steadfast paid{' '}
+                              <b title={takaExact(toPaisa(payoutInfo.data.net_received))}>{takaWhole(toPaisa(payoutInfo.data.net_received))}</b>
+                              {payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''} (fees{' '}
+                              <span title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</span>)
+                            </>
+                          ) : (
+                            // Batch 46: prepaid or returned — nothing collected,
+                            // Steadfast only kept its charge (never "paid −৳61").
+                            <>
+                              Steadfast collected nothing and kept{' '}
+                              <b title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</b>{' '}
+                              in fees{payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''}
+                            </>
+                          )}
                           {payoutInfo.data.payout_id && (
                             <>
                               {' · '}

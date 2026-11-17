@@ -127,6 +127,7 @@ const TYPE_LABELS: Record<LedgerType, string> = {
   steadfast_payout_out: 'Paid out by Steadfast',
   courier_fees: 'Courier & COD fees (in order profit)',
   steadfast_unmatched: 'Parcel not matched to an order',
+  steadfast_courier_only: 'Courier only, not a shop sale',
 };
 
 export function typeLabel(type: LedgerType): string {

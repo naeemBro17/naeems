@@ -3,6 +3,7 @@ import {
   fetchPayout,
   isOutsideParcel,
   itemFeesPaisa,
+  payoutOrderCount,
   payoutPill,
   reasonText,
   takaExact,
@@ -61,7 +62,7 @@ export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
 
 function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (orderNumber: string) => void }) {
   const pill = payoutPill(payout);
-  const orders = payout.items.length || payout.parcel_count;
+  const orders = payoutOrderCount(payout);
   const sum = payout.items.reduce(
     (t, i) => ({
       cod: t.cod + toPaisa(i.cod_collected),
@@ -102,11 +103,14 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
           </thead>
           <tbody>
             {payout.items.map((item) => {
-              const outside = isOutsideParcel(item);
+              // Booked on Steadfast's website, or settled (courier only /
+              // returned parcel whose order was deleted): grey, never "to check".
+              const outside = isOutsideParcel(item) || item.line_kind !== 'order';
+              const toCheck = item.match_status === 'to_check' && !outside;
               const label = item.invoice ?? (item.consignment_id ? `Parcel ${item.consignment_id}` : '—');
               const reason = reasonText(item);
               return (
-                <tr key={item.id} className={item.match_status === 'to_check' && !outside ? 'is-check' : undefined}>
+                <tr key={item.id} className={toCheck ? 'is-check' : undefined}>
                   <td>
                     {item.order_id && item.invoice ? (
                       <button type="button" className="adm-payouts__link" onClick={() => onOpenOrder(item.invoice ?? '')}>
@@ -120,7 +124,7 @@ function PayoutDetail({ payout, onOpenOrder }: { payout: Payout; onOpenOrder: (o
                         className={`adm-payouts__reason${outside ? ' adm-payouts__reason--outside' : ''}`}
                         data-testid="payout-reason"
                       >
-                        {outside ? reason : `To check: ${reason}`}
+                        {toCheck ? `To check: ${reason}` : reason}
                       </span>
                     )}
                   </td>

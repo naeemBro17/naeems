@@ -96,11 +96,15 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
       }
       const ids = [...found.keys()];
       const paid = new Map<string, number>();
+      const viaSteadfast = new Map<string, number>();
       if (ids.length > 0) {
         const { data, error } = await db.from('order_payments').select('order_id, kind, amount, source').in('order_id', ids);
         if (error) fail('Reading payments', error.message);
         for (const p of (data ?? []) as PaymentRow[]) {
-          if (p.source === 'steadfast_cod') continue;
+          if (p.source === 'steadfast_cod') {
+            viaSteadfast.set(p.order_id, (viaSteadfast.get(p.order_id) ?? 0) + Number(p.amount));
+            continue;
+          }
           const amount = Number(p.amount) * (p.kind === 'refund' ? -1 : 1);
           paid.set(p.order_id, (paid.get(p.order_id) ?? 0) + amount);
         }
@@ -115,6 +119,7 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
         steadfast_cod_amount: o.steadfast_cod_amount === null ? null : Number(o.steadfast_cod_amount),
         paid_before_courier: Math.round((paid.get(o.id) ?? 0) * 100) / 100,
         delivery_fee: o.delivery_fee === null ? null : Number(o.delivery_fee),
+        steadfast_cod_paid: Math.round((viaSteadfast.get(o.id) ?? 0) * 100) / 100,
       }));
     },
 

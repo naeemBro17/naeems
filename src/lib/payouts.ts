@@ -10,6 +10,11 @@ import { MATCH_REASON_TEXT, bookedOutsideSite, toPaisa, type MatchReason } from 
  * page says so instead of breaking.
  */
 
+/** Batch 46: what a payout line is — a parcel of an order ('order'), a
+ *  parcel that was not a shop sale ('courier_only'), or a returned parcel
+ *  whose order was deleted ('returned'). */
+export type PayoutLineKind = 'order' | 'courier_only' | 'returned';
+
 export interface PayoutItem {
   id: string;
   payout_id: string;
@@ -25,6 +30,7 @@ export interface PayoutItem {
   match_status: 'matched' | 'to_check';
   match_reason: MatchReason | null;
   note: string | null;
+  line_kind: PayoutLineKind;
 }
 
 export interface Payout {
@@ -61,6 +67,14 @@ export type LoadState<T> = { kind: 'ready'; data: T } | { kind: 'no-db' } | { ki
 
 const ITEM_COLUMNS =
   'id, payout_id, consignment_id, invoice, order_id, cod_collected, delivery_charge, cod_fee, other_deduction, net_paid, expected_cod, match_status, match_reason, note';
+/** The same plus line_kind (migration-047). Until it is run the column is
+ *  missing and the page reads without it. */
+const ITEM_COLUMNS_B46 = `${ITEM_COLUMNS}, line_kind`;
+
+/** A column the query asked for is not there yet. */
+function isMissingColumn(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));
+}
 
 /** The table (or function) isn't there yet — migration-038 not run. */
 export function isMissingSchema(error: { code?: string; message?: string } | null): boolean {
@@ -94,6 +108,7 @@ function toItem(row: Record<string, unknown>): PayoutItem {
     match_status: row.match_status === 'matched' ? 'matched' : 'to_check',
     match_reason: (row.match_reason as MatchReason | null) ?? null,
     note: (row.note as string | null) ?? null,
+    line_kind: row.line_kind === 'courier_only' || row.line_kind === 'returned' ? row.line_kind : 'order',
   };
 }
 
@@ -111,23 +126,27 @@ function toPayout(row: Record<string, unknown>): Payout {
   };
 }
 
+function payoutsQuery(columns: string) {
+  const select: string = `id, steadfast_payment_id, paid_at, total_amount, parcel_count, steadfast_payout_items(${columns})`;
+  return supabase.from('steadfast_payouts').select(select);
+}
+
 export async function fetchPayouts(): Promise<LoadState<Payout[]>> {
-  const { data, error } = await supabase
-    .from('steadfast_payouts')
-    .select(`id, steadfast_payment_id, paid_at, total_amount, parcel_count, steadfast_payout_items(${ITEM_COLUMNS})`)
-    .order('paid_at', { ascending: false, nullsFirst: false });
+  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B46).order('paid_at', { ascending: false, nullsFirst: false });
+  if (isMissingColumn(error)) {
+    ({ data, error } = await payoutsQuery(ITEM_COLUMNS).order('paid_at', { ascending: false, nullsFirst: false }));
+  }
   if (error) return isMissingSchema(error) ? { kind: 'no-db' } : { kind: 'error', message: error.message };
-  return { kind: 'ready', data: ((data ?? []) as Record<string, unknown>[]).map(toPayout) };
+  return { kind: 'ready', data: ((data ?? []) as unknown as Record<string, unknown>[]).map(toPayout) };
 }
 
 export async function fetchPayout(id: string): Promise<LoadState<Payout | null>> {
-  const { data, error } = await supabase
-    .from('steadfast_payouts')
-    .select(`id, steadfast_payment_id, paid_at, total_amount, parcel_count, steadfast_payout_items(${ITEM_COLUMNS})`)
-    .eq('id', id)
-    .maybeSingle();
+  let { data, error } = await payoutsQuery(ITEM_COLUMNS_B46).eq('id', id).maybeSingle();
+  if (isMissingColumn(error)) {
+    ({ data, error } = await payoutsQuery(ITEM_COLUMNS).eq('id', id).maybeSingle());
+  }
   if (error) return isMissingSchema(error) ? { kind: 'no-db' } : { kind: 'error', message: error.message };
-  return { kind: 'ready', data: data ? toPayout(data as Record<string, unknown>) : null };
+  return { kind: 'ready', data: data ? toPayout(data as unknown as Record<string, unknown>) : null };
 }
 
 export async function fetchSyncState(): Promise<SyncState | null> {
@@ -207,6 +226,13 @@ export function isOutsideParcel(i: Pick<PayoutItem, 'match_reason' | 'invoice'>)
   return bookedOutsideSite({ reason: i.match_reason, invoice: i.invoice });
 }
 
+/** Lines that are orders (a courier-only parcel or a returned parcel whose
+ *  order was deleted is not counted as an order). */
+export function payoutOrderCount(payout: Pick<Payout, 'items' | 'parcel_count'>): number {
+  if (payout.items.length === 0) return payout.parcel_count;
+  return payout.items.filter((i) => i.line_kind === 'order').length;
+}
+
 export function payoutToCheck(payout: Pick<Payout, 'items'>): number {
   return payout.items.filter((i) => i.match_status === 'to_check' && !isOutsideParcel(i)).length;
 }
@@ -250,11 +276,11 @@ export function monthTotals(payouts: readonly Payout[], key: string): MonthTotal
   for (const p of payouts) {
     if (!p.paid_at || dhakaMonthKey(p.paid_at) !== key) continue;
     for (const i of p.items) {
+      if (i.line_kind === 'order') totals.orders += 1;
       totals.codPaisa += toPaisa(i.cod_collected);
       totals.chargesPaisa += toPaisa(i.delivery_charge) + toPaisa(i.other_deduction);
       totals.codFeePaisa += toPaisa(i.cod_fee);
       totals.receivedPaisa += toPaisa(i.net_paid);
-      totals.orders += 1;
     }
   }
   return totals;
@@ -304,7 +330,13 @@ export function updatedAgo(iso: string | null, now: Date = new Date()): string {
   return `updated ${shortDhakaDate(iso)}`;
 }
 
-export function reasonText(item: Pick<PayoutItem, 'match_reason' | 'note' | 'invoice'>): string | null {
+export const LINE_KIND_TEXT: Record<Exclude<PayoutLineKind, 'order'>, string> = {
+  courier_only: 'Not a shop sale: courier only',
+  returned: 'Returned parcel (order deleted): its charge counts as a delivery cost',
+};
+
+export function reasonText(item: Pick<PayoutItem, 'match_reason' | 'note' | 'invoice' | 'line_kind'>): string | null {
+  if (item.line_kind !== 'order') return item.note ?? LINE_KIND_TEXT[item.line_kind];
   if (!item.match_reason) return null;
   if (isOutsideParcel(item)) return 'Booked directly on Steadfast, not from this site';
   return item.note ?? MATCH_REASON_TEXT[item.match_reason];
