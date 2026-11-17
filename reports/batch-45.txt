@@ -2380,6 +2380,13 @@ from lots). Batch 23/27 video and Batch 40 broken-image failures were
 already in the old-failures list. I did not re-run the suite (the rules say
 not to re-run it for failures in files this batch did not touch).
 
+Second full run (17 Nov, after .env.e2e was put back): the same result —
+FAILED, 108 passed, 28 failed, 341 skipped (18.2 min). The new .env.e2e
+holds only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (a copy of .env);
+the tests need E2E_TEST_EMAIL, E2E_TEST_PASSWORD, E2E_ADMIN_EMAIL,
+E2E_ADMIN_PASSWORD and E2E_MOD_PASSWORD (see reports/batch-21.txt Part 3).
+With those added, run npm run verify once more.
+
 What DID run and pass for this batch:
 - Database checks (e2e/sql/batch-45-inventory.sql, with the whole
   migration, in ONE transaction that is always undone): 45 of 45 passed —
