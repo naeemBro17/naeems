@@ -71,3 +71,58 @@ test('Task 1: the delete confirm field keeps focus and takes typed digits while 
   await page.screenshot({ path: `${SHOTS}/01-delete-field-typed.png` });
   await page.getByRole('button', { name: 'Cancel' }).click();
 });
+
+/* ------------------------------- Task 2: description keeps the keyboard */
+
+test('Task 2: typing a long product description keeps the same editor focused the whole time (no re-mount)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const found = await select<{ id: string }[]>(null, 'products_view?select=id&is_active=eq.true&order=name.asc&limit=1');
+  const id = found.data?.[0]?.id;
+  test.skip(!id, 'No product to open.');
+  // Nothing is saved: any product write is refused in the browser.
+  await page.route(/\/rest\/v1\/products(\?|$)/, (route) => (route.request().method() === 'GET' ? route.fallback() : route.abort()));
+  await adminAt(page, `/admin/products/${id}/edit`);
+  const box = page.locator('#pf-description');
+  await expect(box).toBeVisible({ timeout: 20_000 });
+  await box.click();
+  await page.keyboard.press('Control+End');
+  // Mark the editor's DOM node, then count how often Tiptap pushes new
+  // options (setProps + updateState) into the live editor while typing —
+  // what used to happen on every key press.
+  const hooked = await page.evaluate(() => {
+    type Ed = { setOptions: (o: unknown) => void };
+    const el = document.getElementById('pf-description') as HTMLElement & { b47?: boolean; editor?: Ed };
+    el.b47 = true;
+    const w = window as Window & { b47Set?: number };
+    w.b47Set = 0;
+    const ed = el.editor;
+    if (!ed) return false;
+    const original = ed.setOptions.bind(ed);
+    ed.setOptions = (o: unknown) => {
+      w.b47Set = (w.b47Set ?? 0) + 1;
+      original(o);
+    };
+    return true;
+  });
+  expect(hooked, 'the editor instance is reachable').toBe(true);
+  const text = ' Gentle foaming cleanser for normal to oily skin, with ceramides and niacinamide.';
+  for (let i = 0; i < text.length; i += 1) {
+    await page.keyboard.type(text[i]);
+    if (i % 10 === 0) await page.waitForTimeout(400);
+  }
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => {
+    const el = document.getElementById('pf-description') as (HTMLElement & { b47?: boolean }) | null;
+    return {
+      same: el?.b47 === true,
+      focused: document.activeElement === el,
+      setOptionsCalls: (window as Window & { b47Set?: number }).b47Set ?? -1,
+    };
+  });
+  expect(after.same, 'the editor was never replaced').toBe(true);
+  expect(after.focused, 'the editor kept focus').toBe(true);
+  expect(after.setOptionsCalls, 'nothing was pushed into the editor while typing').toBe(0);
+  await expect(box).toContainText('ceramides and niacinamide.');
+  await box.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/02-description-typing.png` });
+});
