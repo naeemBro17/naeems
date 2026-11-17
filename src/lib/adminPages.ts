@@ -126,6 +126,21 @@ export const adminPath = {
   payout: (id: string) => `/admin/payouts/${encodeURIComponent(id)}`,
 };
 
+/**
+ * Batch 47: a click the browser should handle itself — Ctrl/⌘/Shift-click
+ * or a middle click opens the link in a new tab or window. A list row's
+ * own click handler must then leave it alone (the row's <Link> does).
+ */
+export function isNewTabClick(e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; button: number }): boolean {
+  return e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0;
+}
+
+/** For a click on a row's padding (outside its <Link>): a new-tab click
+ *  opens the same page in a new tab instead of this one. */
+export function openInNewTab(path: string): void {
+  window.open(path, '_blank', 'noopener');
+}
+
 /** A "next" link after signing in may only lead back into the admin. */
 export function safeAdminNext(next: string | null | undefined): string {
   if (!next) return '/admin';

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { phoneSearchCore } from '../../lib/phone';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchCustomersV3, type CustomerRow } from '../../lib/adminData';
 import { AdminIcon } from './ui/AdminIcon';
-import { adminPath } from '../../lib/adminPages';
+import { adminPath, isNewTabClick, openInNewTab } from '../../lib/adminPages';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import { formatTakaBd } from '../../lib/adminNav';
 import { AdminPageHeader, AdminSearch, ChipRow, EmptyState, SkeletonRows } from './ui/AdminUi';
@@ -233,14 +233,19 @@ export function CustomersTab() {
             // Batch 35 Part 4: name and total spent; "1 order, last 8 Oct";
             // a small due pill only when owed. The phone lives on the
             // customer page (search still finds it).
-            <div key={c.key} role="listitem" className="adm-lrow adm-crow2" data-testid="customer-row" onClick={() => openCustomer(c.key)}>
-              <button
-                type="button"
+            <div
+              key={c.key}
+              role="listitem"
+              className="adm-lrow adm-crow2"
+              data-testid="customer-row"
+              onClick={(e) => (isNewTabClick(e) ? openInNewTab(adminPath.customer(c.key)) : openCustomer(c.key))}
+            >
+              {/* Batch 47: a real link (Ctrl+click / "Open in new tab" work). */}
+              <Link
+                to={adminPath.customer(c.key)}
+                state={{ fromList: true }}
                 className="adm-lrow__open adm-crow2__open"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openCustomer(c.key);
-                }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <span className="adm-orow2__line">
                   <span className="adm-orow2__name">
@@ -264,7 +269,7 @@ export function CustomersTab() {
                     {formatTakaBd(dueOf(c))} due
                   </span>
                 ) : null}
-              </button>
+              </Link>
               <CustomerTagChips tags={notesFor(c)} />
             </div>
           ))}

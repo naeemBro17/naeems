@@ -126,3 +126,35 @@ test('Task 2: typing a long product description keeps the same editor focused th
   await box.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/02-description-typing.png` });
 });
+
+/* ----------------------------------- Task 3: admin rows are real links */
+
+test('Task 3: Ctrl+click on an order row opens that order in a new tab; order, product, customer and lot rows are real links', async ({ page, context }) => {
+  test.setTimeout(120_000);
+  await adminAt(page, '/admin?tab=orders');
+  const link = page.getByTestId('order-row-link').first();
+  await expect(link).toBeVisible({ timeout: 20_000 });
+  const href = await link.getAttribute('href');
+  expect(href).toMatch(/^\/admin\/orders\/[^/]+$/);
+  const [tab] = await Promise.all([context.waitForEvent('page'), link.click({ modifiers: ['Control'] })]);
+  await tab.waitForLoadState();
+  expect(new URL(tab.url()).pathname).toBe(href);
+  await expect(tab.getByTestId('admin-order-page')).toBeVisible({ timeout: 20_000 });
+  // The first tab did not move.
+  expect(new URL(page.url()).pathname).toBe('/admin');
+  await tab.close();
+  // A plain click still opens the order in this tab.
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await expect(page.getByTestId('admin-order-page')).toBeVisible({ timeout: 20_000 });
+
+  await page.goto('/admin?tab=products');
+  await expect(page.locator('[data-testid="product-row"] a.adm-lrow__open').first()).toHaveAttribute('href', /^\/admin\/products\/[^/]+\/edit$/, { timeout: 20_000 });
+  await page.goto('/admin?tab=customers');
+  await expect(page.locator('[data-testid="customer-row"] a.adm-lrow__open').first()).toHaveAttribute('href', /^\/admin\/customers\/[^/]+$/, { timeout: 20_000 });
+  await page.goto('/admin?tab=inventory');
+  const lots = page.getByTestId('inv-lot-link');
+  await expect(page.getByTestId('inv-lots').or(page.getByText('No lots yet'))).toBeVisible({ timeout: 20_000 });
+  if ((await lots.count()) > 0) await expect(lots.first()).toHaveAttribute('href', /inv=lot&lot=/);
+  await page.screenshot({ path: `${SHOTS}/03-lot-rows-links.png` });
+});
