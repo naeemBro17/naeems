@@ -24,6 +24,7 @@ import { PayoutsTab } from '../components/admin/PayoutsTab';
 import { InventoryTab } from '../components/admin/inventory/InventoryTab';
 import { MoneyTab } from '../components/admin/money/MoneyTab';
 import { ReportsTab } from '../components/admin/reports/ReportsTab';
+import { KaarbarImportTab } from '../components/admin/kaarbar/KaarbarImportTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
 import { fetchOwnRoleName } from '../lib/staff';
@@ -279,6 +280,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         {active === 'settings' && <SettingsTab />}
         {active === 'team' && <TeamTab />}
         {active === 'activity' && <ActivityLogTab />}
+        {active === 'kaarbar' && <KaarbarImportTab />}
         {active === 'profile' && <MyProfileTab />}
         </>
         )}

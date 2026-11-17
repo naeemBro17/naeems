@@ -22,7 +22,7 @@ describe('admin navigation', () => {
       ['CATALOG', ['Products', 'Inventory', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Wholesalers', 'Reviews']],
       ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
-      ['ADMIN', ['Team', 'Activity Log', 'Settings']],
+      ['ADMIN', ['Team', 'Activity Log', 'Import from Kaarbar', 'Settings']],
     ]);
   });
 
@@ -31,7 +31,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'settings',
+      'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'kaarbar', 'settings',
     ]);
   });
 
@@ -62,7 +62,7 @@ describe('admin navigation', () => {
       'edit_brands', 'edit_customer_notes',
     ];
     const ids = visibleNavItems(staffWith(all)).map((i) => i.id);
-    for (const id of ['team', 'activity', 'settings', 'import-export', 'promo-codes', 'reviews', 'bento', 'design']) {
+    for (const id of ['team', 'activity', 'kaarbar', 'settings', 'import-export', 'promo-codes', 'reviews', 'bento', 'design']) {
       expect(ids).not.toContain(id);
     }
   });

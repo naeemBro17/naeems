@@ -200,7 +200,7 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
     'Products', 'Inventory', 'Categories', 'Brands', 'Import / Export',
     'Promo Codes', 'Wholesalers', 'Reviews',
     'Bento Tiles', 'Banner & Texts',
-    'Team', 'Activity Log', 'Settings',
+    'Team', 'Activity Log', 'Import from Kaarbar', 'Settings',
   ]);
   await expect(page.locator('.adm-sidebar__item--on')).toHaveText('Products');
   await expect(page.getByRole('link', { name: /View site/ })).toHaveAttribute('target', '_blank');

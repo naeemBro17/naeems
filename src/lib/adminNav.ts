@@ -25,6 +25,7 @@ export type AdminSection =
   | 'design'
   | 'team'
   | 'activity'
+  | 'kaarbar'
   | 'settings'
   | 'profile'
   | 'more';
@@ -109,6 +110,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'design', label: 'Banner & Texts', moreLabel: 'Banner, Expert page, Texts', icon: 'design', group: 'design' },
   { id: 'team', label: 'Team', icon: 'team', group: 'admin', superAdminOnly: true },
   { id: 'activity', label: 'Activity Log', icon: 'activity', group: 'admin', superAdminOnly: true },
+  // Batch 49: customers and expenses from Kaarbar; Super Admin only (the
+  // database refuses anyone else, is_admin()).
+  { id: 'kaarbar', label: 'Import from Kaarbar', icon: 'import', group: 'admin', superAdminOnly: true },
   { id: 'settings', label: 'Settings', icon: 'settings', group: 'admin' },
   { id: 'profile', label: 'My Profile', icon: 'profile', group: 'admin' },
 ];
