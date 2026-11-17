@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchLots, fetchStockUnits, lotTotals } from '../../../lib/inventory/api';
-import type { LotSummary, StockUnit } from '../../../lib/inventory/types';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchLots, lotTotals } from '../../../lib/inventory/api';
+import type { LotSummary } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
 import { takaWhole, takaExact } from '../../../lib/payouts';
 import { useProducts } from '../../../contexts/ProductContext';
@@ -8,7 +8,6 @@ import { AdminPageHeader, EmptyState, ListGroup, ListRow, SkeletonRows } from '.
 import { useInvNav } from './invNav';
 import { LotForm } from './LotForm';
 import { LotDetailView } from './LotDetailView';
-import { NeedsWeightView } from './NeedsWeightView';
 import { CompareView } from './CompareView';
 import { OpeningStockView } from './OpeningStockView';
 import { ShortfallsView } from './ShortfallsView';
@@ -16,6 +15,8 @@ import { SalesProfitView } from './SalesProfitView';
 import { ModeView } from './ModeView';
 import { OffersView } from './OffersView';
 import { BuyingListView } from './BuyingListView';
+import { StockCheckView } from './StockCheckView';
+import { BuyingPricesView } from './BuyingPricesView';
 import { formatLotDate, sourceLabel } from './invFormat';
 import '../../../styles/adminInventory.css';
 
@@ -31,7 +32,6 @@ export function InventoryTab() {
   if (view === 'new') return <LotForm lotId={null} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
   if (view === 'edit' && lotId) return <LotForm lotId={lotId} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
   if (view === 'lot' && lotId) return <LotDetailView key={lotId} lotId={lotId} onBack={back} onEdit={() => open('edit', lotId)} onDeleted={() => open('home', undefined, { replace: true })} />;
-  if (view === 'weights') return <NeedsWeightView onBack={back} />;
   if (view === 'compare') return <CompareView onBack={back} />;
   if (view === 'opening') return <OpeningStockView onBack={back} onOpenLot={(id) => open('lot', id)} />;
   if (view === 'shortfalls') return <ShortfallsView onBack={back} />;
@@ -39,18 +39,17 @@ export function InventoryTab() {
   if (view === 'mode') return <ModeView onBack={back} />;
   if (view === 'offers') return <OffersView onBack={back} />;
   if (view === 'buying') return <BuyingListView onBack={back} />;
+  if (view === 'check') return <StockCheckView onBack={back} onOpenLot={(id) => open('lot', id)} />;
+  if (view === 'prices') return <BuyingPricesView onBack={back} />;
   return <InventoryHome onOpen={open} />;
 }
 
 function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'] }) {
   const { settings } = useProducts();
   const [lots, setLots] = useState<LoadState<LotSummary[]> | null>(null);
-  const [units, setUnits] = useState<StockUnit[]>([]);
 
   const load = useCallback(async () => {
-    const [list, stock] = await Promise.all([fetchLots(), fetchStockUnits()]);
-    setLots(list);
-    setUnits(stock.kind === 'ready' ? stock.data : []);
+    setLots(await fetchLots());
   }, []);
 
   useEffect(() => {
@@ -59,7 +58,6 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
 
   const list = lots?.kind === 'ready' ? lots.data : [];
   const opening = list.find((l) => l.kind === 'opening') ?? null;
-  const needsWeight = useMemo(() => units.filter((u) => u.weight_grams === null).length, [units]);
   const modeOn = settings.inventory_mode === 'true';
 
   const newLot = (
@@ -85,7 +83,8 @@ function InventoryHome({ onOpen }: { onOpen: ReturnType<typeof useInvNav>['open'
 
       <ListGroup title="TOOLS">
         <ListRow icon="restock" label="Opening stock" detail={opening ? 'Saved (L-000)' : 'Not uploaded'} onClick={() => onOpen('opening')} />
-        <ListRow icon="alert" label="Needs weight" detail={units.length ? String(needsWeight) : undefined} onClick={() => onOpen('weights')} />
+        <ListRow icon="alert" label="Stock check" onClick={() => onOpen('check')} />
+        <ListRow icon="tag" label="Set buying prices" onClick={() => onOpen('prices')} />
         <ListRow icon="chart" label="Compare stock (shop vs lots)" onClick={() => onOpen('compare')} />
         <ListRow icon="chart" label="Sales profit" onClick={() => onOpen('profit')} />
         <ListRow icon="alert" label="Sold without stock" onClick={() => onOpen('shortfalls')} />

@@ -151,16 +151,8 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
       icon: 'products',
       count: att.no_buy_price,
       text: `product${att.no_buy_price === 1 ? '' : 's'} with no buy price (in no lot yet)`,
-      open: () => onOpen('inventory'),
-    });
-  }
-  if (att && att.no_weight > 0) {
-    attention.push({
-      key: 'noweight',
-      icon: 'products',
-      count: att.no_weight,
-      text: `product${att.no_weight === 1 ? '' : 's'} with no weight`,
-      open: () => onOpen('inventory', { inv: 'weights' }),
+      // Batch 45: straight to Set buying prices.
+      open: () => onOpen('inventory', { inv: 'prices' }),
     });
   }
   if (att && att.count_due) {

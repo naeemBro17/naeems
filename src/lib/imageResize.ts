@@ -83,6 +83,46 @@ export function resizeImageCircle(file: Blob): Promise<Blob> {
   return resizeToWidth(file, CIRCLE_IMAGE_WIDTH, CARD_WEBP_QUALITY);
 }
 
+/** Batch 45: a lot receipt photo — longest side 1600 px first (text stays
+ *  readable), smaller until it is under RECEIPT_PHOTO_MAX_BYTES. A portrait
+ *  photo is limited by its height, so its width is worked out from it. */
+export const RECEIPT_PHOTO_MAX_BYTES = 300 * 1024;
+export const RECEIPT_PHOTO_TRIES: readonly { longest: number; quality: number }[] = [
+  { longest: 1600, quality: 0.72 },
+  { longest: 1600, quality: 0.6 },
+  { longest: 1300, quality: 0.6 },
+  { longest: 1100, quality: 0.55 },
+  { longest: 900, quality: 0.5 },
+];
+
+function imageSize(source: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(source);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read the selected image.'));
+    };
+    img.src = objectUrl;
+  });
+}
+
+export async function resizeReceiptPhoto(file: Blob): Promise<Blob> {
+  const { width, height } = await imageSize(file);
+  let last: Blob | null = null;
+  for (const t of RECEIPT_PHOTO_TRIES) {
+    const maxWidth = height > width ? Math.round((t.longest * width) / height) : t.longest;
+    last = await resizeToWidth(file, Math.max(1, maxWidth), t.quality);
+    if (last.size <= RECEIPT_PHOTO_MAX_BYTES) return last;
+  }
+  if (last) return last;
+  throw new Error('This photo could not be made small enough.');
+}
+
 /** Batch 41: a bill photo is kept under this size (WebP). */
 export const BILL_PHOTO_MAX_BYTES = 150 * 1024;
 

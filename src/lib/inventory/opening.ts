@@ -392,15 +392,6 @@ export function mergeDuplicates(rows: readonly OpeningRow[], log: OpeningPreview
 
 /* ------------------------------------------------------- weight % maths */
 
-/** The % to add for weight from past lots: (weight + other costs) ÷ buy
- *  price × 100, to 2 decimals. null until both are filled. */
-export function weightPercentFromHistory(buyTotal: string, costsTotal: string): number | null {
-  const buy = toScaled(buyTotal, 2);
-  const costs = toScaled(costsTotal, 2);
-  if (buy === null || costs === null || buy <= 0n || costs < 0n) return null;
-  return Number(roundDiv(costs * 10000n, buy)) / 100;
-}
-
 type OpeningMoney = Pick<OpeningRow, 'source' | 'pieces' | 'priceE4' | 'extraUnits' | 'packSize'>;
 
 /** The % added to one row, in paisa for the whole row (the database's

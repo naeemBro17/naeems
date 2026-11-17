@@ -297,12 +297,391 @@
   margin-bottom: 8px;
 }
 
-.inv-weight-edit {
-  display: flex;
-  gap: 8px;
+/* ------------------------------------------------------------------
+   Batch 45: compact lot form. Fields look about 34px high; each one
+   still has a 44px tap area (padding around it). Neutral colours — Save
+   lot is the only orange element.
+   ------------------------------------------------------------------ */
+.inv-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 10px;
+  padding: 12px;
 }
 
-.inv-weight-edit .form-input {
-  flex: 1;
+.inv-top__wide {
+  grid-column: 1 / -1;
+}
+
+.inv-cf {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
+}
+
+.inv-cf__label {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+  font-weight: 600;
+}
+
+.inv-cf__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  margin: 5px 0;
+  padding: 0 9px;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  background: var(--adm-input-bg);
+  color: var(--adm-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.inv-cf__input:focus-visible {
+  outline: 2px solid var(--adm-text-2);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.inv-cf__input:disabled {
+  background: var(--adm-card-2);
+  color: var(--adm-muted);
+}
+
+.inv-cf__input--bad {
+  border-color: var(--adm-red);
+}
+
+.inv-cf__area {
+  height: auto;
+  padding: 7px 9px;
+  resize: vertical;
+}
+
+.inv-cf__select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inv-cf__pair,
+.inv-cf__with-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.inv-cf__pair > .inv-cf__input:first-child {
+  flex: 0 0 76px;
+}
+
+.inv-cf__icon,
+.inv-prow__x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text-2);
+  cursor: pointer;
+}
+
+.inv-flag {
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
+.inv-country {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.inv-country-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  background: var(--adm-card);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.inv-country-list button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inv-country-list [aria-selected='true'] button {
+  background: var(--adm-active);
+  border-radius: 8px;
+}
+
+.inv-rename {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inv-prod {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px 12px 12px;
+}
+
+.inv-prod__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.inv-prod__title {
+  margin: 0;
+  font-size: var(--adm-fs-section);
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.inv-prow {
+  padding: 6px 0 4px;
+  border-top: 1px solid var(--adm-divider);
+  min-width: 0;
+}
+
+.inv-prow__name {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: var(--adm-fs-body);
+  font-weight: 600;
+  color: var(--adm-text);
+  line-height: 1.3;
+}
+
+.inv-prow__name > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.inv-prow__x {
+  height: 30px;
+  margin: -2px -6px 0 0;
+}
+
+.inv-prow__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1.1fr);
+  gap: 6px;
+}
+
+.inv-prow__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.inv-prow__unit {
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text-2);
+  font: inherit;
+  font-size: var(--adm-fs-small);
+  text-decoration: underline;
+}
+
+.inv-prod__search {
+  margin-top: 8px;
+}
+
+.inv-prod__import {
+  margin-top: 8px;
+  align-self: flex-start;
+}
+
+.inv-prod__help {
+  margin-top: 4px;
+}
+
+.inv-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 24px;
+}
+
+.inv-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+}
+
+.inv-total b {
+  font-size: 16px;
+}
+
+.inv-more summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+}
+
+.inv-more__title {
+  margin: 6px 0 0;
+  font-size: var(--adm-fs-label);
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.inv-cost {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.2fr);
+}
+
+/* Batch 45: receipts */
+.inv-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.inv-receipts__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.inv-receipts__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--adm-row-line);
+}
+
+.inv-receipts__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text);
+  font: inherit;
+  font-size: var(--adm-fs-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.inv-receipts__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.inv-receipts__confirm {
+  display: flex;
+  gap: 4px;
+}
+
+/* Batch 45: Stock check and Set buying prices */
+.inv-check-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--adm-row-line);
+  min-width: 0;
+}
+
+.inv-check-row__name {
+  font-weight: 600;
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+}
+
+.inv-check-row__nums {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.inv-bp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  border-bottom: 1px solid var(--adm-row-line);
+}
+
+.inv-bp-row__name {
+  font-size: var(--adm-fs-body);
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+  padding: 6px 0;
+}
+
+.inv-bp-row__sub {
+  display: block;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+}
+
+.inv-sticky-save {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0;
+  background: var(--adm-bg);
 }

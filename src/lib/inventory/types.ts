@@ -107,7 +107,7 @@ export interface StockMovement {
 
 /** A lot in the list, with what it holds. */
 export interface LotSummary extends Lot {
-  lot_items: (Pick<LotItem, 'qty' | 'qty_remaining' | 'unit_price_bdt' | 'alloc_weight_paisa' | 'alloc_other_paisa' | 'product_id' | 'variant_id'> & {
+  lot_items: (Pick<LotItem, 'qty' | 'qty_remaining' | 'unit_price_bdt' | 'alloc_other_paisa' | 'product_id' | 'variant_id'> & {
     buy_value_bdt?: number;
   })[];
 }
@@ -137,9 +137,7 @@ export interface LotSavePayload {
     qty: number;
     entry_unit: EntryUnit;
     unit_price_foreign: string;
-    weight_grams: string | null;
     expiry_date: string | null;
-    save_weight_to_product: boolean;
   }[];
   costs: { id?: string; cost_type: CostType; amount_bdt: string; cost_date: string | null; note: string }[];
 }
@@ -230,6 +228,8 @@ export interface SalesProfit {
   totals: {
     orders: number;
     uncosted_orders: number;
+    /** Batch 45: delivered items with no stored cost (no buying price yet). */
+    items_missing_cost: number;
     sales: number;
     cost: number;
     provisional: number;
@@ -249,4 +249,51 @@ export interface ModeCheck {
   mode_on: boolean;
   opening_confirmed: boolean;
   open_orders: { order_number: string; status: string; units: number }[];
+}
+
+/** Batch 45: one line of Inventory → Stock check (inventory_stock_check). */
+export type StockCheckReason = 'shop_differs' | 'no_lot' | 'negative_lot' | 'ledger' | 'sold_no_lot';
+
+export interface StockCheckRow {
+  product_id: string;
+  variant_id: string | null;
+  label: string;
+  reason_code: StockCheckReason;
+  reason: string;
+  /** The shop's stock number (null = not counted). */
+  shop_number: number | null;
+  /** Units (or whole packs) the lots say. */
+  lot_number: number | null;
+  lot_id: string | null;
+  lot_code: string | null;
+}
+
+/** Batch 45: a product / option with no buying price (inventory_missing_buying_prices). */
+export interface MissingBuyingPrice {
+  product_id: string;
+  variant_id: string | null;
+  label: string;
+  stock_unit: StockUnitWord;
+  pack_size: number;
+  units_sold: number;
+  items_missing: number;
+}
+
+/** Batch 45: what deleting a lot would do (inventory_lot_delete_info). */
+export interface LotDeleteInfo {
+  code: string;
+  units_left: number;
+  orders: number;
+  receipts: number;
+}
+
+/** Batch 45: a receipt photo / PDF of a lot (private bucket lot-receipts). */
+export interface LotReceipt {
+  id: string;
+  lot_id: string;
+  path: string;
+  file_name: string;
+  mime: 'image/webp' | 'image/jpeg' | 'application/pdf';
+  size_bytes: number;
+  created_at: string;
 }

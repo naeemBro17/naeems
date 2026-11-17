@@ -38,6 +38,19 @@ let units: TestUnits;
 let staffId = '';
 let roleId = '';
 let startedAt = '';
+
+// Batch 45: the live shop's Inventory mode has been On since 13 Nov 2026
+// (a later batch removes the switch). The checks below that need it Off
+// on the live shop are skipped while it is On — the same rules run in the
+// rolled-back database tests (e2e/sql/). "The switch did not move" now
+// means: still what it was when the tests began.
+const MODE_ON_SKIP = 'The live Inventory mode is On; this check needs it Off (covered by the rolled-back database tests).';
+let liveModeAtStart = 'false';
+
+async function readLiveMode(): Promise<string> {
+  const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
+  return mode.data?.[0]?.value ?? 'false';
+}
 let realOpeningExists = false;
 
 interface LotRow {
@@ -196,6 +209,10 @@ async function adminAt(page: Page, query: string): Promise<void> {
 }
 
 test.beforeAll(async () => {
+  liveModeAtStart = await readLiveMode();
+  // Every Batch 38 check writes test lots on the live shop and expects its
+  // stock numbers not to follow them — true only while the mode is Off.
+  test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(150_000);
   mkdirSync(SHOTS, { recursive: true });
   await cleanUp();
@@ -336,7 +353,7 @@ test('Part 2: landed cost — missing weight guessed (Batch 39), totals exact to
   // Inventory mode is Off: the shop's stock numbers did not move.
   expect(await testStock()).toBe(stockBefore);
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(liveModeAtStart);
 });
 
 /* ---------------------------------------------------------------- Part 3 */
@@ -628,5 +645,5 @@ test('Activity Log records lots, bills, opening upload/confirm/undo and weight e
   const on = await upsertSettings(admin.accessToken, [{ key: 'inventory_mode', value: 'true' }]);
   expect(on.ok).toBe(false);
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(liveModeAtStart);
 });

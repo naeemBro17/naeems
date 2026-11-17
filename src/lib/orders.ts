@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { optionVariantId } from './cartStock';
 import type { CartItem, DeliveryAddress, DeliveryZoneId } from '../features/checkout/types';
 import type {
   DiscountReason,
@@ -160,7 +161,7 @@ export interface PlaceOrderResult {
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
   const items = input.items.map((item) => ({
     product_id: item.product.id,
-    variant_id: item.variantId,
+    variant_id: optionVariantId(item.product.id, item.variantId),
     quantity: item.quantity,
   }));
 
@@ -522,7 +523,7 @@ export interface AdminCreateOrderResult {
 export async function adminCreateOrder(input: AdminCreateOrderInput): Promise<AdminCreateOrderResult> {
   const items = input.items.map((item) => ({
     product_id: item.productId,
-    variant_id: item.variantId,
+    variant_id: optionVariantId(item.productId, item.variantId),
     quantity: item.quantity,
     sold_price: item.soldPrice,
     sold_unit: item.soldUnit ?? null,

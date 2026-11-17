@@ -7,6 +7,7 @@ import { adminPath } from '../../../lib/adminPages';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { AdminPageHeader, ChipRow, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { formatLotDate } from './invFormat';
+import { MissingCostNote } from './MissingCostNote';
 
 type Range = 'today' | 'month' | 'custom';
 
@@ -129,10 +130,11 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
             </div>
             {t.uncosted_orders > 0 && (
               <p className="inv-muted">
-                {t.uncosted_orders} order{t.uncosted_orders === 1 ? '' : 's'} with no cost (before inventory) {t.uncosted_orders === 1 ? 'is' : 'are'} listed below but
+                {t.uncosted_orders} order{t.uncosted_orders === 1 ? '' : 's'} with a line that has no cost {t.uncosted_orders === 1 ? 'is' : 'are'} listed below but
                 not counted.
               </p>
             )}
+            <MissingCostNote count={t.items_missing_cost} />
           </div>
 
           <h2 className="inv-section">Orders</h2>

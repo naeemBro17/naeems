@@ -143,6 +143,8 @@ export interface ProfitParts {
   to: string;
   orders: number;
   uncosted_orders: number;
+  /** Batch 45: delivered items with no buying price (absent before the Batch 45 step). */
+  items_missing_cost?: number;
   sales: number;
   cost: number;
   provisional: number;

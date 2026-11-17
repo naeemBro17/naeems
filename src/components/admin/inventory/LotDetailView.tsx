@@ -1,30 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '../../../hooks/useToast';
-import { useSafetyLock } from '../../../contexts/SafetyLockContext';
+import { useProducts } from '../../../contexts/ProductContext';
 import { takaExact } from '../../../lib/payouts';
-import { deleteLot, fetchLot, fetchMovements, fetchStockUnits, monthYear, packsText, unitName } from '../../../lib/inventory/api';
-import type { LotDetail, StockMovement, StockUnit } from '../../../lib/inventory/types';
+import { deleteLot, fetchLot, fetchLotDeleteInfo, fetchMovements, fetchStockUnits, monthYear, packsText, unitName } from '../../../lib/inventory/api';
+import type { LotDeleteInfo, LotDetail, StockMovement, StockUnit } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
 import { AdminPageHeader, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { formatLotDate, movementLabel, sourceLabel, taka2 } from './invFormat';
 import { LotPaymentsCard } from '../money/LotPayments';
+import { CountryLabel } from './countries';
+import { LotReceipts } from './LotReceipts';
 
 /**
  * Batch 38 Part 3: one lot — its rows with the cost shared out, its bills,
- * the stock movements and the pieces left. Deleting needs the Safety Lock
- * (the database checks it too). Batch 39: stock and cost are per unit
- * (packs shown for products with a pack size); rows whose weight was
- * guessed from their price are marked.
+ * the stock movements and the pieces left. Batch 39: stock and cost are per
+ * unit (packs shown for products with a pack size). Batch 45: every lot —
+ * the opening lot and lots with sales too — can be edited and deleted (one
+ * confirmation that says what will happen; the orders stay). Weight is not
+ * part of cost. Receipts are listed by name; a file opens only when tapped.
  */
 export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: string; onBack: () => void; onEdit: () => void; onDeleted: () => void }) {
   const { showToast } = useToast();
-  useSafetyLock(); // keep context subscription; DB still enforces the lock
+  const { refetch: refetchProducts } = useProducts();
   const [lot, setLot] = useState<LoadState<LotDetail | null> | null>(null);
   const [units, setUnits] = useState<Map<string, StockUnit>>(new Map());
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteInfo, setDeleteInfo] = useState<LotDeleteInfo | null>(null);
 
   const load = useCallback(async () => {
     const [detail, stock] = await Promise.all([fetchLot(lotId), fetchStockUnits()]);
@@ -51,18 +55,16 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
     let pieces = 0;
     let left = 0;
     let buyPaisa = 0;
-    let weightAlloc = 0;
     let otherAlloc = 0;
     for (const i of data.lot_items) {
       pieces += i.qty;
       left += i.qty_remaining;
       buyPaisa += Math.round((Number(i.buy_value_bdt) > 0 ? Number(i.buy_value_bdt) : i.qty * Number(i.unit_price_bdt)) * 100);
-      weightAlloc += Number(i.alloc_weight_paisa);
       otherAlloc += Number(i.alloc_other_paisa);
     }
-    const weightBills = data.lot_costs.filter((c) => c.cost_type === 'weight').reduce((a, c) => a + Math.round(Number(c.amount_bdt) * 100), 0);
+    // Old weight bills are history only: they count nowhere.
     const otherBills = data.lot_costs.filter((c) => c.cost_type === 'other').reduce((a, c) => a + Math.round(Number(c.amount_bdt) * 100), 0);
-    return { pieces, left, buyPaisa, weightAlloc, otherAlloc, weightBills, otherBills };
+    return { pieces, left, buyPaisa, otherAlloc, otherBills };
   }, [data]);
 
   const handleDelete = async () => {
@@ -74,6 +76,7 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
       setDeleteError(answer.error ?? 'Could not delete the lot.');
       return;
     }
+    await refetchProducts();
     showToast('Lot deleted');
     onDeleted();
   };
@@ -96,14 +99,19 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
   }
 
   const isOpening = data.kind === 'opening';
-  const menu = isOpening
-    ? []
-    : [
-        { label: 'Edit lot', onSelect: onEdit },
-        { label: 'Delete lot', onSelect: () => setConfirmDelete(true), danger: true },
-      ];
-  const weightOk = isOpening || totals.weightAlloc === totals.weightBills;
-  const otherOk = isOpening || totals.otherAlloc === totals.otherBills;
+  const askDelete = () => {
+    setConfirmDelete(true);
+    setDeleteInfo(null);
+    void fetchLotDeleteInfo(lotId).then(setDeleteInfo);
+  };
+  const menu = [
+    { label: 'Edit lot', onSelect: onEdit },
+    { label: 'Delete lot', onSelect: askDelete, danger: true },
+  ];
+  const otherOk = totals.otherAlloc === totals.otherBills;
+  const otherCosts = data.lot_costs.filter((c) => c.cost_type === 'other');
+  const unitsLeaving = deleteInfo?.units_left ?? Math.max(totals.left, 0);
+  const soldOrders = deleteInfo?.orders ?? null;
 
   return (
     <section className="inv" aria-label={`Lot ${data.code}`}>
@@ -111,8 +119,12 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
 
       {confirmDelete && (
         <div className="adm-ocard inv-stack inv-danger-box" role="alertdialog" aria-label="Delete lot">
-          <p>
-            Delete lot <b>{data.code}</b> and its {totals.pieces} pieces? This can&apos;t be undone.
+          <p data-testid="inv-delete-text">
+            Delete lot <b>{data.code}</b>? {unitsLeaving} unit{unitsLeaving === 1 ? '' : 's'} leave stock.
+            {soldOrders !== null && soldOrders > 0
+              ? ` ${soldOrders} order${soldOrders === 1 ? ' was' : 's were'} sold from this lot — the orders stay.`
+              : ''}
+            {deleteInfo && deleteInfo.receipts > 0 ? ` Its ${deleteInfo.receipts} receipt${deleteInfo.receipts === 1 ? ' is' : 's are'} deleted too.` : ''} This can&apos;t be undone.
           </p>
           {deleteError && <p className="inv-error">{deleteError}</p>}
           <div className="inv-actions">
@@ -135,7 +147,11 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
           <>
             <div className="inv-line">
               <span>Country · supplier</span>
-              <span>{[data.country, data.supplier].filter((s) => s.trim() !== '').join(' · ') || '—'}</span>
+              <span>
+                {data.country.trim() ? <CountryLabel text={data.country} /> : null}
+                {data.country.trim() && data.supplier.trim() ? ' · ' : ''}
+                {data.supplier.trim() || (data.country.trim() ? '' : '—')}
+              </span>
             </div>
             <div className="inv-line">
               <span>Currency</span>
@@ -160,12 +176,6 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
           </p>
         )}
         {data.notes && <p className="inv-muted">{data.notes}</p>}
-        {isOpening && (
-          <p className="inv-note-strong" data-testid="inv-opening-moved">
-            Weight cost moved from old expenses into opening stock: {takaExact(Math.round(Number(data.opening_weight_added_bdt ?? 0) * 100))}
-            {data.opening_weight_percent !== null ? ` (${Number(data.opening_weight_percent)}% on imported goods)` : ''}
-          </p>
-        )}
       </div>
 
       <div className="adm-ocard inv-stack" data-testid="inv-lot-totals">
@@ -181,10 +191,6 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
           <span>Buy price (all units)</span>
           <span>{takaExact(totals.buyPaisa)}</span>
         </div>
-        <div className="inv-line">
-          <span>{isOpening ? 'Weight % added' : 'Weight cost'}</span>
-          <span>{takaExact(isOpening ? totals.weightAlloc : totals.weightBills)}</span>
-        </div>
         {!isOpening && (
           <div className="inv-line">
             <span>Other costs</span>
@@ -193,10 +199,10 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
         )}
         <div className="inv-line inv-line--total">
           <span>Landed cost</span>
-          <span>{takaExact(totals.buyPaisa + totals.weightAlloc + totals.otherAlloc)}</span>
+          <span>{takaExact(totals.buyPaisa + totals.otherAlloc)}</span>
         </div>
-        {!isOpening &&
-          (weightOk && otherOk ? (
+        {totals.otherBills > 0 &&
+          (otherOk ? (
             <p className="inv-ok" data-testid="inv-detail-allocated-ok">
               Allocated total = lot total ✓
             </p>
@@ -231,16 +237,9 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
               </div>
             )}
             <div className="inv-line">
-              <span>Expiry · weight</span>
-              <span>
-                {monthYear(i.expiry_date)} · {i.weight_grams_used === null ? '—' : `${Number(i.weight_grams_used)} g`}
-              </span>
+              <span>Expiry</span>
+              <span>{monthYear(i.expiry_date)}</span>
             </div>
-            {i.weight_guessed && (
-              <p className="inv-muted" data-testid="inv-detail-guessed">
-                <span className="inv-badge inv-badge--grey">weight guessed from price</span>
-              </p>
-            )}
             {isOpening && i.opening_source && (
               <div className="inv-line">
                 <span>Source</span>
@@ -260,11 +259,7 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
                 <span>{taka2(Number(i.unit_price_foreign))}</span>
               </div>
             )}
-            <div className="inv-line">
-              <span>+ weight share</span>
-              <span>{taka2(Number(i.alloc_weight_bdt))}</span>
-            </div>
-            {!isOpening && (
+            {Number(i.alloc_other_bdt) !== 0 && (
               <div className="inv-line">
                 <span>+ other share</span>
                 <span>{taka2(Number(i.alloc_other_bdt))}</span>
@@ -281,15 +276,15 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
 
       {!isOpening && (
         <>
-          <h2 className="inv-section">Bills</h2>
-          {data.lot_costs.length === 0 ? (
-            <p className="inv-muted">No bills yet.</p>
+          <h2 className="inv-section">Other costs</h2>
+          {otherCosts.length === 0 ? (
+            <p className="inv-muted">No other costs.</p>
           ) : (
             <div className="adm-ocard inv-stack">
-              {data.lot_costs.map((c) => (
+              {otherCosts.map((c) => (
                 <div key={c.id} className="inv-line">
                   <span>
-                    {c.cost_type === 'weight' ? 'Weight' : 'Other'}
+                    Other cost
                     {c.cost_date ? ` · ${formatLotDate(c.cost_date)}` : ''}
                     {c.note ? ` · ${c.note}` : ''}
                   </span>
@@ -300,6 +295,11 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
           )}
         </>
       )}
+
+      <h2 className="inv-section">Receipts</h2>
+      <div className="adm-ocard">
+        <LotReceipts lotId={lotId} />
+      </div>
 
       <h2 className="inv-section">Stock movements</h2>
       <div className="adm-ocard inv-stack" data-testid="inv-movements">

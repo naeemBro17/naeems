@@ -1,13 +1,17 @@
 import { supabase } from '../supabase';
 import { isMissingSchema, type LoadState } from '../payouts';
+import { RECEIPTS_BUCKET } from './receipts';
 import type {
+  LotDeleteInfo,
   LotDetail,
   LotSavePayload,
   LotSummary,
+  MissingBuyingPrice,
   ModeCheck,
   OrderProfit,
   SalesProfit,
   Shortfall,
+  StockCheckRow,
   StockMovement,
   StockUnit,
   StockUnitWord,
@@ -68,7 +72,7 @@ const LOT_COLUMNS =
 export async function fetchLots(): Promise<LoadState<LotSummary[]>> {
   const { data, error } = await supabase
     .from('lots')
-    .select(`${LOT_COLUMNS}, lot_items(qty, qty_remaining, unit_price_bdt, buy_value_bdt, alloc_weight_paisa, alloc_other_paisa, product_id, variant_id)`)
+    .select(`${LOT_COLUMNS}, lot_items(qty, qty_remaining, unit_price_bdt, buy_value_bdt, alloc_other_paisa, product_id, variant_id)`)
     .order('lot_date', { ascending: false })
     .order('code', { ascending: false });
   if (error) return fail(error);
@@ -110,9 +114,25 @@ export async function saveLot(payload: LotSavePayload): Promise<Answer<string>> 
   return { ok: true, data: data as string };
 }
 
+/** Batch 45: deletes any lot. Its receipt files go first (Storage files
+ *  can't be removed from the database); the orders sold from it stay. */
 export async function deleteLot(id: string): Promise<Answer<null>> {
+  const receipts = await supabase.from('lot_receipts').select('path').eq('lot_id', id);
+  if (!receipts.error && receipts.data && receipts.data.length > 0) {
+    const paths = (receipts.data as { path: string }[]).map((r) => r.path);
+    const removed = await supabase.storage.from(RECEIPTS_BUCKET).remove(paths);
+    if (removed.error) return { ok: false, error: `Could not remove the receipts: ${message(removed.error)}` };
+  }
   const { error } = await supabase.rpc('inventory_delete_lot', { p_lot_id: id });
   return error ? { ok: false, error: message(error) } : { ok: true, data: null };
+}
+
+/** What deleting a lot would do, for the one confirmation box. */
+export async function fetchLotDeleteInfo(id: string): Promise<LotDeleteInfo | null> {
+  const { data, error } = await supabase.rpc('inventory_lot_delete_info', { p_lot_id: id });
+  if (error || !data) return null;
+  const raw = data as LotDeleteInfo;
+  return { code: raw.code, units_left: num(raw.units_left), orders: num(raw.orders), receipts: num(raw.receipts) };
 }
 
 export async function setWeight(productId: string, variantId: string | null, grams: number | null): Promise<Answer<number | null>> {
@@ -160,6 +180,25 @@ export async function undoOpening(): Promise<Answer<null>> {
 export async function fetchSuppliers(): Promise<Supplier[]> {
   const { data } = await supabase.from('suppliers').select('id, name, country, note').order('name');
   return (data ?? []) as Supplier[];
+}
+
+/** Batch 45: every supplier name used on a lot or in the supplier list
+ *  (for the Supplier field's suggestions). */
+export async function fetchSupplierNames(): Promise<string[]> {
+  const [lots, list] = await Promise.all([supabase.from('lots').select('supplier'), fetchSuppliers()]);
+  const names = new Map<string, string>();
+  for (const name of [...((lots.data ?? []) as { supplier: string }[]).map((l) => l.supplier), ...list.map((s) => s.name)]) {
+    const trimmed = (name ?? '').trim();
+    if (trimmed && !names.has(trimmed.toLowerCase())) names.set(trimmed.toLowerCase(), trimmed);
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** Batch 45: renames a supplier on every lot that used the old name. */
+export async function renameSupplier(oldName: string, newName: string): Promise<Answer<number>> {
+  const { data, error } = await supabase.rpc('inventory_rename_supplier', { p_old: oldName, p_new: newName });
+  if (error) return { ok: false, error: message(error) };
+  return { ok: true, data: num(data) };
 }
 
 export async function saveSupplier(name: string, country: string): Promise<Answer<string>> {
@@ -240,7 +279,7 @@ export async function fetchSalesProfit(from: string, to: string): Promise<LoadSt
     kind: 'ready',
     data: {
       ...raw,
-      totals: numbers(raw.totals, ['orders', 'uncosted_orders', 'sales', 'cost', 'provisional', 'delivery', 'courier', 'adjustments', 'profit', 'margin']),
+      totals: numbers({ ...raw.totals, items_missing_cost: raw.totals.items_missing_cost ?? 0 }, ['orders', 'uncosted_orders', 'items_missing_cost', 'sales', 'cost', 'provisional', 'delivery', 'courier', 'adjustments', 'profit', 'margin']),
       orders: raw.orders.map((o) => numbers(o, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'profit', 'margin'])),
       products: raw.products.map((p) => numbers(p, ['units', 'pack_size', 'sales', 'cost', 'profit', 'margin'])),
       adjustments: raw.adjustments.map((a) => numbers(a, ['amount'])),
@@ -277,6 +316,40 @@ export function packsText(units: number, unit: StockUnitWord, packSize: number):
   return parts.join(' + ');
 }
 
+/* ------------------------------------- Batch 45: checks, buying prices */
+
+export async function fetchStockCheck(): Promise<LoadState<StockCheckRow[]>> {
+  const { data, error } = await supabase.rpc('inventory_stock_check');
+  if (error) return fail(error);
+  return {
+    kind: 'ready',
+    data: ((data ?? []) as StockCheckRow[]).map((r) => ({ ...r, shop_number: numOrNull(r.shop_number), lot_number: numOrNull(r.lot_number) })),
+  };
+}
+
+export async function fetchMissingBuyingPrices(): Promise<LoadState<MissingBuyingPrice[]>> {
+  const { data, error } = await supabase.rpc('inventory_missing_buying_prices');
+  if (error) return fail(error);
+  return {
+    kind: 'ready',
+    data: ((data ?? []) as MissingBuyingPrice[]).map((r) => ({
+      ...r,
+      pack_size: Math.max(1, num(r.pack_size)),
+      units_sold: num(r.units_sold),
+      items_missing: num(r.items_missing),
+    })),
+  };
+}
+
+export async function saveBuyingPrices(
+  rows: { product_id: string; variant_id: string | null; price: string }[]
+): Promise<Answer<{ saved: number; items_filled: number }>> {
+  const { data, error } = await supabase.rpc('inventory_set_buying_prices', { p_rows: rows });
+  if (error) return { ok: false, error: message(error) };
+  const raw = (data ?? {}) as { saved?: number; items_filled?: number };
+  return { ok: true, data: { saved: num(raw.saved), items_filled: num(raw.items_filled) } };
+}
+
 /* ------------------------------------------------------------ helpers */
 
 /** Today in Dhaka, "YYYY-MM-DD". */
@@ -311,7 +384,8 @@ export function lotTotals(items: LotSummary['lot_items']): {
     left += num(item.qty_remaining);
     // Batch 39: the row's exact buy value (packs × price per pack).
     buyPaisa += Math.round((item.buy_value_bdt !== undefined && num(item.buy_value_bdt) > 0 ? num(item.buy_value_bdt) : num(item.qty) * num(item.unit_price_bdt)) * 100);
-    costsPaisa += num(item.alloc_weight_paisa) + num(item.alloc_other_paisa);
+    // Batch 45: weight is not part of cost; only the other bills count.
+    costsPaisa += num(item.alloc_other_paisa);
   }
   return { products, pieces, left, buyPaisa, costsPaisa, landedPaisa: buyPaisa + costsPaisa };
 }

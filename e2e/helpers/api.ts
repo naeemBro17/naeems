@@ -156,13 +156,20 @@ export async function placeTestOrder(
   return { id: result.data[0].order_id, orderNumber: result.data[0].order_number };
 }
 
-/** An active product with tracked stock to spare — orders here change it. */
+/** An active product with tracked stock to spare — orders here change it.
+ *  Batch 45: one without options (a product with options opens a size
+ *  picker in New order instead of being added in one tap). */
 export async function pickStockedProduct(minStock = 5): Promise<{ id: string; name: string; stock: number }> {
   const result = await select<{ id: string; name: string; stock_quantity: number }[]>(
     null,
-    `products_view?select=id,name,stock_quantity&is_active=eq.true&stock_quantity=gte.${minStock}&order=stock_quantity.desc&limit=1`
+    `products_view?select=id,name,stock_quantity&is_active=eq.true&stock_quantity=gte.${minStock}&order=stock_quantity.desc&limit=20`
   );
-  const row = result.data?.[0];
+  const ids = (result.data ?? []).map((r) => r.id);
+  const withOptions = ids.length
+    ? await select<{ product_id: string }[]>(null, `product_variants_view?select=product_id&product_id=in.(${ids.join(',')})`)
+    : { data: [] as { product_id: string }[] };
+  const optioned = new Set((withOptions.data ?? []).map((v) => v.product_id));
+  const row = (result.data ?? []).find((r) => !optioned.has(r.id));
   if (!row) throw new Error('No active product with enough tracked stock for the test.');
   return { id: row.id, name: row.name, stock: row.stock_quantity };
 }

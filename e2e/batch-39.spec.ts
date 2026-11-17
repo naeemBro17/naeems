@@ -43,6 +43,19 @@ let admin: TestSession;
 let customer: TestSession;
 let fishId = '';
 let realOpeningExists = false;
+
+// Batch 45: the live shop's Inventory mode has been On since 13 Nov 2026
+// (a later batch removes the switch). The checks below that need it Off
+// on the live shop are skipped while it is On — the same rules run in the
+// rolled-back database tests (e2e/sql/). "The switch did not move" now
+// means: still what it was when the tests began.
+const MODE_ON_SKIP = 'The live Inventory mode is On; this check needs it Off (covered by the rolled-back database tests).';
+let liveModeAtStart = 'false';
+
+async function readLiveMode(): Promise<string> {
+  const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
+  return mode.data?.[0]?.value ?? 'false';
+}
 const orderIds: string[] = [];
 
 async function freshAdmin(): Promise<void> {
@@ -108,6 +121,7 @@ async function cleanUp(): Promise<void> {
 }
 
 test.beforeAll(async () => {
+  liveModeAtStart = await readLiveMode();
   test.setTimeout(150_000);
   mkdirSync(SHOTS, { recursive: true });
   await cleanUp();
@@ -130,7 +144,7 @@ test.afterAll(async () => {
   test.setTimeout(150_000);
   await cleanUp();
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(liveModeAtStart);
 });
 
 /* ------------------------------------------------- the database logic */
@@ -149,7 +163,7 @@ test('database: units, earliest expiry first, cancel / return / edits, sell with
   expect((results ?? []).length).toBeGreaterThanOrEqual(60);
   // Nothing of it stayed: the live switch is still Off, no test product left.
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(liveModeAtStart);
   const left = await select<unknown[]>(admin.accessToken, 'products?select=id&sku=like.E2E-B39-A-*');
   expect(left.data).toHaveLength(0);
 });
@@ -198,6 +212,7 @@ test('Part 0: pack size in the product editor (staff only, never public)', async
 });
 
 test('Part 0 + 1: lot form — packs or units, no currency, supplier list with "+ Add new", weight guessed from price', async ({ page }) => {
+  test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(120_000);
   await adminAt(page, '/admin?tab=inventory&inv=new');
   await expect(page.getByRole('heading', { name: 'New lot' })).toBeVisible({ timeout: 20_000 });
@@ -264,6 +279,7 @@ test('Part 0: opening stock template has stock_unit, pack_size and extra_units',
 });
 
 test('Parts 2–4: Sold without stock, Sales profit and the Inventory mode check screen at phone width', async ({ page }) => {
+  test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(120_000);
   await adminAt(page, '/admin?tab=inventory');
   await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible({ timeout: 20_000 });
@@ -301,6 +317,7 @@ test('Parts 2–4: Sold without stock, Sales profit and the Inventory mode check
 });
 
 test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back (Inventory mode Off)', async ({ page }) => {
+  test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(150_000);
   const product = await pickStockedProduct(3);
   const before = await productStock(product.id);
@@ -330,6 +347,7 @@ test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back
 });
 
 test('Part 0.6: manual order — a product with a pack size can be sold in loose units at its own price', async ({ page }) => {
+  test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(120_000);
   const product = await pickStockedProduct(1);
   // Only this browser sees the product as a 400 pcs pack (nothing is saved).

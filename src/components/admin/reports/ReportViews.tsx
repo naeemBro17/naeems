@@ -37,6 +37,7 @@ import { BarChart } from './BarChart';
 import { ReportShell, useReport, useReportRange } from './ReportShell';
 import { ReportTable } from './ReportTable';
 import { InvestorPdfCard } from './InvestorPdfCard';
+import { MissingCostNote } from '../inventory/MissingCostNote';
 
 interface ViewProps {
   onBack: () => void;
@@ -75,9 +76,10 @@ export function ProfitLossView({ onBack }: ViewProps) {
           </div>
           {data.parts.uncosted_orders > 0 && (
             <p className="inv-muted">
-              {data.parts.uncosted_orders} order{data.parts.uncosted_orders === 1 ? '' : 's'} from before Inventory mode (no lot cost) are left out, as on the Money page.
+              {data.parts.uncosted_orders} order{data.parts.uncosted_orders === 1 ? '' : 's'} left out (before Inventory mode, or no cost yet), as on the Money page.
             </p>
           )}
+          <MissingCostNote count={data.parts.items_missing_cost} />
           <ReportTable sheet={sheet} testId="pnl-table" strongRows={strong} subRows={subs} />
         </>
       )}
@@ -189,7 +191,7 @@ export function LotsView({ onBack }: ViewProps) {
       onBack={onBack}
       sheets={sheet ? [sheet] : null}
       state={state}
-      note={<p className="inv-muted">All time. Landed cost includes the trip costs (weight and other bills). Sales and profit are for delivered units.</p>}
+      note={<p className="inv-muted">All time. Landed cost = buy price + the lot&apos;s other costs (weight is an ordinary expense, not part of it). Sales and profit are for delivered units.</p>}
     >
       {sheet && <ReportTable sheet={sheet} testId="lots-table" empty="No lots yet." />}
     </ReportShell>

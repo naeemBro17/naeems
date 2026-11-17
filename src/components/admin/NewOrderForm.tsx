@@ -8,13 +8,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { BottomSheet } from '../shared/BottomSheet';
+import { productSearchGroups, type SellableOption, type SellableProduct } from '../../lib/manualOrderSearch';
 import { Toggle } from './edit-sheets/SheetChrome';
 import { type AddressFieldErrors } from '../checkout/AddressFormFields';
 import { CustomerDetailsFields } from './CustomerDetailsFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka, normalizeText } from '../../lib/format';
-import { cardImage } from '../../lib/productImages';
 import { zoneForAddress } from '../../lib/deliveryZones';
 import { adminCreateOrder, findCustomerMatches, type ManualOrderItemInput } from '../../lib/orders';
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
@@ -78,21 +79,6 @@ interface OrderLine {
   soldUnit: StockUnitWord | null;
 }
 
-interface SellableOption {
-  productId: string;
-  variantId: string | null;
-  key: string;
-  label: string;
-  productName: string;
-  variantLabel: string | null;
-  imageUrl: string | null;
-  listPrice: number;
-  stockQuantity: number | null;
-}
-
-function currentPrice(retailPrice: number, offerPrice: number | null): number {
-  return offerPrice !== null && offerPrice < retailPrice ? offerPrice : retailPrice;
-}
 
 function emptyForm(): DeliveryAddress {
   return { fullName: '', phone: '', division: '', district: '', thana: '', fullAddress: '' };
@@ -258,54 +244,37 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     };
   }, [address.phone, lookedUpPhone, customerSearchReady]);
 
-  const sellableOptions = useMemo<SellableOption[]>(() => {
-    const list: SellableOption[] = [];
-    for (const p of products) {
-      if (!p.is_active) continue;
-      const variants = variantsFor(p.id);
-      if (variants.length === 0) {
-        list.push({
-          productId: p.id,
-          variantId: null,
-          key: p.id,
-          label: p.name,
-          productName: p.name,
-          variantLabel: null,
-          imageUrl: cardImage(p),
-          listPrice: currentPrice(p.retail_price, p.offer_price),
-          stockQuantity: p.stock_quantity,
-        });
-      } else {
-        for (const v of variants) {
-          const variantLabel = [v.region, v.size].filter(Boolean).join(' · ');
-          list.push({
-            productId: p.id,
-            variantId: v.id,
-            key: `${p.id}::${v.id}`,
-            label: variantLabel ? `${p.name} — ${variantLabel}` : p.name,
-            productName: p.name,
-            variantLabel: variantLabel || null,
-            imageUrl: v.image_url ?? cardImage(p),
-            listPrice: currentPrice(v.retail_price, v.offer_price),
-            stockQuantity: v.stock_quantity,
-          });
-        }
-      }
-    }
-    return list;
-  }, [products, variantsFor]);
+  // Batch 45 Part 4: each product once in the search. A product with
+  // options opens a picker (its own size first, then each option with its
+  // own price and stock).
+  const sellableProducts = useMemo<SellableProduct[]>(() => productSearchGroups(products, variantsFor), [products, variantsFor]);
+  const [picking, setPicking] = useState<SellableProduct | null>(null);
+  const [pickKey, setPickKey] = useState<string | null>(null);
+  const [pickQty, setPickQty] = useState(1);
 
   const searchResults = useMemo(() => {
     const term = normalizeText(query.trim());
     if (term === '') return [];
-    return sellableOptions.filter((opt) => normalizeText(opt.label).includes(term)).slice(0, 20);
-  }, [query, sellableOptions]);
+    return sellableProducts
+      .filter((p) => normalizeText(p.name).includes(term) || p.options.some((o) => normalizeText(o.label).includes(term)))
+      .slice(0, 20);
+  }, [query, sellableProducts]);
 
-  const addLine = (option: SellableOption) => {
+  const choose = (group: SellableProduct) => {
+    if (group.options.length === 1) {
+      addLine(group.options[0]);
+      return;
+    }
+    setPicking(group);
+    setPickKey(null);
+    setPickQty(1);
+  };
+
+  const addLine = (option: SellableOption, quantity = 1) => {
     setLines((current) => {
       const existing = current.find((l) => l.key === option.key);
       if (existing) {
-        return current.map((l) => (l.key === option.key ? { ...l, quantity: l.quantity + 1 } : l));
+        return current.map((l) => (l.key === option.key ? { ...l, quantity: l.quantity + quantity } : l));
       }
       const pack = packs.get(packKey(option.productId, option.variantId));
       return [
@@ -320,7 +289,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           listPrice: option.listPrice,
           soldPrice: option.listPrice,
           soldPriceInput: String(option.listPrice),
-          quantity: 1,
+          quantity,
           reason: null,
           reasonNote: '',
           stockQuantity: option.stockQuantity,
@@ -825,15 +794,16 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
             />
           </div>
           {searchResults.length > 0 && (
-            <ul className="picker-sheet__list">
-              {searchResults.map((opt) => (
-                <li key={opt.key}>
-                  <button type="button" className="picker-sheet__row" onClick={() => addLine(opt)}>
+            <ul className="picker-sheet__list" data-testid="manual-product-results">
+              {searchResults.map((group) => (
+                <li key={group.productId}>
+                  <button type="button" className="picker-sheet__row" onClick={() => choose(group)} data-testid="manual-product-result">
                     <span className="picker-sheet__row-label">
-                      {opt.label}
+                      {group.options.length === 1 ? group.options[0].label : group.name}
                       <span className="picker-sheet__row-sub">
-                        {formatTaka(opt.listPrice)}
-                        {opt.stockQuantity !== null ? ` · stock ${opt.stockQuantity}` : ''}
+                        {group.options.length === 1
+                          ? `${formatTaka(group.options[0].listPrice)}${group.options[0].stockQuantity !== null ? ` · stock ${group.options[0].stockQuantity}` : ''}`
+                          : `${group.options.length} sizes · from ${formatTaka(Math.min(...group.options.map((o) => o.listPrice)))}`}
                       </span>
                     </span>
                   </button>
@@ -1106,6 +1076,60 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
         </div>
 
       </form>
+
+      <BottomSheet isOpen={picking !== null} onClose={() => setPicking(null)} title={picking ? `Pick a size: ${picking.name}` : 'Pick a size'}>
+        {picking && (
+          <div className="manual-pick" data-testid="manual-option-picker">
+            <p className="manual-pick__title">{picking.name}</p>
+            <ul className="manual-pick__list" role="radiogroup" aria-label="Size">
+              {picking.options.map((o) => {
+                const soldOut = o.stockQuantity !== null && o.stockQuantity <= 0;
+                return (
+                  <li key={o.key}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={pickKey === o.key}
+                      className={`manual-pick__row${pickKey === o.key ? ' manual-pick__row--on' : ''}`}
+                      onClick={() => setPickKey(o.key)}
+                      data-testid="manual-option"
+                    >
+                      <span className="manual-pick__name">{o.variantLabel ?? 'Own size'}</span>
+                      <span className="manual-pick__meta">
+                        {formatTaka(o.listPrice)} · {o.stockQuantity === null ? 'stock not counted' : soldOut ? 'Sold out' : `stock ${o.stockQuantity}`}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="manual-pick__qty">
+              <span>Quantity</span>
+              <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" aria-label="One less" onClick={() => setPickQty((q) => Math.max(1, q - 1))}>
+                −
+              </button>
+              <span data-testid="manual-pick-qty">{pickQty}</span>
+              <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" aria-label="One more" onClick={() => setPickQty((q) => q + 1)}>
+                +
+              </button>
+            </div>
+            <button
+              type="button"
+              className="adm-btn adm-btn--primary adm-btn--lg"
+              disabled={pickKey === null}
+              onClick={() => {
+                const option = picking.options.find((o) => o.key === pickKey);
+                if (!option) return;
+                addLine(option, pickQty);
+                setPicking(null);
+              }}
+              data-testid="manual-pick-add"
+            >
+              Add to order
+            </button>
+          </div>
+        )}
+      </BottomSheet>
 
       <ConfirmDialog
         isOpen={pendingWarnings !== null}

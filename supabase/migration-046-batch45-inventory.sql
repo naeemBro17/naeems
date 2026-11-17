@@ -1,0 +1,2201 @@
+-- =============================================================================
+-- Batch 45 — Inventory clean-up: correct stock, simple cost, full freedom
+-- over lots
+-- =============================================================================
+-- What this does (plain words):
+--   1. Backups: copies of the rows it changes (_b45_backup_*), made once.
+--   2. Stock comes back: a sale made before Inventory mode was On is
+--      remembered on its order line (pre_inventory_units); undoing it puts
+--      the units back into the opening lot L-000. A product's own size
+--      (a product that also has options) can now hold lots.
+--   3. Weight is not part of product cost any more. Landed cost per unit =
+--      buy price + share of the lot's other costs. Old weight bills stay in
+--      lot_costs as history only.
+--   4. Every order line gets its own stored cost (order_item_costs), plus a
+--      buying price per product for products with no priced lot row
+--      (product_buying_prices). Old orders are filled in.
+--   5. Any lot can be edited or deleted (also L-000 and lots with sales) by
+--      anyone with "View profit & costs". No Safety Lock, no Inventory mode
+--      check, no password. Orders always stay.
+--   6. Stock check, Set buying prices, supplier rename, lot receipts
+--      (private Storage bucket lot-receipts).
+--
+-- Safe to run twice: backups are made only the first time; every change
+-- below gives the same result when it runs again.
+-- =============================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- 1. Backups (first run only)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS _b45_backup_lots AS SELECT * FROM lots;
+CREATE TABLE IF NOT EXISTS _b45_backup_lot_items AS SELECT * FROM lot_items;
+CREATE TABLE IF NOT EXISTS _b45_backup_order_items AS SELECT * FROM order_items;
+CREATE TABLE IF NOT EXISTS _b45_backup_order_item_lots AS SELECT * FROM order_item_lots;
+ALTER TABLE _b45_backup_lots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE _b45_backup_lot_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE _b45_backup_order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE _b45_backup_order_item_lots ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON _b45_backup_lots, _b45_backup_lot_items, _b45_backup_order_items, _b45_backup_order_item_lots FROM anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 2. New columns and tables
+-- ---------------------------------------------------------------------------
+
+-- Units an order line took from the shop's plain stock number while
+-- Inventory mode was Off (never from a lot). Undoing the line gives them
+-- back: into the opening lot while the mode is On.
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS pre_inventory_units integer NOT NULL DEFAULT 0;
+
+-- The stored cost of one unit of order_items.quantity (one pack, or one
+-- loose unit for a line sold in loose units). Kept apart from order_items
+-- because customers can read their own order_items.
+CREATE TABLE IF NOT EXISTS order_item_costs (
+  order_item_id uuid PRIMARY KEY REFERENCES order_items(id) ON DELETE CASCADE,
+  unit_cost_bdt numeric(14, 6),
+  source        text NOT NULL DEFAULT 'missing' CHECK (source IN ('lots', 'buying_price', 'missing')),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE order_item_costs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS order_item_costs_read ON order_item_costs;
+CREATE POLICY order_item_costs_read ON order_item_costs FOR SELECT TO authenticated
+  USING (staff_can('view_profit_costs'));
+REVOKE ALL ON order_item_costs FROM anon, authenticated;
+GRANT SELECT ON order_item_costs TO authenticated;
+
+-- A buying price per unit (the lots' unit: a piece, or one ml / g / pcs of
+-- a pack) for a product or option with no priced lot row.
+CREATE TABLE IF NOT EXISTS product_buying_prices (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id    uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  variant_id    uuid REFERENCES product_variants(id) ON DELETE CASCADE,
+  unit_cost_bdt numeric(14, 4) NOT NULL CHECK (unit_cost_bdt > 0),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  updated_by    uuid
+);
+CREATE UNIQUE INDEX IF NOT EXISTS product_buying_prices_unit
+  ON product_buying_prices (product_id, COALESCE(variant_id, '00000000-0000-0000-0000-000000000000'::uuid));
+ALTER TABLE product_buying_prices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS product_buying_prices_read ON product_buying_prices;
+CREATE POLICY product_buying_prices_read ON product_buying_prices FOR SELECT TO authenticated
+  USING (staff_can('view_profit_costs'));
+REVOKE ALL ON product_buying_prices FROM anon, authenticated;
+GRANT SELECT ON product_buying_prices TO authenticated;
+
+-- Receipt photos / PDFs of a lot (files in the private bucket lot-receipts).
+CREATE TABLE IF NOT EXISTS lot_receipts (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id     uuid NOT NULL REFERENCES lots(id) ON DELETE CASCADE,
+  path       text NOT NULL UNIQUE,
+  file_name  text NOT NULL CHECK (btrim(file_name) <> '' AND length(file_name) <= 200),
+  mime       text NOT NULL CHECK (mime IN ('image/webp', 'image/jpeg', 'application/pdf')),
+  size_bytes integer NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 5242880),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  created_by uuid DEFAULT auth.uid()
+);
+CREATE INDEX IF NOT EXISTS lot_receipts_lot ON lot_receipts (lot_id);
+ALTER TABLE lot_receipts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lot_receipts_read ON lot_receipts;
+DROP POLICY IF EXISTS lot_receipts_insert ON lot_receipts;
+DROP POLICY IF EXISTS lot_receipts_delete ON lot_receipts;
+CREATE POLICY lot_receipts_read ON lot_receipts FOR SELECT TO authenticated USING (staff_can('view_profit_costs'));
+CREATE POLICY lot_receipts_insert ON lot_receipts FOR INSERT TO authenticated
+  WITH CHECK (staff_can('view_profit_costs') AND path LIKE lot_id::text || '/%');
+CREATE POLICY lot_receipts_delete ON lot_receipts FOR DELETE TO authenticated USING (staff_can('view_profit_costs'));
+REVOKE ALL ON lot_receipts FROM anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON lot_receipts TO authenticated;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('lot-receipts', 'lot-receipts', false, 5242880, ARRAY['image/webp', 'image/jpeg', 'application/pdf'])
+ON CONFLICT (id) DO UPDATE
+SET public = false, file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS lot_receipts_files_read ON storage.objects;
+DROP POLICY IF EXISTS lot_receipts_files_insert ON storage.objects;
+DROP POLICY IF EXISTS lot_receipts_files_delete ON storage.objects;
+CREATE POLICY lot_receipts_files_read ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'lot-receipts' AND public.staff_can('view_profit_costs'));
+CREATE POLICY lot_receipts_files_insert ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'lot-receipts' AND public.staff_can('view_profit_costs'));
+CREATE POLICY lot_receipts_files_delete ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'lot-receipts' AND public.staff_can('view_profit_costs'));
+
+-- ---------------------------------------------------------------------------
+-- 3. A product's own size is a stock unit too
+-- ---------------------------------------------------------------------------
+-- Before: a product with options could hold lots only per option, so its
+-- own size (shown in the shop as the first option) could never be sold
+-- while Inventory mode was On.
+
+CREATE OR REPLACE FUNCTION inventory_check_unit(p_product_id uuid, p_variant_id uuid, p_row text)
+RETURNS void
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF p_product_id IS NULL OR NOT EXISTS (SELECT 1 FROM products WHERE id = p_product_id) THEN
+    RAISE EXCEPTION '%: product not found.', p_row;
+  END IF;
+  IF p_variant_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM product_variants WHERE id = p_variant_id AND product_id = p_product_id) THEN
+    RAISE EXCEPTION '%: option not found.', p_row;
+  END IF;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_sync_unit(p_product_id uuid, p_variant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_packs     integer;
+  v_prev_sync text := COALESCE(current_setting('inventory.syncing', true), '');
+  v_prev_flag text := COALESCE(current_setting('app.order_stock_change', true), '');
+BEGIN
+  IF p_product_id IS NULL OR NOT inventory_mode_on() THEN
+    RETURN;
+  END IF;
+  v_packs := GREATEST(floor(inventory_units_left(p_product_id, p_variant_id)::numeric
+                            / inventory_pack_size(p_product_id, p_variant_id))::integer, 0);
+  -- Not a staff edit: no "last edited by", no Activity Log line per change.
+  PERFORM set_config('inventory.syncing', 'on', true);
+  PERFORM set_config('app.order_stock_change', 'on', true);
+  IF p_variant_id IS NULL THEN
+    UPDATE products
+    SET stock_quantity = v_packs,
+        stock_status = CASE
+          WHEN v_packs <= 0 THEN 'out_of_stock'
+          WHEN stock_status = 'out_of_stock' THEN 'in_stock'
+          ELSE stock_status
+        END
+    WHERE id = p_product_id
+      AND (stock_quantity IS DISTINCT FROM v_packs
+           OR (v_packs <= 0) IS DISTINCT FROM (stock_status = 'out_of_stock'));
+  ELSE
+    UPDATE product_variants
+    SET stock_quantity = v_packs, in_stock = (v_packs > 0)
+    WHERE id = p_variant_id
+      AND (stock_quantity IS DISTINCT FROM v_packs OR in_stock IS DISTINCT FROM (v_packs > 0));
+  END IF;
+  PERFORM set_config('inventory.syncing', v_prev_sync, true);
+  PERFORM set_config('app.order_stock_change', v_prev_flag, true);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_sync_all()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_unit record;
+  v_n    integer := 0;
+BEGIN
+  FOR v_unit IN
+    SELECT p.id AS product_id, NULL::uuid AS variant_id FROM products p
+    UNION ALL
+    SELECT v.product_id, v.id FROM product_variants v
+  LOOP
+    PERFORM inventory_sync_unit(v_unit.product_id, v_unit.variant_id);
+    v_n := v_n + 1;
+  END LOOP;
+  RETURN v_n;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_force_product_stock()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_packs integer;
+BEGIN
+  IF COALESCE(current_setting('inventory.syncing', true), '') = 'on' OR NOT inventory_mode_on() THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.stock_quantity IS NOT DISTINCT FROM OLD.stock_quantity
+     AND NEW.stock_status IS NOT DISTINCT FROM OLD.stock_status THEN
+    RETURN NEW;
+  END IF;
+  v_packs := GREATEST(floor(inventory_units_left(NEW.id, NULL)::numeric / GREATEST(NEW.pack_size, 1))::integer, 0);
+  NEW.stock_quantity := v_packs;
+  NEW.stock_status := CASE
+    WHEN v_packs <= 0 THEN 'out_of_stock'
+    WHEN NEW.stock_status = 'out_of_stock' THEN 'in_stock'
+    ELSE NEW.stock_status
+  END;
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_stock_units()
+ RETURNS TABLE(product_id uuid, variant_id uuid, sku text, product_name text, option_label text, is_active boolean, weight_grams numeric, weight_source text, site_stock integer, in_stock boolean, selling_price numeric, lot_pieces_left bigint, lot_rows bigint, stock_unit text, pack_size integer, latest_unit_cost numeric)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RETURN;
+  END IF;
+  RETURN QUERY
+  SELECT u.* FROM (
+    SELECT p.id, NULL::uuid, p.sku, p.name,
+           -- Batch 45: a product with options also sells its own size.
+           CASE WHEN EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id)
+                THEN NULLIF(concat_ws(' · ', NULLIF(btrim(p.region), ''), NULLIF(btrim(p.size), '')), '') END,
+           p.is_active,
+           p.weight_grams, p.weight_source, p.stock_quantity,
+           (p.stock_status <> 'out_of_stock'),
+           CASE WHEN p.offer_price IS NOT NULL AND p.offer_price < p.retail_price THEN p.offer_price ELSE p.retail_price END,
+           COALESCE(l.left_qty, 0)::bigint, COALESCE(l.n, 0)::bigint,
+           p.stock_unit, p.pack_size, inventory_latest_unit_cost(p.id, NULL)
+    FROM products p
+    LEFT JOIN LATERAL (
+      SELECT sum(li.qty_remaining) AS left_qty, count(*) AS n
+      FROM lot_items li WHERE li.product_id = p.id AND li.variant_id IS NULL
+    ) l ON true
+    UNION ALL
+    SELECT p.id, v.id, p.sku, p.name,
+           NULLIF(concat_ws(' · ', NULLIF(btrim(v.region), ''), NULLIF(btrim(v.size), '')), ''),
+           p.is_active, v.weight_grams, v.weight_source, v.stock_quantity, v.in_stock,
+           CASE WHEN v.offer_price IS NOT NULL AND v.offer_price < v.retail_price THEN v.offer_price ELSE v.retail_price END,
+           COALESCE(l.left_qty, 0)::bigint, COALESCE(l.n, 0)::bigint,
+           v.stock_unit, v.pack_size, inventory_latest_unit_cost(p.id, v.id)
+    FROM product_variants v
+    JOIN products p ON p.id = v.product_id
+    LEFT JOIN LATERAL (
+      SELECT sum(li.qty_remaining) AS left_qty, count(*) AS n
+      FROM lot_items li WHERE li.variant_id = v.id
+    ) l ON true
+  ) u (product_id, variant_id, sku, product_name, option_label, is_active, weight_grams, weight_source,
+       site_stock, in_stock, selling_price, lot_pieces_left, lot_rows, stock_unit, pack_size, latest_unit_cost)
+  ORDER BY u.is_active DESC, lower(u.product_name), u.option_label NULLS FIRST;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION inventory_pack_units()
+ RETURNS TABLE(product_id uuid, variant_id uuid, stock_unit text, pack_size integer)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT is_staff() THEN
+    RETURN;
+  END IF;
+  RETURN QUERY
+  SELECT p.id, NULL::uuid, p.stock_unit, p.pack_size FROM products p
+  -- Batch 45: every product (its own size), then every option.
+  UNION ALL
+  SELECT v.product_id, v.id, v.stock_unit, v.pack_size FROM product_variants v;
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Buying price and the stored cost of a sale
+-- ---------------------------------------------------------------------------
+
+-- The current buying price of one unit: the landed cost of the newest
+-- priced lot row; else the buying price typed on Set buying prices; else
+-- NULL (no buying price).
+CREATE OR REPLACE FUNCTION inventory_buying_price(p_product_id uuid, p_variant_id uuid)
+RETURNS numeric
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT COALESCE(
+    (SELECT li.landed_unit_cost_bdt
+     FROM lot_items li JOIN lots l ON l.id = li.lot_id
+     WHERE li.product_id = p_product_id AND li.variant_id IS NOT DISTINCT FROM p_variant_id
+       AND li.landed_unit_cost_bdt > 0
+     ORDER BY l.lot_date DESC, l.created_at DESC, li.sort_order DESC
+     LIMIT 1),
+    (SELECT b.unit_cost_bdt FROM product_buying_prices b
+     WHERE b.product_id = p_product_id AND b.variant_id IS NOT DISTINCT FROM p_variant_id));
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_latest_unit_cost(p_product_id uuid, p_variant_id uuid)
+RETURNS numeric
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT COALESCE(inventory_buying_price(p_product_id, p_variant_id), 0);
+$function$;
+
+-- Works out and stores the cost of one unit of an order line:
+--   units still taken from priced lot rows  → those rows' landed cost now;
+--   every other unit (not-in-stock, before Inventory mode, a lot row with
+--   no price)                               → the current buying price.
+-- With nothing to price it by, a cost already stored is kept (for example
+-- after its lot was deleted); otherwise the line is "cost missing".
+CREATE OR REPLACE FUNCTION inventory_refresh_item_cost(p_item_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item     order_items%ROWTYPE;
+  v_factor   integer;
+  v_need     numeric;
+  v_units    numeric;
+  v_cost     numeric;
+  v_bp       numeric;
+  v_per_unit numeric;
+  v_source   text;
+BEGIN
+  SELECT * INTO v_item FROM order_items WHERE id = p_item_id;
+  IF NOT FOUND OR v_item.product_id IS NULL OR v_item.quantity <= 0 THEN
+    RETURN;
+  END IF;
+  v_factor := inventory_item_factor(v_item);
+  v_need := v_item.quantity * v_factor;
+  SELECT COALESCE(sum(o.units - o.units_back), 0), COALESCE(sum((o.units - o.units_back) * li.landed_unit_cost_bdt), 0)
+  INTO v_units, v_cost
+  FROM order_item_lots o JOIN lot_items li ON li.id = o.lot_item_id
+  WHERE o.order_item_id = p_item_id AND o.units > o.units_back AND li.landed_unit_cost_bdt > 0;
+  v_bp := inventory_buying_price(v_item.product_id, v_item.variant_id);
+
+  IF v_units > 0 AND v_units >= v_need THEN
+    v_per_unit := v_cost / v_units;
+    v_source := 'lots';
+  ELSIF v_units > 0 AND v_bp IS NOT NULL THEN
+    v_per_unit := (v_cost + (v_need - v_units) * v_bp) / v_need;
+    v_source := 'lots';
+  ELSIF v_units > 0 THEN
+    v_per_unit := v_cost / v_units;
+    v_source := 'lots';
+  ELSIF v_bp IS NOT NULL THEN
+    v_per_unit := v_bp;
+    v_source := 'buying_price';
+  ELSE
+    INSERT INTO order_item_costs (order_item_id, unit_cost_bdt, source)
+    VALUES (p_item_id, NULL, 'missing')
+    ON CONFLICT (order_item_id) DO NOTHING;
+    RETURN;
+  END IF;
+
+  INSERT INTO order_item_costs (order_item_id, unit_cost_bdt, source, updated_at)
+  VALUES (p_item_id, round(v_per_unit * v_factor, 6), v_source, now())
+  ON CONFLICT (order_item_id) DO UPDATE
+  SET unit_cost_bdt = EXCLUDED.unit_cost_bdt, source = EXCLUDED.source, updated_at = now()
+  WHERE order_item_costs.unit_cost_bdt IS DISTINCT FROM EXCLUDED.unit_cost_bdt
+     OR order_item_costs.source IS DISTINCT FROM EXCLUDED.source;
+END;
+$function$;
+
+-- One order's lines with their stored cost. Every profit figure (order
+-- profit, Sales profit, Money, Reports) reads cost from here.
+CREATE OR REPLACE FUNCTION inventory_item_costs(p_order_ids uuid[])
+RETURNS TABLE(order_item_id uuid, order_id uuid, product_id uuid, variant_id uuid, label text, line_total numeric,
+              units integer, cost numeric, provisional numeric, costed boolean)
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT oi.id, oi.order_id, oi.product_id, oi.variant_id,
+         oi.product_name || COALESCE(' — ' || oi.variant_label, ''),
+         oi.line_total,
+         (oi.quantity * inventory_item_factor(oi))::integer,
+         round(COALESCE(c.unit_cost_bdt, 0) * oi.quantity, 2),
+         -- The part priced at the buying price because no lot held it yet.
+         round(COALESCE((SELECT sum(s.units) FROM stock_shortfalls s
+                         WHERE s.order_item_id = oi.id AND s.status = 'open'), 0)
+               * COALESCE(c.unit_cost_bdt, 0) / GREATEST(inventory_item_factor(oi), 1), 2),
+         c.unit_cost_bdt IS NOT NULL
+  FROM order_items oi
+  LEFT JOIN order_item_costs c ON c.order_item_id = oi.id
+  WHERE oi.order_id = ANY (p_order_ids);
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 5. Stock comes back
+-- ---------------------------------------------------------------------------
+
+-- Gives back up to p_units of the units a line took while Inventory mode
+-- was Off. While the mode is On they go into the opening lot (a row is
+-- added for the product when L-000 has none). While it is Off the caller
+-- already put them back on the plain stock number. p_update = false when
+-- the line itself is being deleted (it can't be changed then).
+CREATE OR REPLACE FUNCTION inventory_give_back_pre(p_item_id uuid, p_units integer, p_reason text, p_update boolean)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item  order_items%ROWTYPE;
+  v_n     integer;
+  v_ref   text;
+  v_lot   lots%ROWTYPE;
+  v_row   uuid;
+  v_pack  integer;
+  v_bp    numeric;
+  v_sort  integer;
+BEGIN
+  SELECT * INTO v_item FROM order_items WHERE id = p_item_id;
+  IF NOT FOUND THEN
+    RETURN 0;
+  END IF;
+  v_n := LEAST(COALESCE(p_units, v_item.pre_inventory_units), v_item.pre_inventory_units);
+  IF v_n <= 0 THEN
+    RETURN 0;
+  END IF;
+  IF p_update THEN
+    UPDATE order_items SET pre_inventory_units = pre_inventory_units - v_n WHERE id = p_item_id;
+  END IF;
+  IF NOT inventory_mode_on() OR v_item.product_id IS NULL THEN
+    RETURN v_n;
+  END IF;
+
+  SELECT order_number INTO v_ref FROM orders WHERE id = v_item.order_id;
+  SELECT * INTO v_lot FROM lots WHERE kind = 'opening' ORDER BY created_at LIMIT 1;
+  IF NOT FOUND THEN
+    PERFORM inventory_log(v_item.order_id, COALESCE(v_ref, 'order'),
+      format('%s: %s units sold before Inventory mode not put back (there is no opening lot)', inventory_item_label(v_item), v_n));
+    RETURN 0;
+  END IF;
+
+  SELECT li.id INTO v_row FROM lot_items li
+  WHERE li.lot_id = v_lot.id AND li.product_id = v_item.product_id
+    AND li.variant_id IS NOT DISTINCT FROM v_item.variant_id
+  ORDER BY li.sort_order
+  LIMIT 1;
+  IF FOUND THEN
+    UPDATE lot_items SET qty = qty + v_n WHERE id = v_row;
+  ELSE
+    v_pack := inventory_pack_size(v_item.product_id, v_item.variant_id);
+    v_bp := COALESCE(inventory_buying_price(v_item.product_id, v_item.variant_id), 0);
+    SELECT COALESCE(max(sort_order), 0) + 1 INTO v_sort FROM lot_items WHERE lot_id = v_lot.id;
+    INSERT INTO lot_items (lot_id, product_id, variant_id, sort_order, qty, entry_unit, pack_size,
+                           unit_price_foreign, unit_price_bdt, buy_value_bdt, expiry_date,
+                           alloc_weight_paisa, alloc_other_paisa, alloc_weight_bdt, alloc_other_bdt,
+                           landed_unit_cost_bdt, qty_remaining)
+    VALUES (v_lot.id, v_item.product_id, v_item.variant_id, v_sort, v_n, 'unit', v_pack,
+            round(v_bp, 4), round(v_bp, 4), round(v_bp * v_n, 4), NULL, 0, 0, 0, 0, round(v_bp, 6), 0)
+    RETURNING id INTO v_row;
+  END IF;
+  INSERT INTO stock_movements (lot_item_id, movement_type, qty, reference, reason, created_by)
+  VALUES (v_row, 'opening', v_n, COALESCE(v_ref, 'order'),
+          format('Back from an order sold before Inventory mode (%s)', p_reason), auth.uid());
+  PERFORM inventory_allocate_lot(v_lot.id, NULL);
+  PERFORM inventory_log(v_item.order_id, COALESCE(v_ref, 'order'),
+    format('%s: %s back to %s (sold before Inventory mode)', inventory_item_label(v_item), v_n, v_lot.code));
+  RETURN v_n;
+END;
+$function$;
+
+-- While Inventory mode is Off a sale lowers the plain stock number; the
+-- line remembers those units (only for a counted stock number).
+CREATE OR REPLACE FUNCTION inventory_pre_units()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_order   orders%ROWTYPE;
+  v_counted boolean;
+BEGIN
+  IF inventory_mode_on() OR NEW.sold_unit IS NOT NULL OR NEW.product_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.quantity <= OLD.quantity THEN
+    RETURN NEW;
+  END IF;
+  SELECT * INTO v_order FROM orders WHERE id = NEW.order_id;
+  IF NOT FOUND OR v_order.stock_released OR v_order.status IN ('cancelled', 'returned') THEN
+    RETURN NEW;
+  END IF;
+  v_counted := CASE WHEN NEW.variant_id IS NULL
+                    THEN (SELECT stock_quantity IS NOT NULL FROM products WHERE id = NEW.product_id)
+                    ELSE (SELECT stock_quantity IS NOT NULL FROM product_variants WHERE id = NEW.variant_id) END;
+  IF NOT COALESCE(v_counted, false) THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW.pre_inventory_units := NEW.quantity * inventory_pack_size(NEW.product_id, NEW.variant_id);
+  ELSE
+    NEW.pre_inventory_units := OLD.pre_inventory_units
+                               + (NEW.quantity - OLD.quantity) * inventory_pack_size(NEW.product_id, NEW.variant_id);
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS order_items_pre_units ON order_items;
+CREATE TRIGGER order_items_pre_units BEFORE INSERT OR UPDATE OF quantity ON order_items
+  FOR EACH ROW EXECUTE FUNCTION inventory_pre_units();
+
+CREATE OR REPLACE FUNCTION inventory_order_item_changed()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_order  orders%ROWTYPE;
+  v_holds  boolean;
+  v_held   integer;
+  v_factor integer;
+  v_delta  integer;
+  v_back   integer;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF inventory_item_held(OLD.id) > 0 THEN
+      PERFORM inventory_give_back(OLD.id, NULL, 'cancel', 'Removed from the order');
+    END IF;
+    IF OLD.pre_inventory_units > 0 THEN
+      PERFORM inventory_give_back_pre(OLD.id, NULL, 'Removed from the order', false);
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  SELECT * INTO v_order FROM orders WHERE id = NEW.order_id;
+  v_holds := FOUND AND NOT v_order.stock_released AND v_order.status NOT IN ('cancelled', 'returned');
+
+  IF TG_OP = 'INSERT' THEN
+    IF v_holds AND inventory_mode_on() THEN
+      PERFORM inventory_take_units(NEW, NEW.quantity * inventory_item_factor(NEW), v_order.order_number);
+    END IF;
+    PERFORM inventory_refresh_item_cost(NEW.id);
+    RETURN NEW;
+  END IF;
+
+  IF NEW.quantity = OLD.quantity THEN
+    RETURN NEW;
+  END IF;
+  v_held := inventory_item_held(NEW.id);
+  v_factor := CASE
+    WHEN NEW.sold_unit IS NOT NULL THEN 1
+    WHEN v_held > 0 AND OLD.quantity > 0 AND v_held % OLD.quantity = 0 THEN v_held / OLD.quantity
+    ELSE inventory_pack_size(NEW.product_id, NEW.variant_id)
+  END;
+  v_delta := (NEW.quantity - OLD.quantity) * v_factor;
+  IF v_delta < 0 THEN
+    v_back := 0;
+    IF v_held > 0 THEN
+      v_back := LEAST(-v_delta, v_held);
+      PERFORM inventory_give_back(NEW.id, v_back, 'cancel', format('Quantity %s → %s', OLD.quantity, NEW.quantity));
+    END IF;
+    IF -v_delta > v_back AND NEW.pre_inventory_units > 0 THEN
+      PERFORM inventory_give_back_pre(NEW.id, -v_delta - v_back, format('Quantity %s → %s', OLD.quantity, NEW.quantity), true);
+    END IF;
+  ELSIF v_delta > 0 AND v_holds AND inventory_mode_on() THEN
+    PERFORM inventory_take_units(NEW, v_delta, v_order.order_number);
+  END IF;
+  PERFORM inventory_refresh_item_cost(NEW.id);
+  RETURN NEW;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_order_released()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item order_items%ROWTYPE;
+BEGIN
+  IF NEW.stock_released AND NOT OLD.stock_released THEN
+    FOR v_item IN SELECT * FROM order_items WHERE order_id = NEW.id ORDER BY id LOOP
+      PERFORM inventory_give_back(v_item.id, NULL,
+        CASE WHEN NEW.status = 'returned' THEN 'return' ELSE 'cancel' END,
+        CASE WHEN NEW.status = 'returned' THEN 'Order returned' ELSE 'Order cancelled' END);
+      IF v_item.pre_inventory_units > 0 THEN
+        PERFORM inventory_give_back_pre(v_item.id, NULL,
+          CASE WHEN NEW.status = 'returned' THEN 'Order returned' ELSE 'Order cancelled' END, true);
+      END IF;
+    END LOOP;
+  ELSIF OLD.stock_released AND NOT NEW.stock_released THEN
+    IF inventory_mode_on() THEN
+      FOR v_item IN SELECT * FROM order_items WHERE order_id = NEW.id ORDER BY id LOOP
+        PERFORM inventory_take_units(v_item, v_item.quantity * inventory_item_factor(v_item), NEW.order_number);
+        PERFORM inventory_refresh_item_cost(v_item.id);
+      END LOOP;
+    ELSE
+      -- Reopened while Off: the plain stock number was lowered again.
+      UPDATE order_items oi
+      SET pre_inventory_units = oi.quantity * inventory_pack_size(oi.product_id, oi.variant_id)
+      WHERE oi.order_id = NEW.id AND oi.sold_unit IS NULL AND oi.product_id IS NOT NULL
+        AND CASE WHEN oi.variant_id IS NULL
+                 THEN (SELECT p.stock_quantity IS NOT NULL FROM products p WHERE p.id = oi.product_id)
+                 ELSE (SELECT v.stock_quantity IS NOT NULL FROM product_variants v WHERE v.id = oi.variant_id) END;
+    END IF;
+  END IF;
+  RETURN NULL;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_set_mode(p_on boolean, p_take_open_orders boolean DEFAULT true)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_password_at bigint;
+  v_was_on      boolean := COALESCE((SELECT value FROM app_settings WHERE key = 'inventory_mode'), 'false') = 'true';
+  v_order       record;
+  v_item        order_items%ROWTYPE;
+  v_orders      integer := 0;
+  v_short       integer;
+  v_units       integer := 0;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Only the Super Admin can change Inventory mode.';
+  END IF;
+  SELECT max((e ->> 'timestamp')::bigint) INTO v_password_at
+  FROM jsonb_array_elements(COALESCE(auth.jwt() -> 'amr', '[]'::jsonb)) e
+  WHERE e ->> 'method' = 'password';
+  IF v_password_at IS NULL OR v_password_at < extract(epoch FROM now())::bigint - 300 THEN
+    RAISE EXCEPTION 'Please confirm your password again.';
+  END IF;
+  IF p_on IS NULL THEN
+    RAISE EXCEPTION 'Choose On or Off.';
+  END IF;
+  IF p_on = v_was_on THEN
+    RETURN jsonb_build_object('changed', false, 'mode_on', v_was_on);
+  END IF;
+  IF p_on AND NOT EXISTS (SELECT 1 FROM lots WHERE kind = 'opening') THEN
+    RAISE EXCEPTION 'Inventory mode can be turned On only after the opening stock (L-000) is confirmed.';
+  END IF;
+
+  PERFORM set_config('inventory.mode_change', 'on', true);
+  PERFORM set_config('app.activity_quiet', 'on', true);
+  INSERT INTO app_settings (key, value) VALUES ('inventory_mode', CASE WHEN p_on THEN 'true' ELSE 'false' END)
+  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+  PERFORM set_config('app.activity_quiet', '', true);
+  PERFORM set_config('inventory.mode_change', '', true);
+
+  IF p_on THEN
+    IF COALESCE(p_take_open_orders, true) THEN
+      PERFORM set_config('inventory.short_ok', 'on', true);
+      FOR v_order IN
+        SELECT o.id, o.order_number FROM orders o
+        WHERE o.status IN ('pending', 'confirmed') AND NOT o.stock_released
+          AND NOT EXISTS (SELECT 1 FROM order_item_lots x WHERE x.order_id = o.id)
+          AND NOT EXISTS (SELECT 1 FROM stock_shortfalls x WHERE x.order_id = o.id)
+        ORDER BY o.created_at
+        FOR UPDATE OF o
+      LOOP
+        FOR v_item IN SELECT * FROM order_items WHERE order_id = v_order.id ORDER BY id LOOP
+          PERFORM inventory_take_units(v_item, v_item.quantity * inventory_item_factor(v_item), v_order.order_number);
+          PERFORM inventory_refresh_item_cost(v_item.id);
+        END LOOP;
+        -- Batch 45: these lines now hold lot units, not units from before.
+        UPDATE order_items SET pre_inventory_units = 0 WHERE order_id = v_order.id AND pre_inventory_units <> 0;
+        v_orders := v_orders + 1;
+      END LOOP;
+      PERFORM set_config('inventory.short_ok', '', true);
+    END IF;
+    PERFORM inventory_sync_all();
+  END IF;
+
+  SELECT count(*) INTO v_short FROM stock_shortfalls WHERE status = 'open';
+  SELECT COALESCE(sum(qty_remaining), 0) INTO v_units FROM lot_items;
+
+  PERFORM write_activity(CASE WHEN p_on THEN 'inventory.mode_on' ELSE 'inventory.mode_off' END,
+    'setting', 'inventory_mode', 'Inventory mode',
+    CASE WHEN p_on
+         THEN format('Turned Inventory mode ON: stock numbers now come from lots (%s units). %s open orders took their stock.',
+                     v_units, v_orders)
+         ELSE 'Turned Inventory mode OFF: sales stop taking stock from lots; profit will be missing for orders while Off.' END,
+    jsonb_build_object('mode_on', p_on, 'open_orders_taken', v_orders, 'open_shortfalls', v_short, 'units_in_lots', v_units));
+
+  RETURN jsonb_build_object('changed', true, 'mode_on', p_on, 'open_orders_taken', v_orders, 'open_shortfalls', v_short);
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 6. Landed cost without weight
+-- ---------------------------------------------------------------------------
+-- landed cost per unit = buy price + the row's share of the lot's OTHER
+-- costs (shared by buy value; all values 0 → by units), exact to the paisa.
+-- Weight bills (cost_type 'weight') are history only and count nowhere.
+-- Works for every lot, the opening lot too. p_adjust_date is no longer
+-- used (sales follow the lot's cost directly) and stays for old callers.
+CREATE OR REPLACE FUNCTION inventory_allocate_lot(p_lot_id uuid, p_adjust_date date DEFAULT NULL::date)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_lot         lots%ROWTYPE;
+  v_other_paisa numeric;
+BEGIN
+  SELECT * INTO v_lot FROM lots WHERE id = p_lot_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  SELECT COALESCE(sum(round(amount_bdt * 100)) FILTER (WHERE cost_type = 'other'), 0)
+  INTO v_other_paisa
+  FROM lot_costs WHERE lot_id = p_lot_id;
+
+  UPDATE lot_items
+  SET buy_value_bdt = (CASE WHEN entry_unit = 'pack' THEN qty / pack_size ELSE qty END)
+                      * round(unit_price_foreign * v_lot.exchange_rate, 4),
+      unit_price_bdt = round((CASE WHEN entry_unit = 'pack' THEN qty / pack_size ELSE qty END)
+                             * round(unit_price_foreign * v_lot.exchange_rate, 4) / qty, 4)
+  WHERE lot_id = p_lot_id;
+
+  WITH base AS (
+    SELECT li.id, li.qty, li.sort_order, round(li.buy_value_bdt * 10000) AS vb
+    FROM lot_items li
+    WHERE li.lot_id = p_lot_id
+  ), totals AS (
+    SELECT sum(vb) AS vt, sum(qty) AS qt FROM base
+  ), basis AS (
+    SELECT b.id, b.qty, b.sort_order,
+           CASE WHEN t.vt > 0 THEN b.vb ELSE b.qty END AS ob,
+           CASE WHEN t.vt > 0 THEN t.vt ELSE t.qt END AS ot
+    FROM base b CROSS JOIN totals t
+  ), shares AS (
+    SELECT b.id, b.qty, b.sort_order,
+           CASE WHEN b.ot > 0 THEN div(v_other_paisa * b.ob, b.ot) ELSE 0 END AS o_floor,
+           CASE WHEN b.ot > 0 THEN mod(v_other_paisa * b.ob, b.ot) ELSE 0 END AS o_rem
+    FROM basis b
+  ), ranked AS (
+    SELECT s.*,
+           row_number() OVER (ORDER BY o_rem DESC, sort_order, id) AS o_rank,
+           v_other_paisa - sum(o_floor) OVER () AS o_left
+    FROM shares s
+  ), final AS (
+    SELECT id, qty, (o_floor + CASE WHEN o_rank <= o_left THEN 1 ELSE 0 END)::bigint AS o_paisa
+    FROM ranked
+  )
+  UPDATE lot_items li
+  SET alloc_weight_paisa = 0,
+      alloc_other_paisa = f.o_paisa,
+      alloc_weight_bdt = 0,
+      alloc_other_bdt = round(f.o_paisa::numeric / f.qty / 100, 6),
+      landed_unit_cost_bdt = round(li.buy_value_bdt / f.qty + f.o_paisa::numeric / f.qty / 100, 6),
+      weight_guessed = false
+  FROM final f
+  WHERE li.id = f.id;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION money_lot_landed(p_lot_id uuid)
+RETURNS numeric
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT round(COALESCE(sum(
+    CASE WHEN li.buy_value_bdt > 0 THEN li.buy_value_bdt ELSE li.qty * li.unit_price_bdt END
+    + li.alloc_other_paisa::numeric / 100), 0), 2)
+  FROM lot_items li WHERE li.lot_id = p_lot_id;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_confirm_opening(p_lot_date date, p_weight_percent numeric, p_rows jsonb, p_file_name text DEFAULT ''::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_id       uuid;
+  v_row      jsonb;
+  v_idx      integer;
+  v_label    text;
+  v_pid      uuid;
+  v_vid      uuid;
+  v_src      text;
+  v_price    numeric;
+  v_pieces   numeric;
+  v_extra    numeric;
+  v_pack     integer;
+  v_units    numeric;
+  v_grams    numeric;
+  v_merged   record;
+  v_item_id  uuid;
+  v_sort     integer := 0;
+  v_alloc    bigint;
+  v_value    numeric;
+  v_added    bigint := 0;
+  v_total    numeric := 0;
+  v_count    bigint := 0;
+  v_current  numeric;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_lot_date IS NULL THEN
+    RAISE EXCEPTION 'Pick the start date for the opening stock.';
+  END IF;
+  -- Batch 45: weight is not part of product cost; p_weight_percent is
+  -- kept only so older screens can still call this.
+  IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' OR jsonb_array_length(p_rows) = 0 THEN
+    RAISE EXCEPTION 'The file has no rows to save.';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('inventory_opening'));
+  IF EXISTS (SELECT 1 FROM lots WHERE kind = 'opening') THEN
+    RAISE EXCEPTION 'Opening stock was already saved (L-000). Undo it first to upload again.';
+  END IF;
+
+  CREATE TEMP TABLE IF NOT EXISTS inventory_opening_rows (
+    ord integer, product_id uuid, variant_id uuid, source text, price numeric, pieces integer, expiry date, grams numeric
+  ) ON COMMIT DROP;
+  ALTER TABLE inventory_opening_rows ADD COLUMN IF NOT EXISTS units integer;
+  ALTER TABLE inventory_opening_rows ADD COLUMN IF NOT EXISTS pack integer;
+  TRUNCATE inventory_opening_rows;
+
+  FOR v_row, v_idx IN SELECT value, ordinality FROM jsonb_array_elements(p_rows) WITH ORDINALITY LOOP
+    v_label := format('Row %s', v_idx);
+    v_pid := NULLIF(v_row ->> 'product_id', '')::uuid;
+    v_vid := NULLIF(v_row ->> 'variant_id', '')::uuid;
+    PERFORM inventory_check_unit(v_pid, v_vid, v_label);
+    v_src := lower(btrim(COALESCE(v_row ->> 'source', '')));
+    IF v_src NOT IN ('import', 'wholesale') THEN
+      RAISE EXCEPTION '%: source must be import or wholesale.', v_label;
+    END IF;
+    v_price := NULLIF(v_row ->> 'buy_price_bdt', '')::numeric;
+    IF v_price IS NULL OR v_price <= 0 THEN
+      RAISE EXCEPTION '%: buy price must be above 0.', v_label;
+    END IF;
+    v_pieces := COALESCE(NULLIF(v_row ->> 'pieces', '')::numeric, 0);
+    v_extra := COALESCE(NULLIF(v_row ->> 'extra_units', '')::numeric, 0);
+    IF v_pieces < 0 OR v_pieces <> trunc(v_pieces) OR v_pieces > 1000000 THEN
+      RAISE EXCEPTION '%: pieces must be a whole number above 0.', v_label;
+    END IF;
+    IF v_extra < 0 OR v_extra <> trunc(v_extra) OR v_extra > 100000000 THEN
+      RAISE EXCEPTION '%: extra units must be a whole number (0 or more).', v_label;
+    END IF;
+    v_pack := inventory_pack_size(v_pid, v_vid);
+    v_units := v_pieces * v_pack + v_extra;
+    IF v_units <= 0 THEN
+      RAISE EXCEPTION '%: pieces must be a whole number above 0.', v_label;
+    END IF;
+    IF v_units > 100000000 THEN
+      RAISE EXCEPTION '%: too many units.', v_label;
+    END IF;
+    v_grams := NULLIF(v_row ->> 'weight_g', '')::numeric;
+    IF v_grams IS NOT NULL AND (v_grams <= 0 OR v_grams > 100000) THEN
+      RAISE EXCEPTION '%: weight must be between 1 and 100000 grams.', v_label;
+    END IF;
+    INSERT INTO inventory_opening_rows (ord, product_id, variant_id, source, price, pieces, expiry, grams, units, pack)
+    VALUES (v_idx, v_pid, v_vid, v_src, round(v_price, 4), v_pieces::integer,
+            inventory_month_end(NULLIF(v_row ->> 'expiry', '')::date), round(v_grams, 2), v_units::integer, v_pack);
+  END LOOP;
+
+  INSERT INTO lots (code, kind, source_type, lot_date, currency, exchange_rate, notes,
+                    opening_weight_percent, created_by, created_by_username)
+  VALUES ('L-000', 'opening', NULL, p_lot_date, 'BDT', 1,
+          'Opening stock' || CASE WHEN COALESCE(p_file_name, '') <> '' THEN ' from ' || left(p_file_name, 120) ELSE '' END,
+          0, auth.uid(), current_actor_username())
+  RETURNING id INTO v_id;
+
+  FOR v_merged IN
+    SELECT r.product_id, r.variant_id, r.source, r.expiry,
+           sum(r.units)::integer AS units,
+           max(r.pack) AS pack,
+           round(sum(r.units * r.price) / sum(r.units), 4) AS price,
+           max(r.grams) AS grams
+    FROM inventory_opening_rows r
+    GROUP BY r.product_id, r.variant_id, r.source, r.expiry
+    ORDER BY min(r.ord)
+  LOOP
+    v_sort := v_sort + 1;
+    -- Buy value of the row (4 decimals) and the % on an imported row, in
+    -- whole paisa for the whole row.
+    v_value := round(v_merged.units * v_merged.price / v_merged.pack, 4);
+    v_alloc := 0;
+    v_added := v_added + v_alloc;
+
+    IF v_merged.variant_id IS NULL THEN
+      SELECT weight_grams INTO v_current FROM products WHERE id = v_merged.product_id;
+    ELSE
+      SELECT weight_grams INTO v_current FROM product_variants WHERE id = v_merged.variant_id;
+    END IF;
+    IF v_merged.grams IS NOT NULL AND v_merged.grams IS DISTINCT FROM v_current THEN
+      PERFORM inventory_write_weight(v_merged.product_id, v_merged.variant_id, v_merged.grams);
+    END IF;
+
+    INSERT INTO lot_items (lot_id, product_id, variant_id, sort_order, qty, entry_unit, pack_size,
+                           unit_price_foreign, unit_price_bdt, buy_value_bdt,
+                           weight_grams_used, expiry_date, alloc_weight_paisa, alloc_other_paisa,
+                           alloc_weight_bdt, alloc_other_bdt, landed_unit_cost_bdt, opening_source)
+    VALUES (v_id, v_merged.product_id, v_merged.variant_id, v_sort, v_merged.units, 'unit', v_merged.pack,
+            round(v_merged.price / v_merged.pack, 4), round(v_merged.price / v_merged.pack, 4), v_value,
+            COALESCE(v_merged.grams, v_current), v_merged.expiry, v_alloc, 0,
+            round(v_alloc::numeric / v_merged.units / 100, 6), 0,
+            round(v_value / v_merged.units + v_alloc::numeric / v_merged.units / 100, 6), v_merged.source)
+    RETURNING id INTO v_item_id;
+
+    INSERT INTO stock_movements (lot_item_id, movement_type, qty, reference, reason, created_by)
+    VALUES (v_item_id, 'opening', v_merged.units, 'L-000', 'Opening stock', auth.uid());
+
+    v_count := v_count + v_merged.units;
+    v_total := v_total + v_value;
+  END LOOP;
+
+  UPDATE lots SET opening_weight_added_bdt = v_added::numeric / 100 WHERE id = v_id;
+
+  -- Opening stock fills "sold without stock" units first (oldest first).
+  PERFORM inventory_fill_shortfalls(v_id);
+
+  PERFORM write_activity('inventory.opening_confirmed', 'lot', v_id::text, 'L-000',
+    format('Saved opening stock L-000: %s rows, %s units, value ৳%s', v_sort, v_count, round(v_total, 2)),
+    jsonb_build_object('rows', v_sort, 'pieces', v_count, 'buy_value', round(v_total, 2),
+                       'weight_added', 0, 'weight_percent', 0,
+                       'lot_date', p_lot_date, 'file', left(COALESCE(p_file_name, ''), 120)));
+  RETURN v_id;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION smart_below_cost(p_lines jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_view  boolean := money_can_view();
+  v_out   jsonb := '[]'::jsonb;
+  v_line  jsonb;
+  v_pid   uuid;
+  v_vid   uuid;
+  v_unit  numeric;
+  v_cost  numeric;
+  v_price numeric;
+  v_qty   integer;
+  v_below boolean;
+BEGIN
+  IF NOT (v_view OR staff_can('create_orders') OR staff_can('edit_orders')) THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_lines IS NULL OR jsonb_typeof(p_lines) <> 'array' THEN
+    RETURN '[]'::jsonb;
+  END IF;
+  IF jsonb_array_length(p_lines) > 200 THEN
+    RAISE EXCEPTION 'Too many lines.';
+  END IF;
+  FOR v_line IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
+    v_pid := NULLIF(v_line ->> 'product_id', '')::uuid;
+    v_vid := NULLIF(v_line ->> 'variant_id', '')::uuid;
+    IF v_vid = v_pid THEN
+      v_vid := NULL;
+    END IF;
+    v_price := COALESCE(NULLIF(v_line ->> 'price', '')::numeric, 0);
+    v_qty := GREATEST(COALESCE(NULLIF(v_line ->> 'quantity', '')::integer, 1), 1);
+    v_unit := NULL;
+    IF v_pid IS NOT NULL THEN
+      SELECT li.landed_unit_cost_bdt INTO v_unit
+      FROM lot_items li JOIN lots l ON l.id = li.lot_id
+      WHERE li.product_id = v_pid AND li.variant_id IS NOT DISTINCT FROM v_vid AND li.qty_remaining > 0
+        AND li.landed_unit_cost_bdt > 0
+      ORDER BY li.expiry_date ASC NULLS LAST, l.lot_date, (l.kind = 'opening') DESC, length(l.code), l.code, li.sort_order
+      LIMIT 1;
+      IF v_unit IS NULL THEN
+        v_unit := inventory_buying_price(v_pid, v_vid);
+      END IF;
+    END IF;
+    IF v_unit IS NULL THEN
+      v_out := v_out || jsonb_build_object('below', false, 'cost', NULL, 'loss', NULL);
+      CONTINUE;
+    END IF;
+    v_cost := round(v_unit * CASE WHEN NULLIF(v_line ->> 'sold_unit', '') IS NULL THEN inventory_pack_size(v_pid, v_vid) ELSE 1 END, 2);
+    v_below := v_price < v_cost;
+    v_out := v_out || jsonb_build_object(
+      'below', v_below,
+      'cost', CASE WHEN v_view THEN v_cost END,
+      'loss', CASE WHEN v_view AND v_below THEN round((v_cost - v_price) * v_qty, 2) END);
+  END LOOP;
+  RETURN v_out;
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Edit and delete any lot
+-- ---------------------------------------------------------------------------
+
+-- Before lot rows go away: every order line sold from them keeps (or gets)
+-- its stored cost, then the link to the rows is removed. The orders stay.
+CREATE OR REPLACE FUNCTION inventory_unlink_lot_items(p_ids uuid[])
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item  uuid;
+  v_count integer := 0;
+BEGIN
+  FOR v_item IN
+    SELECT DISTINCT o.order_item_id FROM order_item_lots o WHERE o.lot_item_id = ANY (p_ids)
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM order_item_costs c WHERE c.order_item_id = v_item AND c.unit_cost_bdt IS NOT NULL) THEN
+      PERFORM inventory_refresh_item_cost(v_item);
+    END IF;
+    v_count := v_count + 1;
+  END LOOP;
+  DELETE FROM order_item_lots WHERE lot_item_id = ANY (p_ids);
+  RETURN v_count;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_save_lot(p_lot jsonb)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_id          uuid := NULLIF(p_lot ->> 'id', '')::uuid;
+  v_is_new      boolean := v_id IS NULL;
+  v_lot         lots%ROWTYPE;
+  v_opening     boolean := false;
+  v_move        text := 'purchase';
+  v_source      text := NULLIF(p_lot ->> 'source_type', '');
+  v_currency    text := upper(COALESCE(NULLIF(p_lot ->> 'currency', ''), 'BDT'));
+  v_rate        numeric;
+  v_date        date := NULLIF(p_lot ->> 'lot_date', '')::date;
+  v_items       jsonb := COALESCE(p_lot -> 'items', '[]'::jsonb);
+  v_costs       jsonb := COALESCE(p_lot -> 'costs', '[]'::jsonb);
+  v_supplier_id uuid := NULLIF(p_lot ->> 'supplier_id', '')::uuid;
+  v_supplier    text := btrim(COALESCE(p_lot ->> 'supplier', ''));
+  v_n           integer;
+  v_code        text;
+  v_item        jsonb;
+  v_cost        jsonb;
+  v_idx         integer := 0;
+  v_row         text;
+  v_item_id     uuid;
+  v_pid         uuid;
+  v_vid         uuid;
+  v_qty         numeric;
+  v_entry       text;
+  v_pack        integer;
+  v_units       integer;
+  v_price       numeric;
+  v_expiry      date;
+  v_old_item    lot_items%ROWTYPE;
+  v_old_cost    lot_costs%ROWTYPE;
+  v_amount      numeric;
+  v_changes     jsonb := '[]'::jsonb;
+  v_units_all   bigint;
+  v_other       numeric;
+  v_out         integer;
+  v_filled      integer;
+  v_removed     uuid[] := '{}';
+  v_affected    uuid;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+
+  IF NOT v_is_new THEN
+    SELECT * INTO v_lot FROM lots WHERE id = v_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Lot not found.';
+    END IF;
+    v_opening := v_lot.kind = 'opening';
+  END IF;
+  IF v_opening THEN
+    v_move := 'opening';
+    v_source := v_lot.source_type;
+  ELSIF v_source IS NULL OR v_source NOT IN ('import', 'wholesale', 'local') THEN
+    RAISE EXCEPTION 'Pick where the lot came from (import, wholesale or local).';
+  END IF;
+  IF v_currency NOT IN ('BDT', 'AUD', 'USD', 'CAD', 'JPY', 'KRW', 'INR', 'GBP') THEN
+    RAISE EXCEPTION 'Unknown currency %.', v_currency;
+  END IF;
+  v_rate := CASE WHEN v_currency = 'BDT' THEN 1 ELSE NULLIF(p_lot ->> 'exchange_rate', '')::numeric END;
+  IF v_rate IS NULL OR v_rate <= 0 THEN
+    RAISE EXCEPTION 'Enter the exchange rate (taka for 1 %).', v_currency;
+  END IF;
+  IF v_date IS NULL THEN
+    RAISE EXCEPTION 'Enter the lot date.';
+  END IF;
+  IF jsonb_typeof(v_items) <> 'array' OR jsonb_array_length(v_items) = 0 THEN
+    RAISE EXCEPTION 'Add at least one product to the lot.';
+  END IF;
+  IF jsonb_typeof(v_costs) <> 'array' THEN
+    RAISE EXCEPTION 'Costs must be a list.';
+  END IF;
+
+  -- The supplier from the list (the text column keeps its name). A typed
+  -- name is linked when the name is in the list.
+  IF v_supplier_id IS NOT NULL THEN
+    SELECT name INTO v_supplier FROM suppliers WHERE id = v_supplier_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Supplier not found.';
+    END IF;
+  ELSIF v_supplier <> '' THEN
+    SELECT id INTO v_supplier_id FROM suppliers WHERE lower(btrim(name)) = lower(v_supplier);
+  END IF;
+
+  IF v_is_new THEN
+    PERFORM pg_advisory_xact_lock(hashtext('inventory_lot_code'));
+    SELECT COALESCE(max(substring(code FROM 3)::integer), 0) + 1 INTO v_n
+    FROM lots WHERE code ~ '^L-[0-9]+$';
+    v_code := 'L-' || CASE WHEN v_n < 1000 THEN lpad(v_n::text, 3, '0') ELSE v_n::text END;
+    INSERT INTO lots (code, kind, source_type, country, supplier, supplier_id, lot_date, currency, exchange_rate,
+                      costs_pending, notes, created_by, created_by_username)
+    VALUES (v_code, 'purchase', v_source, btrim(COALESCE(p_lot ->> 'country', '')),
+            v_supplier, v_supplier_id, v_date, v_currency, v_rate,
+            COALESCE((p_lot ->> 'costs_pending')::boolean, false), COALESCE(p_lot ->> 'notes', ''),
+            auth.uid(), current_actor_username())
+    RETURNING id INTO v_id;
+  ELSE
+    v_code := v_lot.code;
+    IF v_lot.exchange_rate <> v_rate OR v_lot.currency <> v_currency THEN
+      v_changes := v_changes || jsonb_build_object('field', 'exchange_rate',
+        'from', v_lot.currency || ' ' || v_lot.exchange_rate, 'to', v_currency || ' ' || v_rate);
+    END IF;
+    UPDATE lots
+    SET source_type = v_source,
+        country = btrim(COALESCE(p_lot ->> 'country', '')),
+        supplier = v_supplier,
+        supplier_id = v_supplier_id,
+        lot_date = v_date,
+        currency = v_currency,
+        exchange_rate = v_rate,
+        costs_pending = COALESCE((p_lot ->> 'costs_pending')::boolean, false),
+        notes = COALESCE(p_lot ->> 'notes', ''),
+        updated_at = now()
+    WHERE id = v_id;
+  END IF;
+
+  -- Other costs. Old weight bills are history: never changed or removed
+  -- here, and a weight bill sent in is ignored.
+  FOR v_old_cost IN
+    SELECT c.* FROM lot_costs c
+    WHERE c.lot_id = v_id AND c.cost_type = 'other'
+      AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_costs) x WHERE x ->> 'id' = c.id::text)
+  LOOP
+    DELETE FROM lot_costs WHERE id = v_old_cost.id;
+    v_changes := v_changes || jsonb_build_object('cost', 'other', 'removed', v_old_cost.amount_bdt);
+  END LOOP;
+
+  FOR v_cost IN SELECT value FROM jsonb_array_elements(v_costs) LOOP
+    CONTINUE WHEN COALESCE(v_cost ->> 'cost_type', 'other') <> 'other';
+    v_amount := round(NULLIF(v_cost ->> 'amount_bdt', '')::numeric, 2);
+    IF v_amount IS NULL OR v_amount < 0 THEN
+      RAISE EXCEPTION 'Cost amounts must be 0 or more.';
+    END IF;
+    SELECT * INTO v_old_cost FROM lot_costs
+    WHERE id = NULLIF(v_cost ->> 'id', '')::uuid AND lot_id = v_id AND cost_type = 'other';
+    IF FOUND THEN
+      IF v_old_cost.amount_bdt <> v_amount THEN
+        v_changes := v_changes || jsonb_build_object('cost', 'other', 'from', v_old_cost.amount_bdt, 'to', v_amount);
+      END IF;
+      UPDATE lot_costs
+      SET amount_bdt = v_amount,
+          cost_date = NULLIF(v_cost ->> 'cost_date', '')::date,
+          note = COALESCE(v_cost ->> 'note', '')
+      WHERE id = v_old_cost.id;
+    ELSE
+      INSERT INTO lot_costs (lot_id, cost_type, amount_bdt, cost_date, note, created_by)
+      VALUES (v_id, 'other', v_amount, NULLIF(v_cost ->> 'cost_date', '')::date,
+              COALESCE(v_cost ->> 'note', ''), auth.uid());
+      IF NOT v_is_new THEN
+        v_changes := v_changes || jsonb_build_object('cost', 'other', 'added', v_amount);
+      END IF;
+    END IF;
+  END LOOP;
+
+  -- Rows left out of the form are removed, also when units from them were
+  -- sold: those sales keep their stored cost and lose the link to the row.
+  SELECT COALESCE(array_agg(li.id), '{}') INTO v_removed
+  FROM lot_items li
+  WHERE li.lot_id = v_id
+    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_items) x WHERE x ->> 'id' = li.id::text);
+  IF array_length(v_removed, 1) > 0 THEN
+    PERFORM inventory_unlink_lot_items(v_removed);
+    FOR v_old_item IN SELECT * FROM lot_items WHERE id = ANY (v_removed) LOOP
+      v_changes := v_changes || jsonb_build_object('item_removed',
+        inventory_unit_label(v_old_item.product_id, v_old_item.variant_id), 'qty', v_old_item.qty);
+    END LOOP;
+    DELETE FROM lot_items WHERE id = ANY (v_removed);
+  END IF;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+    v_idx := v_idx + 1;
+    v_row := format('Row %s', v_idx);
+    v_pid := NULLIF(v_item ->> 'product_id', '')::uuid;
+    v_vid := NULLIF(v_item ->> 'variant_id', '')::uuid;
+    IF v_vid = v_pid THEN
+      v_vid := NULL;
+    END IF;
+    PERFORM inventory_check_unit(v_pid, v_vid, v_row);
+    v_pack := inventory_pack_size(v_pid, v_vid);
+    v_entry := CASE WHEN v_pack > 1 AND v_item ->> 'entry_unit' = 'unit' THEN 'unit' ELSE 'pack' END;
+    v_qty := NULLIF(v_item ->> 'qty', '')::numeric;
+    IF v_qty IS NULL OR v_qty <= 0 OR v_qty <> trunc(v_qty) OR v_qty > 1000000 THEN
+      RAISE EXCEPTION '%: % must be a whole number above 0.', v_row, CASE WHEN v_entry = 'unit' THEN 'units' ELSE 'packs' END;
+    END IF;
+    v_units := (v_qty * CASE WHEN v_entry = 'pack' THEN v_pack ELSE 1 END)::integer;
+    IF v_units > 100000000 THEN
+      RAISE EXCEPTION '%: too many units.', v_row;
+    END IF;
+    v_price := NULLIF(v_item ->> 'unit_price_foreign', '')::numeric;
+    IF v_price IS NULL OR v_price < 0 THEN
+      RAISE EXCEPTION '%: enter the buy price.', v_row;
+    END IF;
+    v_expiry := inventory_month_end(NULLIF(v_item ->> 'expiry_date', '')::date);
+
+    SELECT * INTO v_old_item FROM lot_items
+    WHERE id = NULLIF(v_item ->> 'id', '')::uuid AND lot_id = v_id;
+    IF FOUND THEN
+      IF (v_old_item.product_id <> v_pid OR v_old_item.variant_id IS DISTINCT FROM v_vid)
+         AND EXISTS (SELECT 1 FROM order_item_lots o WHERE o.lot_item_id = v_old_item.id) THEN
+        RAISE EXCEPTION '%: can''t change the product — units from this row are already sold. Remove the row and add the product again.', v_row;
+      END IF;
+      v_out := v_old_item.qty - v_old_item.qty_remaining;
+      IF v_units < v_out THEN
+        RAISE EXCEPTION '"%": % units from this row are already sold.', inventory_unit_label(v_pid, v_vid), v_out;
+      END IF;
+      UPDATE lot_items
+      SET product_id = v_pid, variant_id = v_vid, sort_order = v_idx, qty = v_units,
+          entry_unit = v_entry, pack_size = v_pack,
+          unit_price_foreign = round(v_price, 4), expiry_date = v_expiry
+      WHERE id = v_old_item.id;
+      IF v_old_item.qty <> v_units THEN
+        INSERT INTO stock_movements (lot_item_id, movement_type, qty, reference, reason, created_by)
+        VALUES (v_old_item.id, v_move, v_units - v_old_item.qty, v_code,
+                format('Lot edited: units %s → %s', v_old_item.qty, v_units), auth.uid());
+        v_changes := v_changes || jsonb_build_object('item', inventory_unit_label(v_pid, v_vid),
+          'qty_from', v_old_item.qty, 'qty_to', v_units);
+      END IF;
+      IF v_old_item.unit_price_foreign <> round(v_price, 4) OR v_old_item.entry_unit <> v_entry THEN
+        v_changes := v_changes || jsonb_build_object('item', inventory_unit_label(v_pid, v_vid),
+          'price_from', v_old_item.unit_price_foreign, 'price_to', round(v_price, 4), 'per', v_entry);
+      END IF;
+    ELSE
+      INSERT INTO lot_items (lot_id, product_id, variant_id, sort_order, qty, entry_unit, pack_size,
+                             unit_price_foreign, expiry_date)
+      VALUES (v_id, v_pid, v_vid, v_idx, v_units, v_entry, v_pack, round(v_price, 4), v_expiry)
+      RETURNING id INTO v_item_id;
+      INSERT INTO stock_movements (lot_item_id, movement_type, qty, reference, reason, created_by)
+      VALUES (v_item_id, v_move, v_units, v_code, NULL, auth.uid());
+      IF NOT v_is_new THEN
+        v_changes := v_changes || jsonb_build_object('item_added', inventory_unit_label(v_pid, v_vid), 'qty', v_units);
+      END IF;
+    END IF;
+  END LOOP;
+
+  PERFORM inventory_allocate_lot(v_id, NULL);
+  -- New stock fills "sold without stock" units first (oldest first).
+  v_filled := inventory_fill_shortfalls(v_id);
+  -- Sales from this lot follow its (new) cost.
+  FOR v_affected IN
+    SELECT DISTINCT o.order_item_id FROM order_item_lots o JOIN lot_items li ON li.id = o.lot_item_id
+    WHERE li.lot_id = v_id
+  LOOP
+    PERFORM inventory_refresh_item_cost(v_affected);
+  END LOOP;
+
+  SELECT COALESCE(sum(qty), 0) INTO v_units_all FROM lot_items WHERE lot_id = v_id;
+  SELECT COALESCE(sum(amount_bdt) FILTER (WHERE cost_type = 'other'), 0) INTO v_other FROM lot_costs WHERE lot_id = v_id;
+
+  IF v_is_new THEN
+    PERFORM write_activity('inventory.lot_created', 'lot', v_id::text, v_code,
+      format('Created lot %s: %s products, %s units, other costs ৳%s%s',
+             v_code, jsonb_array_length(v_items), v_units_all, v_other,
+             CASE WHEN v_filled > 0 THEN format(', %s units filled sold-without-stock orders', v_filled) ELSE '' END),
+      jsonb_build_object('pieces', v_units_all, 'other_cost', v_other,
+                         'currency', v_currency, 'exchange_rate', v_rate, 'supplier', v_supplier,
+                         'shortfalls_filled', v_filled));
+  ELSIF jsonb_array_length(v_changes) > 0 OR v_lot.costs_pending IS DISTINCT FROM COALESCE((p_lot ->> 'costs_pending')::boolean, false) THEN
+    PERFORM write_activity(
+      CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(v_changes) c WHERE c ? 'cost' OR c ->> 'field' = 'exchange_rate')
+           THEN 'inventory.lot_cost_changed' ELSE 'inventory.lot_edited' END,
+      'lot', v_id::text, v_code,
+      format('Edited lot %s: other costs ৳%s, %s units', v_code, v_other, v_units_all),
+      jsonb_build_object('changes', v_changes, 'other_cost', v_other, 'shortfalls_filled', v_filled));
+  ELSE
+    PERFORM write_activity('inventory.lot_edited', 'lot', v_id::text, v_code,
+      format('Edited lot %s details', v_code), '{}'::jsonb);
+  END IF;
+
+  RETURN v_id;
+END;
+$function$;
+
+-- What deleting a lot would do (for the confirmation box).
+CREATE OR REPLACE FUNCTION inventory_lot_delete_info(p_lot_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_lot lots%ROWTYPE;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  SELECT * INTO v_lot FROM lots WHERE id = p_lot_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Lot not found.';
+  END IF;
+  RETURN jsonb_build_object(
+    'code', v_lot.code,
+    'units_left', (SELECT COALESCE(sum(GREATEST(qty_remaining, 0)), 0) FROM lot_items WHERE lot_id = p_lot_id),
+    'orders', (SELECT count(DISTINCT o.order_id) FROM order_item_lots o JOIN lot_items li ON li.id = o.lot_item_id
+               WHERE li.lot_id = p_lot_id),
+    'receipts', (SELECT count(*) FROM lot_receipts WHERE lot_id = p_lot_id));
+END;
+$function$;
+
+-- Deletes any lot (the opening lot and lots with sales too). Orders stay;
+-- their lines keep their stored cost. The lot's units leave stock. The
+-- receipt files are removed by the app first (Storage files can't be
+-- removed from SQL); their rows go with the lot.
+CREATE OR REPLACE FUNCTION inventory_delete_lot(p_lot_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_lot    lots%ROWTYPE;
+  v_ids    uuid[];
+  v_pieces bigint;
+  v_left   bigint;
+  v_orders integer;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  SELECT * INTO v_lot FROM lots WHERE id = p_lot_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Lot not found.';
+  END IF;
+  SELECT COALESCE(array_agg(id), '{}'), COALESCE(sum(qty), 0), COALESCE(sum(GREATEST(qty_remaining, 0)), 0)
+  INTO v_ids, v_pieces, v_left
+  FROM lot_items WHERE lot_id = p_lot_id;
+  SELECT count(DISTINCT order_id) INTO v_orders FROM order_item_lots WHERE lot_item_id = ANY (v_ids);
+  PERFORM inventory_unlink_lot_items(v_ids);
+  DELETE FROM lot_costs WHERE lot_id = p_lot_id;
+  DELETE FROM lot_items WHERE lot_id = p_lot_id;
+  DELETE FROM lots WHERE id = p_lot_id;
+  PERFORM write_activity('inventory.lot_deleted', 'lot', p_lot_id::text, v_lot.code,
+    format('Deleted lot %s: %s units, %s left in stock; %s orders sold from it stay', v_lot.code, v_pieces, v_left, v_orders),
+    jsonb_build_object('pieces', v_pieces, 'units_left', v_left, 'orders', v_orders,
+                       'lot_date', v_lot.lot_date, 'supplier', v_lot.supplier));
+END;
+$function$;
+
+-- Renames a supplier on every lot that used the old name (and in the
+-- supplier list). When the new name is already in the list, those lots
+-- move to it.
+CREATE OR REPLACE FUNCTION inventory_rename_supplier(p_old text, p_new text)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_old     text := btrim(COALESCE(p_old, ''));
+  v_new     text := btrim(COALESCE(p_new, ''));
+  v_old_id  uuid;
+  v_new_id  uuid;
+  v_lots    integer;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF v_old = '' THEN
+    RAISE EXCEPTION 'Pick the supplier to rename.';
+  END IF;
+  IF v_new = '' THEN
+    RAISE EXCEPTION 'Enter the new name.';
+  END IF;
+  IF length(v_new) > 120 THEN
+    RAISE EXCEPTION 'The supplier''s name is too long.';
+  END IF;
+  SELECT id INTO v_old_id FROM suppliers WHERE lower(btrim(name)) = lower(v_old);
+  SELECT id INTO v_new_id FROM suppliers WHERE lower(btrim(name)) = lower(v_new);
+  IF v_old_id IS NOT NULL AND (v_new_id IS NULL OR v_new_id = v_old_id) THEN
+    UPDATE suppliers SET name = v_new WHERE id = v_old_id;
+    v_new_id := v_old_id;
+  END IF;
+  UPDATE lots
+  SET supplier = v_new,
+      supplier_id = COALESCE(v_new_id, supplier_id),
+      updated_at = now()
+  WHERE lower(btrim(supplier)) = lower(v_old)
+     OR (v_old_id IS NOT NULL AND supplier_id = v_old_id);
+  GET DIAGNOSTICS v_lots = ROW_COUNT;
+  PERFORM write_activity('inventory.supplier_renamed', 'supplier', COALESCE(v_new_id::text, v_new), v_new,
+    format('Renamed supplier "%s" to "%s" on %s lots', v_old, v_new, v_lots),
+    jsonb_build_object('from', v_old, 'to', v_new, 'lots', v_lots));
+  RETURN v_lots;
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 8. Stock check and Set buying prices
+-- ---------------------------------------------------------------------------
+
+-- Every product / option where the numbers do not add up, with a plain
+-- reason. Read only.
+CREATE OR REPLACE FUNCTION inventory_stock_check()
+RETURNS TABLE(product_id uuid, variant_id uuid, label text, reason_code text, reason text,
+              shop_number integer, lot_number bigint, lot_id uuid, lot_code text)
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  RETURN QUERY
+  WITH units AS (
+    SELECT p.id AS pid, NULL::uuid AS vid, p.name AS pname,
+           CASE WHEN EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id)
+                THEN NULLIF(concat_ws(' · ', NULLIF(btrim(p.region), ''), NULLIF(btrim(p.size), '')), '') END AS opt,
+           p.is_active AS active, p.stock_quantity AS shop,
+           (p.stock_status <> 'out_of_stock') AS flag, GREATEST(p.pack_size, 1) AS pack
+    FROM products p
+    UNION ALL
+    SELECT v.product_id, v.id, p.name,
+           NULLIF(concat_ws(' · ', NULLIF(btrim(v.region), ''), NULLIF(btrim(v.size), '')), ''),
+           p.is_active, v.stock_quantity, v.in_stock, GREATEST(v.pack_size, 1)
+    FROM product_variants v JOIN products p ON p.id = v.product_id
+  ), lotsum AS (
+    SELECT li.product_id AS pid, li.variant_id AS vid, sum(li.qty_remaining) AS left_units, count(*) AS n
+    FROM lot_items li GROUP BY li.product_id, li.variant_id
+  ), named AS (
+    SELECT u.*, u.pname || COALESCE(' — ' || u.opt, '') AS lbl,
+           COALESCE(s.left_units, 0) AS left_units, COALESCE(s.n, 0) AS n
+    FROM units u
+    LEFT JOIN lotsum s ON s.pid = u.pid AND s.vid IS NOT DISTINCT FROM u.vid
+  )
+  SELECT x.pid, x.vid, x.lbl, 'shop_differs',
+         'Shop stock differs from the units left in its lots',
+         x.shop, floor(GREATEST(x.left_units, 0)::numeric / x.pack)::bigint, NULL::uuid, NULL::text
+  FROM named x
+  WHERE x.n > 0 AND x.shop IS DISTINCT FROM floor(GREATEST(x.left_units, 0)::numeric / x.pack)::integer
+  UNION ALL
+  SELECT x.pid, x.vid, x.lbl, 'no_lot',
+         'In stock in the shop but has no lot at all',
+         x.shop, 0::bigint, NULL::uuid, NULL::text
+  FROM named x
+  WHERE x.n = 0 AND x.active AND COALESCE(x.shop > 0, x.flag)
+  UNION ALL
+  SELECT li.product_id, li.variant_id, inventory_unit_label(li.product_id, li.variant_id), 'negative_lot',
+         'Negative units left in a lot row',
+         NULL::integer, li.qty_remaining::bigint, l.id, l.code
+  FROM lot_items li JOIN lots l ON l.id = li.lot_id
+  WHERE li.qty_remaining < 0
+  UNION ALL
+  SELECT li.product_id, li.variant_id, inventory_unit_label(li.product_id, li.variant_id), 'ledger',
+         'The units left in this lot row don''t match its movements',
+         li.qty_remaining, COALESCE((SELECT sum(m.qty) FROM stock_movements m WHERE m.lot_item_id = li.id), 0)::bigint,
+         l.id, l.code
+  FROM lot_items li JOIN lots l ON l.id = li.lot_id
+  WHERE li.qty_remaining <> COALESCE((SELECT sum(m.qty) FROM stock_movements m WHERE m.lot_item_id = li.id), 0)
+  UNION ALL
+  SELECT s.product_id, s.variant_id, inventory_unit_label(s.product_id, s.variant_id), 'sold_no_lot',
+         'Units were sold with no lot behind them',
+         NULL::integer, sum(s.units)::bigint, NULL::uuid, NULL::text
+  FROM stock_shortfalls s
+  WHERE s.status = 'open'
+  GROUP BY s.product_id, s.variant_id
+  ORDER BY 3, 4;
+END;
+$function$;
+
+-- Every product / option with no buying price (no priced lot row and no
+-- typed buying price). Those already sold come first.
+CREATE OR REPLACE FUNCTION inventory_missing_buying_prices()
+RETURNS TABLE(product_id uuid, variant_id uuid, label text, stock_unit text, pack_size integer,
+              units_sold bigint, items_missing bigint)
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  RETURN QUERY
+  WITH units AS (
+    SELECT p.id AS pid, NULL::uuid AS vid,
+           p.name || COALESCE(' — ' || CASE WHEN EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id)
+                THEN NULLIF(concat_ws(' · ', NULLIF(btrim(p.region), ''), NULLIF(btrim(p.size), '')), '') END, '') AS lbl,
+           p.stock_unit AS su, GREATEST(p.pack_size, 1) AS pack, p.is_active AS active
+    FROM products p
+    UNION ALL
+    SELECT v.product_id, v.id,
+           p.name || COALESCE(' — ' || NULLIF(concat_ws(' · ', NULLIF(btrim(v.region), ''), NULLIF(btrim(v.size), '')), ''), ''),
+           v.stock_unit, GREATEST(v.pack_size, 1), p.is_active
+    FROM product_variants v JOIN products p ON p.id = v.product_id
+  ), sold AS (
+    SELECT oi.product_id AS pid, oi.variant_id AS vid,
+           sum(oi.quantity * CASE WHEN oi.sold_unit IS NULL THEN inventory_pack_size(oi.product_id, oi.variant_id) ELSE 1 END) AS units,
+           count(*) FILTER (WHERE c.unit_cost_bdt IS NULL) AS missing
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id AND o.status <> 'cancelled'
+    LEFT JOIN order_item_costs c ON c.order_item_id = oi.id
+    WHERE oi.product_id IS NOT NULL
+    GROUP BY oi.product_id, oi.variant_id
+  )
+  SELECT u.pid, u.vid, u.lbl, u.su, u.pack, COALESCE(s.units, 0)::bigint, COALESCE(s.missing, 0)::bigint
+  FROM units u
+  LEFT JOIN sold s ON s.pid = u.pid AND s.vid IS NOT DISTINCT FROM u.vid
+  WHERE inventory_buying_price(u.pid, u.vid) IS NULL
+    AND (u.active OR COALESCE(s.units, 0) > 0)
+  ORDER BY (COALESCE(s.units, 0) > 0) DESC, COALESCE(s.units, 0) DESC, lower(u.lbl);
+END;
+$function$;
+
+-- Saves buying prices per unit ([{product_id, variant_id, price}]) and
+-- fills the cost of that product's sold lines that have none.
+CREATE OR REPLACE FUNCTION inventory_set_buying_prices(p_rows jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_row    jsonb;
+  v_pid    uuid;
+  v_vid    uuid;
+  v_price  numeric;
+  v_saved  integer := 0;
+  v_filled integer := 0;
+  v_item   uuid;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' THEN
+    RAISE EXCEPTION 'Nothing to save.';
+  END IF;
+  IF jsonb_array_length(p_rows) > 2000 THEN
+    RAISE EXCEPTION 'Too many rows.';
+  END IF;
+  FOR v_row IN SELECT value FROM jsonb_array_elements(p_rows) LOOP
+    v_pid := NULLIF(v_row ->> 'product_id', '')::uuid;
+    v_vid := NULLIF(v_row ->> 'variant_id', '')::uuid;
+    v_price := round(NULLIF(v_row ->> 'price', '')::numeric, 4);
+    PERFORM inventory_check_unit(v_pid, v_vid, inventory_unit_label(v_pid, v_vid));
+    IF v_price IS NULL OR v_price <= 0 OR v_price > 100000000 THEN
+      RAISE EXCEPTION '"%": the buying price must be above 0.', inventory_unit_label(v_pid, v_vid);
+    END IF;
+    DELETE FROM product_buying_prices WHERE product_id = v_pid AND variant_id IS NOT DISTINCT FROM v_vid;
+    INSERT INTO product_buying_prices (product_id, variant_id, unit_cost_bdt, updated_by)
+    VALUES (v_pid, v_vid, v_price, auth.uid());
+    v_saved := v_saved + 1;
+    FOR v_item IN
+      SELECT oi.id FROM order_items oi
+      LEFT JOIN order_item_costs c ON c.order_item_id = oi.id
+      WHERE oi.product_id = v_pid AND oi.variant_id IS NOT DISTINCT FROM v_vid AND c.unit_cost_bdt IS NULL
+    LOOP
+      PERFORM inventory_refresh_item_cost(v_item);
+      v_filled := v_filled + 1;
+    END LOOP;
+  END LOOP;
+  IF v_saved > 0 THEN
+    PERFORM write_activity('inventory.buying_prices_set', 'setting', 'buying_prices', 'Buying prices',
+      format('Set %s buying prices; %s sold items got their cost', v_saved, v_filled),
+      jsonb_build_object('saved', v_saved, 'items_filled', v_filled));
+  END IF;
+  RETURN jsonb_build_object('saved', v_saved, 'items_filled', v_filled);
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 9. Order placing (product's own size) and profit
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION place_order(p_items jsonb, p_full_name text, p_phone text, p_division text, p_district text, p_thana text, p_address_line text, p_delivery_zone text, p_payment_method text, p_bkash_trx_id text DEFAULT NULL::text, p_bkash_sender text DEFAULT NULL::text, p_promo_code text DEFAULT NULL::text, p_customer_note text DEFAULT NULL::text)
+ RETURNS TABLE(order_id uuid, order_number text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_uid              uuid := auth.uid();
+  v_item             jsonb;
+  v_product_id       uuid;
+  v_variant_id       uuid;
+  v_quantity         integer;
+  v_unit_price       numeric(10,2);
+  v_product_name     text;
+  v_variant_label    text;
+  v_image_url        text;
+  v_is_active        boolean;
+  v_stock_quantity   integer;
+  v_in_stock_flag    boolean;
+  v_region           text;
+  v_size             text;
+  v_subtotal         numeric(10,2) := 0;
+  v_delivery_fee     numeric(10,2);
+  v_discount         numeric(10,2) := 0;
+  v_total            numeric(10,2);
+  v_promo_row        promo_codes%ROWTYPE;
+  v_promo_ok         boolean;
+  v_order_id         uuid;
+  v_order_number     text;
+  v_item_count       integer := 0;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in to place an order.';
+  END IF;
+
+  IF p_payment_method NOT IN ('cod', 'bkash') THEN
+    RAISE EXCEPTION 'Invalid payment method.';
+  END IF;
+  IF p_payment_method = 'bkash' AND (p_bkash_trx_id IS NULL OR trim(p_bkash_trx_id) = '') THEN
+    RAISE EXCEPTION 'A bKash Transaction ID is required for bKash payment.';
+  END IF;
+  IF p_delivery_zone NOT IN ('inside_dhaka', 'outside_dhaka') THEN
+    RAISE EXCEPTION 'Invalid delivery zone.';
+  END IF;
+  IF p_full_name IS NULL OR trim(p_full_name) = '' THEN
+    RAISE EXCEPTION 'Full name is required.';
+  END IF;
+  IF p_address_line IS NULL OR trim(p_address_line) = '' THEN
+    RAISE EXCEPTION 'Delivery address is required.';
+  END IF;
+  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'Your cart is empty.';
+  END IF;
+
+  SELECT COALESCE(
+    (SELECT value::numeric FROM app_settings WHERE key = 'delivery_fee_' || p_delivery_zone),
+    CASE WHEN p_delivery_zone = 'inside_dhaka' THEN 80 ELSE 130 END
+  ) INTO v_delivery_fee;
+
+  CREATE TEMP TABLE IF NOT EXISTS _order_lines (
+    product_id    uuid,
+    variant_id    uuid,
+    product_name  text,
+    variant_label text,
+    image_url     text,
+    unit_price    numeric(10,2),
+    quantity      integer,
+    line_total    numeric(10,2)
+  ) ON COMMIT DROP;
+  TRUNCATE _order_lines;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_item_count := v_item_count + 1;
+    v_product_id := (v_item->>'product_id')::uuid;
+    v_variant_id := NULLIF(v_item->>'variant_id', '')::uuid;
+    -- Batch 45 Part 3: the product's own size is picked as an option whose
+    -- id is the product's id. It is the product row, not an option row.
+    IF v_variant_id = v_product_id THEN
+      v_variant_id := NULL;
+    END IF;
+    v_quantity   := (v_item->>'quantity')::integer;
+
+    IF v_product_id IS NULL OR v_quantity IS NULL OR v_quantity <= 0 THEN
+      RAISE EXCEPTION 'Invalid item in your cart.';
+    END IF;
+
+    IF v_variant_id IS NOT NULL THEN
+      SELECT
+        CASE WHEN pv.offer_price IS NOT NULL AND pv.offer_price < pv.retail_price
+             THEN pv.offer_price ELSE pv.retail_price END,
+        pv.stock_quantity,
+        pv.in_stock,
+        pv.region,
+        pv.size,
+        COALESCE(pv.image_url, p.image_url),
+        p.name,
+        p.is_active
+      INTO v_unit_price, v_stock_quantity, v_in_stock_flag, v_region, v_size,
+           v_image_url, v_product_name, v_is_active
+      FROM product_variants pv
+      JOIN products p ON p.id = pv.product_id
+      WHERE pv.id = v_variant_id AND pv.product_id = v_product_id;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'One of the items in your cart is no longer available.';
+      END IF;
+      v_variant_label := NULLIF(trim(both ' ' from concat_ws(' · ', NULLIF(v_region, ''), NULLIF(v_size, ''))), '');
+    ELSE
+      SELECT
+        CASE WHEN p.offer_price IS NOT NULL AND p.offer_price < p.retail_price
+             THEN p.offer_price ELSE p.retail_price END,
+        p.stock_quantity,
+        (p.stock_status <> 'out_of_stock'),
+        p.image_url,
+        p.name,
+        p.is_active
+      INTO v_unit_price, v_stock_quantity, v_in_stock_flag, v_image_url, v_product_name, v_is_active
+      FROM products p
+      WHERE p.id = v_product_id;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'One of the items in your cart is no longer available.';
+      END IF;
+      v_variant_label := NULL;
+    END IF;
+
+    IF NOT v_is_active THEN
+      RAISE EXCEPTION '"%" is no longer available.', v_product_name;
+    END IF;
+
+    IF v_stock_quantity IS NOT NULL THEN
+      IF v_stock_quantity < v_quantity THEN
+        RAISE EXCEPTION 'Only % of "%" left in stock.', v_stock_quantity, v_product_name;
+      END IF;
+    ELSIF NOT v_in_stock_flag THEN
+      RAISE EXCEPTION '"%" is out of stock.', v_product_name;
+    END IF;
+
+    INSERT INTO _order_lines (product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total)
+    VALUES (v_product_id, v_variant_id, v_product_name, v_variant_label, v_image_url, v_unit_price, v_quantity, v_unit_price * v_quantity);
+
+    v_subtotal := v_subtotal + (v_unit_price * v_quantity);
+
+    IF v_stock_quantity IS NOT NULL THEN
+      IF v_variant_id IS NOT NULL THEN
+        UPDATE product_variants SET stock_quantity = stock_quantity - v_quantity WHERE id = v_variant_id;
+      ELSE
+        UPDATE products SET stock_quantity = stock_quantity - v_quantity WHERE id = v_product_id;
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF p_promo_code IS NOT NULL AND trim(p_promo_code) <> '' THEN
+    SELECT * INTO v_promo_row FROM promo_codes WHERE lower(code) = lower(trim(p_promo_code));
+    IF NOT FOUND OR NOT v_promo_row.active
+       OR (v_promo_row.max_uses IS NOT NULL AND v_promo_row.times_used >= v_promo_row.max_uses)
+       OR (v_promo_row.expires_at IS NOT NULL AND v_promo_row.expires_at <= now()) THEN
+      RAISE EXCEPTION 'This promo code is no longer valid.';
+    END IF;
+
+    v_discount := CASE WHEN v_promo_row.discount_type = 'percent'
+                        THEN v_subtotal * v_promo_row.discount_amount / 100
+                        ELSE v_promo_row.discount_amount END;
+    v_discount := LEAST(GREATEST(v_discount, 0), v_subtotal);
+
+    SELECT increment_promo_usage(p_promo_code) INTO v_promo_ok;
+    IF NOT v_promo_ok THEN
+      RAISE EXCEPTION 'This promo code is no longer valid.';
+    END IF;
+  END IF;
+
+  v_total := GREATEST(v_subtotal + v_delivery_fee - v_discount, 0);
+  v_order_number := next_order_number();
+
+  INSERT INTO orders (
+    order_number, customer_id, customer_name, customer_phone,
+    division, district, thana, address_line,
+    delivery_zone, delivery_fee, subtotal, discount, list_value,
+    promo_code, total, payment_method, bkash_trx_id, bkash_sender,
+    payment_status, customer_note
+  ) VALUES (
+    v_order_number, v_uid, trim(p_full_name), p_phone,
+    p_division, p_district, p_thana, trim(p_address_line),
+    p_delivery_zone, v_delivery_fee, v_subtotal, v_discount, v_subtotal,
+    NULLIF(trim(COALESCE(p_promo_code, '')), ''), v_total, p_payment_method,
+    NULLIF(trim(COALESCE(p_bkash_trx_id, '')), ''), NULLIF(trim(COALESCE(p_bkash_sender, '')), ''),
+    CASE WHEN p_payment_method = 'bkash' THEN 'pending_verification' ELSE 'unpaid' END,
+    NULLIF(trim(COALESCE(p_customer_note, '')), '')
+  )
+  RETURNING id INTO v_order_id;
+
+  INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total, list_price)
+  SELECT v_order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total, unit_price
+  FROM _order_lines;
+
+  INSERT INTO order_status_history (order_id, old_status, new_status, changed_by)
+  VALUES (v_order_id, NULL, 'pending', v_uid);
+
+  RETURN QUERY SELECT v_order_id, v_order_number;
+END;
+$function$;
+-- Sales profit has one core; Inventory → Sales profit and the reports count
+-- every delivered order with a stored cost (old ones too); the Money page
+-- leaves out the old orders already inside its opening balance.
+CREATE OR REPLACE FUNCTION inventory_sales_profit_core(p_from date, p_to date, p_for_money boolean)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_ids      uuid[];
+  v_orders   jsonb;
+  v_products jsonb;
+  v_adjust   jsonb;
+  v_totals   jsonb;
+  v_adj_sum  numeric;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF p_from IS NULL OR p_to IS NULL OR p_to < p_from THEN
+    RAISE EXCEPTION 'Pick a date range.';
+  END IF;
+
+  CREATE TEMP TABLE IF NOT EXISTS _sp_orders (
+    id uuid, order_number text, status text, counted_at timestamptz, sale numeric, discount numeric,
+    delivery numeric, courier numeric, courier_known boolean, cost numeric, provisional numeric, costed boolean
+  ) ON COMMIT DROP;
+  TRUNCATE _sp_orders;
+
+  INSERT INTO _sp_orders (id, order_number, status, counted_at, sale, discount, delivery, courier, courier_known)
+  SELECT o.id, o.order_number, o.status, x.at,
+         CASE WHEN o.status = 'delivered' THEN GREATEST(o.subtotal - o.discount, 0) ELSE 0 END,
+         o.discount,
+         CASE WHEN o.status = 'delivered' THEN o.delivery_fee ELSE 0 END,
+         COALESCE(cc.total_kept, 0), cc.order_id IS NOT NULL
+  FROM orders o
+  CROSS JOIN LATERAL (SELECT inventory_order_counted_at(o.id, o.status) AS at) x
+  LEFT JOIN order_courier_costs cc ON cc.order_id = o.id
+  WHERE o.status IN ('delivered', 'returned')
+    AND (x.at AT TIME ZONE 'Asia/Dhaka')::date BETWEEN p_from AND p_to;
+
+  SELECT COALESCE(array_agg(id), '{}') INTO v_ids FROM _sp_orders;
+
+  CREATE TEMP TABLE IF NOT EXISTS _sp_items (
+    order_item_id uuid, order_id uuid, product_id uuid, variant_id uuid, label text, line_total numeric,
+    units integer, cost numeric, provisional numeric, costed boolean
+  ) ON COMMIT DROP;
+  TRUNCATE _sp_items;
+  INSERT INTO _sp_items SELECT * FROM inventory_item_costs(v_ids);
+
+  UPDATE _sp_orders o
+  SET cost = CASE WHEN o.status = 'delivered' THEN COALESCE(i.cost, 0) ELSE 0 END,
+      provisional = CASE WHEN o.status = 'delivered' THEN COALESCE(i.provisional, 0) ELSE 0 END,
+      costed = COALESCE(i.costed, false)
+  FROM (
+    SELECT order_id, sum(cost) AS cost, sum(provisional) AS provisional, bool_and(costed) AS costed
+    FROM _sp_items GROUP BY order_id
+  ) i
+  WHERE i.order_id = o.id;
+  -- (Orders with no lines at all. A WHERE is required: the API refuses an
+  -- UPDATE without one.)
+  UPDATE _sp_orders SET cost = COALESCE(cost, 0), provisional = COALESCE(provisional, 0), costed = COALESCE(costed, false)
+  WHERE cost IS NULL OR provisional IS NULL OR costed IS NULL;
+  -- Batch 45: for the Money page, an order placed before the money start
+  -- and not taken from lots was already owed in the opening balance; its
+  -- sale is not counted a second time as profit.
+  IF p_for_money AND money_start_date() IS NOT NULL THEN
+    UPDATE _sp_orders so SET costed = false
+    FROM orders o
+    WHERE o.id = so.id AND so.costed AND o.created_at < money_start_ts()
+      AND so.counted_at >= money_start_ts() AND NOT money_order_costed(o.id);
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'order_id', id, 'order_number', order_number, 'status', status, 'counted_at', counted_at,
+           'sale', sale, 'cost', cost, 'provisional', provisional, 'delivery', delivery,
+           'courier', courier, 'courier_known', courier_known, 'costed', costed,
+           'profit', sale - cost + delivery - courier,
+           'margin', CASE WHEN sale > 0 THEN round((sale - cost + delivery - courier) / sale * 100, 1) END)
+         ORDER BY counted_at DESC, order_number DESC), '[]'::jsonb)
+  INTO v_orders FROM _sp_orders;
+
+  -- Per product: delivered, costed orders only.
+  WITH lines AS (
+    SELECT i.*, o.discount AS order_discount, o.id AS oid
+    FROM _sp_items i JOIN _sp_orders o ON o.id = i.order_id
+    WHERE o.status = 'delivered' AND o.costed
+  ), paisa AS (
+    SELECT l.*, round(l.line_total * 100) AS lp, round(l.order_discount * 100) AS dp,
+           sum(round(l.line_total * 100)) OVER (PARTITION BY l.oid) AS tp
+    FROM lines l
+  ), floors AS (
+    SELECT p.*,
+           CASE WHEN p.tp > 0 THEN div(LEAST(p.dp, p.tp) * p.lp, p.tp) ELSE 0 END AS d_floor,
+           CASE WHEN p.tp > 0 THEN mod(LEAST(p.dp, p.tp) * p.lp, p.tp) ELSE 0 END AS d_rem
+    FROM paisa p
+  ), ranked AS (
+    SELECT f.*,
+           row_number() OVER (PARTITION BY f.oid ORDER BY f.d_rem DESC, f.order_item_id) AS d_rank,
+           LEAST(f.dp, f.tp) - sum(f.d_floor) OVER (PARTITION BY f.oid) AS d_left
+    FROM floors f
+  ), shared AS (
+    SELECT r.product_id, r.variant_id, r.label, r.units, r.cost,
+           (r.lp - r.d_floor - CASE WHEN r.d_rank <= r.d_left THEN 1 ELSE 0 END) / 100.0 AS sale
+    FROM ranked r
+  ), per_product AS (
+    SELECT s.product_id, s.variant_id, min(s.label) AS label, sum(s.units)::bigint AS units,
+           round(sum(s.sale), 2) AS sales, round(sum(s.cost), 2) AS cost
+    FROM shared s
+    GROUP BY s.product_id, s.variant_id
+  )
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'product_id', product_id, 'variant_id', variant_id, 'label', label, 'units', units,
+           'stock_unit', inventory_stock_unit(product_id, variant_id),
+           'pack_size', inventory_pack_size(product_id, variant_id),
+           'sales', sales, 'cost', cost, 'profit', sales - cost,
+           'margin', CASE WHEN sales > 0 THEN round((sales - cost) / sales * 100, 1) END)
+         ORDER BY sales - cost DESC, label), '[]'::jsonb)
+  INTO v_products FROM per_product;
+
+  SELECT COALESCE(sum(amount_bdt), 0),
+         COALESCE(jsonb_agg(jsonb_build_object('date', adj_date, 'amount', amount_bdt, 'reason', reason, 'note', note)
+                            ORDER BY adj_date, created_at), '[]'::jsonb)
+  INTO v_adj_sum, v_adjust
+  FROM cost_adjustments WHERE adj_date BETWEEN p_from AND p_to
+    -- Batch 45: a sale's cost is stored on the sale; these old corrections
+    -- are already inside it.
+    AND reason NOT IN ('late_bill', 'shortfall_filled', 'given_back');
+
+  SELECT jsonb_build_object(
+           'orders', count(*) FILTER (WHERE costed),
+           'uncosted_orders', count(*) FILTER (WHERE NOT costed),
+           'items_missing_cost', (SELECT count(*) FROM _sp_items i JOIN _sp_orders so ON so.id = i.order_id
+                                  WHERE so.status = 'delivered' AND NOT i.costed),
+           'sales', COALESCE(sum(sale) FILTER (WHERE costed), 0),
+           'cost', COALESCE(sum(cost) FILTER (WHERE costed), 0),
+           'provisional', COALESCE(sum(provisional) FILTER (WHERE costed), 0),
+           'delivery', COALESCE(sum(delivery) FILTER (WHERE costed), 0),
+           'courier', COALESCE(sum(courier) FILTER (WHERE costed), 0),
+           'adjustments', v_adj_sum)
+  INTO v_totals FROM _sp_orders;
+
+  v_totals := v_totals || jsonb_build_object(
+    'profit', (v_totals ->> 'sales')::numeric - (v_totals ->> 'cost')::numeric + (v_totals ->> 'delivery')::numeric
+              - (v_totals ->> 'courier')::numeric - v_adj_sum);
+  v_totals := v_totals || jsonb_build_object(
+    'margin', CASE WHEN (v_totals ->> 'sales')::numeric > 0
+                   THEN round((v_totals ->> 'profit')::numeric / (v_totals ->> 'sales')::numeric * 100, 1) END);
+
+  RETURN jsonb_build_object('from', p_from, 'to', p_to, 'totals', v_totals,
+                            'orders', v_orders, 'products', v_products, 'adjustments', v_adjust);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION inventory_sales_profit(p_from date, p_to date)
+RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT inventory_sales_profit_core(p_from, p_to, false);
+$function$;
+
+CREATE OR REPLACE FUNCTION money_profit_parts(p_from date, p_to date)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_sales    jsonb;
+  v_exp      numeric;
+  v_wo       numeric;
+  v_share    numeric;
+  v_with     numeric;
+  v_own_in   numeric;
+  v_nb       numeric;
+  v_adj      numeric;
+  v_net      numeric;
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  v_sales := inventory_sales_profit_core(p_from, p_to, true) -> 'totals';
+  SELECT COALESCE(-sum(amount) FILTER (WHERE type = 'expense'), 0),
+         COALESCE(-sum(amount) FILTER (WHERE type = 'investor_profit_share'), 0),
+         COALESCE(-sum(amount) FILTER (WHERE type = 'owner_withdrawal'), 0),
+         COALESCE(sum(amount) FILTER (WHERE type = 'owner_money_in'), 0),
+         COALESCE(sum(amount) FILTER (WHERE type IN ('non_business_in', 'non_business_out')), 0),
+         COALESCE(sum(amount) FILTER (WHERE type = 'adjustment'), 0)
+  INTO v_exp, v_share, v_with, v_own_in, v_nb, v_adj
+  FROM money_movements
+  WHERE entry_date BETWEEN p_from AND p_to
+    AND (money_start_date() IS NULL OR entry_date >= money_start_date());
+  SELECT COALESCE(sum(cost_bdt), 0) INTO v_wo FROM stock_write_offs WHERE write_date BETWEEN p_from AND p_to;
+  v_net := (v_sales ->> 'sales')::numeric - (v_sales ->> 'cost')::numeric + (v_sales ->> 'delivery')::numeric
+           - (v_sales ->> 'courier')::numeric - (v_sales ->> 'adjustments')::numeric - v_exp - v_wo;
+  RETURN jsonb_build_object(
+    'from', p_from, 'to', p_to,
+    'orders', (v_sales ->> 'orders')::integer, 'uncosted_orders', (v_sales ->> 'uncosted_orders')::integer,
+    'items_missing_cost', COALESCE((v_sales ->> 'items_missing_cost')::integer, 0),
+    'sales', (v_sales ->> 'sales')::numeric, 'cost', (v_sales ->> 'cost')::numeric,
+    'provisional', (v_sales ->> 'provisional')::numeric,
+    'delivery', (v_sales ->> 'delivery')::numeric, 'courier', (v_sales ->> 'courier')::numeric,
+    'cost_adjustments', (v_sales ->> 'adjustments')::numeric,
+    'expenses', v_exp, 'write_offs', v_wo, 'net_profit', v_net,
+    'profit_share', v_share, 'your_profit', v_net - v_share,
+    'withdrawals', v_with, 'left_in_business', v_net - v_share - v_with,
+    'owner_money_in', v_own_in, 'not_shop_money', v_nb, 'count_differences', v_adj);
+END;
+$function$;
+
+-- Weight / cargo is now an ordinary expense (it is not part of product
+-- cost any more), so it may be an expense category.
+CREATE OR REPLACE FUNCTION money_category_name_ok(p_name text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT lower(p_name) !~ '(profit\s*share|courier|steadfast|investor|withdraw)';
+$function$;
+
+CREATE OR REPLACE FUNCTION money_save_category(p_id uuid, p_name text, p_archived boolean DEFAULT false)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_name text := btrim(COALESCE(p_name, ''));
+  v_id   uuid;
+  v_old  money_categories%ROWTYPE;
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  IF v_name = '' THEN
+    RAISE EXCEPTION 'Type a name.';
+  END IF;
+  IF NOT money_category_name_ok(v_name) THEN
+    RAISE EXCEPTION '"%" can''t be an expense category: courier and COD fees are in each order''s profit, and profit share, investor money, withdrawals and stock are not expenses.', v_name;
+  END IF;
+  IF EXISTS (SELECT 1 FROM money_categories WHERE lower(name) = lower(v_name) AND id IS DISTINCT FROM p_id) THEN
+    RAISE EXCEPTION 'That category already exists.';
+  END IF;
+  IF p_id IS NULL THEN
+    INSERT INTO money_categories (name, sort_order)
+    VALUES (v_name, COALESCE((SELECT max(sort_order) FROM money_categories), 0) + 1)
+    RETURNING id INTO v_id;
+    PERFORM write_activity('money.category_add', 'money_category', v_id::text, v_name, format('Added the expense category "%s"', v_name), '{}'::jsonb);
+    RETURN v_id;
+  END IF;
+  SELECT * INTO v_old FROM money_categories WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Category not found.';
+  END IF;
+  UPDATE money_categories SET name = v_name, archived = COALESCE(p_archived, false) WHERE id = p_id;
+  PERFORM write_activity('money.category_edit', 'money_category', p_id::text, v_name,
+    format('Changed the expense category "%s"', v_old.name), jsonb_build_object('before', to_jsonb(v_old)));
+  RETURN p_id;
+END;
+$function$;
+
+-- ---------------------------------------------------------------------------
+-- 10. Who may call what
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION inventory_buying_price(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_refresh_item_cost(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_give_back_pre(uuid, integer, text, boolean) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_pre_units() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_unlink_lot_items(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_sales_profit_core(date, date, boolean) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION inventory_lot_delete_info(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION inventory_rename_supplier(text, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION inventory_stock_check() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION inventory_missing_buying_prices() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION inventory_set_buying_prices(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION inventory_lot_delete_info(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION inventory_rename_supplier(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION inventory_stock_check() TO authenticated;
+GRANT EXECUTE ON FUNCTION inventory_missing_buying_prices() TO authenticated;
+GRANT EXECUTE ON FUNCTION inventory_set_buying_prices(jsonb) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 11. Fix the existing data
+-- ---------------------------------------------------------------------------
+
+-- 11a. L-000 is the opening lot again (it had been switched to "purchase";
+-- that also made Money count its whole value as owed to a supplier). Its
+-- weight amounts are cleared: weight is not part of cost.
+UPDATE lots SET kind = 'opening', source_type = NULL
+WHERE code = 'L-000' AND kind <> 'opening' AND NOT EXISTS (SELECT 1 FROM lots WHERE kind = 'opening');
+UPDATE lots SET opening_weight_added_bdt = 0, opening_weight_percent = 0
+WHERE kind = 'opening' AND (COALESCE(opening_weight_added_bdt, 0) <> 0 OR COALESCE(opening_weight_percent, 0) <> 0);
+
+-- 11b. Opening rows of a pack product were stored "per pack" while marked
+-- as typed in units; store them per unit like every other lot row.
+UPDATE lot_items li
+SET unit_price_foreign = round(li.buy_value_bdt / li.qty, 4)
+FROM lots l
+WHERE l.id = li.lot_id AND l.kind = 'opening' AND li.entry_unit = 'unit' AND li.pack_size > 1
+  AND li.unit_price_foreign <> round(li.buy_value_bdt / li.qty, 4);
+
+-- 11c. Landed cost of every lot again, without weight.
+DO $fix$
+DECLARE
+  v_lot uuid;
+BEGIN
+  FOR v_lot IN SELECT id FROM lots ORDER BY lot_date, code LOOP
+    PERFORM inventory_allocate_lot(v_lot, NULL);
+  END LOOP;
+END;
+$fix$;
+
+-- 11d. Lines of orders placed before Inventory mode was turned On that
+-- still hold stock: remember the units they took from the plain number.
+DO $fix$
+DECLARE
+  v_on timestamptz;
+BEGIN
+  SELECT max(created_at) INTO v_on FROM activity_log WHERE action = 'inventory.mode_on';
+  IF v_on IS NULL THEN
+    RETURN;
+  END IF;
+  UPDATE order_items oi
+  SET pre_inventory_units = x.pre
+  FROM (
+    SELECT oi2.id,
+           GREATEST(oi2.quantity * inventory_pack_size(oi2.product_id, oi2.variant_id) - inventory_item_held(oi2.id), 0) AS pre
+    FROM order_items oi2
+    JOIN orders o ON o.id = oi2.order_id
+    WHERE o.created_at < v_on AND NOT o.stock_released AND o.status NOT IN ('cancelled', 'returned')
+      AND oi2.sold_unit IS NULL AND oi2.product_id IS NOT NULL
+  ) x
+  WHERE oi.id = x.id AND oi.pre_inventory_units <> x.pre;
+END;
+$fix$;
+
+-- 11e. Stored cost for every order line: from its lot rows' landed cost
+-- (no weight) when it was sold from lots, else the current buying price,
+-- else "cost missing".
+DO $fix$
+DECLARE
+  v_item uuid;
+BEGIN
+  FOR v_item IN SELECT id FROM order_items LOOP
+    PERFORM inventory_refresh_item_cost(v_item);
+  END LOOP;
+END;
+$fix$;
+
+-- 11f. The shop's stock numbers while Inventory mode is On (base sizes of
+-- products with options are left alone: see Stock check).
+DO $fix$
+DECLARE
+  v_unit record;
+BEGIN
+  IF NOT inventory_mode_on() THEN
+    RETURN;
+  END IF;
+  FOR v_unit IN SELECT DISTINCT product_id, variant_id FROM lot_items LOOP
+    PERFORM inventory_sync_unit(v_unit.product_id, v_unit.variant_id);
+  END LOOP;
+END;
+$fix$;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- What happened (plain counts)
+-- ---------------------------------------------------------------------------
+SELECT
+  (SELECT count(*) FROM lots) AS lots_recalculated,
+  (SELECT count(*) FROM lot_items WHERE alloc_weight_paisa <> 0) AS lot_rows_with_weight_left,
+  (SELECT count(*) FROM order_item_costs WHERE unit_cost_bdt IS NOT NULL) AS order_items_with_cost,
+  (SELECT count(*) FROM order_items oi LEFT JOIN order_item_costs c ON c.order_item_id = oi.id
+   WHERE c.unit_cost_bdt IS NULL) AS order_items_missing_cost,
+  (SELECT count(*) FROM order_items WHERE pre_inventory_units > 0) AS lines_sold_before_inventory,
+  (SELECT count(*) FROM lot_costs WHERE cost_type = 'weight') AS old_weight_bills_kept,
+  (SELECT COALESCE(sum(amount_bdt), 0) FROM lot_costs WHERE cost_type = 'weight') AS old_weight_bills_total;

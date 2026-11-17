@@ -33,6 +33,12 @@ export interface StockChange {
   available: number;
 }
 
+/** Batch 45 Part 3: the product's own size is picked as an option whose id
+ *  is the product's id. Its stock is the product row's, not an option's. */
+export function optionVariantId(productId: string, variantId: string | null): string | null {
+  return variantId !== null && variantId === productId ? null : variantId;
+}
+
 export function lineKey(productId: string, variantId: string | null): string {
   return `${productId}:${variantId ?? ''}`;
 }
@@ -84,7 +90,9 @@ interface VariantStockRow {
 export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, LiveStock> | null> {
   if (lines.length === 0) return new Map();
   const productIds = [...new Set(lines.map((l) => l.productId))];
-  const variantIds = [...new Set(lines.map((l) => l.variantId).filter((v): v is string => v !== null))];
+  const variantIds = [
+    ...new Set(lines.map((l) => optionVariantId(l.productId, l.variantId)).filter((v): v is string => v !== null)),
+  ];
 
   const [productRes, variantRes] = await Promise.all([
     supabase
@@ -114,7 +122,8 @@ export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, Li
       live.set(key, { name: 'An item', label: null, available: 0 });
       continue;
     }
-    if (line.variantId === null) {
+    const variantId = optionVariantId(line.productId, line.variantId);
+    if (variantId === null) {
       live.set(key, {
         name: product.name,
         label: null,
@@ -128,7 +137,7 @@ export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, Li
       });
       continue;
     }
-    const variant = variants.get(line.variantId);
+    const variant = variants.get(variantId);
     const label = variant
       ? [variant.region, variant.size].map((s) => (s ?? '').trim()).filter(Boolean).join(' · ') || null
       : null;

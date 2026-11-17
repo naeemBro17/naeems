@@ -34,8 +34,8 @@ describe('Batch 39 units: packs ↔ units in a lot', () => {
   it('a price per pack and a price per unit both become a cost per unit (৳1,200 a 400 pcs pack = ৳3 a pc)', () => {
     const result = allocateLot(
       [
-        { qty: 2, entryUnit: 'pack', packSize: 400, unitPriceForeign: '1200', weightGrams: null, label: 'Fish oil' },
-        { qty: 250, entryUnit: 'unit', packSize: 400, unitPriceForeign: '3', weightGrams: null, label: 'Fish oil loose' },
+        { qty: 2, entryUnit: 'pack', packSize: 400, unitPriceForeign: '1200', label: 'Fish oil' },
+        { qty: 250, entryUnit: 'unit', packSize: 400, unitPriceForeign: '3', label: 'Fish oil loose' },
       ],
       [],
       1
@@ -50,7 +50,7 @@ describe('Batch 39 units: packs ↔ units in a lot', () => {
 
   it('a CeraVe 473 ml refill: ৳1,000 a pack is ৳2.114165 a ml, and the lot still adds up exactly', () => {
     const result = allocateLot(
-      [{ qty: 3, entryUnit: 'pack', packSize: 473, unitPriceForeign: '1000', weightGrams: 544, label: 'Refill' }],
+      [{ qty: 3, entryUnit: 'pack', packSize: 473, unitPriceForeign: '1000', label: 'Refill' }],
       [{ costType: 'other', amountBdt: '99.99' }],
       1
     );
@@ -60,67 +60,36 @@ describe('Batch 39 units: packs ↔ units in a lot', () => {
   });
 
   it('pack size 1 behaves exactly like Batch 38 (packs/units choice ignored)', () => {
-    const a = allocateLot([{ qty: 3, unitPriceForeign: '12.35', weightGrams: 100, label: 'A' }], [{ costType: 'weight', amountBdt: 50 }], '78.4567');
-    const b = allocateLot([{ qty: 3, entryUnit: 'unit', packSize: 1, unitPriceForeign: '12.35', weightGrams: 100, label: 'A' }], [{ costType: 'weight', amountBdt: 50 }], '78.4567');
+    const a = allocateLot([{ qty: 3, unitPriceForeign: '12.35', label: 'A' }], [{ costType: 'other', amountBdt: 50 }], '78.4567');
+    const b = allocateLot([{ qty: 3, entryUnit: 'unit', packSize: 1, unitPriceForeign: '12.35', label: 'A' }], [{ costType: 'other', amountBdt: 50 }], '78.4567');
     expect(a).toEqual(b);
-  });
-
-  it('weight is per pack: grams of a row = units × weight ÷ pack size', () => {
-    // 800 pcs of a 400 pcs / 500 g bottle = 1,000 g; 2 pieces of 500 g = 1,000 g → equal shares.
-    const result = allocateLot(
-      [
-        { qty: 2, entryUnit: 'pack', packSize: 400, unitPriceForeign: '100', weightGrams: 500, label: 'Bottle' },
-        { qty: 2, unitPriceForeign: '100', weightGrams: 500, label: 'Jar' },
-      ],
-      [{ costType: 'weight', amountBdt: '100' }],
-      1
-    );
-    expect(result.ok && result.rows.map((r) => r.weightPaisa)).toEqual([5000n, 5000n]);
   });
 });
 
-/* ----------------------------------------------------- guessed weights */
+/* --------------------------------------- Batch 45: no weight in cost */
 
-describe('Batch 39 Part 1: missing weight is guessed from price', () => {
-  it('some rows weighted: the others get a weight at the lot’s grams per taka — same as the database (14286 / 85714)', () => {
+describe('Batch 45: weight bills count nowhere', () => {
+  it('a weight bill leaves every row at buy price + its other-cost share', () => {
     const result = allocateLot(
       [
-        { qty: 2, unitPriceForeign: '100', weightGrams: '100', label: 'Cleanser' },
-        { qty: 1, entryUnit: 'pack', packSize: 400, unitPriceForeign: '1200', weightGrams: null, label: 'Fish oil' },
+        { qty: 2, unitPriceForeign: '100', label: 'Cleanser' },
+        { qty: 1, entryUnit: 'pack', packSize: 400, unitPriceForeign: '1200', label: 'Fish oil' },
       ],
       [{ costType: 'weight', amountBdt: '1000' }],
       1
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.weightRule).toBe('guess');
-    expect(result.rows.map((r) => r.weightGuessed)).toEqual([false, true]);
-    expect(result.rows.map((r) => r.weightPaisa)).toEqual([14286n, 85714n]);
-    expect(result.allocatedWeightPaisa).toBe(100_000n);
+    expect(result.ok && result.rows.map((r) => r.landedUnitBdt)).toEqual([100, 3]);
+    expect(result.ok && result.allocatedOtherPaisa).toBe(0n);
   });
 
-  it('no row weighted: the whole weight cost is shared by buy value — same as the database (25546 / 24459)', () => {
-    const result = allocateLot(
-      [
-        { qty: 3, unitPriceForeign: '100.33', weightGrams: null, label: 'A' },
-        { qty: 7, unitPriceForeign: '41.17', weightGrams: null, label: 'B' },
-      ],
-      [{ costType: 'weight', amountBdt: '500.05' }],
-      1
-    );
-    expect(result.ok && result.weightRule).toBe('value');
-    expect(result.ok && result.rows.map((r) => r.weightPaisa)).toEqual([25546n, 24459n]);
-    expect(result.ok && result.rows.every((r) => r.weightGuessed)).toBe(true);
-  });
-
-  it('totals stay exact to the paisa for awkward amounts, any mix of weighted rows', () => {
+  it('other costs stay exact to the paisa for awkward amounts (a weight bill beside them changes nothing)', () => {
     for (let paisa = 1; paisa < 4000; paisa += 37) {
       const result = allocateLot(
         [
-          { qty: 3, unitPriceForeign: '7.77', weightGrams: '33.3', label: 'A' },
-          { qty: 5, unitPriceForeign: '0.01', weightGrams: null, label: 'B' },
-          { qty: 1, entryUnit: 'unit', packSize: 60, unitPriceForeign: '19.99', weightGrams: null, label: 'C' },
-          { qty: 2, entryUnit: 'pack', packSize: 7, unitPriceForeign: '1', weightGrams: '12', label: 'D' },
+          { qty: 3, unitPriceForeign: '7.77', label: 'A' },
+          { qty: 5, unitPriceForeign: '0.01', label: 'B' },
+          { qty: 1, entryUnit: 'unit', packSize: 60, unitPriceForeign: '19.99', label: 'C' },
+          { qty: 2, entryUnit: 'pack', packSize: 7, unitPriceForeign: '1', label: 'D' },
         ],
         [
           { costType: 'weight', amountBdt: (paisa / 100).toFixed(2) },
@@ -128,15 +97,14 @@ describe('Batch 39 Part 1: missing weight is guessed from price', () => {
         ],
         1
       );
-      expect(result.ok && result.allocatedWeightPaisa).toBe(BigInt(paisa));
       expect(result.ok && result.allocatedOtherPaisa).toBe(BigInt(paisa * 3));
     }
   });
 
   it('an old lot in another currency still works out the same (AUD at 78.4567)', () => {
-    const result = allocateLot([{ qty: 3, unitPriceForeign: '12.35', weightGrams: '271', label: 'A' }], [{ costType: 'weight', amountBdt: '100' }], '78.4567');
+    const result = allocateLot([{ qty: 3, unitPriceForeign: '12.35', label: 'A' }], [{ costType: 'weight', amountBdt: '100' }], '78.4567');
     expect(result.ok && scaledText(result.rows[0].unitPriceBdtE4, 4)).toBe('968.9402');
-    expect(result.ok && result.rows[0].landedUnitBdt).toBeCloseTo(1002.273533, 5);
+    expect(result.ok && result.rows[0].landedUnitBdt).toBeCloseTo(968.9402, 5); // the weight bill adds nothing
   });
 });
 
