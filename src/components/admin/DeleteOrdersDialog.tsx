@@ -72,6 +72,7 @@ export function DeleteOrdersDialog({ orders, isOpen, onConfirm, onClose }: Delet
           inputMode={orders.length === 1 ? 'numeric' : 'text'}
           autoComplete="off"
           spellCheck={false}
+          data-autofocus
           data-testid="delete-orders-input"
         />
       </div>
