@@ -6,6 +6,7 @@ import { buildInvoicePdf } from './invoice/renderInvoice';
 import { isHandOverSource, sendsByCourier } from './manualOrders';
 import { productSearchGroups, searchProductGroups } from './manualOrderSearch';
 import { variantOptionLabel, variantOptionsFor } from './variants';
+import { loginReturnPath, safeReturnPath } from './loginReturn';
 import type { Product, ProductVariant } from '../types';
 import { mockOrder } from '../../e2e/helpers/invoiceFixtures';
 import { fontFilesFromDisk, pdfPageText } from '../../e2e/helpers/invoicePdf';
@@ -73,5 +74,24 @@ describe('Batch 47 Task 5: a product with sizes shows once in the admin search, 
       ['C1', 950, 3],
       ['C2', 2300, 0],
     ]);
+  });
+});
+
+/* -------------------------------------------- Task 7: back after logging in */
+
+describe('Batch 47 Task 7: where the customer goes after logging in', () => {
+  it('only a page of this shop is a place to return to', () => {
+    expect(safeReturnPath('/cart')).toBe('/cart');
+    expect(safeReturnPath('/checkout/delivery')).toBe('/checkout/delivery');
+    expect(safeReturnPath('/search?q=cerave')).toBe('/search?q=cerave');
+    for (const bad of ['/account', '/account/', '//evil.com', 'https://evil.com/x', '/admin/orders', '', null, undefined]) {
+      expect(safeReturnPath(bad)).toBeNull();
+    }
+  });
+
+  it('the page it came from wins; nothing known → the shop home', () => {
+    expect(loginReturnPath({ from: '/cart' })).toBe('/cart');
+    expect(loginReturnPath({ from: '//evil.com' })).toBe('/');
+    expect(loginReturnPath(null)).toBe('/');
   });
 });

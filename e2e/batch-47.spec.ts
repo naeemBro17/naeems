@@ -296,3 +296,48 @@ test('Task 6b: Move order to another customer — only accounts are offered, the
   expect(sent[0]).toMatchObject({ p_profile_id: accountId });
   await expect(sheet).toBeHidden();
 });
+
+/* ------------------------------------------ Task 7: back after logging in */
+
+async function googleReturnFor(page: Page, start: () => Promise<void>): Promise<{ redirectTo: string; historyGrew: boolean }> {
+  let redirectTo = '';
+  // Google is never opened: the sign-in request is caught on its way out.
+  await page.route(/\/auth\/v1\/authorize/, async (route) => {
+    redirectTo = new URL(route.request().url()).searchParams.get('redirect_to') ?? '';
+    await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Google</title><p>google</p>' });
+  });
+  await start();
+  const before = await page.evaluate(() => window.history.length);
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect.poll(() => redirectTo, { timeout: 15_000 }).not.toBe('');
+  await page.waitForLoadState();
+  const after = await page.evaluate(() => window.history.length);
+  return { redirectTo, historyGrew: after > before };
+}
+
+test('Task 7: logging in from the account page returns to the page before it (the shop home when opened directly), and the login page leaves the history', async ({ page, context }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: WIDTH, height: 844 });
+  const origin = new URL(String(test.info().project.use.baseURL)).origin;
+
+  // From a search page, then the account page.
+  const fromSearch = await googleReturnFor(page, async () => {
+    await page.goto('/search?q=cerave');
+    await page.waitForLoadState('domcontentloaded');
+    await page.goto('/account');
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible({ timeout: 20_000 });
+    await page.screenshot({ path: `${SHOTS}/08-account-login.png` });
+  });
+  expect(fromSearch.redirectTo).toBe(`${origin}/search?q=cerave`);
+  expect(fromSearch.historyGrew, 'the login page was replaced, not stacked').toBe(false);
+
+  // Opened directly in a fresh tab: the shop home.
+  const fresh = await context.newPage();
+  await fresh.setViewportSize({ width: WIDTH, height: 844 });
+  const direct = await googleReturnFor(fresh, async () => {
+    await fresh.goto('/account');
+    await expect(fresh.getByRole('button', { name: 'Continue with Google' })).toBeVisible({ timeout: 20_000 });
+  });
+  expect(direct.redirectTo).toBe(`${origin}/`);
+  await fresh.close();
+});
