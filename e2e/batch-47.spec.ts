@@ -4,6 +4,7 @@ import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 import { passwordSession, select, useSessionInPage, type TestSession } from './helpers/api';
 import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
+import { signInAsTestCustomer } from './helpers/auth';
 
 // Batch 47: admin and customer bug fixes.
 //
@@ -340,4 +341,126 @@ test('Task 7: logging in from the account page returns to the page before it (th
   });
   expect(direct.redirectTo).toBe(`${origin}/`);
   await fresh.close();
+});
+
+/* ------------------- Tasks 8, 9, 10: order summary and the "Order placed" page */
+
+const B47_ADDRESS = {
+  fullName: 'E2E Test Customer',
+  phone: '01712345678',
+  division: 'Dhaka',
+  district: 'Dhaka',
+  thana: 'Gulshan',
+  fullAddress: '123 Test Road (e2e)',
+};
+
+function placedSnapshot(paymentMethod: 'cod' | 'bkash') {
+  return {
+    zoneId: 'inside_dhaka',
+    address: B47_ADDRESS,
+    promo: null,
+    lastOrder: {
+      orderId: '00000000-0000-4000-8000-000000004747',
+      orderNumber: 'NM-4747',
+      items: [{ product: { id: 'p', name: 'E2E B47 Cream' }, variantId: null, variantLabel: null, quantity: 2, unitPrice: 850, listPrice: 900 }],
+      zone: { id: 'inside_dhaka', label: 'Inside Dhaka', fee: 70 },
+      address: B47_ADDRESS,
+      promo: null,
+      subtotal: 1700,
+      discount: 0,
+      total: 1770,
+      paymentMethod,
+      bkashTrxId: paymentMethod === 'bkash' ? 'TRX47' : null,
+      placedAt: new Date().toISOString(),
+    },
+  };
+}
+
+test('Tasks 8 + 10: "Order placed" says ডেলিভারিতে দেবেন for cash on delivery (Total paid only for bKash) and has a neutral "Need help?" to the shop on WhatsApp with the order number', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: WIDTH, height: 844 });
+  // A made-up order receipt in this tab only — no order is placed.
+  await page.addInitScript((state) => window.sessionStorage.setItem('nph_checkout_state', state), JSON.stringify(placedSnapshot('cod')));
+  await page.goto('/checkout/success');
+  const total = page.getByTestId('placed-total');
+  await expect(total).toBeVisible({ timeout: 20_000 });
+  await expect(total).toContainText('ডেলিভারিতে দেবেন');
+  await expect(total).not.toContainText('paid');
+  const help = page.getByTestId('placed-need-help');
+  await expect(help).toBeVisible();
+  const href = (await help.getAttribute('data-href')) ?? '';
+  expect(href).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
+  expect(decodeURIComponent(href.split('text=')[1] ?? '')).toContain('NM-4747');
+  // Neutral, not a second orange button.
+  const bg = await help.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const primaryBg = await page.getByRole('button', { name: 'View my order' }).evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).not.toBe(primaryBg);
+  await page.screenshot({ path: `${SHOTS}/09-order-placed-cod.png`, fullPage: true });
+
+  const paid = await page.context().newPage();
+  await paid.setViewportSize({ width: WIDTH, height: 844 });
+  await paid.addInitScript((state) => window.sessionStorage.setItem('nph_checkout_state', state), JSON.stringify(placedSnapshot('bkash')));
+  await paid.goto('/checkout/success');
+  await expect(paid.getByTestId('placed-total')).toContainText('Total paid', { timeout: 20_000 });
+  await paid.close();
+});
+
+test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, every line shows its quantity, cash on delivery total says ডেলিভারিতে দেবেন (nothing ordered)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const list = await select<{ id: string; name: string; retail_price: number; offer_price: number | null; stock_quantity: number | null }[]>(
+    null,
+    'products_view?select=id,name,retail_price,offer_price,stock_quantity&is_active=eq.true&stock_quantity=gte.3&limit=200'
+  );
+  const products = (list.data ?? []).sort((a, b) => b.name.length - a.name.length);
+  test.skip(products.length < 2, 'Not enough products in stock.');
+  const [long, short] = [products[0], products[products.length - 1]];
+  const price = (p: { retail_price: number; offer_price: number | null }) => (p.offer_price !== null && p.offer_price < p.retail_price ? p.offer_price : p.retail_price);
+  await page.setViewportSize({ width: WIDTH, height: 844 });
+  await signInAsTestCustomer(page);
+  const cart = [
+    { productId: long.id, variantId: null, variantLabel: null, quantity: 2, priceAtAdd: price(long) },
+    { productId: short.id, variantId: null, variantLabel: null, quantity: 1, priceAtAdd: price(short) },
+  ];
+  await page.addInitScript(
+    ([c, s]) => {
+      if (window.sessionStorage.getItem('e2e-b47-seeded')) return;
+      window.sessionStorage.setItem('e2e-b47-seeded', '1');
+      window.localStorage.setItem('nph_cart', c);
+      window.sessionStorage.setItem('nph_checkout_state', s);
+    },
+    [JSON.stringify(cart), JSON.stringify({ zoneId: 'inside_dhaka', address: B47_ADDRESS, promo: null, lastOrder: null })]
+  );
+  // Placing is refused in the browser, in case anything clicks it.
+  await page.route(/\/rest\/v1\/rpc\/place_order/, (route) => route.abort());
+  await page.goto('/checkout/summary');
+  await expect(page.getByRole('button', { name: /Place order/i })).toBeVisible({ timeout: 20_000 });
+
+  const names = page.getByTestId('summary-item-name');
+  const qtys = page.getByTestId('summary-item-qty');
+  await expect(names).toHaveCount(2);
+  await expect(qtys.nth(0)).toHaveText('× 2');
+  await expect(qtys.nth(1)).toHaveText('× 1');
+  for (let i = 0; i < 2; i += 1) {
+    await expect(qtys.nth(i)).toBeInViewport();
+    const box = await qtys.nth(i).boundingBox();
+    expect(box && box.x + box.width <= WIDTH, 'the quantity is on screen').toBe(true);
+  }
+  // Two lines of height for every name (rows line up), and the long name
+  // really uses its second line instead of being cut on the first.
+  const heights = await names.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+  const lineHeight = await names.first().evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect(heights[0]).toBeGreaterThanOrEqual(Math.floor(lineHeight * 2) - 1);
+  expect(heights[1]).toBe(heights[0]);
+  const longLines = await names.first().evaluate((el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+  });
+  if (long.name.length > 30) expect(longLines).toBeGreaterThanOrEqual(2);
+
+  await expect(page.getByTestId('summary-total')).toContainText('ডেলিভারিতে দেবেন');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow, 'no sideways scroll at phone width').toBeLessThanOrEqual(0);
+  await page.locator('.checkout-summary-card').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/10-order-summary-390.png` });
 });

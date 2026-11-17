@@ -8,3 +8,15 @@ export const CHECKOUT_LOGIN_COPY = {
   googleButton: 'Continue with Google',
   cancel: 'Cancel',
 };
+
+/**
+ * Batch 47: the total line's wording. Cash on delivery means nothing has
+ * been paid yet — never "Total paid". Only money really paid says paid.
+ */
+export const PAY_ON_DELIVERY_LABEL = 'ডেলিভারিতে দেবেন';
+
+/** The total line of a just-placed web order: bKash is paid in full up
+ *  front; cash on delivery is paid to the rider. */
+export function placedTotalLabel(paymentMethod: string): string {
+  return paymentMethod === 'bkash' ? 'Total paid' : PAY_ON_DELIVERY_LABEL;
+}
