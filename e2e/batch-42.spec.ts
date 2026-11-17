@@ -216,6 +216,7 @@ test.beforeAll(async () => {
 /* ------------------------------------------------------------ database */
 
 test('database: reports agree with the Batch 39/41 functions, the count, the month lock (one rolled-back transaction)', async () => {
+  const modeBefore = (await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode')).data?.[0]?.value ?? 'false';
   test.skip(!supabaseCli(), 'The Supabase command line is not on this computer.');
   test.setTimeout(300_000);
   const script = readFileSync('e2e/sql/batch-42-reports.sql', 'utf8')
@@ -233,8 +234,9 @@ test('database: reports agree with the Batch 39/41 functions, the count, the mon
   if (!skipped) expect(locks.data).toHaveLength(0);
   const products = await select<unknown[]>(admin.accessToken, 'products?select=id&sku=like.E2E-B42-*');
   expect(products.data).toHaveLength(0);
+  // Batch 45: the live switch is unchanged by the test (On on the live shop since 13 Nov).
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
-  expect(mode.data?.[0]?.value).toBe('false');
+  expect(mode.data?.[0]?.value).toBe(modeBefore);
 });
 
 test('permissions: the public and a customer get nothing from the Dashboard, reports, count or lock', async () => {
@@ -286,7 +288,8 @@ test('Dashboard (phone): Your profit with ▲ %, You took, Left in the business,
   await expect(page.getByText('products expiring before they sell')).toBeVisible();
   await expect(page.getByText('sold without stock (still open)')).toBeVisible();
   await expect(page.getByText('customers owing for over 30 days (৳4,600)')).toBeVisible();
-  await expect(page.getByText('products with no weight')).toBeVisible();
+  // Batch 45: weight is no longer part of cost, so Home has no "no weight" alert.
+  await expect(page.getByText('products with no weight')).toHaveCount(0);
   await expect(page.getByText('Monthly stock count: 5 of 18 counted')).toBeVisible();
   // The month is compared with the same days of last month.
   expect(JSON.parse(calls[0])).toMatchObject({ p_prev_from: expect.stringMatching(/-01$/) });
