@@ -9,6 +9,7 @@ import { formatInvoicePhone } from './invoiceShop';
 import { amountInWords } from './amountInWords';
 import { lineNameWithUnits, orderItemCount, soldInUnits } from '../orderLines';
 import { sendsByCourier } from '../manualOrders';
+import { WALLET_NAMES, advanceLineLabel, isWalletMethod, orderDiscountParts } from '../advanceDiscount';
 
 /** Steadfast parcels are booked as their standard home delivery. */
 export const STEADFAST_DELIVERY_TYPE = 'Regular';
@@ -59,7 +60,12 @@ export interface InvoiceData {
   lines: InvoiceLine[];
   subtotal: number;
   deliveryFee: number;
+  /** The promo code's / hand-typed discount (not the advance part). */
   discount: number;
+  /** Batch 48: the advance-payment discount (bKash / Nagad), its own row
+   *  when more than 0, and that row's label. */
+  advanceDiscount?: number;
+  advanceLabel?: string;
   total: number;
   /** "Paid in advance" rows (one per method), refunds, courier. */
   paidRows: InvoiceMoneyRow[];
@@ -163,7 +169,7 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     if (courier > 0) paidRows.push({ label: 'Collected by courier', amount: round2(courier), minus: true });
     if (refunded > 0) paidRows.push({ label: 'Refunded', amount: round2(refunded), minus: false });
   } else if (order.payment_status === 'paid') {
-    const name = order.payment_method === 'bkash' ? 'bKash' : order.payment_method === 'cash' ? 'Cash' : 'Paid';
+    const name = isWalletMethod(order.payment_method) ? WALLET_NAMES[order.payment_method] : order.payment_method === 'cash' ? 'Cash' : 'Paid';
     advanceMethods.push(name);
     paidRows.push({ label: `Paid in advance (${name})`, amount: total, minus: true });
   } else {
@@ -215,7 +221,9 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     ),
     subtotal: Number(order.subtotal),
     deliveryFee: Number(order.delivery_fee),
-    discount: Number(order.discount),
+    discount: orderDiscountParts(order).other,
+    advanceDiscount: orderDiscountParts(order).advance,
+    advanceLabel: advanceLineLabel(order.advance_discount_type, order.advance_discount_value),
     total,
     paidRows,
     cod: { amount: collect, note: codNote(due, payLater) },
@@ -225,10 +233,12 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
 }
 
 /** The customer's own copy from the checkout "Order placed" page. A
- *  website bKash order is paid in full up front; anything else is COD. */
+ *  website bKash / Nagad order is paid in full up front; anything else is
+ *  COD. */
 export function invoiceFromSnapshot(order: OrderSnapshot): InvoiceData {
   const total = Number(order.total);
-  const paidByBkash = order.paymentMethod === 'bkash';
+  const wallet = isWalletMethod(order.paymentMethod) ? WALLET_NAMES[order.paymentMethod] : null;
+  const paidByBkash = wallet !== null;
   const due = paidByBkash ? 0 : total;
   return {
     audience: 'customer',
@@ -245,16 +255,18 @@ export function invoiceFromSnapshot(order: OrderSnapshot): InvoiceData {
       addressLine: order.address.fullAddress.trim(),
       area: areaOf(order.address.thana, order.address.district),
     },
-    paymentLabel: paidByBkash ? 'Paid (bKash)' : 'Cash on delivery',
+    paymentLabel: wallet ? `Paid (${wallet})` : 'Cash on delivery',
     lines: order.items.map((item) =>
       lineOf(item.product.name, item.variantLabel, item.listPrice, item.unitPrice, item.quantity, round2(item.unitPrice * item.quantity))
     ),
     subtotal: Number(order.subtotal),
     deliveryFee: Number(order.zone.fee),
     discount: Number(order.discount),
+    advanceDiscount: Number(order.advanceDiscount ?? 0),
+    advanceLabel: advanceLineLabel(order.advanceRule?.type, order.advanceRule?.value),
     total,
-    paidRows: paidByBkash
-      ? [{ label: 'Paid in advance (bKash)', amount: total, minus: true }]
+    paidRows: wallet
+      ? [{ label: `Paid in advance (${wallet})`, amount: total, minus: true }]
       : [{ label: 'Paid in advance', amount: 0, minus: false }],
     cod: { amount: due, note: codNote(due, false) },
     finalRow: { label: 'Amount to collect', amount: due },

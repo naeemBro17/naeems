@@ -519,8 +519,12 @@ function totalsRows(inv: InvoiceData): TotalsRow[] {
     { label: 'Subtotal', value: invoiceMoney(inv.subtotal) },
     { label: 'Delivery charge', value: invoiceMoney(inv.deliveryFee) },
     { label: 'Discount', value: inv.discount > 0 ? `−${invoiceMoney(inv.discount)}` : invoiceMoney(0) },
-    { label: 'Order total', value: invoiceMoney(inv.total) },
   ];
+  // Batch 48: paying in advance (bKash / Nagad) — its own row.
+  if ((inv.advanceDiscount ?? 0) > 0) {
+    rows.push({ label: inv.advanceLabel ?? 'Advance payment discount', value: `−${invoiceMoney(inv.advanceDiscount ?? 0)}` });
+  }
+  rows.push({ label: 'Order total', value: invoiceMoney(inv.total) });
   for (const r of inv.paidRows) {
     rows.push({ label: r.label, value: r.minus && r.amount > 0 ? `−${invoiceMoney(r.amount)}` : invoiceMoney(r.amount) });
   }

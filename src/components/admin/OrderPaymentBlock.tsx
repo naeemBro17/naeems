@@ -4,6 +4,7 @@ import { BottomSheet } from '../shared/BottomSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useToast } from '../../hooks/useToast';
 import { formatTaka } from '../../lib/format';
+import { WALLET_NAMES, isWalletMethod } from '../../lib/advanceDiscount';
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_NAMES,
@@ -106,7 +107,8 @@ export function OrderPaymentBlock({
   const [isSaving, setIsSaving] = useState(false);
   const [deleting, setDeleting] = useState<OrderPayment | null>(null);
 
-  const pendingBkash = order.payment_method === 'bkash' && order.payment_status === 'pending_verification' && Boolean(order.bkash_trx_id);
+  // Batch 48: a Nagad advance waits for its check exactly like bKash.
+  const pendingBkash = isWalletMethod(order.payment_method) && order.payment_status === 'pending_verification' && Boolean(order.bkash_trx_id);
 
   const openAdd = () => {
     setForm({ amount: summary.due > 0 ? String(summary.due) : '', method: 'bkash', trxId: '', paidAt: toLocalInput(null), note: '', kind: 'payment' });
@@ -205,7 +207,7 @@ export function OrderPaymentBlock({
       {pendingBkash && (
         <div className="order-pay__pending">
           <span>
-            bKash advance · TrxID {order.bkash_trx_id}
+            {isWalletMethod(order.payment_method) ? WALLET_NAMES[order.payment_method] : 'bKash'} advance · TrxID {order.bkash_trx_id}
             {order.bkash_sender ? ` · from ${order.bkash_sender}` : ''}
             <span className="order-pay__pending-tag">Not checked yet</span>
           </span>

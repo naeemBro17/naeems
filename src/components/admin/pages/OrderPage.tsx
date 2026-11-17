@@ -27,6 +27,7 @@ import { CarefulActionsCard, ConfirmSheet, OrderInvoiceCard, ReopenCard, orderDi
 import { copyToClipboard } from '../../../lib/clipboard';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_TONE } from '../../../lib/orderStatus';
 import { DISCOUNT_REASON_LABELS, ORDER_SOURCE_LABELS, sendsByCourier } from '../../../lib/manualOrders';
+import { WALLET_NAMES, advanceLineLabel, isWalletMethod, orderDiscountParts } from '../../../lib/advanceDiscount';
 import type { OrderStatus, OrderWithDetails } from '../../../types';
 import { hasOwnTrackingLink, steadfastTrackingUrl } from '../../../lib/steadfastLink';
 import { orderHistoryNote } from '../../../lib/orderHistoryNotes';
@@ -357,7 +358,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   // bKash payment.
   const summary = order && payments ? summarizePayments(order.total, payments) : null;
   const steadfastCodAmount = order
-    ? order.payment_method === 'bkash' && order.payment_status !== 'paid' && (summary?.paid ?? 0) <= 0
+    ? isWalletMethod(order.payment_method) && order.payment_status !== 'paid' && (summary?.paid ?? 0) <= 0
       ? null
       : codAmountFor(order, summary ? summary.due : null)
     : null;
@@ -644,13 +645,20 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                   <span>Delivery</span>
                   <span>{formatTakaBd(order.delivery_fee)}</span>
                 </div>
-                {order.discount > 0 && (
+                {orderDiscountParts(order).other > 0 && (
                   <div className="adm-ototals__row">
                     <span>
                       Discount
                       {order.discount_reason ? ` (${DISCOUNT_REASON_LABELS[order.discount_reason]})` : order.promo_code ? ` (${order.promo_code})` : ''}
                     </span>
-                    <span>&minus;{formatTakaBd(order.discount)}</span>
+                    <span>&minus;{formatTakaBd(orderDiscountParts(order).other)}</span>
+                  </div>
+                )}
+                {/* Batch 48: the advance-payment discount (bKash / Nagad). */}
+                {orderDiscountParts(order).advance > 0 && (
+                  <div className="adm-ototals__row" data-testid="admin-advance-discount">
+                    <span>{advanceLineLabel(order.advance_discount_type, order.advance_discount_value)}</span>
+                    <span>&minus;{formatTakaBd(orderDiscountParts(order).advance)}</span>
                   </div>
                 )}
                 <div className="adm-ototals__row adm-ototals__row--strong">
@@ -700,7 +708,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                     {PAYMENT_STATUS_LABELS[order.payment_status]}
                   </span>
                 </div>
-                {order.payment_method === 'bkash' && (
+                {isWalletMethod(order.payment_method) && (
                   <>
                     {order.bkash_trx_id && <p className="order-detail__trx">TrxID: {order.bkash_trx_id}</p>}
                     {order.bkash_sender && <p className="order-detail__trx">Sender: {order.bkash_sender}</p>}
@@ -825,7 +833,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                   <p className="admin-panel__description">Not booked on Steadfast yet.</p>
                 ) : steadfastCodAmount === null ? (
                   <p className="admin-panel__description">
-                    This bKash payment has not been verified yet — mark it as paid before booking with Steadfast.
+                    This {isWalletMethod(order.payment_method) ? WALLET_NAMES[order.payment_method] : 'bKash'} payment has not been verified yet — mark it as paid before booking with Steadfast.
                   </p>
                 ) : (
                   <p className="admin-panel__description">

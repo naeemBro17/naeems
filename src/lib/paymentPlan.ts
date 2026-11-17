@@ -70,8 +70,9 @@ export function legacyPaymentMethod(input: {
   paidNow: number;
   method: string | null;
   mode: CollectMode;
-}): 'cod' | 'bkash' | 'cash' | 'due' {
-  if (input.paidNow > 0 && input.paidNow >= input.total) return input.method === 'bkash' ? 'bkash' : 'cash';
+}): 'cod' | 'bkash' | 'nagad' | 'cash' | 'due' {
+  // Batch 48: fully paid by Nagad is a Nagad order, like bKash.
+  if (input.paidNow > 0 && input.paidNow >= input.total) return input.method === 'bkash' || input.method === 'nagad' ? input.method : 'cash';
   return input.mode === 'pay_later' ? 'due' : 'cod';
 }
 

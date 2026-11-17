@@ -80,7 +80,7 @@ describe('Batch 32 Part 1 — the payment section summary', () => {
   });
   it('the old payment column stays meaningful', () => {
     expect(legacyPaymentMethod({ total: 1000, paidNow: 1000, method: 'bkash', mode: 'cod' })).toBe('bkash');
-    expect(legacyPaymentMethod({ total: 1000, paidNow: 1000, method: 'nagad', mode: 'cod' })).toBe('cash');
+    expect(legacyPaymentMethod({ total: 1000, paidNow: 1000, method: 'nagad', mode: 'cod' })).toBe('nagad');
     expect(legacyPaymentMethod({ total: 1000, paidNow: 300, method: 'bkash', mode: 'cod' })).toBe('cod');
     expect(legacyPaymentMethod({ total: 1000, paidNow: 0, method: null, mode: 'pay_later' })).toBe('due');
   });
