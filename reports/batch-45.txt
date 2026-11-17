@@ -2361,63 +2361,66 @@ WHAT NAEEM DOES AFTER MERGING
 ====================================================================
 TESTS — RESULT OF THE FINAL npm run verify
 ====================================================================
-FAILED. Summary: build OK · unit tests 536 of 536 passed · browser tests
-108 passed, 28 failed, 341 skipped (17.2 min).
+Final full run (17 Nov, with the test accounts' passwords reset and
+.env.e2e rebuilt, and after you had run the Batch 45 SQL on live):
+FAILED — build OK · unit tests 536 of 536 passed · browser tests 243
+passed, 37 failed, 123 skipped (32.0 min).
 
-Why so many skipped: this computer has no .env.e2e (the test accounts'
-passwords), so every browser test that signs in skips itself — including
-all of this batch's screen tests. 2 of the 28 failures are the same
-cause ("Missing .env.e2e").
+ALL 8 Batch 45 browser tests PASSED: database (stock comes back, no weight,
+stored costs, lot edit / delete incl. L-000); New lot at 390 px (one
+orange element, typing keeps the keyboard); Import from Excel (15 rows in,
+unknown product and bad date listed); New order size picker; Stock check;
+Set buying prices; L-000 delete box; Receipts (tiny file, deleted after).
+Phone pictures: reports/batch-45-screens/ (7 files, checked by eye).
 
-The other 26 failures are shop-page tests from Batches 23, 27, 28, 29 and
-40 (product page header / buy bar / floating cart / Undo toast / videos /
-broken images). None of those files or screens was changed by this
-batch. The ones I opened fail in their SET-UP, before any of this batch's
-code runs: they look for live products with a certain stock (for example
-"3 products without sizes with stock 2–9"), and the live shop no longer
-has such products since Inventory mode went On (stock numbers now come
-from lots). Batch 23/27 video and Batch 40 broken-image failures were
-already in the old-failures list. I did not re-run the suite (the rules say
-not to re-run it for failures in files this batch did not touch).
+The 37 failures, sorted:
+- Fixed and re-run file by file (each now passes):
+  * Batch 39 database script — it assumed the live Inventory mode is Off
+    (it is On); it now switches the mode Off inside its own undone
+    transaction. Its old weight / late-bill checks are rewritten to the
+    Batch 45 rules (a weight bill adds nothing; a late bill changes the
+    sale's stored cost directly).
+  * Batch 42 and 43 database tests — only their last line wanted the live
+    switch to be "Off"; now "unchanged".
+  * Batch 42 Dashboard — looked for the Home alert "products with no
+    weight", removed on purpose this batch.
+  * Batch 43 live screens — looked for the "Inventory mode is Off" note,
+    which correctly does not show while the mode is On.
+- Caused by the live shop's state, not by this batch (files and screens
+  not changed by Batch 45):
+  * Batches 23, 27, 28, 29 (product page, buy bar, floating cart, Undo,
+    videos): they look for live products with certain stock numbers that
+    no longer exist since stock comes from lots; video ones were on the
+    old-failures list.
+  * Batch 26 restock, 30 edit-order stock message, 33 "last unit": the
+    database (since Batch 39) refuses plain restocking and stock without
+    lots while Inventory mode is On.
+  * Batch 32 (order link format), 35 (the "show rider's phone" setting is
+    On in your live settings), 41 opening balances (your Money books are
+    already confirmed), 40 (broken images: old failure; "comes back by
+    itself": a timing check), checkout.spec (customer checkout on a
+    product without a lot).
+  These need a separate clean-up batch: rewrite the old shop tests so
+  they create their own stocked test product instead of searching the
+  live catalogue.
+- My mistake: while re-running three fixed files, one command started the
+  whole "parallel" test group (207 tests) because the "serial" group
+  depends on it. Rule says not to re-run the suite; it cost about 4
+  minutes of extra Supabase traffic. Later re-runs used --no-deps and ran
+  only the named tests.
 
-Second full run (17 Nov, after .env.e2e was put back): the same result —
-FAILED, 108 passed, 28 failed, 341 skipped (18.2 min). The new .env.e2e
-holds only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (a copy of .env);
-the tests need E2E_TEST_EMAIL, E2E_TEST_PASSWORD, E2E_ADMIN_EMAIL,
-E2E_ADMIN_PASSWORD and E2E_MOD_PASSWORD (see reports/batch-21.txt Part 3).
-With those added, run npm run verify once more.
-
-What DID run and pass for this batch:
-- Database checks (e2e/sql/batch-45-inventory.sql, with the whole
-  migration, in ONE transaction that is always undone): 45 of 45 passed —
-  every Part 1 undo case (one lot, two lots, an option, the own size, a
-  pack of 10, a partial quantity cut, a line removed in Edit order, delete,
-  cancel, return, oversell, deleted lot, mode On and Off, the CeraVe case),
-  the ৳795 Niacinamide example, weight bills ignored, edit / delete of a
-  lot with sales and of L-000, quantity floor, stored costs, Set buying
-  prices, Stock check, permissions.
-- Unit tests: 12 new (cart per size, New order grouping, no-weight cost,
-  Excel rows with an unknown product and a bad date, MM/YYYY expiry), and
-  the old weight tests rewritten to the new rule.
-- npm run verify:quick: GREEN (build, 536 unit tests; touched browser
-  files skipped for the same .env.e2e reason).
+Test accounts: the passwords of test-customer@naeems.test and
+e2e.admin@staff.naeems.internal were reset through the Supabase Admin API
+(the Batch 21 method) and written only to .env.e2e (not committed).
 
 ====================================================================
 3. WHAT I COULD NOT FINISH
 ====================================================================
-- The browser (screen) tests did not run on this computer. The file
-  .env.e2e (the test accounts' passwords) is not on this PC, so every
-  browser test skips itself — including the new e2e/batch-45.spec.ts
-  (lot form at 390 px with 1 and 15 products, Excel import, New order size
-  picker, Stock check, Set buying prices, the L-000 delete box, receipts).
-  So I have NO phone-width frame captures for this batch yet. Put .env.e2e
-  back (from your other computer / password manager) and run
-  "npm run verify" once; the pictures go to reports/batch-45-screens/.
-- The receipt-upload browser test also needs the SQL below to have been
-  run (it skips until the lot_receipts table exists).
-- I did not run the SQL on the live shop (you run it). I tried it on the
-  live database inside a transaction that was always undone: it works, and
-  the 45 database checks pass.
+- Nothing from the batch itself is unfinished. The 26 old shop-test
+  failures listed under TESTS are not fixed (they depend on live stock;
+  see there).
+- You have already run the SQL on live (checked: the new tables exist,
+  L-000 is the opening lot again).
 
 ====================================================================
 4. WHAT I FOUND ALONG THE WAY

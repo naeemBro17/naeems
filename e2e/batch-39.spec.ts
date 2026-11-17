@@ -160,7 +160,10 @@ test('database: units, earliest expiry first, cancel / return / edits, sell with
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
   expect(failed).toEqual([]);
-  expect((results ?? []).length).toBeGreaterThanOrEqual(60);
+  // With a real opening stock (L-000) the script's own test opening stock
+  // is skipped: 1 check instead of 4.
+  const realOpening = (results ?? []).some((r) => r.detail === 'skipped');
+  expect((results ?? []).length).toBeGreaterThanOrEqual(realOpening ? 57 : 60);
   // Nothing of it stayed: the live switch is still Off, no test product left.
   const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
   expect(mode.data?.[0]?.value).toBe(liveModeAtStart);
