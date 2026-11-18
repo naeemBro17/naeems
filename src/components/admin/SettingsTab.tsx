@@ -21,7 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProducts, type TextSettingKey } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import type { AppSettings, BannerSlide, BannerCtaAction } from '../../types';
-import { CourierPanel, LowStockPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
+import { CourierPanel, LowStockPanel, OrderLimitDeliveryPanel, OrderNumberPanel, SafetyLocksPanel } from './SettingsExtraPanels';
 import { TwoStepCard } from './TwoStepCard';
 import { DueReminderPanel } from './money/DueReminderPanel';
 import { InvoiceSettingsPanel } from './InvoiceSettingsPanel';
@@ -1087,6 +1087,8 @@ export function SettingsTab() {
         </>
       ),
     },
+    // Batch 51.
+    { id: 'order-limit', group: 'ORDERS', label: 'Order limit and delivery times', icon: 'truck', render: () => <OrderLimitDeliveryPanel /> },
     { id: 'low-stock', group: 'ORDERS', label: 'Low-stock alert', icon: 'low-stock', render: () => <LowStockPanel /> },
     { id: 'whatsapp', group: 'ORDERS', label: 'Checkout WhatsApp number', icon: 'phone', render: () => <ShopWhatsAppPanel /> },
     // Batch 37.

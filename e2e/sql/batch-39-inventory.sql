@@ -85,6 +85,11 @@ BEGIN
   INSERT INTO product_variants (product_id, region, size, retail_price, stock_quantity, in_stock)
   VALUES (v_pv, 'AU', '30 ml', 900, 0, true) RETURNING id INTO v_vv;
   v_ids := ARRAY[v_pa, v_pb, v_pc, v_pf, v_pv];
+  -- Batch 51: these test products sell only from stock (once migration-052
+  -- has added products.keep_selling), so the stock rules above still apply.
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'keep_selling') THEN
+    EXECUTE 'UPDATE products SET keep_selling = false WHERE id = ANY ($1)' USING v_ids;
+  END IF;
 
   -- ======================================================= Mode OFF: as today
   -- Batch 45: the live shop's mode is On since 13 Nov; switch it Off for

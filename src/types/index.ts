@@ -96,6 +96,12 @@ export interface Product {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Batch 51: "Keep selling when out of stock" (default true). Customers
+   *  can order it at stock 0; products_view then hides the real number
+   *  from everyone but staff. Absent before migration-052. */
+  keep_selling?: boolean;
+  /** Batch 51: at least one in stock (from products_view, never a number). */
+  in_hand?: boolean;
 }
 
 export type StockStatus = Product['stock_status'];
@@ -122,6 +128,8 @@ export interface ProductFormData {
   is_active: boolean;
   skin_types: string[];
   skin_conditions: string[];
+  /** Batch 51: "Keep selling when out of stock". */
+  keep_selling: boolean;
 }
 
 export type UserRole = 'customer' | 'wholesaler' | 'admin' | 'moderator';
@@ -291,6 +299,16 @@ export interface AppSettings {
   invoice_community_line2: string;
   /** 'false' hides the community box; anything else (or missing) shows it. */
   invoice_show_community: string;
+
+  /* --- Batch 51 — blank means "use the default" --- */
+  /** "Most of one item per order" (default 4). */
+  order_limit_per_item: string;
+  /** "Delivery in Dhaka" (default 1–2 days). */
+  delivery_time_dhaka: string;
+  /** "Delivery outside Dhaka" (default 2–3 days). */
+  delivery_time_outside: string;
+  /** "Items we buy after the order" (default 3–5 days). */
+  delivery_time_buy_after: string;
 }
 
 /**
@@ -332,6 +350,11 @@ export interface ProductVariant {
   source_product_id: string | null;
   sort_order: number;
   created_at: string;
+  /** Batch 51: the product's "Keep selling when out of stock" (from
+   *  product_variants_view; absent before migration-052). */
+  keep_selling?: boolean;
+  /** Batch 51: at least one of this option in stock (never a number). */
+  in_hand?: boolean;
 }
 
 /** The variant fields the admin edits in the inline sub-form. */

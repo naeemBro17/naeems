@@ -65,21 +65,20 @@ const file = (name: string, buf: Buffer) => ({ name, mimeType: 'image/png', buff
 async function makeProduct(n: number, stock: number, active: boolean, price = 1000): Promise<{ id: string; name: string }> {
   const stamp = `${n}-${Date.now() % 1_000_000}`;
   const name = `${PREFIX} Product ${stamp}`;
-  const res = await insert(
-    admin.accessToken,
-    'products',
-    {
-      sku: `E2E-B33-${stamp}`,
-      slug: `e2e-b33-${stamp}`,
-      name,
-      category_id: categoryId,
-      retail_price: price,
-      stock_status: 'in_stock',
-      stock_quantity: stock,
-      is_active: active,
-    },
-    false
-  );
+  const row0 = {
+    sku: `E2E-B33-${stamp}`,
+    slug: `e2e-b33-${stamp}`,
+    name,
+    category_id: categoryId,
+    retail_price: price,
+    stock_status: 'in_stock',
+    stock_quantity: stock,
+    is_active: active,
+  };
+  // Batch 51: these products sell only from stock ("just sold out" needs a
+  // real stock); before migration-052 there is no such column.
+  let res = await insert(admin.accessToken, 'products', { ...row0, keep_selling: false }, false);
+  if (!res.ok && /keep_selling/.test(res.error ?? '')) res = await insert(admin.accessToken, 'products', row0, false);
   expect(res.ok, res.error ?? '').toBe(true);
   const row = await select<{ id: string }[]>(admin.accessToken, `products?select=id&sku=eq.E2E-B33-${stamp}`);
   return { id: row.data![0].id, name };
@@ -486,8 +485,8 @@ test('Part 3: fewer left than in the cart — "Only 1 left", quantity lowered (c
 
   await page.goto('/cart');
   const notice = page.getByTestId('stock-notice');
-  await expect(notice).toContainText(`Only 1 left of ${few.name}`, { timeout: 20_000 });
-  await expect(notice).toContainText("we've updated the quantity");
+  // Batch 51: no stock number in the message any more.
+  await expect(notice).toContainText(`We've lowered ${few.name} to what we have left.`, { timeout: 20_000 });
   await expect(page.locator('.checkout-cart__step-count').first()).toHaveText('1');
   await notice.getByRole('button', { name: 'Close message' }).click();
   await expect(notice).toHaveCount(0);

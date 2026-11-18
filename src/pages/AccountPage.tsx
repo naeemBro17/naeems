@@ -12,6 +12,59 @@ import { useToast } from '../hooks/useToast';
 import { initialsOf } from '../lib/format';
 import { openExternal, whatsAppUrl } from '../lib/expertLinks';
 import { loginReturnPath } from '../lib/loginReturn';
+import { BottomSheet } from '../components/shared/BottomSheet';
+import { HeartIcon } from '../components/viewer/Wishlist';
+import { useWishlist } from '../contexts/WishlistContext';
+
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="acct-row__chevron">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function RowIcon({ name }: { name: 'orders' | 'clock' | 'help' }) {
+  return (
+    <span className="acct-row__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        {name === 'orders' && (
+          <>
+            <rect x="5" y="3.5" width="14" height="17" rx="2" />
+            <path d="M9 8h6M9 12h6M9 16h3" />
+          </>
+        )}
+        {name === 'clock' && (
+          <>
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7.5V12l3 2" />
+          </>
+        )}
+        {name === 'help' && <path d="M20 11.5a8 8 0 01-11.7 7.1L4 20l1.4-4.1A8 8 0 1120 11.5z" />}
+      </svg>
+    </span>
+  );
+}
+
+/** Batch 51 Part 4: "Pre-orders — COMING SOON" (no function yet). */
+function PreordersSheet({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  return (
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Pre-orders"
+      headerAction={<span className="acct-soon">COMING SOON</span>}
+      panelClassName="acct-sheet"
+    >
+      <div className="acct-sheet__body" data-testid="preorders-sheet">
+        <p className="acct-sheet__text">Soon you can reserve sold-out favourites — we'll bring them in just for you.</p>
+        <button type="button" className="acct-sheet__ok" onClick={onClose}>
+          Got it
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
 
 /** A soft skincare-adjacent brand mark — a droplet — built entirely from
  *  shapes, no external image or copyrighted artwork. */
@@ -99,6 +152,11 @@ function CustomerAccountView() {
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [preordersOpen, setPreordersOpen] = useState(false);
+  const { ids: wishIds, ready: wishReady } = useWishlist();
+  const { products } = useProducts();
+  // Hidden or deleted products are not counted (the Wishlist page drops them).
+  const wishCount = wishReady ? wishIds.filter((id) => products.some((p) => p.id === id && p.is_active)).length : 0;
 
   if (!profile) return null;
 
@@ -159,28 +217,46 @@ function CustomerAccountView() {
         )}
       </section>
 
-      <Link to="/orders" className="account-card account-card--link">
-        <div className="account-card__head">
-          <h2 className="account-card__title">My Orders</h2>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="account-row__chevron">
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </div>
-        <p className="account-card__empty">Track and manage your orders</p>
-      </Link>
-
-      {waLink && (
-        <button
-          type="button"
-          className="account-row"
-          onClick={() => openExternal(waLink)}
-        >
-          <span>Need help?</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="account-row__chevron">
-            <path d="M9 6l6 6-6 6" />
-          </svg>
+      {/* Batch 51: one glass list — My orders, Wishlist, Pre-orders and
+          Need help? (every earlier row kept). */}
+      <nav className="acct-glass" aria-label="Your account" data-testid="account-list">
+        <Link to="/orders" className="acct-row">
+          <RowIcon name="orders" />
+          <span className="acct-row__text">
+            <span className="acct-row__label">My Orders</span>
+            <span className="acct-row__hint">Track and manage your orders</span>
+          </span>
+          <Chevron />
+        </Link>
+        <Link to="/wishlist" className="acct-row" data-testid="account-wishlist">
+          <span className="acct-row__icon" aria-hidden="true">
+            <HeartIcon filled={false} />
+          </span>
+          <span className="acct-row__text">
+            <span className="acct-row__label">Wishlist</span>
+          </span>
+          {wishCount > 0 && <span className="acct-row__count" data-testid="account-wishlist-count">{wishCount}</span>}
+          <Chevron />
+        </Link>
+        <button type="button" className="acct-row" onClick={() => setPreordersOpen(true)} data-testid="account-preorders">
+          <RowIcon name="clock" />
+          <span className="acct-row__text">
+            <span className="acct-row__label">Pre-orders</span>
+          </span>
+          <span className="acct-soon">COMING SOON</span>
         </button>
-      )}
+        {waLink && (
+          <button type="button" className="acct-row" onClick={() => openExternal(waLink)}>
+            <RowIcon name="help" />
+            <span className="acct-row__text">
+              <span className="acct-row__label">Need help?</span>
+            </span>
+            <Chevron />
+          </button>
+        )}
+      </nav>
+
+      <PreordersSheet isOpen={preordersOpen} onClose={() => setPreordersOpen(false)} />
 
       <button
         type="button"

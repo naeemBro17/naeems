@@ -151,22 +151,26 @@ test.describe('Part 1 — product page', () => {
   // Batch 28: the in-page "− 1 +" and Add to Cart were replaced by the buy
   // bar, whose stepper IS the cart quantity. Same rule checked there: it
   // never goes past the stock count, with the "Only N in stock" note.
-  test('buy bar stepper: max = stock with the "Only N in stock" note', async ({ page }) => {
+  test('buy bar stepper: max = stock (or the order limit) with the limit popup', async ({ page }) => {
     const product = await smallStockProduct();
     test.skip(product === null, 'No product with a small tracked stock count today.');
     const p = product as LiveProduct;
     const stock = p.stock_quantity as number;
+    // Batch 51: + stops at the order limit (4) or the stock, whichever is
+    // smaller, and the limit popup says which.
+    const cap = Math.min(stock, 4);
+    const popupText = stock >= 4 ? 'Limit 4 per order' : stock === 1 ? "You've got the last one!" : `You've got the last ${stock}!`;
 
     await openFresh(page, `/product/${p.slug}`);
     await page.getByTestId('add-to-cart').click();
     const value = page.getByTestId('buy-bar-qty');
     await expect(value).toHaveText('1');
     const plus = page.getByTestId('buy-bar-plus');
-    for (let i = 1; i < stock + 2; i++) await plus.click();
-    await expect(value).toHaveText(String(stock));
-    await expect(page.locator('.toast', { hasText: `Only ${stock} in stock` }).first()).toBeVisible();
-    await expect.poll(() => cartUnits(page)).toBe(stock);
-    await expect(page.getByTestId('glass-cart-badge')).toHaveText(String(stock));
+    for (let i = 1; i < cap + 2; i++) await plus.click();
+    await expect(value).toHaveText(String(cap));
+    await expect(page.getByTestId('limit-popup-title')).toHaveText(popupText);
+    await expect.poll(() => cartUnits(page)).toBe(cap);
+    await expect(page.getByTestId('glass-cart-badge')).toHaveText(String(cap));
     await emptyCart(page);
   });
 
@@ -515,17 +519,17 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await page.goto('/');
     await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('3');
 
-    // Add 2 more on the product page → the card shows 5. (Batch 28: the
-    // product page's buy bar already shows the cart's 3 as its stepper.)
+    // Add 1 more on the product page → the card shows 4 (Batch 51: 4 is the
+    // most of one item per order). (Batch 28: the product page's buy bar
+    // already shows the cart's 3 as its stepper.)
     await cardNamed(page, name).locator('.product-card__image-wrap').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('3');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('3');
     await page.getByTestId('buy-bar-plus').click();
-    await page.getByTestId('buy-bar-plus').click();
-    await expect(page.getByTestId('buy-bar-qty')).toHaveText('5');
-    await expect(page.getByTestId('glass-cart-badge')).toHaveText('5');
+    await expect(page.getByTestId('buy-bar-qty')).toHaveText('4');
+    await expect(page.getByTestId('glass-cart-badge')).toHaveText('4');
     await page.getByRole('button', { name: 'Go back' }).click();
-    await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('5');
+    await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('4');
     await emptyCart(page);
   });
 
@@ -534,16 +538,20 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     test.skip(product === null, 'No product with a small tracked stock count today.');
     const p = product as LiveProduct;
     const stock = p.stock_quantity as number;
+    // Batch 51: + stops at the order limit (4) or the stock, whichever is
+    // smaller, and the limit popup says which.
+    const cap = Math.min(stock, 4);
+    const popupText = stock >= 4 ? 'Limit 4 per order' : stock === 1 ? "You've got the last one!" : `You've got the last ${stock}!`;
     await openFresh(page, `/search?q=${encodeURIComponent(p.name)}`);
     const card = cardNamed(page, p.name);
     await expect(card).toBeVisible();
     await scrollElementTo(card, 120);
     await card.locator('.cart-button').click();
     const plus = card.getByRole('button', { name: `One more ${p.name}` });
-    for (let i = 1; i < stock + 2; i++) await plus.click();
-    await expect(card.getByTestId('card-stepper-qty')).toHaveText(String(stock));
-    await expect(page.locator('.toast', { hasText: `Only ${stock} in stock` }).first()).toBeVisible();
-    expect(await cartUnits(page)).toBe(stock);
+    for (let i = 1; i < cap + 2; i++) await plus.click();
+    await expect(card.getByTestId('card-stepper-qty')).toHaveText(String(cap));
+    await expect(page.getByTestId('limit-popup-title')).toHaveText(popupText);
+    expect(await cartUnits(page)).toBe(cap);
     await emptyCart(page);
   });
 

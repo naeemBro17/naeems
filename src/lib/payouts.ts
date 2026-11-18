@@ -300,12 +300,47 @@ export function payoutToCheck(payout: Pick<Payout, 'items'>): number {
   return payout.items.filter((i) => i.match_status === 'to_check' && !isOutsideParcel(i)).length;
 }
 
-/** The pill on a payout row / the detail page. */
-export function payoutPill(payout: Pick<Payout, 'items'>): { tone: 'green' | 'amber' | 'grey'; text: string } {
+/**
+ * Batch 51: a payout paid before the money start date (the opening
+ * balances, confirmed 13 Nov 2026) is already counted in those balances —
+ * its money was received before the books began. Display only.
+ */
+export function coveredByOpening(paidAt: string | null, booksStart: string | null): boolean {
+  if (!paidAt || !booksStart) return false;
+  const day = new Date(new Date(paidAt).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return day < booksStart.slice(0, 10);
+}
+
+/** The pill on a payout row / the detail page. "Booked on Steadfast" (grey)
+ *  = every parcel in it was booked straight on Steadfast's website, so none
+ *  is an order of this site; Batch 51: such a payout from before the money
+ *  start date is covered by the opening balances and reads "Matched". */
+export function payoutPill(
+  payout: Pick<Payout, 'items'> & { paid_at?: string | null },
+  booksStart: string | null = null
+): { tone: 'green' | 'amber' | 'grey'; text: string } {
   const open = payoutToCheck(payout);
   if (open > 0) return { tone: 'amber', text: `${open} to check` };
-  if (payout.items.length > 0 && payout.items.every(isOutsideParcel)) return { tone: 'grey', text: 'Booked on Steadfast' };
+  if (payout.items.length > 0 && payout.items.every(isOutsideParcel) && !coveredByOpening(payout.paid_at ?? null, booksStart)) {
+    return { tone: 'grey', text: 'Booked on Steadfast' };
+  }
   return { tone: 'green', text: 'Matched' };
+}
+
+/** Batch 51: the start date of the books, once confirmed (null before). */
+export async function fetchBooksStart(): Promise<string | null> {
+  const { data, error } = await supabase.from('money_books').select('start_date, confirmed_at').eq('id', 1).maybeSingle();
+  if (error || !data) return null;
+  const row = data as { start_date: string | null; confirmed_at: string | null };
+  return row.confirmed_at ? row.start_date : null;
+}
+
+/** Batch 51: the words under the Steadfast balance — the count and the
+ *  amount always agree. */
+export function balanceLine(balance: number | null, unpaidCount: number): string {
+  if (balance !== null && Math.round(balance * 100) === 0) return 'Nothing waiting from Steadfast';
+  if (unpaidCount > 0) return `From ${unpaidCount} delivered order${unpaidCount === 1 ? '' : 's'}`;
+  return 'Waiting from Steadfast';
 }
 
 /** "2026-10" in Dhaka time. */

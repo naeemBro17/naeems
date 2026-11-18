@@ -179,6 +179,6 @@ describe('Batch 32 Part 5 — Admin Home', () => {
   });
   it("today's date in Bangladesh time", () => {
     // 20:30 UTC on 6 Oct is already 7 Oct in Dhaka.
-    expect(homeDateLabel(new Date('2026-10-06T20:30:00Z'))).toBe('Wednesday 7 October');
+    expect(homeDateLabel(new Date('2026-10-06T20:30:00Z'))).toBe('Wednesday, 7 October');
   });
 });

@@ -26,6 +26,11 @@ BEGIN
   INSERT INTO products (sku, slug, name, retail_price, stock_status, stock_quantity, is_active)
   VALUES ('E2E-B39-LOCK-{{TAG}}', 'e2e-b39-lock-{{TAG}}', 'E2E B39 Lock test {{TAG}}', 100, 'in_stock', 0, false)
   RETURNING id INTO v_product;
+  -- Batch 51: these test products sell only from stock (once migration-052
+  -- has added products.keep_selling), so the stock rules above still apply.
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'keep_selling') THEN
+    EXECUTE 'UPDATE products SET keep_selling = false WHERE id = ANY ($1)' USING ARRAY[v_product];
+  END IF;
   INSERT INTO lots (code, kind, source_type, lot_date, supplier, notes)
   VALUES ('E2E-B39-{{TAG}}', 'purchase', 'local', current_date, 'E2E B39 supplier', 'e2e b39 lock test')
   RETURNING id INTO v_lot;

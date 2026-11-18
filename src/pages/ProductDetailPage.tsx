@@ -9,16 +9,16 @@ import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../contexts/ProductC
 import { coverImage, productImages } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
-import { isOutOfStock, stockLimit } from '../lib/stockStatus';
+import { isOutOfStock } from '../lib/stockStatus';
 import { siteText } from '../lib/editableTexts';
-import { useToast } from '../hooks/useToast';
-import { stockLimitMessage } from '../hooks/useCartLine';
+import { useSellLimit } from '../hooks/useSellLimit';
+import { deliveryLine, lowStockText, type LimitReason } from '../lib/sellRules';
+import { LimitPopup } from '../components/viewer/LimitPopup';
 import {
   isVariantInStock,
   optionGalleryImages,
   sortVariants,
-  VARIANT_SELECT,
-  VARIANTS_VIEW,
+
   variantDisplayPrice,
   variantOptionLabel,
   variantOptionsFor,
@@ -30,6 +30,7 @@ import { setBuyBarState } from '../lib/buyBarState';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
+import { HeartButton } from '../components/viewer/Wishlist';
 import { CartIcon, tapHaptic } from '../components/viewer/CartButton';
 import { RelatedProducts } from '../components/viewer/RelatedProducts';
 import { WholesaleReveal } from '../components/viewer/WholesaleReveal';
@@ -38,6 +39,7 @@ import { VideoReview } from '../components/viewer/VideoReview';
 import { extractYouTubeId } from '../lib/youtube';
 import { Accordion, AccordionItem } from '../components/viewer/Accordion';
 import { RichTextView } from '../components/shared/RichTextView';
+import { fetchVariantRows } from '../lib/variantRows';
 import { richTextToPlain } from '../lib/richTextPlain';
 import type { Product, ProductVariant, VariantOption } from '../types';
 
@@ -104,6 +106,18 @@ function setProductJsonLd(product: Product, price: number, inStock: boolean): vo
 
 function removeProductJsonLd(): void {
   document.getElementById(JSON_LD_ID)?.remove();
+}
+
+/** Batch 51: the small delivery truck beside "Get it in …". */
+function TruckIcon() {
+  return (
+    <svg className="pdp-eta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 6.5h11v9h-11z" />
+      <path d="M13.5 9.5h4l3 3v3h-7z" />
+      <circle cx="6.5" cy="17.5" r="1.6" />
+      <circle cx="17" cy="17.5" r="1.6" />
+    </svg>
+  );
 }
 
 function PlaceholderIcon() {
@@ -260,7 +274,6 @@ function DetailContent({
 }) {
   const { addItem, updateQuantity, items, itemCount } = useCart();
   const { brands, settings } = useProducts();
-  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -382,7 +395,16 @@ function DetailContent({
   const lineVariantId = hasSelector ? selectedOption.id : null;
   const inCart =
     items.find((item) => item.productId === product.id && item.variantId === lineVariantId)?.quantity ?? 0;
-  const limit = stockLimit(hasSelector ? selectedOption.stock_quantity : product.stock_quantity);
+  // Batch 51: the order limit (or the stock, for a product that sells only
+  // from stock), the "Only 2 left" line and the delivery line.
+  const sell = useSellLimit();
+  const stockFacts = sell.factsFor(product, hasSelector ? selectedOption : null);
+  const limit = sell.maxFor(stockFacts);
+  const [limitPopup, setLimitPopup] = useState<LimitReason | null>(null);
+  const lowText = outOfStock ? null : lowStockText(stockFacts, sell.limit);
+  const inHand = (hasSelector ? selectedOption.in_hand : product.in_hand) ?? !outOfStock;
+  const deliveryText = deliveryLine(settings, { available: !outOfStock, inHand });
+  const selectedLabel = hasSelector ? variantOptionLabel(selectedOption, product.name) : null;
   const { shown: barShown, onPressStart } = useBuyBarVisibility(itemCount);
 
   // The floating cart (outside this page) rides just above the bar and moves
@@ -411,7 +433,7 @@ function DetailContent({
   const handleAddToCart = () => {
     if (outOfStock || inCart > 0) return;
     if (limit < 1) {
-      showToast(stockLimitMessage(limit), 'info');
+      setLimitPopup(sell.reasonFor(stockFacts));
       return;
     }
     const variant = hasSelector
@@ -425,7 +447,7 @@ function DetailContent({
   const increase = () => {
     tapHaptic();
     if (inCart >= limit) {
-      showToast(stockLimitMessage(limit), 'info');
+      setLimitPopup(sell.reasonFor(stockFacts));
       return;
     }
     updateQuantity(product.id, inCart + 1, lineVariantId);
@@ -434,6 +456,7 @@ function DetailContent({
 
   const decrease = () => {
     tapHaptic();
+    setLimitPopup(null);
     updateQuantity(product.id, inCart - 1, lineVariantId);
   };
 
@@ -578,11 +601,17 @@ function DetailContent({
           <div className="pdp-stock" data-sheet-part="chips">
             <span className="pdp-chip" data-testid="stock-chip">
               <span
-                className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : 'pdp-chip__dot--in'}`}
+                className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : lowText ? 'pdp-chip__dot--low' : 'pdp-chip__dot--in'}`}
                 aria-hidden="true"
               />
-              {outOfStock ? 'Out of stock' : 'In stock'}
+              {outOfStock ? 'Sold out' : lowText ?? 'In stock'}
             </span>
+            {deliveryText && (
+              <p className="pdp-eta" data-testid="pdp-delivery">
+                <TruckIcon />
+                <span>{deliveryText}</span>
+              </p>
+            )}
             {noteText !== '' && (
               <p className="pdp-note" data-testid="product-note">
                 <svg
@@ -674,10 +703,10 @@ function DetailContent({
                 className="buy-bar__pill buy-bar__pill--out"
                 disabled
                 tabIndex={barShown ? 0 : -1}
-                aria-label={`${product.name} is out of stock`}
+                aria-label={`${product.name} is sold out`}
                 data-testid="buy-bar-out"
               >
-                Out of stock
+                Sold out
               </button>
             ) : inCart > 0 ? (
               <div className="buy-bar__pill buy-bar__stepper" role="group" aria-label={`${product.name} in cart`} data-testid="buy-bar-stepper">
@@ -704,6 +733,14 @@ function DetailContent({
                 >
                   <StepIcon plus />
                 </button>
+                {limitPopup && (
+                  <LimitPopup
+                    reason={limitPopup}
+                    productName={product.name}
+                    optionLabel={selectedLabel}
+                    onClose={() => setLimitPopup(null)}
+                  />
+                )}
               </div>
             ) : (
               <button
@@ -840,16 +877,13 @@ export function ProductDetailPage() {
     if (fromCatalog || fetchedId === null) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from(VARIANTS_VIEW)
-        .select(VARIANT_SELECT)
-        .eq('product_id', fetchedId);
+      const { rows, error } = await fetchVariantRows(fetchedId);
       if (cancelled) return;
       if (error) {
-        console.warn('Product variants unavailable:', error.message);
+        console.warn('Product variants unavailable:', error);
         return;
       }
-      setFetchedVariants(sortVariants((data ?? []) as ProductVariant[]));
+      setFetchedVariants(sortVariants(rows));
     })();
     return () => {
       cancelled = true;
@@ -922,6 +956,7 @@ export function ProductDetailPage() {
               <ShareButton product={product} variant="header" />
             </span>
           )}
+          {product && <HeartButton productId={product.id} productName={product.name} />}
         </div>
       </header>
 

@@ -63,6 +63,7 @@ export const OrderSuccessPage = routePage(() => import('../features/checkout/Ord
 export const AdminAccessPage = routePage(() => import('../pages/AdminAccessPage'), (m) => m.AdminAccessPage);
 export const WholesalerAccessPage = routePage(() => import('../pages/WholesalerAccessPage'), (m) => m.WholesalerAccessPage);
 export const AccountPage = routePage(() => import('../pages/AccountPage'), (m) => m.AccountPage);
+export const WishlistPage = routePage(() => import('../pages/WishlistPage'), (m) => m.WishlistPage);
 export const OrdersListPage = routePage(() => import('../pages/OrdersListPage'), (m) => m.OrdersListPage);
 export const OrderDetailPage = routePage(() => import('../pages/OrderDetailPage'), (m) => m.OrderDetailPage);
 export const NotFoundPage = routePage(() => import('../pages/NotFoundPage'), (m) => m.NotFoundPage);
@@ -90,6 +91,7 @@ export function pageForPath(pathname: string): RoutePage | null {
     '/admin-access': AdminAccessPage,
     '/wholesaler-access': WholesalerAccessPage,
     '/account': AccountPage,
+    '/wishlist': WishlistPage,
     '/orders': OrdersListPage,
     '/return-policy': ReturnPolicyPage,
     '/delivery': DeliveryPolicyPage,

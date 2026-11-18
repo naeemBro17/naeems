@@ -10,11 +10,20 @@ import type { Product } from '../types';
  * zero — those rows fall back to the stock_status flag. Only an explicit 0
  * forces Out of Stock.
  */
-export function isInStock(product: Product): boolean {
+export function hasStock(product: Product): boolean {
   if (product.stock_quantity !== null && product.stock_quantity !== undefined) {
     return product.stock_quantity > 0;
   }
   return product.stock_status !== 'out_of_stock';
+}
+
+/**
+ * Whether the shop sells it now (Batch 51): a product with "Keep selling
+ * when out of stock" is always available; any other needs stock. The admin
+ * list keeps the real stock (hasStock).
+ */
+export function isInStock(product: Product): boolean {
+  return product.keep_selling === true || hasStock(product);
 }
 
 /**

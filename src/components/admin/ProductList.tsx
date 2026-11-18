@@ -12,7 +12,7 @@ import { CombineProductsSheet } from './CombineProductsSheet';
 import { RestockSheet } from './RestockSheet';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { BottomSheet } from '../shared/BottomSheet';
-import { isOutOfStock } from '../../lib/stockStatus';
+import { hasStock } from '../../lib/stockStatus';
 import { VARIANTS_VIEW } from '../../lib/variants';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchProductEditInfo, type ProductEditInfo } from '../../lib/staff';
@@ -41,7 +41,7 @@ const STOCK_FILTERS: readonly StockFilter[] = ['all', 'in', 'low', 'out'];
  *  (red) — red at or below the low-stock threshold. Availability comes from
  *  isOutOfStock(), so a product with 0 pieces can never read "In stock". */
 function stockLabel(product: Product, threshold: number): { tone: 'ok' | 'low'; text: string } {
-  if (isOutOfStock(product)) return { tone: 'low', text: 'Out of stock' };
+  if (!hasStock(product)) return { tone: 'low', text: 'Out of stock' };
   if (product.stock_quantity === null || product.stock_quantity === undefined) return { tone: 'ok', text: 'In stock' };
   if (isLowStockCount(product, threshold)) return { tone: 'low', text: `${product.stock_quantity} left` };
   return { tone: 'ok', text: `${product.stock_quantity} pcs` };
@@ -96,6 +96,9 @@ export function ProductList() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [combineOpen, setCombineOpen] = useState(false);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [stockRuleOpen, setStockRuleOpen] = useState(false);
+  // Batch 51: only once migration-052 has added products.keep_selling.
+  const keepSellingReady = products.some((p) => p.keep_selling !== undefined);
   // Batch 31 Part 8 / Batch 40: "Make images light" — a 480 px card copy of
   // every product and variant photo, the Browse-circle copies, then the
   // one-year cache setting on every stored photo (lib/smallImages).
@@ -141,8 +144,8 @@ export function ProductList() {
       result = result.filter((p) => p.is_active === (statusFilter === 'active'));
     }
     if (stockFilter === 'low') result = result.filter((p) => isLowStockProduct(p, threshold));
-    if (stockFilter === 'out') result = result.filter((p) => isOutOfStock(p));
-    if (stockFilter === 'in') result = result.filter((p) => !isOutOfStock(p));
+    if (stockFilter === 'out') result = result.filter((p) => !hasStock(p));
+    if (stockFilter === 'in') result = result.filter((p) => hasStock(p));
     const q = normalizeText(search.trim());
     if (q !== '') {
       result = result.filter((p) => normalizeText(p.name).includes(q) || normalizeText(p.sku).includes(q));
@@ -255,6 +258,27 @@ export function ProductList() {
     }
     for (const id of ids) patchProductLocal(id, { is_active: isActive });
     showToast(`${ids.length} product${ids.length === 1 ? '' : 's'} ${isActive ? 'now live' : 'hidden'}`);
+    exitSelectMode();
+  };
+
+  /** Batch 51: bulk "Keep selling when out of stock" on / off. */
+  const handleBulkKeepSelling = async (keepSelling: boolean) => {
+    const ids = [...selectedIds];
+    setIsBulkSaving(true);
+    const { error } = await supabase
+      .from('products')
+      .update({ keep_selling: keepSelling, updated_at: new Date().toISOString() })
+      .in('id', ids);
+    setIsBulkSaving(false);
+    setStockRuleOpen(false);
+    if (error) {
+      showToast('Could not update the products. Please try again.', 'error');
+      return;
+    }
+    for (const id of ids) patchProductLocal(id, { keep_selling: keepSelling });
+    showToast(
+      `${ids.length} product${ids.length === 1 ? '' : 's'} ${keepSelling ? 'keep selling when out of stock' : 'sell only from stock'}`
+    );
     exitSelectMode();
   };
 
@@ -555,6 +579,11 @@ export function ProductList() {
                   >
                     <span className="adm-lrow__name">{product.name}</span>
                   </Link>
+                  {product.keep_selling === false && (
+                    <span className="adm-tag adm-ptag-stock" data-testid="sells-only-from-stock">
+                      Sells only from stock
+                    </span>
+                  )}
                   <p className="adm-lrow__sub adm-only-desktop-block">{subLine(product)}</p>
                   <p className="adm-lrow__meta adm-mobile-meta">
                     <span className="adm-price">{formatTakaBd(product.retail_price)}</span>
@@ -602,6 +631,17 @@ export function ProductList() {
           <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" disabled={isBulkSaving} onClick={() => void handleBulkLive(false)}>
             Hide
           </button>
+          {keepSellingReady && (
+            <button
+              type="button"
+              className="adm-btn adm-btn--ghost adm-btn--sm"
+              disabled={isBulkSaving}
+              onClick={() => setStockRuleOpen(true)}
+              data-testid="bulk-stock-rule"
+            >
+              Out of stock…
+            </button>
+          )}
           {selectedIds.length >= 2 && (
             <button type="button" className="adm-btn adm-btn--primary adm-btn--sm" onClick={() => setCombineOpen(true)}>
               Combine into variants
@@ -609,6 +649,32 @@ export function ProductList() {
           )}
         </BulkBar>
       )}
+
+      <BottomSheet isOpen={stockRuleOpen} onClose={() => setStockRuleOpen(false)} title="When out of stock">
+        <div className="adm-filter-sheet">
+          <p className="adm-ocard__muted">
+            {selectedIds.length} product{selectedIds.length === 1 ? '' : 's'} selected.
+          </p>
+          <button
+            type="button"
+            className="button button--secondary button--full adm-filter-sheet__select"
+            disabled={isBulkSaving}
+            onClick={() => void handleBulkKeepSelling(true)}
+            data-testid="bulk-keep-selling-on"
+          >
+            Keep selling when out of stock
+          </button>
+          <button
+            type="button"
+            className="button button--secondary button--full adm-filter-sheet__select"
+            disabled={isBulkSaving}
+            onClick={() => void handleBulkKeepSelling(false)}
+            data-testid="bulk-keep-selling-off"
+          >
+            Sell only from stock
+          </button>
+        </div>
+      </BottomSheet>
 
       <BottomSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
         <div className="adm-filter-sheet">{filterSelects}</div>

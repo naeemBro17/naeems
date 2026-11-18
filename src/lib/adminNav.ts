@@ -9,6 +9,7 @@ import type { StaffPermission } from '../types';
 export type AdminSection =
   | 'home'
   | 'orders'
+  | 'shopping'
   | 'payouts'
   | 'money'
   | 'reports'
@@ -33,6 +34,7 @@ export type AdminSection =
 export type AdminIconName =
   | 'home'
   | 'orders'
+  | 'shopping'
   | 'payouts'
   | 'reports'
   | 'customers'
@@ -88,6 +90,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'home', label: 'Home', icon: 'home', group: 'main' },
   { id: 'orders', label: 'Orders', icon: 'orders', group: 'main' },
+  // Batch 51 Part 3: what to buy for open orders; with "View orders".
+  { id: 'shopping', label: 'Shopping list', icon: 'shopping', group: 'main' },
   // Batch 36 Part 1: under Orders; only with "View profit & costs".
   { id: 'payouts', label: 'Steadfast payouts', tabLabel: 'Payouts', icon: 'payouts', group: 'main' },
   // Batch 41: accounts, expenses, investors, profit; "View profit & costs"
@@ -135,6 +139,7 @@ export function canOpenSection(section: AdminSection, access: NavAccess): boolea
     case 'more':
       return true;
     case 'orders':
+    case 'shopping':
       return can('view_orders');
     case 'payouts':
     case 'inventory':
@@ -216,9 +221,9 @@ export function greeting(now: Date = new Date()): string {
   const hour = dhakaHour(now);
   if (hour >= 5 && hour < 12) return 'Good morning';
   if (hour >= 12 && hour < 17) return 'Good afternoon';
-  if (hour >= 17) return 'Good evening';
-  // Batch 35 Part 5: 00:00–04:59 is neither evening nor morning.
-  return 'Hello';
+  // Batch 51: 17:00–04:59 is evening (Batch 35 had made 00:00–04:59
+  // "Hello", which is why Naeem saw "Hello, Naeem" late at night).
+  return 'Good evening';
 }
 
 /** First name for the greeting: the first word of the full name, else the

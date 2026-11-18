@@ -98,6 +98,8 @@ interface CheckoutStateValue {
     advanceRule: OrderSnapshot['advanceRule'];
     /** What the database saved (null before migration-049). */
     saved: { total: number; advanceDiscount: number } | null;
+    /** Batch 51: something in it is bought after the order. */
+    buysLater: boolean;
   }) => OrderSnapshot;
   /** Empties the live cart and resets zone/address/promo for a fresh visit.
    *  Leaves lastOrder in place so OrderSuccessPage keeps its snapshot. */
@@ -189,6 +191,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       advanceDiscount: number;
       advanceRule: OrderSnapshot['advanceRule'];
       saved: { total: number; advanceDiscount: number } | null;
+      buysLater: boolean;
     }): OrderSnapshot => {
       // The saved amounts win: the database works the discount out itself.
       const advanceDiscount = result.saved ? result.saved.advanceDiscount : result.advanceDiscount;
@@ -207,6 +210,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
         placedAt: new Date().toISOString(),
         advanceDiscount,
         advanceRule: advanceDiscount > 0 ? result.advanceRule : null,
+        buysLater: result.buysLater,
         celebrated: false,
       };
       setLastOrder(snapshot);

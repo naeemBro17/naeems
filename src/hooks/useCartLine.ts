@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useCart } from '../contexts/CartContext';
-import { useToast } from './useToast';
-import { stockLimit } from '../lib/stockStatus';
+import { useSellLimit } from './useSellLimit';
 import { trackAddToCart } from '../lib/analytics';
+import type { LimitReason } from '../lib/sellRules';
 import type { Product, VariantOption } from '../types';
 
 export interface CartLineControls {
@@ -10,15 +10,15 @@ export interface CartLineControls {
   quantity: number;
   /** Which line the controls act on: the product itself (null) or one option. */
   variantId: string | null;
-  /** Most units allowed (Infinity when stock isn't tracked). */
+  /** The option's label for the limit popup's WhatsApp message. */
+  optionLabel: string | null;
+  /** Most units allowed (Batch 51: the order limit, or the stock). */
   limit: number;
   increment: () => void;
   decrement: () => void;
-}
-
-/** The gentle note shown when + would go past the stock count. */
-export function stockLimitMessage(limit: number): string {
-  return limit === 1 ? 'Only 1 in stock' : `Only ${limit} in stock`;
+  /** Why + stopped, while the limit popup is open. */
+  popup: LimitReason | null;
+  closePopup: () => void;
 }
 
 /**
@@ -29,10 +29,14 @@ export function stockLimitMessage(limit: number): string {
  * A product without options has one line. A product with options shows the
  * option most recently added this session — or, after a reload, its last
  * line in the cart.
+ *
+ * Batch 51: + stops at the order limit (or the last of the stock for a
+ * product that sells only from stock) and opens the limit popup.
  */
 export function useCartLine(product: Product, options: VariantOption[]): CartLineControls {
   const { items, updateQuantity, lastVariantFor } = useCart();
-  const { showToast } = useToast();
+  const sell = useSellLimit();
+  const [popup, setPopup] = useState<LimitReason | null>(null);
   const hasOptions = options.length > 1;
 
   let variantId: string | null = null;
@@ -47,25 +51,35 @@ export function useCartLine(product: Product, options: VariantOption[]): CartLin
   const line = items.find((item) => item.productId === product.id && item.variantId === variantId);
   const quantity = line?.quantity ?? 0;
   const option = hasOptions ? options.find((o) => o.id === variantId) : undefined;
-  const limit = hasOptions
-    ? option
-      ? stockLimit(option.stock_quantity)
-      : Number.POSITIVE_INFINITY
-    : stockLimit(product.stock_quantity);
+  const facts = sell.factsFor(product, hasOptions ? option ?? null : null);
+  const limit = hasOptions && !option ? Number.POSITIVE_INFINITY : sell.maxFor(facts);
   const unitPrice = line?.priceAtAdd ?? 0;
+  const reason = sell.reasonFor(facts);
 
   const increment = useCallback(() => {
     if (quantity >= limit) {
-      showToast(stockLimitMessage(limit), 'info');
+      setPopup(reason);
       return;
     }
     updateQuantity(product.id, quantity + 1, variantId);
     trackAddToCart({ id: product.id, name: product.name, price: unitPrice }, 1);
-  }, [quantity, limit, showToast, updateQuantity, product.id, product.name, variantId, unitPrice]);
+  }, [quantity, limit, reason, updateQuantity, product.id, product.name, variantId, unitPrice]);
 
   const decrement = useCallback(() => {
+    setPopup(null);
     updateQuantity(product.id, quantity - 1, variantId);
   }, [updateQuantity, product.id, quantity, variantId]);
 
-  return { quantity, variantId, limit, increment, decrement };
+  const closePopup = useCallback(() => setPopup(null), []);
+
+  return {
+    quantity,
+    variantId,
+    optionLabel: line?.variantLabel ?? null,
+    limit,
+    increment,
+    decrement,
+    popup,
+    closePopup,
+  };
 }

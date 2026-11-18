@@ -39,8 +39,7 @@ export function StockNotice() {
               </>
             ) : (
               <>
-                Only <strong>{change.available}</strong> left of <strong>{itemName(change)}</strong> — we've
-                updated the quantity.
+                We've lowered <strong>{itemName(change)}</strong> to what we have left.
               </>
             )}
           </p>

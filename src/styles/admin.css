@@ -3600,3 +3600,350 @@ a.adm-lrow__open:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* Batch 51: "Sells only from stock" — a small neutral tag under the name. */
+.adm-ptag-stock {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Batch 51 Part 5 — Admin home hero: greeting + liquid-glass clock.
+   The orange wash is decoration (approved by Naeem), not an action.
+   --------------------------------------------------------------------- */
+.adm {
+  --adm-hero-bg: #fbfbfc;
+  --adm-hero-line: rgba(0, 0, 0, 0.06);
+  --adm-hero-warm: rgba(242, 110, 60, 0.32);
+  --adm-hero-cool: rgba(150, 150, 160, 0.3);
+  --adm-hero-text: #16161a;
+  --adm-hero-muted: #6e6e76;
+  --adm-glass-top: rgba(28, 28, 32, 0.78);
+  --adm-glass-mid: rgba(28, 28, 32, 0.48);
+  --adm-glass-low: rgba(28, 28, 32, 0.24);
+  --adm-glass-edge: rgba(255, 255, 255, 0.95);
+  --adm-glass-shine: rgba(255, 255, 255, 0.85);
+  --adm-glass-shadow: rgba(20, 20, 30, 0.16);
+}
+
+:root[data-theme='dark'] .adm {
+  --adm-hero-bg: #161618;
+  --adm-hero-line: rgba(255, 255, 255, 0.06);
+  --adm-hero-warm: rgba(242, 100, 50, 0.55);
+  --adm-hero-cool: rgba(150, 150, 165, 0.28);
+  --adm-hero-text: #f2f2f4;
+  --adm-hero-muted: #a8a8b0;
+  --adm-glass-top: rgba(255, 255, 255, 0.94);
+  --adm-glass-mid: rgba(255, 255, 255, 0.55);
+  --adm-glass-low: rgba(255, 255, 255, 0.2);
+  --adm-glass-edge: rgba(255, 255, 255, 0.55);
+  --adm-glass-shine: rgba(255, 255, 255, 0.95);
+  --adm-glass-shadow: rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .adm {
+    --adm-hero-bg: #161618;
+    --adm-hero-line: rgba(255, 255, 255, 0.06);
+    --adm-hero-warm: rgba(242, 100, 50, 0.55);
+    --adm-hero-cool: rgba(150, 150, 165, 0.28);
+    --adm-hero-text: #f2f2f4;
+    --adm-hero-muted: #a8a8b0;
+    --adm-glass-top: rgba(255, 255, 255, 0.94);
+    --adm-glass-mid: rgba(255, 255, 255, 0.55);
+    --adm-glass-low: rgba(255, 255, 255, 0.2);
+    --adm-glass-edge: rgba(255, 255, 255, 0.55);
+    --adm-glass-shine: rgba(255, 255, 255, 0.95);
+    --adm-glass-shadow: rgba(0, 0, 0, 0.45);
+  }
+}
+
+.adm-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  grid-template-areas: 'tools' 'clock' 'text';
+  gap: 6px;
+  margin: var(--adm-s4) 0 var(--adm-s3);
+  padding: 18px 20px 22px;
+  border-radius: 24px;
+  background: var(--adm-hero-bg);
+  border: 1px solid var(--adm-hero-line);
+  color: var(--adm-hero-text);
+}
+
+.adm-hero__wash {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(48px);
+  pointer-events: none;
+}
+
+.adm-hero__wash--warm {
+  top: -30%;
+  right: -22%;
+  width: 85%;
+  height: 120%;
+  background: radial-gradient(closest-side, var(--adm-hero-warm), transparent);
+}
+
+.adm-hero__wash--cool {
+  bottom: -40%;
+  left: -25%;
+  width: 70%;
+  height: 110%;
+  background: radial-gradient(closest-side, var(--adm-hero-cool), transparent);
+}
+
+.adm-hero__tools {
+  grid-area: tools;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--adm-s2);
+  min-height: 0;
+}
+
+.adm-hero__clock {
+  grid-area: clock;
+  min-width: 0;
+}
+
+.adm-hero__text {
+  grid-area: text;
+  min-width: 0;
+}
+
+.adm-hero__eyebrow {
+  margin: 0 0 6px;
+  font-size: var(--adm-fs-micro);
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--adm-hero-muted);
+}
+
+.adm .adm-hero__greeting {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+  color: var(--adm-hero-text);
+}
+
+.adm-hero__date {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--adm-hero-muted);
+}
+
+/* The clock: big hours:minutes, small seconds bottom-aligned beside them. */
+.adm-clock {
+  display: flex;
+  align-items: flex-end;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: 0.86;
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.adm-clock__hm {
+  position: relative;
+  font-size: clamp(84px, 27vw, 128px);
+}
+
+.adm-clock__s {
+  position: relative;
+  margin: 0 0 0.05em 0.08em;
+  font-size: clamp(30px, 9vw, 44px);
+  letter-spacing: -0.02em;
+}
+
+.adm-clock__colon {
+  margin: 0 0.01em;
+}
+
+/* Glass digits: a see-through gradient fill (brightest along the top
+   edge), a thin light rim and a soft shadow under them. */
+.adm-clock__hm,
+.adm-clock__s {
+  color: transparent;
+  background: linear-gradient(180deg, var(--adm-glass-shine) 0%, var(--adm-glass-top) 8%, var(--adm-glass-mid) 45%, var(--adm-glass-low) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* A thin light rim from tight glows (a text outline would also draw
+     the lines where the font's strokes overlap inside a digit). */
+  filter: drop-shadow(0 0 0.6px var(--adm-glass-edge)) drop-shadow(0 -0.5px 0 var(--adm-glass-shine))
+    drop-shadow(0 10px 18px var(--adm-glass-shadow));
+}
+
+@media (min-width: 1024px) {
+  .adm-hero {
+    grid-template-areas:
+      'text tools'
+      'text clock';
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto 1fr;
+    align-items: center;
+    column-gap: var(--adm-s5);
+    padding: 22px 40px 34px 44px;
+    min-height: 260px;
+  }
+
+  .adm-hero__text {
+    align-self: center;
+  }
+
+  .adm .adm-hero__greeting {
+    font-size: 40px;
+    letter-spacing: -0.6px;
+  }
+
+  .adm-hero__date {
+    font-size: 17px;
+  }
+
+  .adm-hero__clock {
+    justify-self: end;
+    align-self: center;
+  }
+
+  .adm-clock__hm {
+    font-size: 150px;
+  }
+
+  .adm-clock__s {
+    font-size: 52px;
+  }
+}
+
+/* Batch 51 Part 3: the Home tile and the Shopping list page. */
+.adm-home__shop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--adm-s3);
+  width: 100%;
+  margin: 0 0 var(--adm-s3);
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--adm-text);
+  cursor: pointer;
+}
+
+.adm-home__shop-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.adm-home__shop-label {
+  font-size: var(--adm-fs-label);
+  color: var(--adm-muted);
+}
+
+.adm-home__shop-count {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.adm-badge--neutral {
+  background: var(--adm-card-2);
+  color: var(--adm-text);
+  box-shadow: inset 0 0 0 1px var(--adm-line);
+}
+
+.adm-shop__totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--adm-s3);
+  margin-bottom: var(--adm-s3);
+}
+
+.adm-shop__big {
+  margin: 0;
+  font-family: var(--font-price);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.adm-shop__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-line);
+  overflow: hidden;
+}
+
+.adm-shop__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--adm-s3);
+  padding: 14px 16px;
+  border-top: 1px solid var(--adm-row-line);
+}
+
+.adm-shop__row:first-child {
+  border-top: 0;
+}
+
+.adm-shop__icon {
+  color: var(--adm-muted);
+}
+
+.adm-shop__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.adm-shop__orders {
+  margin: 4px 0 0;
+  font-size: var(--adm-fs-label);
+  color: var(--adm-muted);
+}
+
+.adm-shop__order {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--adm-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.adm-shop__qty {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+}
+
+.adm-shop__qty-num {
+  font-family: var(--font-price);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.adm-shop__qty-unit {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+}

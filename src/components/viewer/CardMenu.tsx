@@ -146,7 +146,7 @@ export function CardMenu({ product, copyPrice, outOfStock }: CardMenuProps) {
           {outOfStock ? (
             <span className="card-menu__item card-menu__item--disabled" aria-disabled="true">
               Copy Price
-              <span className="card-menu__hint">Out of Stock</span>
+              <span className="card-menu__hint">Sold out</span>
             </span>
           ) : (
             <button

@@ -17,6 +17,8 @@ interface AdminLayoutProps {
   onNavigate: (section: AdminSection) => void;
   /** Orders waiting to be confirmed — the orange badge on Orders. */
   pendingOrders: number;
+  /** Batch 51: items on the Shopping list — a neutral badge (hidden at 0). */
+  shoppingCount?: number;
   /** Batch 32: a form page docks its Save button where the bottom bar is. */
   hideTabbar?: boolean;
   children: ReactNode;
@@ -36,6 +38,7 @@ export function AdminLayout({
   banner,
   onNavigate,
   pendingOrders,
+  shoppingCount = 0,
   hideTabbar = false,
   children,
 }: AdminLayoutProps) {
@@ -46,6 +49,10 @@ export function AdminLayout({
     item.id === 'orders' && pendingOrders > 0 ? (
       <span className="adm-badge" aria-label={`${pendingOrders} to confirm`}>
         {pendingOrders}
+      </span>
+    ) : item.id === 'shopping' && shoppingCount > 0 ? (
+      <span className="adm-badge adm-badge--neutral" aria-label={`${shoppingCount} to buy`} data-testid="shopping-badge">
+        {shoppingCount}
       </span>
     ) : null;
 

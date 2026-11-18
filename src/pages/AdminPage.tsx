@@ -21,6 +21,8 @@ import { CustomersTab } from '../components/admin/CustomersTab';
 import { BannerTextsTab } from '../components/admin/BannerTextsTab';
 import { BrandsTab } from '../components/admin/BrandsTab';
 import { PayoutsTab } from '../components/admin/PayoutsTab';
+import { ShoppingListTab } from '../components/admin/ShoppingListTab';
+import { fetchShoppingList, type ShoppingLoad } from '../lib/shoppingList';
 import { InventoryTab } from '../components/admin/inventory/InventoryTab';
 import { MoneyTab } from '../components/admin/money/MoneyTab';
 import { ReportsTab } from '../components/admin/reports/ReportsTab';
@@ -145,6 +147,18 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
     setOrders(await fetchAllOrders());
   }, [canViewOrders]);
 
+  // Batch 51: the Shopping list — its count is the badge, Home's tile and
+  // the list page. Read again whenever the orders are.
+  const [shopping, setShopping] = useState<ShoppingLoad | null>(null);
+  const loadShopping = useCallback(async () => {
+    if (!canViewOrders) return;
+    setShopping(await fetchShoppingList());
+  }, [canViewOrders]);
+  useEffect(() => {
+    void loadShopping();
+  }, [loadShopping, orders]);
+  const shoppingCount = shopping?.kind === 'ready' ? shopping.rows.length : 0;
+
   useEffect(() => {
     void loadWholesalers();
     void loadOrders();
@@ -194,6 +208,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         banner={isAdmin ? <SafetyLockBar /> : null}
         onNavigate={(section) => goTo(section)}
         pendingOrders={pendingOrders}
+        shoppingCount={shoppingCount}
         hideTabbar={sub !== null && isFormSubPage(sub)}
       >
         {sub?.kind === 'new-order' && (
@@ -245,8 +260,17 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         )}
         {!sub && (
         <>
-        {active === 'home' && <HomeTab title={title} onOpen={goTo} />}
-        {active === 'more' && <MoreTab items={more} username={staff?.username ?? null} onOpen={goTo} />}
+        {active === 'home' && <HomeTab title={title} onOpen={goTo} shoppingCount={shoppingCount} />}
+        {active === 'more' && (
+          <MoreTab items={more} username={staff?.username ?? null} onOpen={goTo} shoppingCount={shoppingCount} />
+        )}
+        {active === 'shopping' && (
+          <ShoppingListTab
+            list={shopping}
+            onReload={() => void loadShopping()}
+            onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
+          />
+        )}
         {active === 'products' && <ProductList />}
         {active === 'categories' && (
           <>

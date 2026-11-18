@@ -23,6 +23,7 @@ import { placedPaymentLabel, placedTotalLabel } from '../../lib/checkoutCopy';
 import { isWalletMethod } from '../../lib/advanceDiscount';
 import { openExternal, orderHelpWhatsAppUrl } from '../../lib/expertLinks';
 import { useCheckoutState } from './useCheckoutState';
+import { arrivalText } from '../../lib/sellRules';
 import '../../styles/checkoutFinish.css';
 
 /** When the drop splashes (ms after the sequence starts). */
@@ -146,6 +147,9 @@ export function OrderSuccessPage() {
   const itemCount = lastOrder.items.reduce((sum, item) => sum + item.quantity, 0);
   const paidInAdvance = isWalletMethod(lastOrder.paymentMethod);
   const saved = lastOrder.advanceDiscount ?? 0;
+  // Batch 51: "Arriving Fri, 20 – Sat, 21 Nov" from the order date, the
+  // delivery zone and the slowest item.
+  const arriving = arrivalText(lastOrder.placedAt, lastOrder.zone.id, lastOrder.buysLater === true, settings);
 
   // Batch 37: the same A4 invoice the shop prints (the customer's copy).
   const handleDownloadInvoice = async () => {
@@ -208,6 +212,17 @@ export function OrderSuccessPage() {
             Order no. <b>{lastOrder.orderNumber}</b>
           </span>
         </div>
+        {arriving && (
+          <p className="cf-arrive cf-fu" style={fadeUp('.56s')} data-testid="placed-arriving">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M2.5 6.5h11v9h-11z" />
+              <path d="M13.5 9.5h4l3 3v3h-7z" />
+              <circle cx="6.5" cy="17.5" r="1.6" />
+              <circle cx="17" cy="17.5" r="1.6" />
+            </svg>
+            {arriving}
+          </p>
+        )}
 
         <div className="cf-sum cf-fu" style={fadeUp('.6s')}>
           <div className="cf-sr">

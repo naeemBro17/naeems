@@ -9,6 +9,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProductProvider } from './contexts/ProductContext';
 import { AdminEditProvider } from './contexts/AdminEditContext';
 import { CartProvider } from './contexts/CartContext';
+import { WishlistProvider } from './contexts/WishlistContext';
+import { WishlistLoginSheet, WishlistToast } from './components/viewer/Wishlist';
 import { CheckoutStateProvider } from './features/checkout/useCheckoutState';
 import { ToastContainer } from './components/shared/ToastContainer';
 import { AnalyticsTracker } from './components/shared/AnalyticsTracker';
@@ -29,6 +31,7 @@ import {
   AdminAccessPage,
   WholesalerAccessPage,
   AccountPage,
+  WishlistPage,
   OrdersListPage,
   OrderDetailPage,
   NotFoundPage,
@@ -128,6 +131,7 @@ export default function App() {
         <AuthProvider>
           <ProductProvider>
             <CartProvider>
+              <WishlistProvider>
               <CheckoutStateProvider>
                 <AdminEditProvider>
                   {/* Batch 40 Part 3: a calm "shop is being updated" page
@@ -155,6 +159,8 @@ export default function App() {
                           <Route path="/privacy" element={<PrivacyPolicyPage />} />
                           <Route path="/about" element={<AboutPage />} />
                           <Route path="/account" element={<AccountPage />} />
+                          {/* Batch 51: the customer's saved products. */}
+                          <Route path="/wishlist" element={<WishlistPage />} />
                           <Route path="/orders" element={<OrdersListPage />} />
                           <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                           {/* Cart & checkout flow — see src/features/checkout. */}
@@ -183,9 +189,12 @@ export default function App() {
                     <GlobalBottomNav />
                     <GlassCartButton />
                     <CartUndoToast />
+                    <WishlistToast />
+                    <WishlistLoginSheet />
                   </ShopDownGate>
                 </AdminEditProvider>
               </CheckoutStateProvider>
+              </WishlistProvider>
             </CartProvider>
           </ProductProvider>
         </AuthProvider>

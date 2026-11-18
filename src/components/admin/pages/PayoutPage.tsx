@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  coveredByOpening,
+  fetchBooksStart,
   fetchPayout,
   isOutsideParcel,
   isSettled,
@@ -35,6 +37,7 @@ interface PayoutPageProps {
  */
 export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
   const [state, setState] = useState<LoadState<Payout | null> | null>(null);
+  const [booksStart, setBooksStart] = useState<string | null>(null);
   // Batch 47: settling is the Super Admin's (the database checks it too).
   const { isAdmin } = useAuth();
 
@@ -42,6 +45,9 @@ export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
     let alive = true;
     void fetchPayout(payoutId).then((answer) => {
       if (alive) setState(answer);
+    });
+    void fetchBooksStart().then((start) => {
+      if (alive) setBooksStart(start);
     });
     return () => {
       alive = false;
@@ -67,19 +73,26 @@ export function PayoutPage({ payoutId, onBack, onOpenOrder }: PayoutPageProps) {
       ) : !payout ? (
         <EmptyState icon="payouts" title="Payout not found" />
       ) : (
-        <PayoutDetail payout={payout} onOpenOrder={onOpenOrder} canSettle={isAdmin} onChanged={reload} />
+        <PayoutDetail payout={payout} booksStart={booksStart} onOpenOrder={onOpenOrder} canSettle={isAdmin} onChanged={reload} />
       )}
     </section>
   );
 }
 
+/** Batch 51: "0" when nothing was kept — never "−0". */
+function feesText(paisa: number): string {
+  return paisa === 0 ? '0' : `−${takaWhole(paisa).replace('৳', '')}`;
+}
+
 function PayoutDetail({
   payout,
+  booksStart,
   onOpenOrder,
   canSettle,
   onChanged,
 }: {
   payout: Payout;
+  booksStart: string | null;
   onOpenOrder: (orderNumber: string) => void;
   canSettle: boolean;
   onChanged: () => Promise<void>;
@@ -87,7 +100,9 @@ function PayoutDetail({
   const { showToast } = useToast();
   const [settling, setSettling] = useState<PayoutItem | null>(null);
   const [undoing, setUndoing] = useState<string | null>(null);
-  const pill = payoutPill(payout);
+  const pill = payoutPill(payout, booksStart);
+  // Batch 51: paid before the money start date — in the opening balances.
+  const covered = coveredByOpening(payout.paid_at, booksStart);
 
   const undo = async (item: PayoutItem) => {
     setUndoing(item.id);
@@ -109,7 +124,9 @@ function PayoutDetail({
     }),
     { cod: 0, fees: 0, net: 0 }
   );
-  const amount = toPaisa(payout.total_amount) || sum.net;
+  // Batch 51: Steadfast's own total, also when it is ৳0 (it always equals
+  // the lines' sum — Batch 46).
+  const amount = toPaisa(payout.total_amount);
   const anyOther = payout.items.some((i) => toPaisa(i.other_deduction) !== 0);
 
   return (
@@ -148,7 +165,7 @@ function PayoutDetail({
               const outside = isOutsideParcel(item) && !settled;
               const toCheck = item.match_status === 'to_check' && !outside;
               const label = item.invoice ?? (item.consignment_id ? `Parcel ${item.consignment_id}` : '—');
-              const reason = reasonText(item);
+              const reason = outside && covered ? 'Booked on Steadfast · in the opening balances' : reasonText(item);
               const by = settled ? settledByText(item) : null;
               return (
                 <tr key={item.id} className={toCheck ? 'is-check' : settled ? 'is-settled' : undefined} data-testid="payout-line">
@@ -187,7 +204,7 @@ function PayoutDetail({
                     )}
                   </td>
                   <td title={takaExact(toPaisa(item.cod_collected))}>{takaWhole(toPaisa(item.cod_collected))}</td>
-                  <td title={takaExact(-itemFeesPaisa(item))}>−{takaWhole(itemFeesPaisa(item)).replace('৳', '')}</td>
+                  <td title={takaExact(-itemFeesPaisa(item))}>{feesText(itemFeesPaisa(item))}</td>
                   <td title={takaExact(toPaisa(item.net_paid))}>{takaWhole(toPaisa(item.net_paid))}</td>
                 </tr>
               );
@@ -197,7 +214,7 @@ function PayoutDetail({
             <tr>
               <th scope="row">Total</th>
               <td title={takaExact(sum.cod)}>{takaWhole(sum.cod)}</td>
-              <td title={takaExact(-sum.fees)}>−{takaWhole(sum.fees).replace('৳', '')}</td>
+              <td title={takaExact(-sum.fees)}>{feesText(sum.fees)}</td>
               <td title={takaExact(sum.net)} data-testid="payout-total">
                 {takaWhole(sum.net)}
               </td>

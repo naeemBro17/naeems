@@ -98,6 +98,11 @@ BEGIN
   INSERT INTO products (sku, slug, name, retail_price, stock_status, stock_quantity, is_active)
   VALUES ('E2E-B45-N-' || v_tag, 'e2e-b45-n-' || v_tag, 'E2E B45 Lip Balm', 300, 'in_stock', 3, true) RETURNING id INTO v_nb;
   v_ids := ARRAY[v_pa, v_pb, v_pp, v_pv, v_pc, v_pre, v_po, v_pd, v_nb];
+  -- Batch 51: these test products sell only from stock (once migration-052
+  -- has added products.keep_selling), so the stock rules above still apply.
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'keep_selling') THEN
+    EXECUTE 'UPDATE products SET keep_selling = false WHERE id = ANY ($1)' USING v_ids;
+  END IF;
 
   -- ===================================================== Inventory mode OFF
   PERFORM set_config('inventory.mode_change', 'on', true);

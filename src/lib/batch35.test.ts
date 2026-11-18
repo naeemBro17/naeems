@@ -245,12 +245,13 @@ describe('payments are updates too', () => {
 });
 
 describe('Part 5: greeting in Bangladesh time', () => {
-  it('04:00 Hello, 09:00 morning, 14:00 afternoon, 20:00 evening', () => {
-    expect(greeting(new Date('2026-10-08T22:00:00Z'))).toBe('Hello'); // 04:00 Dhaka
+  // Batch 51: 17:00–04:59 is "Good evening" again (Batch 35 had "Hello").
+  it('04:00 evening, 09:00 morning, 14:00 afternoon, 20:00 evening', () => {
+    expect(greeting(new Date('2026-10-08T22:00:00Z'))).toBe('Good evening'); // 04:00 Dhaka
     expect(greeting(new Date('2026-10-09T03:00:00Z'))).toBe('Good morning'); // 09:00
     expect(greeting(new Date('2026-10-09T08:00:00Z'))).toBe('Good afternoon'); // 14:00
     expect(greeting(new Date('2026-10-09T14:00:00Z'))).toBe('Good evening'); // 20:00
-    expect(greeting(new Date('2026-10-08T18:00:00Z'))).toBe('Hello'); // 00:00
+    expect(greeting(new Date('2026-10-08T18:00:00Z'))).toBe('Good evening'); // 00:00
     expect(greeting(new Date('2026-10-08T23:00:00Z'))).toBe('Good morning'); // 05:00
   });
 });
