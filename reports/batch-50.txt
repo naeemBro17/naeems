@@ -1,0 +1,1536 @@
+BATCH 50 — Old Kaarbar sales (products + bills) and "Correct previous balance"
+Branch: feature/batch-50-kaarbar-old-sales   Version: 1.50.0
+SQL file: supabase/migration-051-batch50.sql (must be run — see section 2)
+
+======================================================================
+1. WHAT I DID
+======================================================================
+
+Step 1 · Old products (Admin → Import from Kaarbar, third card)
+You pick Kaarbar's Item List Report (Excel). Every Kaarbar item gets a
+site product. The site suggests a match only when it is sure (it ignores
+capitals, spaces, punctuation, "Moisturising"/"Moisturizing", "236 ML"/
+"236ml", "(Australia/USA)"; different sizes never match). Each row shows
+the Kaarbar name, the chosen site product with a tag (Auto / By hand /
+Hidden), a picker to change it (last choice: "+ Add as new hidden
+product") and the buying price per pack. A matched item starts with the
+site's buying price ("From the site. Change it if you paid differently
+then."); otherwise Kaarbar's purchase price; otherwise the box is empty
+with a red outline. At the top: counts, search, and All / Needs you /
+Matched / New hidden ("Needs you" is shown first). "Save product list"
+stays off until every item has a product and a price, and says how many
+are missing. Saving asks for your password. Items marked Hidden get their
+own product: Kaarbar name, hidden, no picture, SKU made the normal way
+(XX-…), buying price set. Saving again only updates — it never makes a
+second hidden product. Changing a buying price later also corrects the
+old profit (the cost is never stored on the old bill lines). Careful
+action: "Remove hidden products made by the import" (keeps any with
+orders, lots, old bills, or that were ever shown in the shop, and says
+why).
+
+Step 2 · Old sales (fourth card)
+Greyed out until Step 1 is saved. You pick many party statement PDFs at
+once (and can add more). They are read on your phone, never uploaded.
+For each customer you see: name, phone, "on the site" or not, bills to
+add and their total, and a check against Kaarbar's own "Total Sales"
+(green "matches Kaarbar", or red "Does not match Kaarbar (৳X vs ৳Y)" —
+such a file must be removed before importing). Old-layout PDFs (Debit /
+Credit) are refused with the message to download again. Counts: Bills to
+add · Already added · After 30 Sep (skip) · Unknown item. Unknown items
+are listed ("add them to the Item List in Step 1"). Items sold by the
+piece or by the ml get a "Buying price of 1 piece / 1 ml" box (worked out
+from the site's pack size when it can be, and never from a bottle price
+for one capsule). Tap a bill to see its lines, delivery, bill discount and
+total. Import asks for your password. Bills already added are skipped, so
+the same PDF twice is safe. Careful action: "Undo last old-sales import".
+
+Where old sales appear
+- Reports → Profit & loss: new lines "Old sales (Kaarbar)", "Old bill
+  discounts", "Old cost of goods (Kaarbar)", "Old delivery income
+  (Kaarbar)", included in Gross / Net / Your profit / Left in the
+  business and the month-by-month table and the Excel file. A note says
+  old sales are included and the Money page does not count them.
+- Reports → Products: old lines are in Best sellers and Low margin,
+  marked "(Kaarbar)"; the Sales and Profit totals include them, with a
+  note.
+- Customer page: "OLD PURCHASES (KAARBAR)" under the orders (tap a bill
+  to see its items). Order count, total spent and due stay site-only.
+- Nothing else: not in Orders, Day book, money, dues, reminders, Money
+  page, Money position, net worth, Dashboard, or anything customers see.
+
+Correct previous balance (customer page → To receive)
+Super Admin sees "Edit" next to Previous balance (also when it is 0 and
+the customer has a phone). The sheet shows Now, Correct amount (0 is
+allowed, no minus), Why, your password, and "Total due becomes ৳X. Cash
+and bKash do not change." A "Corrections" list shows date, from → to,
+reason and who. The locked opening rows are not edited; corrections are
+stored separately. The customer list, Money position, Dashboard "To
+receive", due reminders and the customer's own balance all follow. The
+Money balance check stays balanced (a new line "Previous balances
+corrected later" in "Show the sums"), and Money → Opening balances shows
+"Previous balances corrected later: ৳X". Each correction goes to the
+Activity Log: "Previous balance corrected from ৳A to ৳B (reason)".
+
+Product editor
+A product with price 0 can no longer be shown in the shop: "Set a price
+before showing this product." (in the editor, and the database refuses
+it too, also for the quick Show switch in the product list). Products
+already in the shop are not affected.
+
+HOW TO USE IT (step by step)
+ 1. Run the SQL in section 2 (once).
+ 2. In Kaarbar: Reports → Item List Report → Excel. Send the file to your
+    phone.
+ 3. Admin → More → Import from Kaarbar → Step 1 → "Pick the Item List
+    Report".
+ 4. You land on "Needs you". For each row: tap the product box and pick
+    the site product (or "+ Add as new hidden product"), and type a buying
+    price where the box is red.
+ 5. Look over "Matched" too — check the Auto matches and prices are right.
+ 6. "Save product list" → type your password.
+ 7. In Kaarbar, download each customer's Party Statement as PDF.
+ 8. Step 2 → "Pick party statements (PDF)" → choose many at once. Add more
+    with "Add more PDFs".
+ 9. Remove any file marked red ("Does not match Kaarbar" or "old layout")
+    and download it again from Kaarbar.
+10. If "Unknown items" appear: add them to Kaarbar's Item List (or check
+    the name), go back to Step 1, pick the file again and save.
+11. If "Needs a price per piece / per ml" appears: type the price of one
+    piece / one ml and press "Save these prices".
+12. "Import N bills…" → password. Check Reports → Profit & loss for the
+    old months.
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+
+Run the whole file supabase/migration-051-batch50.sql in the Supabase SQL
+Editor (it is copied in full at the end of this report). It is safe to
+run more than once. Until it is run, the two new cards say "needs the
+Batch 50 database update (migration-051)", the Edit button answers the
+same, and everything else works as before.
+
+I tested it on the live database only inside a transaction that was
+rolled back (it parsed and ran; nothing was left behind). I did NOT apply
+it.
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+
+- I have never seen a real Kaarbar party statement PDF. The reader is
+  built from the layout in the brief and tested with made-up PDFs drawn
+  in that layout (unit tests and real PDFs in the browser tests). Please
+  try one real customer first. If something reads wrong, the safety nets
+  are: the green/red "matches Kaarbar" total check per customer, and
+  unknown-item names shown on screen. Send me the file name and what was
+  wrong.
+- Things in the PDF I could not be sure about:
+  * Whether a cell sits on the first line of a wrapped name or in the
+    middle of it. Both are handled (the file decides which), but a
+    3-line name in an odd layout could be split wrongly — it would then
+    show as an Unknown item, never be imported silently.
+  * Footer/header text Kaarbar may print on each page (page numbers,
+    "Powered by…"). Common ones are skipped; an unusual one could land in
+    an item name (again: shows as Unknown item).
+  * Any extra rows inside the items table (for example a "Discount" or
+    "Sub total" row) are not in the sample; they would show as Unknown
+    item.
+  * "Sales Return" rows are read as minus bills, but the sample had none,
+    so the exact wording is a guess ("Sale Return" / "Sales Return").
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+
+- The near-black main buttons on the Batch 49 Kaarbar cards ("Import
+  N…") were really showing grey: a general card style was stronger. Fixed
+  in this batch (same fix for the new cards).
+- "Undo last customer import" (Batch 49) checks opening dues but not the
+  new previous-balance corrections. If you corrected the balance of a
+  customer that the import added and then undo the import, the customer
+  is removed but the correction stays stored against the phone (harmless,
+  and it comes back if the customer is added again). Not changed.
+- Undoing the opening balances now also removes the previous-balance
+  corrections (they belong to the opening).
+- The header check counts ALL bills in a PDF (before and after 30 Sep),
+  because Kaarbar's "Total Sales" covers the whole file. Only bills on or
+  before 30 Sep are imported.
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+
+- Old bills live in their own tables and never touch orders, stock, lots
+  or money. Profit & loss adds them on top of the Money figures inside
+  report_profit_loss only; money_profit_parts is unchanged, so the Money
+  page, Money position, net worth and Dashboard are exactly as before
+  (checked by a test that compares them before and after an import).
+- Old sales are treated like site orders: "Old sales" are the product
+  lines, "Old bill discounts" are taken off them, delivery is separate
+  income. A whole-bill discount is spread over the bill's product lines
+  by their totals (whole paisa, same rule as site orders) for the
+  per-product figures.
+- A return is stored as a "return" bill and counted as minus.
+- One cut-off date, in the database: kaarbar_old_sales_cutoff() = 30 Sep
+  2026. The screen reads it from there.
+- Per-piece / per-ml price: worked out only when the site product's unit
+  matches and the result is not more than twice what one unit was sold
+  for (so a bottle's cost is never used for one capsule).
+- Every statement's phone is stored on its bills even when the customer
+  is not on the site yet, so if you add that customer later their old
+  purchases show up on their page.
+- Hidden products start with shop price 0; after Step 2 they get the
+  latest price they were sold for in Kaarbar (by the pack). They stay
+  hidden.
+- Colour: all four cards are neutral; their main buttons are near-black
+  (white in dark mode); the only orange is the Save/Import button inside
+  the password sheet. Prices are near-black / white.
+- The old-purchases list and the correction sheet are permanent features,
+  so they do not depend on the temporary Kaarbar screen's code.
+
+Screenshots (390 px, light and dark): reports/batch-50-screens/
+  01 Step 1 picker open · 02 Step 1 list · 03/04 Step 2 with a bill open
+  05 customer Old purchases · 06 Correct previous balance · 07 Profit & loss
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+======================================================================
+
+1. Real orders table history for old customers (medium). Old bills now
+   show on the customer page but not in "total spent" or reports by
+   customer. A "lifetime value (incl. Kaarbar)" line would show who your
+   best long-term customers are.
+2. Remove the Kaarbar import screens once done (small). They are
+   temporary; leaving import tools with Super Admin powers around is risk
+   without benefit. The data stays.
+3. A "Corrections" report (small). Today corrections are visible per
+   customer and in the Activity Log; a single list would help an
+   accountant audit why receivables changed.
+4. Buying prices history (medium). Old profit uses one buying price per
+   item for all old months. Prices changed over 2025–26; recording a price
+   per period would make old monthly profit more accurate.
+5. Large-bundle warning (small). The admin's PDF tools (invoice PDF,
+   PDF reader) are big files; they only load for the admin, but on a slow
+   phone the first use takes a few seconds. A "Loading…" hint on first use
+   would avoid double taps.
+
+======================================================================
+TEST RESULT
+======================================================================
+- npm run build: passed, zero errors.
+- Unit tests (vitest): 629 / 629 passed (30 new in src/lib/batch50.test.ts).
+- npm run verify:quick (build + all unit tests + the Batch 50 browser
+  tests): QUICK GREEN — 9 / 9 passed. These include the database test:
+  the whole migration plus 50+ checks, run on the live project inside ONE
+  transaction that is always rolled back (nothing kept).
+- The full npm run verify was STARTED ONCE but was stopped by the
+  computer because it ran low on memory (not a test failure; it produced
+  no result). I did not re-run it, per the testing rule. It should be run
+  once more (npm run verify) when the PC has free memory, before merging.
+
+======================================================================
+THE SQL (paste the whole thing into the Supabase SQL Editor and Run)
+======================================================================
+-- =====================================================================
+-- Batch 50 — Old Kaarbar sales (products + bills) and
+--            "Correct previous balance"
+--
+-- Paste the whole file into the Supabase SQL Editor and press Run.
+-- It is safe to run more than once.
+--
+-- PART A — Old sales from Kaarbar (history only)
+--   kaarbar_items       Step 1: every Kaarbar item, matched once to a site
+--                       product (or to a new HIDDEN product), with the
+--                       buying price used for the old bills.
+--   kaarbar_bills       Step 2: the old bills (sales, and returns as
+--   kaarbar_bill_lines  negative bills), dated on or before 30 Sep 2026.
+--   Old bills are NOT orders: they never touch stock, lots, order_item_lots,
+--   stock_quantity, money accounts, money movements, customer dues or
+--   previous balances. They are read only by Reports → Profit & loss,
+--   Reports → Products and the customer page. money_profit_parts (the Money
+--   page, the Money position, net worth, the Dashboard) is NOT changed.
+--   A line has no cost of its own: its cost is read from kaarbar_items, so
+--   correcting a buying price later corrects the old profit too.
+--
+-- PART B — Correct previous balance (customer page)
+--   customer_previous_corrections: a correction of a previous balance that
+--   was wrong when it was brought in. The locked opening rows are never
+--   edited. No money movement, no account change, not an expense, not in
+--   Profit & loss. money_previous_left, money_customer_dues,
+--   money_customer_history, money_position (and so the Dashboard, due
+--   reminders and the customer list) include it.
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------
+-- A1. Import kinds
+-- ---------------------------------------------------------------------
+ALTER TABLE kaarbar_imports DROP CONSTRAINT IF EXISTS kaarbar_imports_kind_check;
+ALTER TABLE kaarbar_imports ADD CONSTRAINT kaarbar_imports_kind_check
+  CHECK (kind IN ('customers', 'expenses', 'products', 'sales'));
+
+-- The one cut-off date: bills after it are already on the site as orders.
+CREATE OR REPLACE FUNCTION kaarbar_old_sales_cutoff()
+RETURNS date
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT DATE '2026-09-30';
+$$;
+
+-- ---------------------------------------------------------------------
+-- A2. Tables
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kaarbar_items (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- The Kaarbar name without case, spaces or punctuation (one per item).
+  name_key            text NOT NULL UNIQUE CHECK (name_key <> ''),
+  kaarbar_name        text NOT NULL CHECK (btrim(kaarbar_name) <> ''),
+  kaarbar_price       numeric NOT NULL DEFAULT 0,
+  -- The site product (and option) the old bills count as.
+  product_id          uuid REFERENCES products(id) ON DELETE SET NULL,
+  variant_id          uuid REFERENCES product_variants(id) ON DELETE SET NULL,
+  -- The hidden product this import made for the item (kept so a re-save
+  -- never makes a second one).
+  made_product_id     uuid REFERENCES products(id) ON DELETE SET NULL,
+  match_how           text NOT NULL DEFAULT 'auto' CHECK (match_how IN ('auto', 'hand', 'hidden')),
+  -- Buying price of one pack (what one "1" in a Kaarbar bill cost).
+  cost_per_pack       numeric NOT NULL CHECK (cost_per_pack > 0 AND cost_per_pack < 100000000),
+  -- Buying price of one unit for lines sold by a unit: {"pcs": 53.3, "ml": 8.5}.
+  unit_costs          jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(unit_costs) = 'object'),
+  import_id           uuid REFERENCES kaarbar_imports(id) ON DELETE SET NULL,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  updated_by_username text
+);
+
+CREATE TABLE IF NOT EXISTS kaarbar_bills (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind           text NOT NULL DEFAULT 'sale' CHECK (kind IN ('sale', 'return')),
+  bill_no        text NOT NULL CHECK (btrim(bill_no) <> ''),
+  bill_date      date NOT NULL,
+  -- The site customer (when found), else only the Kaarbar party.
+  customer_key   text,
+  phone_key      text,
+  party_name     text NOT NULL,
+  party_phone    text,
+  -- Amounts are as Kaarbar shows them (positive also for a return; the
+  -- reports count a return as minus).
+  items_total    numeric NOT NULL,
+  bill_discount  numeric NOT NULL DEFAULT 0,
+  delivery       numeric NOT NULL DEFAULT 0,
+  bill_total     numeric NOT NULL,
+  import_id      uuid NOT NULL REFERENCES kaarbar_imports(id) ON DELETE RESTRICT,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (kind, bill_no)
+);
+
+CREATE TABLE IF NOT EXISTS kaarbar_bill_lines (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  bill_id       uuid NOT NULL REFERENCES kaarbar_bills(id) ON DELETE CASCADE,
+  line_no       integer NOT NULL,
+  item_id       uuid NOT NULL REFERENCES kaarbar_items(id) ON DELETE RESTRICT,
+  kaarbar_name  text NOT NULL,
+  quantity      numeric NOT NULL CHECK (quantity > 0),
+  -- NULL = packs; else the unit word in lower case ("pcs", "ml").
+  unit          text,
+  rate          numeric NOT NULL DEFAULT 0,
+  line_discount numeric NOT NULL DEFAULT 0,
+  line_total    numeric NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bills_date ON kaarbar_bills (bill_date);
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bills_phone ON kaarbar_bills (phone_key) WHERE phone_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bills_customer ON kaarbar_bills (customer_key) WHERE customer_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bills_import ON kaarbar_bills (import_id);
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bill_lines_bill ON kaarbar_bill_lines (bill_id);
+CREATE INDEX IF NOT EXISTS idx_kaarbar_bill_lines_item ON kaarbar_bill_lines (item_id);
+CREATE INDEX IF NOT EXISTS idx_kaarbar_items_product ON kaarbar_items (product_id);
+
+-- Read and written only through the functions below.
+ALTER TABLE kaarbar_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kaarbar_bills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kaarbar_bill_lines ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON kaarbar_items, kaarbar_bills, kaarbar_bill_lines FROM anon, authenticated;
+GRANT ALL ON kaarbar_items, kaarbar_bills, kaarbar_bill_lines TO service_role;
+
+-- ---------------------------------------------------------------------
+-- A3. Small helpers
+-- ---------------------------------------------------------------------
+
+-- The same slug the product editor makes (src/lib/format.ts slugify),
+-- made unique with -2, -3 … like src/lib/slugify.ts.
+CREATE OR REPLACE FUNCTION kaarbar_unique_slug(p_name text)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_base text;
+  v_slug text;
+  v_n    integer := 2;
+BEGIN
+  v_base := lower(btrim(COALESCE(p_name, '')));
+  v_base := regexp_replace(v_base, '[^a-z0-9\s-]', '', 'g');
+  v_base := regexp_replace(v_base, '\s+', '-', 'g');
+  v_base := regexp_replace(v_base, '-+', '-', 'g');
+  v_base := regexp_replace(v_base, '^-|-$', '', 'g');
+  IF v_base = '' THEN
+    v_base := 'product';
+  END IF;
+  v_slug := v_base;
+  WHILE EXISTS (SELECT 1 FROM products WHERE slug = v_slug) LOOP
+    v_slug := v_base || '-' || v_n;
+    v_n := v_n + 1;
+  END LOOP;
+  RETURN v_slug;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_unique_slug(text) FROM PUBLIC, anon, authenticated;
+
+-- The next SKU for a product with no category: the rule of src/lib/sku.ts
+-- (prefix XX, one above the highest XX-number, at least 3 digits).
+CREATE OR REPLACE FUNCTION kaarbar_next_sku()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_max   bigint := 0;
+  v_width integer := 3;
+  v_r     record;
+BEGIN
+  FOR v_r IN SELECT substr(sku, 4) AS digits FROM products WHERE sku ~ '^XX-[0-9]+$' LOOP
+    IF v_r.digits::bigint > v_max THEN
+      v_max := v_r.digits::bigint;
+      v_width := GREATEST(3, length(v_r.digits));
+    END IF;
+  END LOOP;
+  RETURN 'XX-' || lpad((v_max + 1)::text, v_width, '0');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_next_sku() FROM PUBLIC, anon, authenticated;
+
+-- The buying price of one unit of an old bill line (NULL = not known).
+CREATE OR REPLACE FUNCTION kaarbar_line_unit_cost(p_item kaarbar_items, p_unit text)
+RETURNS numeric
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE WHEN p_unit IS NULL THEN p_item.cost_per_pack
+              ELSE NULLIF(p_item.unit_costs ->> p_unit, '')::numeric END;
+$$;
+
+-- Every old bill's product lines in a date range: the line's share of the
+-- whole-bill discount spread by line totals (in whole paisa, the remainder
+-- to the largest fractions — the same way site orders share a discount),
+-- the sale after it and the cost. A return counts as minus.
+CREATE OR REPLACE FUNCTION kaarbar_old_lines(p_from date, p_to date)
+RETURNS TABLE(bill_id uuid, bill_date date, line_id uuid, item_id uuid, product_id uuid, variant_id uuid,
+              label text, quantity numeric, unit text, sign integer, line_total numeric,
+              discount_share numeric, sale numeric, cost numeric)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH lines AS (
+    SELECT b.id AS bid, b.bill_date AS bdate, CASE WHEN b.kind = 'return' THEN -1 ELSE 1 END AS sg,
+           b.bill_discount, l.id AS lid, l.item_id AS iid, i.product_id AS pid, i.variant_id AS vid,
+           COALESCE(report_unit_label(i.product_id, i.variant_id), l.kaarbar_name) AS lbl,
+           l.quantity AS qty, l.unit AS u, l.line_total AS lt,
+           l.quantity * COALESCE(kaarbar_line_unit_cost(i, l.unit), 0) AS c
+    FROM kaarbar_bills b
+    JOIN kaarbar_bill_lines l ON l.bill_id = b.id
+    JOIN kaarbar_items i ON i.id = l.item_id
+    WHERE b.bill_date BETWEEN p_from AND p_to
+  ), paisa AS (
+    SELECT x.*, round(x.lt * 100) AS lp, round(x.bill_discount * 100) AS dp,
+           sum(round(x.lt * 100)) OVER (PARTITION BY x.bid) AS tp
+    FROM lines x
+  ), floors AS (
+    SELECT p.*,
+           CASE WHEN p.tp > 0 THEN div(LEAST(p.dp, p.tp) * p.lp, p.tp) ELSE 0 END AS d_floor,
+           CASE WHEN p.tp > 0 THEN mod(LEAST(p.dp, p.tp) * p.lp, p.tp) ELSE 0 END AS d_rem
+    FROM paisa p
+  ), ranked AS (
+    SELECT f.*,
+           row_number() OVER (PARTITION BY f.bid ORDER BY f.d_rem DESC, f.lid) AS d_rank,
+           LEAST(f.dp, f.tp) - sum(f.d_floor) OVER (PARTITION BY f.bid) AS d_left
+    FROM floors f
+  )
+  SELECT r.bid, r.bdate, r.lid, r.iid, r.pid, r.vid, r.lbl, r.qty, r.u, r.sg, r.lt,
+         (r.d_floor + CASE WHEN r.d_rank <= r.d_left THEN 1 ELSE 0 END) / 100.0,
+         r.sg * (r.lp - r.d_floor - CASE WHEN r.d_rank <= r.d_left THEN 1 ELSE 0 END) / 100.0,
+         r.sg * round(r.c, 2)
+  FROM ranked r;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_old_lines(date, date) FROM PUBLIC, anon, authenticated;
+
+-- Old Kaarbar sales in a date range, for Profit & loss. sales = product
+-- lines after bill discounts (like a site order's sale), delivery is
+-- income on its own (like a site order's delivery).
+CREATE OR REPLACE FUNCTION kaarbar_old_parts(p_from date, p_to date)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH b AS (
+    SELECT count(*) AS bills,
+           COALESCE(sum(CASE WHEN kind = 'return' THEN -items_total ELSE items_total END), 0) AS gross,
+           COALESCE(sum(CASE WHEN kind = 'return' THEN -bill_discount ELSE bill_discount END), 0) AS disc,
+           COALESCE(sum(CASE WHEN kind = 'return' THEN -delivery ELSE delivery END), 0) AS delivery
+    FROM kaarbar_bills WHERE bill_date BETWEEN p_from AND p_to
+  ), c AS (
+    SELECT COALESCE(sum(cost), 0) AS cost FROM kaarbar_old_lines(p_from, p_to)
+  )
+  SELECT jsonb_build_object(
+    'old_bills', b.bills,
+    'old_sales_gross', b.gross,
+    'old_bill_discounts', b.disc,
+    'old_sales', b.gross - b.disc,
+    'old_cost', c.cost,
+    'old_delivery', b.delivery,
+    'old_profit', b.gross - b.disc - c.cost + b.delivery)
+  FROM b, c;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_old_parts(date, date) FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- A4. Step 1 — Old products
+-- ---------------------------------------------------------------------
+
+-- What the Step 1 and Step 2 cards need: the saved item list, every site
+-- product / option to pick from (with its buying price per pack), the
+-- bills already added, the cut-off, locked months and the last imports.
+CREATE OR REPLACE FUNCTION kaarbar_old_sales_status()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM kaarbar_require(false);
+  RETURN jsonb_build_object(
+    'cutoff', kaarbar_old_sales_cutoff(),
+    'items', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'id', i.id, 'name_key', i.name_key, 'kaarbar_name', i.kaarbar_name, 'kaarbar_price', i.kaarbar_price,
+               'product_id', i.product_id, 'variant_id', i.variant_id, 'made_product_id', i.made_product_id,
+               'match_how', i.match_how, 'cost_per_pack', i.cost_per_pack, 'unit_costs', i.unit_costs,
+               'bill_lines', (SELECT count(*) FROM kaarbar_bill_lines l WHERE l.item_id = i.id))
+             ORDER BY lower(i.kaarbar_name))
+      FROM kaarbar_items i), '[]'::jsonb),
+    'choices', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'product_id', u.product_id, 'variant_id', u.variant_id, 'name', u.product_name,
+               'option', u.option_label, 'is_active', u.is_active, 'stock_unit', u.stock_unit,
+               'pack_size', u.pack_size,
+               'cost_per_pack', CASE WHEN u.latest_unit_cost > 0 THEN round(u.latest_unit_cost * u.pack_size, 2) END,
+               'made_by_import', EXISTS (SELECT 1 FROM kaarbar_items k WHERE k.made_product_id = u.product_id)))
+      FROM inventory_stock_units() u), '[]'::jsonb),
+    'bill_keys', COALESCE((SELECT jsonb_agg(kind || ':' || bill_no) FROM kaarbar_bills), '[]'::jsonb),
+    'bills', (SELECT count(*) FROM kaarbar_bills),
+    'locked_months', COALESCE((SELECT jsonb_agg(to_char(month, 'YYYY-MM') ORDER BY month)
+                               FROM money_month_locks WHERE locked), '[]'::jsonb),
+    'last_products', kaarbar_last_import('products'),
+    'last_sales', kaarbar_last_import('sales'));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_old_sales_status() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_old_sales_status() TO authenticated;
+
+-- p_rows: [{name_key, kaarbar_name, kaarbar_price, choice ('auto' | 'hand' |
+-- 'hidden'), product_id, variant_id, cost_per_pack, unit_costs}]
+-- Saves the list (new rows added, known rows updated, rows not in this
+-- file kept). 'hidden' makes a hidden product the first time only.
+CREATE OR REPLACE FUNCTION kaarbar_save_items(p_rows jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import   uuid;
+  v_row      jsonb;
+  v_key      text;
+  v_name     text;
+  v_how      text;
+  v_cost     numeric;
+  v_units    jsonb;
+  v_unit     text;
+  v_pid      uuid;
+  v_vid      uuid;
+  v_made     uuid;
+  v_item     kaarbar_items%ROWTYPE;
+  v_added    integer := 0;
+  v_updated  integer := 0;
+  v_created  integer := 0;
+  v_sku      text;
+  v_try      integer;
+BEGIN
+  PERFORM kaarbar_require(true);
+  IF jsonb_typeof(p_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(p_rows) = 0 THEN
+    RAISE EXCEPTION 'There is nothing to save.';
+  END IF;
+
+  INSERT INTO kaarbar_imports (kind, created_by, created_by_username)
+  VALUES ('products', auth.uid(), current_actor_username())
+  RETURNING id INTO v_import;
+
+  -- One summary line in the Activity Log, not one per hidden product.
+  PERFORM set_config('app.activity_quiet', 'on', true);
+
+  FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+    v_key := btrim(COALESCE(v_row ->> 'name_key', ''));
+    v_name := regexp_replace(btrim(COALESCE(v_row ->> 'kaarbar_name', '')), '\s+', ' ', 'g');
+    v_how := v_row ->> 'choice';
+    v_cost := round(NULLIF(v_row ->> 'cost_per_pack', '')::numeric, 2);
+    v_units := COALESCE(v_row -> 'unit_costs', '{}'::jsonb);
+    IF v_key = '' OR v_name = '' THEN
+      RAISE EXCEPTION 'An item has no name. Read the file again.';
+    END IF;
+    IF v_how NOT IN ('auto', 'hand', 'hidden') THEN
+      RAISE EXCEPTION 'Pick a site product for "%".', v_name;
+    END IF;
+    IF v_cost IS NULL OR v_cost <= 0 OR v_cost >= 100000000 THEN
+      RAISE EXCEPTION 'Type the buying price of "%".', v_name;
+    END IF;
+    IF jsonb_typeof(v_units) <> 'object' THEN
+      RAISE EXCEPTION 'The prices per piece of "%" are not readable.', v_name;
+    END IF;
+    FOR v_unit IN SELECT jsonb_object_keys(v_units) LOOP
+      IF v_unit !~ '^[a-z]{1,12}$' OR jsonb_typeof(v_units -> v_unit) <> 'number' OR (v_units ->> v_unit)::numeric <= 0 THEN
+        RAISE EXCEPTION 'The price per % of "%" must be above 0.', v_unit, v_name;
+      END IF;
+    END LOOP;
+
+    SELECT * INTO v_item FROM kaarbar_items WHERE name_key = v_key FOR UPDATE;
+
+    IF v_how = 'hidden' THEN
+      v_made := CASE WHEN v_item.id IS NOT NULL AND EXISTS (SELECT 1 FROM products WHERE id = v_item.made_product_id)
+                     THEN v_item.made_product_id END;
+      IF v_made IS NULL THEN
+        -- Made like the product editor makes one: generated SKU (no
+        -- category → XX-), slug from the name. Hidden, no picture, no stock.
+        FOR v_try IN 1..5 LOOP
+          v_sku := kaarbar_next_sku();
+          BEGIN
+            INSERT INTO products (sku, name, slug, retail_price, stock_status, stock_quantity, is_active, note)
+            VALUES (v_sku, left(v_name, 300), kaarbar_unique_slug(v_name), 0, 'out_of_stock', 0, false,
+                    'Made by the Kaarbar import for old sales. Hidden.')
+            RETURNING id INTO v_made;
+            EXIT;
+          EXCEPTION WHEN unique_violation THEN
+            IF v_try = 5 THEN RAISE; END IF;
+          END;
+        END LOOP;
+        v_created := v_created + 1;
+      END IF;
+      -- Its buying price (one pack = one unit: pack size 1).
+      INSERT INTO product_buying_prices (product_id, variant_id, unit_cost_bdt, updated_by)
+      VALUES (v_made, NULL, v_cost, auth.uid())
+      ON CONFLICT (product_id, COALESCE(variant_id, '00000000-0000-0000-0000-000000000000'::uuid))
+      DO UPDATE SET unit_cost_bdt = EXCLUDED.unit_cost_bdt, updated_at = now(), updated_by = auth.uid();
+      v_pid := v_made;
+      v_vid := NULL;
+    ELSE
+      v_pid := NULLIF(v_row ->> 'product_id', '')::uuid;
+      v_vid := NULLIF(v_row ->> 'variant_id', '')::uuid;
+      IF NOT EXISTS (SELECT 1 FROM products WHERE id = v_pid) THEN
+        RAISE EXCEPTION 'The site product picked for "%" is not on the site any more. Pick again.', v_name;
+      END IF;
+      IF v_vid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM product_variants WHERE id = v_vid AND product_id = v_pid) THEN
+        RAISE EXCEPTION 'The option picked for "%" is not on the site any more. Pick again.', v_name;
+      END IF;
+      v_made := v_item.made_product_id;
+    END IF;
+
+    IF v_item.id IS NULL THEN
+      INSERT INTO kaarbar_items (name_key, kaarbar_name, kaarbar_price, product_id, variant_id, made_product_id,
+                                 match_how, cost_per_pack, unit_costs, import_id, updated_by_username)
+      VALUES (v_key, v_name, COALESCE(NULLIF(v_row ->> 'kaarbar_price', '')::numeric, 0), v_pid, v_vid, v_made,
+              v_how, v_cost, v_units, v_import, current_actor_username());
+      v_added := v_added + 1;
+    ELSE
+      UPDATE kaarbar_items
+      SET kaarbar_name = v_name,
+          kaarbar_price = COALESCE(NULLIF(v_row ->> 'kaarbar_price', '')::numeric, kaarbar_price),
+          product_id = v_pid, variant_id = v_vid, made_product_id = v_made, match_how = v_how,
+          cost_per_pack = v_cost,
+          -- Prices per piece / per ml typed in Step 2 are kept.
+          unit_costs = kaarbar_items.unit_costs || v_units,
+          import_id = v_import, updated_at = now(), updated_by_username = current_actor_username()
+      WHERE id = v_item.id;
+      v_updated := v_updated + 1;
+    END IF;
+  END LOOP;
+
+  PERFORM set_config('app.activity_quiet', 'off', true);
+  UPDATE kaarbar_imports SET row_count = v_added + v_updated WHERE id = v_import;
+  PERFORM write_activity('kaarbar.products_saved', 'kaarbar_import', v_import::text, 'Kaarbar products',
+    format('Saved the Kaarbar product list: %s new, %s updated, %s hidden products made', v_added, v_updated, v_created),
+    jsonb_build_object('added', v_added, 'updated', v_updated, 'hidden_made', v_created));
+  RETURN jsonb_build_object('added', v_added, 'updated', v_updated, 'hidden_made', v_created);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_save_items(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_save_items(jsonb) TO authenticated;
+
+-- p_rows: [{item_id, unit, cost}] — the buying price of one piece / one
+-- ml, typed on the Step 2 card. Saved into the Step 1 list.
+CREATE OR REPLACE FUNCTION kaarbar_set_unit_costs(p_rows jsonb)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row  jsonb;
+  v_unit text;
+  v_cost numeric;
+  v_n    integer := 0;
+BEGIN
+  PERFORM kaarbar_require(false);
+  IF jsonb_typeof(p_rows) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'There is nothing to save.';
+  END IF;
+  FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+    v_unit := lower(btrim(COALESCE(v_row ->> 'unit', '')));
+    v_cost := round(NULLIF(v_row ->> 'cost', '')::numeric, 4);
+    IF v_unit !~ '^[a-z]{1,12}$' THEN
+      RAISE EXCEPTION 'A unit is not readable.';
+    END IF;
+    IF v_cost IS NULL OR v_cost <= 0 OR v_cost >= 100000000 THEN
+      RAISE EXCEPTION 'Type a price above 0 for every item.';
+    END IF;
+    UPDATE kaarbar_items
+    SET unit_costs = unit_costs || jsonb_build_object(v_unit, v_cost),
+        updated_at = now(), updated_by_username = current_actor_username()
+    WHERE id = NULLIF(v_row ->> 'item_id', '')::uuid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'An item is not in the Step 1 list any more. Open this page again.';
+    END IF;
+    v_n := v_n + 1;
+  END LOOP;
+  RETURN v_n;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_set_unit_costs(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_set_unit_costs(jsonb) TO authenticated;
+
+-- Deletes the hidden products the import made — only those with no
+-- orders, no lots, no old-bill lines and never shown in the shop. The
+-- others are kept and listed with the reason.
+CREATE OR REPLACE FUNCTION kaarbar_remove_hidden_products()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_p       products%ROWTYPE;
+  v_reason  text;
+  v_kept    jsonb := '[]'::jsonb;
+  v_removed integer := 0;
+BEGIN
+  PERFORM kaarbar_require(true);
+  FOR v_p IN
+    SELECT p.* FROM products p
+    WHERE p.id IN (SELECT made_product_id FROM kaarbar_items WHERE made_product_id IS NOT NULL)
+    ORDER BY p.name FOR UPDATE
+  LOOP
+    v_reason := CASE
+      WHEN EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = v_p.id) THEN 'has orders'
+      WHEN EXISTS (SELECT 1 FROM lot_items li WHERE li.product_id = v_p.id) THEN 'is in a lot'
+      WHEN EXISTS (SELECT 1 FROM kaarbar_bill_lines l JOIN kaarbar_items i ON i.id = l.item_id
+                   WHERE i.product_id = v_p.id) THEN 'old bills use it'
+      WHEN v_p.is_active OR EXISTS (SELECT 1 FROM activity_log a
+                                    WHERE a.entity_type = 'product' AND a.entity_id = v_p.id::text
+                                      AND a.details ? 'is_active') THEN 'was shown in the shop'
+    END;
+    IF v_reason IS NULL THEN
+      UPDATE kaarbar_items SET match_how = 'auto' WHERE product_id = v_p.id;
+      DELETE FROM products WHERE id = v_p.id;
+      v_removed := v_removed + 1;
+    ELSE
+      v_kept := v_kept || jsonb_build_object('name', v_p.name, 'reason', v_reason);
+    END IF;
+  END LOOP;
+  PERFORM write_activity('kaarbar.hidden_removed', 'kaarbar_import', 'hidden-products', 'Kaarbar products',
+    format('Removed %s hidden products made by the Kaarbar import%s', v_removed,
+           CASE WHEN jsonb_array_length(v_kept) > 0 THEN format(', kept %s', jsonb_array_length(v_kept)) ELSE '' END),
+    jsonb_build_object('removed', v_removed, 'kept', v_kept));
+  RETURN jsonb_build_object('removed', v_removed, 'kept', v_kept);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_remove_hidden_products() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_remove_hidden_products() TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- A5. Step 2 — Old sales
+-- ---------------------------------------------------------------------
+
+-- p_bills: [{kind, bill_no, date, customer_key, phone_key, party_name,
+-- party_phone, items_total, bill_discount, delivery, bill_total,
+-- lines: [{item_id, kaarbar_name, quantity, unit, rate, line_discount, line_total}]}]
+-- A bill already added is skipped. Nothing but these two tables (and the
+-- shop price of hidden products still at 0) is written.
+CREATE OR REPLACE FUNCTION kaarbar_import_sales(p_bills jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import  uuid;
+  v_b       jsonb;
+  v_l       jsonb;
+  v_kind    text;
+  v_no      text;
+  v_date    date;
+  v_bill    uuid;
+  v_item    kaarbar_items%ROWTYPE;
+  v_unit    text;
+  v_qty     numeric;
+  v_items   numeric;
+  v_disc    numeric;
+  v_del     numeric;
+  v_total   numeric;
+  v_sum     numeric;
+  v_n       integer;
+  v_added   integer := 0;
+  v_skipped integer := 0;
+  v_amount  numeric := 0;
+BEGIN
+  PERFORM kaarbar_require(true);
+  IF jsonb_typeof(p_bills) IS DISTINCT FROM 'array' OR jsonb_array_length(p_bills) = 0 THEN
+    RAISE EXCEPTION 'There is nothing to import.';
+  END IF;
+
+  INSERT INTO kaarbar_imports (kind, created_by, created_by_username)
+  VALUES ('sales', auth.uid(), current_actor_username())
+  RETURNING id INTO v_import;
+
+  FOR v_b IN SELECT * FROM jsonb_array_elements(p_bills) LOOP
+    v_kind := COALESCE(v_b ->> 'kind', 'sale');
+    v_no := btrim(COALESCE(v_b ->> 'bill_no', ''));
+    v_date := NULLIF(v_b ->> 'date', '')::date;
+    v_items := round(NULLIF(v_b ->> 'items_total', '')::numeric, 2);
+    v_disc := round(COALESCE(NULLIF(v_b ->> 'bill_discount', '')::numeric, 0), 2);
+    v_del := round(COALESCE(NULLIF(v_b ->> 'delivery', '')::numeric, 0), 2);
+    v_total := round(NULLIF(v_b ->> 'bill_total', '')::numeric, 2);
+    IF v_kind NOT IN ('sale', 'return') OR v_no = '' THEN
+      RAISE EXCEPTION 'A bill has no bill number. Read the files again.';
+    END IF;
+    IF v_date IS NULL OR v_date > kaarbar_old_sales_cutoff() THEN
+      RAISE EXCEPTION 'Bill % is after %: those sales are already on the site.', v_no, to_char(kaarbar_old_sales_cutoff(), 'DD Mon YYYY');
+    END IF;
+    IF money_month_locked(v_date) THEN
+      RAISE EXCEPTION '% is locked: bill % can''t be added.', to_char(v_date, 'FMMonth YYYY'), v_no;
+    END IF;
+    IF v_items IS NULL OR v_total IS NULL OR v_total < 0 OR v_del < 0 THEN
+      RAISE EXCEPTION 'Bill % has no total.', v_no;
+    END IF;
+    IF abs(v_items + v_del - v_disc - v_total) > 1 THEN
+      RAISE EXCEPTION 'Bill %: the lines, delivery and discount do not add up to the bill total.', v_no;
+    END IF;
+    IF jsonb_typeof(v_b -> 'lines') IS DISTINCT FROM 'array' THEN
+      RAISE EXCEPTION 'Bill % has no items.', v_no;
+    END IF;
+    IF EXISTS (SELECT 1 FROM kaarbar_bills WHERE kind = v_kind AND bill_no = v_no) THEN
+      v_skipped := v_skipped + 1;
+      CONTINUE;
+    END IF;
+
+    INSERT INTO kaarbar_bills (kind, bill_no, bill_date, customer_key, phone_key, party_name, party_phone,
+                               items_total, bill_discount, delivery, bill_total, import_id)
+    VALUES (v_kind, v_no, v_date,
+            NULLIF(btrim(COALESCE(v_b ->> 'customer_key', '')), ''),
+            NULLIF(btrim(COALESCE(v_b ->> 'phone_key', '')), ''),
+            COALESCE(NULLIF(btrim(COALESCE(v_b ->> 'party_name', '')), ''), 'Kaarbar party'),
+            NULLIF(btrim(COALESCE(v_b ->> 'party_phone', '')), ''),
+            v_items, v_disc, v_del, v_total, v_import)
+    RETURNING id INTO v_bill;
+
+    v_n := 0;
+    v_sum := 0;
+    FOR v_l IN SELECT * FROM jsonb_array_elements(v_b -> 'lines') LOOP
+      v_n := v_n + 1;
+      SELECT * INTO v_item FROM kaarbar_items WHERE id = NULLIF(v_l ->> 'item_id', '')::uuid;
+      IF v_item.id IS NULL THEN
+        RAISE EXCEPTION 'Bill %: "%" is not in the Step 1 list. Add it to the Item List in Step 1.', v_no, v_l ->> 'kaarbar_name';
+      END IF;
+      IF v_item.product_id IS NULL THEN
+        RAISE EXCEPTION '"%" has no site product any more. Match it again in Step 1.', v_item.kaarbar_name;
+      END IF;
+      v_unit := NULLIF(lower(btrim(COALESCE(v_l ->> 'unit', ''))), '');
+      v_qty := NULLIF(v_l ->> 'quantity', '')::numeric;
+      IF v_qty IS NULL OR v_qty <= 0 THEN
+        RAISE EXCEPTION 'Bill %: "%" has no quantity.', v_no, v_item.kaarbar_name;
+      END IF;
+      IF kaarbar_line_unit_cost(v_item, v_unit) IS NULL THEN
+        RAISE EXCEPTION 'Type the buying price of 1 % of "%" first.', v_unit, v_item.kaarbar_name;
+      END IF;
+      INSERT INTO kaarbar_bill_lines (bill_id, line_no, item_id, kaarbar_name, quantity, unit, rate, line_discount, line_total)
+      VALUES (v_bill, v_n, v_item.id, COALESCE(NULLIF(btrim(COALESCE(v_l ->> 'kaarbar_name', '')), ''), v_item.kaarbar_name),
+              v_qty, v_unit,
+              round(COALESCE(NULLIF(v_l ->> 'rate', '')::numeric, 0), 4),
+              round(COALESCE(NULLIF(v_l ->> 'line_discount', '')::numeric, 0), 2),
+              round(COALESCE(NULLIF(v_l ->> 'line_total', '')::numeric, 0), 2));
+      v_sum := v_sum + round(COALESCE(NULLIF(v_l ->> 'line_total', '')::numeric, 0), 2);
+    END LOOP;
+    IF v_n = 0 THEN
+      RAISE EXCEPTION 'Bill % has no items.', v_no;
+    END IF;
+    IF abs(v_sum - v_items) > 1 THEN
+      RAISE EXCEPTION 'Bill %: the item lines do not add up.', v_no;
+    END IF;
+    v_added := v_added + 1;
+    v_amount := v_amount + CASE WHEN v_kind = 'return' THEN -v_total ELSE v_total END;
+  END LOOP;
+
+  -- A hidden product made by Step 1 with no shop price yet gets the latest
+  -- price it was sold for in Kaarbar (by the pack).
+  PERFORM set_config('app.activity_quiet', 'on', true);
+  UPDATE products p
+  SET retail_price = x.rate, updated_at = now()
+  FROM (
+    SELECT DISTINCT ON (i.made_product_id) i.made_product_id AS pid, l.rate
+    FROM kaarbar_items i
+    JOIN kaarbar_bill_lines l ON l.item_id = i.id AND l.unit IS NULL AND l.rate > 0
+    JOIN kaarbar_bills b ON b.id = l.bill_id AND b.kind = 'sale'
+    WHERE i.made_product_id IS NOT NULL AND i.product_id = i.made_product_id
+    ORDER BY i.made_product_id, b.bill_date DESC, b.created_at DESC
+  ) x
+  WHERE p.id = x.pid AND p.retail_price = 0 AND NOT p.is_active;
+  PERFORM set_config('app.activity_quiet', 'off', true);
+
+  UPDATE kaarbar_imports SET row_count = v_added, total_amount = v_amount WHERE id = v_import;
+  PERFORM write_activity('kaarbar.sales_imported', 'kaarbar_import', v_import::text, 'Kaarbar old sales',
+    format('Imported %s old Kaarbar bills (%s)%s', v_added, money_short(v_amount),
+           CASE WHEN v_skipped > 0 THEN format(', %s already added skipped', v_skipped) ELSE '' END),
+    jsonb_build_object('added', v_added, 'skipped', v_skipped, 'total', v_amount));
+  RETURN jsonb_build_object('import_id', v_import, 'added', v_added, 'skipped', v_skipped, 'total', v_amount);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_import_sales(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_import_sales(jsonb) TO authenticated;
+
+-- Removes the bills of the last old-sales import (bills in a month locked
+-- since are kept and listed).
+CREATE OR REPLACE FUNCTION kaarbar_undo_sales()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import  uuid;
+  v_kept    jsonb;
+  v_removed integer;
+  v_total   numeric;
+BEGIN
+  PERFORM kaarbar_require(true);
+  SELECT id INTO v_import FROM kaarbar_imports
+  WHERE kind = 'sales' AND undone_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
+  IF v_import IS NULL THEN
+    RAISE EXCEPTION 'There is no old-sales import to undo.';
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('bill_no', b.bill_no, 'date', b.bill_date, 'amount', b.bill_total,
+                                               'reason', 'month is locked') ORDER BY b.bill_date), '[]'::jsonb)
+  INTO v_kept
+  FROM kaarbar_bills b WHERE b.import_id = v_import AND money_month_locked(b.bill_date);
+
+  SELECT count(*), COALESCE(sum(CASE WHEN kind = 'return' THEN -bill_total ELSE bill_total END), 0)
+  INTO v_removed, v_total
+  FROM kaarbar_bills WHERE import_id = v_import AND NOT money_month_locked(bill_date);
+  DELETE FROM kaarbar_bills WHERE import_id = v_import AND NOT money_month_locked(bill_date);
+
+  UPDATE kaarbar_imports SET undone_at = now(), undone_by_username = current_actor_username(), undo_kept = v_kept
+  WHERE id = v_import;
+  PERFORM write_activity('kaarbar.sales_undone', 'kaarbar_import', v_import::text, 'Kaarbar old sales',
+    format('Undid the old-sales import: removed %s bills (%s)%s', v_removed, money_short(v_total),
+           CASE WHEN jsonb_array_length(v_kept) > 0 THEN format(', kept %s in locked months', jsonb_array_length(v_kept)) ELSE '' END),
+    jsonb_build_object('removed', v_removed, 'total', v_total, 'kept', v_kept));
+  RETURN jsonb_build_object('removed', v_removed, 'total', v_total, 'kept', v_kept);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_undo_sales() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_undo_sales() TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- A6. Where old sales appear
+-- ---------------------------------------------------------------------
+
+-- The customer page: "Old purchases (Kaarbar)" — by phone, or by the
+-- customer key the import linked (customers with no phone).
+CREATE OR REPLACE FUNCTION kaarbar_customer_old_bills(p_customer_key text, p_phone text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_pk text := bd_phone_key(p_phone);
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  RETURN COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+             'id', b.id, 'kind', b.kind, 'bill_no', b.bill_no, 'date', b.bill_date,
+             'items_total', b.items_total, 'bill_discount', b.bill_discount, 'delivery', b.delivery,
+             'bill_total', b.bill_total,
+             'lines', (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                                'name', l.kaarbar_name, 'quantity', l.quantity, 'unit', l.unit, 'rate', l.rate,
+                                'line_discount', l.line_discount, 'line_total', l.line_total) ORDER BY l.line_no), '[]'::jsonb)
+                       FROM kaarbar_bill_lines l WHERE l.bill_id = b.id))
+           ORDER BY b.bill_date DESC, b.bill_no DESC)
+    FROM kaarbar_bills b
+    WHERE (v_pk IS NOT NULL AND b.phone_key = v_pk)
+       OR (p_customer_key IS NOT NULL AND b.customer_key = p_customer_key)), '[]'::jsonb);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_customer_old_bills(text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_customer_old_bills(text, text) TO authenticated;
+
+-- Profit & loss: the site's parts (money_profit_parts, unchanged) plus the
+-- old Kaarbar lines, which are also added into the profit lines.
+CREATE OR REPLACE FUNCTION kaarbar_pnl_with_old(p_parts jsonb, p_from date, p_to date)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_old    jsonb := kaarbar_old_parts(p_from, p_to);
+  v_profit numeric := (v_old ->> 'old_profit')::numeric;
+BEGIN
+  RETURN p_parts || v_old || jsonb_build_object(
+    'gross_profit', (p_parts ->> 'sales')::numeric - (p_parts ->> 'cost')::numeric
+                    + (v_old ->> 'old_sales')::numeric - (v_old ->> 'old_cost')::numeric,
+    'net_profit', (p_parts ->> 'net_profit')::numeric + v_profit,
+    'your_profit', (p_parts ->> 'your_profit')::numeric + v_profit,
+    'left_in_business', (p_parts ->> 'left_in_business')::numeric + v_profit);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_pnl_with_old(jsonb, date, date) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.report_profit_loss(p_from date, p_to date)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_parts  jsonb;
+  v_months jsonb := '[]'::jsonb;
+  v_m      record;
+  v_p      jsonb;
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  PERFORM report_check_range(p_from, p_to);
+  -- Batch 50: + old Kaarbar sales (they never had money in the site's
+  -- accounts, so money_profit_parts itself does not count them).
+  v_parts := kaarbar_pnl_with_old(money_profit_parts(p_from, p_to), p_from, p_to);
+  IF date_trunc('month', p_from) <> date_trunc('month', p_to) THEN
+    FOR v_m IN SELECT * FROM report_months(p_from, p_to) LOOP
+      v_p := kaarbar_pnl_with_old(money_profit_parts(v_m.m_from, v_m.m_to), v_m.m_from, v_m.m_to);
+      v_months := v_months || (v_p || jsonb_build_object(
+        'month', v_m.month,
+        'expenses_by_category', report_expense_categories(v_m.m_from, v_m.m_to),
+        'locked', money_month_locked(v_m.month)));
+    END LOOP;
+  END IF;
+  RETURN jsonb_build_object(
+    'from', p_from, 'to', p_to,
+    'parts', v_parts,
+    'expenses_by_category', report_expense_categories(p_from, p_to),
+    'months', v_months,
+    'locked_months', report_locked_in(p_from, p_to),
+    'start_date', money_start_date());
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.report_products(p_from date, p_to date)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_sp jsonb;
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  PERFORM report_check_range(p_from, p_to);
+  v_sp := inventory_sales_profit(p_from, p_to);
+  RETURN jsonb_build_object(
+    'from', p_from, 'to', p_to,
+    'totals', v_sp -> 'totals',
+    'sold', v_sp -> 'products',
+    -- Batch 50: old Kaarbar lines, per product / option and unit.
+    'old_sold', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'product_id', o.product_id, 'variant_id', o.variant_id, 'label', o.label,
+               'units', o.units, 'stock_unit', o.unit, 'pack_size', 1,
+               'sales', o.sales, 'cost', o.cost, 'profit', o.sales - o.cost,
+               'margin', CASE WHEN o.sales > 0 THEN round((o.sales - o.cost) / o.sales * 100, 1) END)
+             ORDER BY o.sales - o.cost DESC, o.label)
+      FROM (
+        SELECT l.product_id, l.variant_id, min(l.label) AS label, COALESCE(l.unit, 'pcs') AS unit,
+               sum(l.sign * l.quantity) AS units, round(sum(l.sale), 2) AS sales, round(sum(l.cost), 2) AS cost
+        FROM kaarbar_old_lines(p_from, p_to) l
+        GROUP BY l.product_id, l.variant_id, COALESCE(l.unit, 'pcs')
+      ) o), '[]'::jsonb),
+    'old_totals', kaarbar_old_parts(p_from, p_to),
+    'units', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'product_id', u.product_id, 'variant_id', u.variant_id,
+               'label', u.product_name || COALESCE(' — ' || u.option_label, ''),
+               'is_active', u.is_active, 'stock_unit', u.stock_unit, 'pack_size', u.pack_size,
+               'units_left', u.lot_pieces_left,
+               'stock_value', COALESCE((SELECT round(sum(li.qty_remaining * li.landed_unit_cost_bdt), 2) FROM lot_items li
+                                        WHERE li.product_id = u.product_id AND li.variant_id IS NOT DISTINCT FROM u.variant_id), 0),
+               'sold_60', COALESCE(s.units, 0), 'last_sold', s.last_sold,
+               'has_cost', u.lot_rows > 0)
+             ORDER BY u.product_name, u.option_label)
+      FROM inventory_stock_units() u
+      LEFT JOIN report_units_sold_since(60) s ON s.product_id = u.product_id AND s.variant_id IS NOT DISTINCT FROM u.variant_id), '[]'::jsonb),
+    'locked_months', report_locked_in(p_from, p_to));
+END;
+$function$;
+
+-- A product cannot be shown in the shop with a price of 0 (the product
+-- editor says so too). Only a change to "shown" is checked, so nothing
+-- already in the shop is affected.
+CREATE OR REPLACE FUNCTION products_no_free_show()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.is_active AND COALESCE(NEW.retail_price, 0) <= 0
+     AND (TG_OP = 'INSERT' OR NOT OLD.is_active) THEN
+    RAISE EXCEPTION 'Set a price before showing this product.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS products_no_free_show ON products;
+CREATE TRIGGER products_no_free_show BEFORE INSERT OR UPDATE OF is_active ON products
+  FOR EACH ROW EXECUTE FUNCTION products_no_free_show();
+
+-- ---------------------------------------------------------------------
+-- B1. Correct previous balance
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS customer_previous_corrections (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone_key           text NOT NULL,
+  amount_change       numeric NOT NULL,
+  old_amount          numeric NOT NULL,
+  new_amount          numeric NOT NULL CHECK (new_amount >= 0),
+  note                text,
+  created_by          uuid,
+  created_by_username text,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_previous_corrections_phone ON customer_previous_corrections (phone_key);
+
+ALTER TABLE customer_previous_corrections ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON customer_previous_corrections FROM anon, authenticated;
+GRANT SELECT ON customer_previous_corrections TO authenticated;
+GRANT ALL ON customer_previous_corrections TO service_role;
+DROP POLICY IF EXISTS customer_previous_corrections_read ON customer_previous_corrections;
+CREATE POLICY customer_previous_corrections_read ON customer_previous_corrections
+  FOR SELECT TO authenticated USING (money_can_view());
+
+CREATE OR REPLACE FUNCTION public.money_previous_left(p_phone_key text)
+ RETURNS numeric
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT COALESCE((SELECT sum(amount) FROM customer_opening_dues WHERE phone_key = p_phone_key), 0)
+       + COALESCE((SELECT sum(amount_change) FROM customer_previous_corrections WHERE phone_key = p_phone_key), 0)
+       - COALESCE((SELECT sum(amount) FROM customer_due_payments WHERE phone_key = p_phone_key), 0);
+$function$;
+
+-- Super Admin, password typed again. Sets the previous balance left to
+-- p_new: no money movement, no account, not an expense.
+CREATE OR REPLACE FUNCTION money_correct_previous_balance(p_phone text, p_new numeric, p_note text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_pk   text := bd_phone_key(p_phone);
+  v_new  numeric := round(p_new, 2);
+  v_old  numeric;
+  v_note text := NULLIF(btrim(COALESCE(p_note, '')), '');
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Only the Super Admin can correct a previous balance.';
+  END IF;
+  IF NOT money_password_recent() THEN
+    RAISE EXCEPTION 'Type your password again to confirm.';
+  END IF;
+  IF money_start_date() IS NULL THEN
+    RAISE EXCEPTION 'Confirm your opening balances in Money first.';
+  END IF;
+  IF v_pk IS NULL THEN
+    RAISE EXCEPTION 'This customer has no phone number.';
+  END IF;
+  IF v_new IS NULL OR v_new < 0 THEN
+    RAISE EXCEPTION 'Type an amount of 0 or more.';
+  END IF;
+  IF v_new > 100000000 THEN
+    RAISE EXCEPTION 'That amount is too large.';
+  END IF;
+  IF v_note IS NOT NULL AND char_length(v_note) > 300 THEN
+    RAISE EXCEPTION 'Keep the reason under 300 letters.';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('previous_balance:' || v_pk));
+  v_old := round(money_previous_left(v_pk), 2);
+  IF v_old = v_new THEN
+    RAISE EXCEPTION 'The previous balance is already %.', money_short(v_new);
+  END IF;
+  INSERT INTO customer_previous_corrections (phone_key, amount_change, old_amount, new_amount, note, created_by, created_by_username)
+  VALUES (v_pk, v_new - v_old, v_old, v_new, v_note, auth.uid(), current_actor_username());
+  PERFORM write_activity('money.previous_corrected', 'customer', money_customer_key_for_phone(v_pk), v_pk,
+    format('Previous balance corrected from %s to %s%s', money_short(v_old), money_short(v_new),
+           CASE WHEN v_note IS NOT NULL THEN format(' (%s)', v_note) ELSE '' END),
+    jsonb_build_object('old', v_old, 'new', v_new, 'note', v_note));
+  RETURN jsonb_build_object('old', v_old, 'new', v_new);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION money_correct_previous_balance(text, numeric, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION money_correct_previous_balance(text, numeric, text) TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- B2. Everything that reads previous balances (latest versions:
+--     money_position from migration-047, the others from migration-043;
+--     only the lines marked Batch 50 / corrections are new).
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.money_position()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_start     date := money_start_date();
+  v_ts        timestamptz := money_start_ts();
+  v_today     date := inventory_dhaka_today();
+  v_accounts  jsonb;
+  v_acc_sum   numeric;
+  v_sf        numeric;
+  v_recv      numeric;
+  v_adv       numeric;
+  v_prev      numeric;
+  v_stock     numeric;
+  v_goods     numeric;
+  v_open_val  numeric;
+  v_short     numeric;
+  v_give      numeric;
+  v_give_inv  numeric;
+  v_give_sup  numeric;
+  v_give_oth  numeric;
+  v_have      numeric;
+  v_owe       numeric;
+  v_open      jsonb;
+  v_parts     jsonb;
+  v_outside   numeric := 0;
+  v_out_orders numeric := 0;
+  v_out_fees  numeric := 0;
+  v_out_unm   numeric := 0;
+  v_rhs       numeric;
+  v_diff      numeric;
+  v_first     date;
+  v_last_ok   date;
+  v_sf_reported numeric;
+  v_sf_at     timestamptz;
+  v_unplaced  jsonb;
+  v_corr      numeric := 0;
+BEGIN
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('account_id', b.account_id, 'name', b.name, 'kind', b.kind,
+                    'archived', b.archived, 'balance', b.balance)), '[]'::jsonb),
+         COALESCE(sum(b.balance) FILTER (WHERE b.kind <> 'steadfast'), 0),
+         COALESCE(sum(b.balance) FILTER (WHERE b.kind = 'steadfast'), 0)
+  INTO v_accounts, v_acc_sum, v_sf
+  FROM money_account_balances() b;
+
+  -- Customers (per order: owed − paid; Cancelled / Returned owe nothing).
+  WITH per AS (
+    SELECT o.id, o.status, o.total, money_order_costed(o.id) AS costed,
+           (CASE WHEN o.status IN ('cancelled', 'returned') THEN 0 ELSE o.total END)
+           - COALESCE((SELECT sum(CASE WHEN p.kind = 'refund' THEN -p.amount ELSE p.amount END)
+                       FROM order_payments p WHERE p.order_id = o.id), 0) AS r
+    FROM orders o
+  )
+  SELECT COALESCE(sum(GREATEST(r, 0)), 0), COALESCE(sum(GREATEST(-r, 0)), 0),
+         COALESCE(sum(total) FILTER (WHERE costed AND status IN ('pending', 'confirmed', 'shipped')), 0)
+  INTO v_recv, v_adv, v_open_val
+  FROM per;
+
+  SELECT COALESCE(sum(amount), 0) INTO v_prev FROM customer_opening_dues;
+  v_prev := v_prev - COALESCE((SELECT sum(amount) FROM customer_due_payments), 0);
+  -- Batch 50: previous balances corrected later (no money moved).
+  v_corr := COALESCE((SELECT sum(amount_change) FROM customer_previous_corrections), 0);
+  v_prev := v_prev + v_corr;
+
+  SELECT COALESCE(round(sum(qty_remaining * landed_unit_cost_bdt), 2), 0) INTO v_stock FROM lot_items;
+
+  -- Goods on orders not delivered yet (taken from lots, at their cost).
+  SELECT COALESCE(round(sum((x.units - x.units_back) * x.unit_cost_bdt), 2), 0) INTO v_goods
+  FROM order_item_lots x JOIN orders o ON o.id = x.order_id
+  WHERE o.status IN ('pending', 'confirmed', 'shipped');
+
+  -- Sold without stock (counted in profit at a provisional cost, not yet
+  -- taken from any lot).
+  SELECT COALESCE(round(sum(s.units * s.provisional_unit_cost_bdt), 2), 0) INTO v_short
+  FROM stock_shortfalls s JOIN orders o ON o.id = s.order_id
+  WHERE s.status = 'open' AND o.status = 'delivered';
+
+  SELECT COALESCE(sum(owed) FILTER (WHERE kind = 'investor'), 0),
+         COALESCE(sum(owed) FILTER (WHERE kind = 'supplier'), 0),
+         COALESCE(sum(owed) FILTER (WHERE kind = 'other'), 0)
+  INTO v_give_inv, v_give_sup, v_give_oth
+  FROM money_to_give_rows();
+  v_give := v_give_inv + v_give_sup + v_give_oth;
+
+  v_have := v_acc_sum + v_sf + v_recv + v_prev + v_stock + v_goods;
+  v_owe := v_give + v_adv + v_open_val + v_short;
+
+  SELECT current_balance, balance_at INTO v_sf_reported, v_sf_at FROM steadfast_sync_state WHERE id = 1;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('payout_id', p.id, 'paid_at', p.paid_at, 'amount', p.total_amount,
+                    'parcels', p.parcel_count) ORDER BY p.paid_at), '[]'::jsonb)
+  INTO v_unplaced
+  FROM steadfast_payouts p
+  WHERE p.total_amount > 0
+    AND NOT EXISTS (SELECT 1 FROM money_movements m WHERE m.payout_id = p.id)
+    AND (v_start IS NULL OR p.paid_at >= v_ts);
+
+  IF v_start IS NOT NULL THEN
+    v_open := money_opening_net_worth();
+    v_parts := money_profit_parts(v_start, v_today);
+    -- Orders outside profit (no lot cost: placed before Inventory mode):
+    -- what changed on them since the start date, and what Steadfast kept on
+    -- them; parcels that match no order.
+    SELECT COALESCE(sum(
+             (CASE WHEN o.status IN ('cancelled', 'returned') THEN 0 ELSE o.total END)
+             - CASE WHEN o.created_at >= v_ts OR money_order_status_at(o.id, v_ts) IN ('cancelled', 'returned') THEN 0
+                    ELSE o.total END), 0)
+    INTO v_out_orders
+    FROM orders o
+    WHERE NOT money_order_costed(o.id);
+    SELECT COALESCE(sum(l.amount) FILTER (WHERE l.type = 'courier_fees' AND l.order_id IS NOT NULL AND NOT money_order_costed(l.order_id)), 0),
+           COALESCE(sum(l.amount) FILTER (WHERE l.type IN ('steadfast_unmatched', 'steadfast_courier_only')), 0)
+    INTO v_out_fees, v_out_unm
+    FROM money_ledger l WHERE l.type IN ('courier_fees', 'steadfast_unmatched', 'steadfast_courier_only');
+    v_outside := v_out_orders + v_out_fees + v_out_unm;
+
+    v_rhs := (v_open ->> 'total')::numeric + (v_parts ->> 'net_profit')::numeric
+             - (v_parts ->> 'profit_share')::numeric - (v_parts ->> 'withdrawals')::numeric
+             + (v_parts ->> 'owner_money_in')::numeric + (v_parts ->> 'not_shop_money')::numeric
+             + (v_parts ->> 'count_differences')::numeric + v_outside + v_corr;
+    v_diff := round((v_have - v_owe) - v_rhs, 2);
+
+    INSERT INTO money_check_log (check_date, difference, checked_at) VALUES (v_today, v_diff, now())
+    ON CONFLICT (check_date) DO UPDATE SET difference = EXCLUDED.difference, checked_at = now();
+    IF abs(v_diff) > 1 THEN
+      SELECT max(check_date) INTO v_last_ok FROM money_check_log WHERE abs(difference) <= 1 AND check_date < v_today;
+      SELECT min(check_date) INTO v_first FROM money_check_log
+      WHERE abs(difference) > 1 AND (v_last_ok IS NULL OR check_date > v_last_ok);
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'start_date', v_start,
+    'accounts', v_accounts,
+    'accounts_total', v_acc_sum,
+    'with_steadfast', v_sf,
+    'steadfast_reported', v_sf_reported,
+    'steadfast_reported_at', v_sf_at,
+    'unplaced_payouts', v_unplaced,
+    'to_receive', v_recv,
+    'previous_balances', v_prev,
+    'previous_corrections', v_corr,
+    'customer_advances', v_adv,
+    'stock_value', v_stock,
+    'goods_on_open_orders', v_goods,
+    'open_orders_value', v_open_val,
+    'sold_without_stock', v_short,
+    'to_give', v_give,
+    'to_give_investors', v_give_inv,
+    'to_give_suppliers', v_give_sup,
+    'to_give_others', v_give_oth,
+    'have', v_have,
+    'owe', v_owe,
+    'net_worth', v_have - v_owe,
+    'opening', v_open,
+    'since_start', v_parts,
+    'outside_orders', v_out_orders,
+    'outside_fees', v_out_fees,
+    'outside_unmatched', v_out_unm,
+    'outside', v_outside,
+    'expected', v_rhs,
+    'difference', v_diff,
+    'balanced', CASE WHEN v_start IS NULL THEN NULL ELSE abs(v_diff) <= 1 END,
+    'first_wrong', v_first);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.money_customer_dues()
+ RETURNS TABLE(customer_key text, phone_key text, order_due numeric, previous_left numeric, latest_unpaid_order_id uuid, latest_unpaid_order_number text, last_reminder_at timestamp with time zone, last_reminder_amount numeric, reminders bigint)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+#variable_conflict use_column
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  RETURN QUERY
+  WITH k AS (
+    SELECT k.customer_key, k.order_id, k.due, o.created_at, o.order_number, bd_phone_key(o.customer_phone) AS pk
+    FROM order_customer_keys() k JOIN orders o ON o.id = k.order_id
+  ), by_order AS (
+    SELECT k.customer_key,
+           sum(k.due) AS due,
+           (array_agg(k.pk ORDER BY k.created_at DESC) FILTER (WHERE k.pk IS NOT NULL))[1] AS pk,
+           (array_agg(k.order_id ORDER BY k.created_at DESC) FILTER (WHERE k.due > 0))[1] AS last_id,
+           (array_agg(k.order_number ORDER BY k.created_at DESC) FILTER (WHERE k.due > 0))[1] AS last_no
+    FROM k GROUP BY k.customer_key
+  ), prev AS (
+    SELECT d.phone_key, money_customer_key_for_phone(d.phone_key) AS customer_key, money_previous_left(d.phone_key) AS left_amount
+    FROM (SELECT phone_key FROM customer_opening_dues
+          UNION SELECT phone_key FROM customer_previous_corrections) d
+  ), keys AS (
+    SELECT b.customer_key FROM by_order b
+    UNION
+    SELECT p.customer_key FROM prev p
+  )
+  SELECT ks.customer_key,
+         COALESCE(b.pk, p.phone_key, CASE WHEN ks.customer_key LIKE 'ph:%' THEN substr(ks.customer_key, 4) END),
+         COALESCE(b.due, 0)::numeric,
+         COALESCE(p.left_amount, 0)::numeric,
+         b.last_id, b.last_no,
+         r.at, r.amount, COALESCE(r.n, 0)
+  FROM keys ks
+  LEFT JOIN by_order b ON b.customer_key = ks.customer_key
+  LEFT JOIN prev p ON p.customer_key = ks.customer_key
+  LEFT JOIN LATERAL (
+    SELECT max(x.created_at) AS at,
+           (array_agg(x.amount ORDER BY x.created_at DESC))[1] AS amount,
+           count(*) AS n
+    FROM customer_due_reminders x WHERE x.customer_key = ks.customer_key
+  ) r ON true
+  WHERE COALESCE(b.due, 0) <> 0 OR COALESCE(p.left_amount, 0) <> 0 OR r.n > 0;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.money_customer_history(p_customer_key text, p_phone text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_pk text := bd_phone_key(p_phone);
+BEGIN
+  IF NOT money_can_view() THEN
+    RAISE EXCEPTION 'Not authorized.';
+  END IF;
+  RETURN jsonb_build_object(
+    'phone_key', v_pk,
+    'previous', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', d.id, 'amount', d.amount, 'at', d.created_at,
+                    'choice', d.choice, 'kaarbar_amount', d.kaarbar_amount, 'site_due_then', d.site_due_then) ORDER BY d.created_at)
+                  FROM customer_opening_dues d WHERE d.phone_key = v_pk), '[]'::jsonb),
+    'previous_left', CASE WHEN v_pk IS NULL THEN 0 ELSE money_previous_left(v_pk) END,
+    'corrections', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', c.id, 'at', c.created_at, 'old_amount', c.old_amount,
+                    'new_amount', c.new_amount, 'note', c.note, 'by', c.created_by_username) ORDER BY c.created_at DESC)
+                  FROM customer_previous_corrections c WHERE c.phone_key = v_pk), '[]'::jsonb),
+    'payments', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', p.id, 'amount', p.amount, 'date', p.paid_date,
+                    'account', a.name, 'note', p.note, 'by', p.created_by_username) ORDER BY p.paid_date, p.created_at)
+                  FROM customer_due_payments p JOIN money_accounts a ON a.id = p.account_id WHERE p.phone_key = v_pk), '[]'::jsonb),
+    'reminders', COALESCE((SELECT jsonb_agg(jsonb_build_object('at', r.created_at, 'amount', r.amount, 'how', r.how,
+                    'by', r.created_by_username) ORDER BY r.created_at DESC)
+                  FROM customer_due_reminders r WHERE r.customer_key = p_customer_key
+                     OR (v_pk IS NOT NULL AND r.phone_key = v_pk)), '[]'::jsonb));
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.money_undo_opening(p_confirm text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_books money_books%ROWTYPE;
+  v_n     integer;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Only the Super Admin can undo the opening balances.';
+  END IF;
+  IF admin_delete_lock_until() IS NULL THEN
+    RAISE EXCEPTION 'Open the Safety Lock first (Settings → Safety Locks).';
+  END IF;
+  IF upper(btrim(COALESCE(p_confirm, ''))) <> 'UNDO' THEN
+    RAISE EXCEPTION 'Type UNDO to confirm.';
+  END IF;
+  SELECT * INTO v_books FROM money_books WHERE id = 1 FOR UPDATE;
+  IF v_books.confirmed_at IS NULL THEN
+    RAISE EXCEPTION 'The opening balances are not confirmed.';
+  END IF;
+  SELECT count(*) INTO v_n FROM customer_due_payments;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'There are % payments against previous balances. Delete them first.', v_n;
+  END IF;
+  DELETE FROM money_movements WHERE type = 'opening_balance';
+  DELETE FROM customer_opening_dues;
+  DELETE FROM customer_previous_corrections;
+  DELETE FROM money_opening_payables;
+  DELETE FROM money_check_log;
+  UPDATE money_books SET start_date = NULL, confirmed_at = NULL, confirmed_by_username = NULL, opening_steadfast = NULL WHERE id = 1;
+  PERFORM write_activity('money.opening_undo', 'money_books', '1', 'Opening balances',
+    format('Undid the opening balances of %s', to_char(v_books.start_date, 'DD Mon YYYY')), to_jsonb(v_books));
+  RETURN true;
+END;
+$function$;
+
+COMMIT;
