@@ -17,7 +17,7 @@ test.use({ serviceWorkers: 'block' });
  * limit.
  */
 
-const PDP = '/product/cerave-hydrating-cleanser';
+const PDP = '/product/cerave-moisturizing-lotion-236ml';
 
 interface LiveProduct {
   id: string;

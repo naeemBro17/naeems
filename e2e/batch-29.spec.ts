@@ -202,7 +202,16 @@ test.describe('Part 2 — stock and note', () => {
     const noteBox = await box(note);
     const trustBox = await box(page.getByTestId('trust-plate'));
     expect(Math.abs(chipBox.y - (priceBox.y + priceBox.height) - 18)).toBeLessThanOrEqual(2);
-    expect(Math.abs(noteBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
+    // Batch 51: the delivery line sits between the chip and the note, the
+    // same 8 px apart.
+    const eta = page.getByTestId('pdp-delivery');
+    if ((await eta.count()) > 0) {
+      const etaBox = await box(eta);
+      expect(Math.abs(etaBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
+      expect(Math.abs(noteBox.y - (etaBox.y + etaBox.height) - 8)).toBeLessThanOrEqual(2);
+    } else {
+      expect(Math.abs(noteBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
+    }
     expect(Math.abs(trustBox.y - (noteBox.y + noteBox.height) - 24)).toBeLessThanOrEqual(2);
 
     const occurrences = await page.evaluate((text) => document.body.innerText.split(text).length - 1, NOTE);

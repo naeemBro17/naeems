@@ -175,7 +175,7 @@ test.describe('Part 1 — product page', () => {
   });
 
   test('opening and closing a section keeps its header at the same screen position (±2 px)', async ({ page }) => {
-    await page.goto('/product/cerave-hydrating-cleanser');
+    await page.goto('/product/cerave-moisturizing-lotion-236ml');
     const closed = page.locator('.accordion__header[aria-expanded="false"]').first();
     await expect(closed).toBeVisible();
     const title = ((await closed.textContent()) ?? '').trim();
@@ -201,7 +201,7 @@ test.describe('Part 1 — product page', () => {
   });
 
   test('no tap highlight anywhere on the shop', async ({ page }) => {
-    await page.goto('/product/cerave-hydrating-cleanser');
+    await page.goto('/product/cerave-moisturizing-lotion-236ml');
     await expect(page.locator('.accordion__header').first()).toBeVisible();
     const colours = await page.evaluate(() =>
       ['.accordion__header', '[data-testid="add-to-cart"]', '.detail-header__back', '.product-card', 'body'].map(
@@ -224,7 +224,7 @@ test.describe('Part 1 — product page', () => {
     test.setTimeout(60_000);
     const opened: string[] = [];
     context.on('page', (p) => opened.push(p.url()));
-    await page.goto('/product/cerave-hydrating-cleanser');
+    await page.goto('/product/cerave-moisturizing-lotion-236ml');
     const header = page.getByRole('button', { name: 'Video review', exact: true });
     await header.click();
 
@@ -501,8 +501,24 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
   });
 
   test('stays in sync with the cart page and the product page', async ({ page }) => {
+    // Batch 51: a product that may reach 4 in the cart (stock 4+ or not
+    // counted) — 4 is the most of one item per order.
+    const roomy = await select<{ name: string }[]>(
+      null,
+      'products_view?select=name&is_active=eq.true&or=(stock_quantity.gte.4,stock_quantity.is.null)'
+    );
+    const roomyNames = new Set((roomy.data ?? []).map((p) => p.name));
     await openFresh(page, '/');
-    const firstAdd = page.getByRole('button', { name: /^Add .* to cart$/ }).first();
+    const adds = page.getByRole('button', { name: /^Add .* to cart$/ });
+    await expect(adds.first()).toBeVisible();
+    let firstAdd = adds.first();
+    for (let i = 0; i < Math.min(await adds.count(), 40); i++) {
+      const label = ((await adds.nth(i).getAttribute('aria-label')) ?? '').replace(/^Add /, '').replace(/ to cart$/, '');
+      if (roomyNames.has(label)) {
+        firstAdd = adds.nth(i);
+        break;
+      }
+    }
     const name = ((await firstAdd.getAttribute('aria-label')) ?? '').replace(/^Add /, '').replace(/ to cart$/, '');
     await scrollElementTo(firstAdd, 160);
     await firstAdd.click();
