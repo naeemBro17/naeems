@@ -114,12 +114,12 @@ describe('Step 1 list', () => {
     { n: 4, name: 'Mystery Cream', key: 'mysterycream', price: 0 },
   ];
 
-  it('matched → the site buying price; Kaarbar price → it; otherwise empty', () => {
+  it('matched → the site buying price; no sure match → a new hidden product with the Kaarbar price, else empty', () => {
     const d = buildDrafts(rows, [], [site]);
     expect(d[0]).toMatchObject({ how: 'auto', price: '2400', priceFrom: 'site' });
-    expect(d[1]).toMatchObject({ how: 'none', price: '350', priceFrom: 'kaarbar' });
-    expect(d[2]).toMatchObject({ how: 'none', price: '', priceFrom: 'none' });
-    expect(itemCounts(d)).toEqual({ matched: 1, byHand: 2, hidden: 0, noPrice: 1 });
+    expect(d[1]).toMatchObject({ how: 'hidden', price: '350', priceFrom: 'kaarbar' });
+    expect(d[2]).toMatchObject({ how: 'hidden', price: '', priceFrom: 'none' });
+    expect(itemCounts(d)).toEqual({ matched: 1, byHand: 0, hidden: 2, noPrice: 1 });
     expect(itemSaveRows(d)).toBeNull();
   });
 

@@ -258,7 +258,8 @@ export function buildDrafts(rows: readonly ItemRow[], saved: readonly SavedItem[
     const m = suggestMatch(r.name, choices);
     const choice = m.confident ? m.best : null;
     const p = startPrice(choice, r.price);
-    return { key: r.key, name: r.name, kaarbarPrice: r.price, how: choice ? 'auto' : 'none', choice, price: p.price, priceFrom: p.from, saved: null };
+    // No sure match: a new hidden product by default (change it in the picker).
+    return { key: r.key, name: r.name, kaarbarPrice: r.price, how: choice ? 'auto' : 'hidden', choice, price: p.price, priceFrom: p.from, saved: null };
   });
   // Saved items that are not in this file stay in the list.
   const inFile = new Set(rows.map((r) => r.key));
