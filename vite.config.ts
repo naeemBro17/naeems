@@ -41,7 +41,10 @@ export default defineConfig({
         // own name, so the offline helper never pre-downloads it to a
         // customer's phone (globIgnores below). Only an admin making a
         // video small loads it.
-        manualChunks: (id: string) => (id.includes('/node_modules/mediabunny/') ? 'mediabunny' : undefined),
+        // Batch 50: the same for the PDF reader (Admin → Import from Kaarbar,
+        // Step 2): only the Super Admin reading a party statement loads it.
+        manualChunks: (id: string) =>
+          id.includes('/node_modules/mediabunny/') ? 'mediabunny' : id.includes('/node_modules/pdfjs-dist/') ? 'pdfjs' : undefined,
       },
     },
   },
@@ -100,7 +103,7 @@ export default defineConfig({
         // they're cached at runtime as reviewers' countries actually appear.
         // Every emitted assets/*.svg is a flag-icons country flag — the app's
         // own icons are inline JSX, and its PNG/ICO assets live in public/.
-        globIgnores: ['**/assets/*.svg', '**/assets/mediabunny-*.js'],
+        globIgnores: ['**/assets/*.svg', '**/assets/mediabunny-*.js', '**/assets/pdfjs-*.js'],
         navigateFallback: '/index.html',
         // Batch 40: the helper takes charge of the page on the very first
         // visit (once it has installed, a few seconds after load), so the

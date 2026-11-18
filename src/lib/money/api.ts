@@ -326,6 +326,14 @@ export async function fetchCustomerHistory(customerKey: string, phone: string): 
       site_due_then: numOrNull(p.site_due_then),
     })),
     previous_left: num(raw.previous_left),
+    corrections: ((raw.corrections ?? []) as Record<string, unknown>[]).map((c) => ({
+      id: c.id as string,
+      at: c.at as string,
+      old_amount: num(c.old_amount),
+      new_amount: num(c.new_amount),
+      note: (c.note as string | null) ?? null,
+      by: (c.by as string | null) ?? null,
+    })),
     payments: ((raw.payments ?? []) as Record<string, unknown>[]).map((p) => ({
       id: p.id as string,
       amount: num(p.amount),
@@ -374,6 +382,15 @@ export async function addDuePayment(input: { phone: string; amount: number; acco
 export async function deleteDuePayment(id: string, typedAmount: number): Promise<Answer<true>> {
   const { error } = await supabase.rpc('money_delete_due_payment', { p_id: id, p_confirm_amount: typedAmount });
   return error ? { ok: false, error: message(error) } : { ok: true, data: true };
+}
+
+/** Batch 50: Super Admin, password typed in the last 5 minutes. Sets the
+ *  previous balance left to newAmount — no money moves, no account changes. */
+export async function correctPreviousBalance(phone: string, newAmount: number, note: string): Promise<Answer<{ old: number; new: number }>> {
+  const { data, error } = await supabase.rpc('money_correct_previous_balance', { p_phone: phone, p_new: newAmount, p_note: note.trim() || null });
+  if (error) return { ok: false, error: error.code === 'PGRST202' ? 'This needs the Batch 50 database update (migration-051).' : message(error) };
+  const r = (data ?? {}) as Record<string, unknown>;
+  return { ok: true, data: { old: num(r.old), new: num(r.new) } };
 }
 
 /** The signed-in customer's own previous balance (0 when none). */
@@ -500,11 +517,15 @@ export async function fetchOpeningRows(): Promise<{
   accounts: { account_id: string; amount: number }[];
   dues: { phone_key: string; full_name: string; amount: number; choice: string }[];
   payables: { party_id: string | null; supplier_id: string | null; amount: number; note: string | null }[];
+  /** Batch 50: the sum of previous balances corrected later (0 when none). */
+  corrected: number;
 }> {
-  const [acc, dues, pay] = await Promise.all([
+  const [acc, dues, pay, corr] = await Promise.all([
     supabase.from('money_movements').select('account_id, amount').eq('type', 'opening_balance'),
     supabase.from('customer_opening_dues').select('phone_key, full_name, amount, choice').order('created_at'),
     supabase.from('money_opening_payables').select('party_id, supplier_id, amount, note').order('created_at'),
+    // Absent before migration-051: then nothing was corrected.
+    supabase.from('customer_previous_corrections').select('amount_change'),
   ]);
   return {
     accounts: ((acc.data ?? []) as Record<string, unknown>[]).map((r) => ({ account_id: r.account_id as string, amount: num(r.amount) })),
@@ -520,6 +541,7 @@ export async function fetchOpeningRows(): Promise<{
       amount: num(r.amount),
       note: (r.note as string | null) ?? null,
     })),
+    corrected: ((corr.data ?? []) as Record<string, unknown>[]).reduce((s, r) => s + num(r.amount_change), 0),
   };
 }
 

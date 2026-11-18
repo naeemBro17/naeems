@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useToast } from '../../../hooks/useToast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { correctionView } from '../../../lib/kaarbar/oldSales';
+import { confirmPassword } from '../../../lib/reports/api';
 import { useProducts } from '../../../contexts/ProductContext';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { openExternal } from '../../../lib/expertLinks';
 import { dhakaToday } from '../../../lib/inventory/api';
-import { addDuePayment, deleteDuePayment, fetchCustomerDues, fetchCustomerHistory, recordReminder } from '../../../lib/money/api';
+import { addDuePayment, correctPreviousBalance, deleteDuePayment, fetchCustomerDues, fetchCustomerHistory, recordReminder } from '../../../lib/money/api';
 import { customerOrderLink, dayText, moneyText, parseAmount, reminderMessage, reminderWhatsAppUrl } from '../../../lib/money/format';
 import type { CustomerDue, CustomerMoneyHistory } from '../../../lib/money/types';
 import { usePayAccounts } from './LotPayments';
@@ -45,6 +48,12 @@ export function CustomerDueCard({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<{ id: string; amount: number } | null>(null);
+  const { isAdmin, session } = useAuth();
+  const [correcting, setCorrecting] = useState(false);
+  const [newAmount, setNewAmount] = useState('');
+  const [why, setWhy] = useState('');
+  const [password, setPassword] = useState('');
+  const [correctError, setCorrectError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [dues, hist] = await Promise.all([fetchCustomerDues(), fetchCustomerHistory(customerKey, phone)]);
@@ -108,6 +117,37 @@ export function CustomerDueCard({
     await load();
   };
 
+  const openCorrect = () => {
+    setNewAmount('');
+    setWhy('');
+    setPassword('');
+    setCorrectError(null);
+    setCorrecting(true);
+  };
+
+  const correction = correctionView(previous, newAmount, sitesDue);
+
+  const saveCorrection = async () => {
+    setCorrectError(null);
+    if (correction.value === null) {
+      setCorrectError(correction.error ?? 'Type the correct amount.');
+      return;
+    }
+    const wrong = await confirmPassword(session?.user.email, password);
+    if (wrong) {
+      setCorrectError(wrong);
+      return;
+    }
+    const answer = await correctPreviousBalance(phone, correction.value, why);
+    if (!answer.ok) {
+      setCorrectError(answer.error ?? 'Could not save');
+      return;
+    }
+    setCorrecting(false);
+    showToast(`Previous balance corrected to ${moneyText(correction.value)}`);
+    await load();
+  };
+
   const remove = async () => {
     if (!deleting) return;
     const answer = await deleteDuePayment(deleting.id, Math.round(deleting.amount));
@@ -127,10 +167,18 @@ export function CustomerDueCard({
         <span>Site orders</span>
         <span>{moneyText(sitesDue)}</span>
       </div>
-      {(previous !== 0 || history.previous.length > 0) && (
-        <div className="inv-line">
+      {(previous !== 0 || history.previous.length > 0 || history.corrections.length > 0 || (isAdmin && history.phone_key !== null)) && (
+        <div className="inv-line money-prev-line">
           <span>Previous balance</span>
-          <span data-testid="customer-previous-balance">{moneyText(previous)}</span>
+          <span className="money-prev-line__amount">
+            <span data-testid="customer-previous-balance">{moneyText(previous)}</span>
+            {/* Batch 50: Super Admin only — the server checks the role and the password too. */}
+            {isAdmin && history.phone_key !== null && (
+              <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={openCorrect} data-testid="customer-previous-edit">
+                Edit
+              </button>
+            )}
+          </span>
         </div>
       )}
       <div className="inv-line inv-line--total">
@@ -162,6 +210,24 @@ export function CustomerDueCard({
             <p key={r.at} className="money-history">
               Due reminder {r.how === 'whatsapp' ? 'sent' : 'copied'}, {moneyText(r.amount)}, {dhakaDayOf(r.at)}
             </p>
+          ))}
+        </div>
+      )}
+
+      {history.corrections.length > 0 && (
+        <div className="inv-stack" data-testid="customer-corrections">
+          <p className="inv-muted">Corrections</p>
+          {history.corrections.map((c) => (
+            <div key={c.id} className="inv-line">
+              <span>
+                {dhakaDayOf(c.at)}
+                {c.note ? ` · ${c.note}` : ''}
+                {c.by ? ` · ${c.by}` : ''}
+              </span>
+              <span>
+                {moneyText(c.old_amount)} → {moneyText(c.new_amount)}
+              </span>
+            </div>
           ))}
         </div>
       )}
@@ -230,6 +296,58 @@ export function CustomerDueCard({
           </div>
         </form>
       )}
+
+      <ConfirmSheet
+        isOpen={correcting}
+        title="Correct previous balance"
+        keepLabel="Cancel"
+        confirmLabel="Save"
+        onConfirm={saveCorrection}
+        onClose={() => setCorrecting(false)}
+      >
+        <p className="adm-csheet__text">
+          For a balance that was wrong when it was brought in. Money received is not this — use &quot;Record a payment&quot; for that.
+        </p>
+        <p className="money-correct__now">
+          <span>Now</span>
+          <b data-testid="correct-now">{moneyText(previous)}</b>
+        </p>
+        <label className="form-field">
+          <span className="form-label">Correct amount</span>
+          <input
+            className="form-input"
+            inputMode="decimal"
+            value={newAmount}
+            onChange={(e) => setNewAmount(e.target.value)}
+            placeholder="৳"
+            aria-label="Correct amount"
+            data-testid="correct-amount"
+          />
+        </label>
+        <label className="form-field">
+          <span className="form-label">Why (optional)</span>
+          <input className="form-input" value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} aria-label="Why" data-testid="correct-why" />
+        </label>
+        <label className="adm-csheet__type">
+          <span>Type your password to confirm</span>
+          <input
+            className="form-input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            data-testid="correct-password"
+          />
+        </label>
+        <p className="money-correct__after" data-testid="correct-after">
+          Total due becomes {moneyText(correction.totalDue)}. Cash and bKash do not change.
+        </p>
+        {(correctError ?? (newAmount.trim() !== '' ? correction.error : null)) && (
+          <p className="inv-error" role="alert" data-testid="correct-error">
+            {correctError ?? correction.error}
+          </p>
+        )}
+      </ConfirmSheet>
 
       <ConfirmSheet
         isOpen={deleting !== null}

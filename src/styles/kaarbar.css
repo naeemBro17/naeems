@@ -294,3 +294,288 @@
 .kb-go:disabled {
   opacity: 0.4;
 }
+
+/* Batch 50: Step 1 · Old products and Step 2 · Old sales. Neutral only;
+   prices near-black / white per theme. Red marks only what is missing. */
+
+.kb-card--off {
+  opacity: 0.6;
+}
+
+.kb-item {
+  gap: 4px;
+}
+
+.kb-item__label {
+  font-size: var(--adm-fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--adm-muted);
+}
+
+.kb-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--adm-hit);
+  margin-top: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-md);
+  background: var(--adm-input-bg);
+  color: var(--adm-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-pick--empty {
+  border-style: dashed;
+  color: var(--adm-text-2);
+}
+
+.kb-pick__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kb-pick .kb-tag {
+  align-self: center;
+}
+
+.kb-tag--auto,
+.kb-tag--hand {
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+}
+
+.kb-tag--hidden {
+  background: transparent;
+  border: 1px solid var(--adm-text-2);
+  color: var(--adm-text);
+}
+
+.kb-price {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.kb-price__label {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.kb-price__input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-price__input--missing {
+  border-color: var(--adm-red);
+  box-shadow: 0 0 0 1px var(--adm-red);
+}
+
+.kb-savebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.kb-picker {
+  height: min(80vh, 640px);
+}
+
+.kb-picker__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.kb-picker__for {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--adm-text);
+}
+
+.kb-picker__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--adm-row-line);
+  overscroll-behavior: contain;
+}
+
+.kb-picker__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--adm-hit);
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--adm-row-line);
+  background: transparent;
+  color: var(--adm-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-picker__row--on {
+  background: var(--adm-card-2);
+}
+
+.kb-picker__row--hidden .kb-picker__name {
+  font-weight: 700;
+}
+
+.kb-picker__name {
+  overflow-wrap: anywhere;
+}
+
+.kb-picker__none {
+  padding: 10px 4px;
+}
+
+.kb-notice--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kb-notice--plain {
+  background: var(--adm-card-2);
+  color: var(--adm-text-2);
+}
+
+.kb-stmt__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-check-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  color: var(--adm-green-text);
+}
+
+.kb-check-bad {
+  font-size: var(--adm-fs-small);
+  font-weight: 600;
+  color: var(--adm-red-text);
+  overflow-wrap: anywhere;
+}
+
+.kb-units .kb-list {
+  margin-top: 6px;
+}
+
+.kb-units > .adm-btn {
+  margin-top: 8px;
+}
+
+.kb-bill {
+  border-bottom: 1px solid var(--adm-row-line);
+}
+
+.kb-bill__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--adm-hit);
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--adm-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-bill__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.kb-bill__total {
+  color: var(--adm-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-tag--already,
+.kb-tag--after {
+  background: var(--adm-tag-bg);
+  color: var(--adm-tag-text);
+}
+
+.kb-tag--unknown,
+.kb-tag--bad {
+  background: var(--adm-red-bg);
+  color: var(--adm-red-text);
+}
+
+.kb-bill__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 0 12px 10px;
+  border-left: 2px solid var(--adm-line);
+}
+
+.kb-bill__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text);
+}
+
+.kb-bill__line--total {
+  padding-top: 6px;
+  border-top: 1px solid var(--adm-row-line);
+  font-size: var(--adm-fs-body);
+}
+
+.kb-bill__item {
+  overflow-wrap: anywhere;
+}
+
+.kb-bill__amount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The card's main button: near-black. It must beat the grey of
+   .adm-ocard .adm-btn:not(.adm-btn--primary):not(.adm-btn--danger). */
+.adm-ocard.kb-card .kb-savebar .adm-btn.kb-go,
+.adm-ocard.kb-card .adm-careful__row .adm-btn.kb-go {
+  background: var(--adm-text);
+  border-color: var(--adm-text);
+  color: var(--adm-card);
+}

@@ -140,6 +140,9 @@ function validate(form: ProductFormData): FieldErrors {
     const price = Number(form.retail_price);
     if (Number.isNaN(price) || price < 0) {
       errors.retail_price = 'Enter a valid price of 0 or more';
+    } else if (price === 0 && form.is_active) {
+      // Batch 50: the database refuses this too (products_no_free_show).
+      errors.retail_price = 'Set a price before showing this product.';
     }
   }
   if (form.offer_price.trim() !== '') {
@@ -866,6 +869,11 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           label="Active"
         />
       </div>
+      {form.is_active && form.retail_price.trim() !== '' && Number(form.retail_price) === 0 && (
+        <p className="form-error" role="alert" data-testid="product-no-price">
+          Set a price before showing this product.
+        </p>
+      )}
 
       {footerVariant === 'sheet' ? (
         <SheetFooter

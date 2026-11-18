@@ -8,7 +8,21 @@ export interface CategoryAmount {
   amount: number;
 }
 
-export interface PnlParts extends ProfitParts {
+/** Batch 50: old Kaarbar sales in the range (absent before migration-051).
+ *  They are already inside gross_profit, net_profit, your_profit and
+ *  left_in_business of Profit & loss — never in money_profit_parts. */
+export interface OldSalesParts {
+  old_bills?: number;
+  /** Product lines before whole-bill discounts. */
+  old_sales_gross?: number;
+  old_bill_discounts?: number;
+  old_sales?: number;
+  old_cost?: number;
+  old_delivery?: number;
+  old_profit?: number;
+}
+
+export interface PnlParts extends ProfitParts, OldSalesParts {
   gross_profit: number;
 }
 
@@ -61,6 +75,8 @@ export interface SoldProduct {
   cost: number;
   profit: number;
   margin: number | null;
+  /** Batch 50: an old Kaarbar line (told apart on screen and in Excel). */
+  old?: boolean;
 }
 
 export interface ProductUnit {
@@ -82,6 +98,9 @@ export interface ProductsReport {
   to: string;
   totals: { sales: number; cost: number; profit: number; orders: number; uncosted_orders: number };
   sold: SoldProduct[];
+  /** Batch 50: old Kaarbar lines in the range (absent before migration-051). */
+  old_sold?: SoldProduct[];
+  old_totals?: OldSalesParts;
   units: ProductUnit[];
   locked_months: string[];
 }

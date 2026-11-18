@@ -75,6 +75,19 @@ const PNL_TAIL: readonly PnlLine[] = [
   { key: 'left', label: 'Left in the business', value: (p) => p.left_in_business, kind: 'total' },
 ];
 
+/** Batch 50: old Kaarbar sales, shown only when the range has any. */
+const PNL_OLD: readonly PnlLine[] = [
+  { key: 'old_sales', label: 'Old sales (Kaarbar)', value: (p) => p.old_sales_gross ?? 0 },
+  { key: 'old_discounts', label: 'Old bill discounts', value: (p) => -(p.old_bill_discounts ?? 0) },
+  { key: 'old_cost', label: 'Old cost of goods (Kaarbar)', value: (p) => -(p.old_cost ?? 0) },
+];
+
+const PNL_OLD_DELIVERY: PnlLine = { key: 'old_delivery', label: 'Old delivery income (Kaarbar)', value: (p) => p.old_delivery ?? 0 };
+
+export function hasOldSales(report: ProfitLossReport): boolean {
+  return (report.parts.old_bills ?? 0) > 0 || report.months.some((m) => (m.old_bills ?? 0) > 0);
+}
+
 export function pnlLines(report: ProfitLossReport): PnlLine[] {
   const names = new Map<string, string>();
   for (const c of report.expenses_by_category) names.set(c.category_id, c.name);
@@ -85,8 +98,11 @@ export function pnlLines(report: ProfitLossReport): PnlLine[] {
     value: (_p, map) => -(map.get(id) ?? 0),
     kind: 'sub',
   }));
+  const head = hasOldSales(report)
+    ? [PNL_HEAD[0], PNL_HEAD[1], ...PNL_OLD, PNL_HEAD[2], PNL_HEAD[3], PNL_OLD_DELIVERY, PNL_HEAD[4]]
+    : PNL_HEAD;
   return [
-    ...PNL_HEAD,
+    ...head,
     { key: 'expenses', label: 'Expenses', value: (p) => -p.expenses },
     ...cats,
     ...PNL_TAIL,
@@ -183,12 +199,17 @@ export const SLOW_DAYS = 60;
 
 const unitKey = (p: { product_id: string; variant_id: string | null }) => `${p.product_id}:${p.variant_id ?? ''}`;
 
+/** Site lines and old Kaarbar lines (marked) together. */
+export function soldWithOld(report: ProductsReport): SoldProduct[] {
+  return [...report.sold, ...(report.old_sold ?? []).map((p) => ({ ...p, label: `${p.label} (Kaarbar)`, old: true }))];
+}
+
 export function bestSellers(report: ProductsReport): SoldProduct[] {
-  return [...report.sold].sort((a, b) => b.units - a.units || b.sales - a.sales || a.label.localeCompare(b.label));
+  return soldWithOld(report).sort((a, b) => b.units - a.units || b.sales - a.sales || a.label.localeCompare(b.label));
 }
 
 export function lowMargin(report: ProductsReport): SoldProduct[] {
-  return report.sold.filter((p) => p.margin !== null && p.margin < LOW_MARGIN).sort((a, b) => (a.margin ?? 0) - (b.margin ?? 0));
+  return soldWithOld(report).filter((p) => p.margin !== null && p.margin < LOW_MARGIN).sort((a, b) => (a.margin ?? 0) - (b.margin ?? 0));
 }
 
 /** No sale in the last 60 days, and either still in the shop or with stock. */
