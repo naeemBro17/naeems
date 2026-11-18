@@ -1,0 +1,761 @@
+BATCH 49 — Import all customers and all expenses from Kaarbar
+Branch: feature/batch-49-kaarbar-import      Version: 1.49.0
+Date: 18 Nov 2026
+
+================================================================================
+HOW TO USE IT (read this first)
+================================================================================
+
+0. Run the SQL in section 2 once in the Supabase SQL Editor. Until you do, the
+   new screen only says "This screen needs the Batch 49 database update
+   (migration-050)".
+
+1. In Kaarbar, export two reports as Excel (.xlsx):
+   - Reports -> All Party Report        (for the Customers card)
+   - Reports -> Expense Report, with the date range from your very first
+     expense up to today               (for the Expenses card)
+
+2. On the site: Admin -> More -> TEAM & SETTINGS -> "Import from Kaarbar"
+   (on a computer: the sidebar, ADMIN group, under Activity Log). Only you
+   (Super Admin) see it.
+
+3. Customers card: "Pick the All Party Report". Before you press Import, check:
+   - The six boxes at the top (New, Already on the site, Same phone, No phone,
+     Looks like a supplier, Cash / walk-in). Tap a chip under the search box
+     to see only that group.
+   - "Same phone": two Kaarbar parties share one number. Tick the one you want.
+     The site keeps ONE customer per phone, so ticking one unticks the other.
+   - "Looks like a supplier" and "Cash / walk-in" start unticked. Tick any that
+     really are customers.
+   - "Dues to check" (tap to open): customers whose Kaarbar Receivable is
+     different from what the site says they owe. Information only, nothing
+     is changed. Your Batch 41 opening dues stay the truth.
+   Then: Careful actions -> "Import N…" -> type your password -> Import.
+
+4. Expenses card: "Pick the Expense Report". Before you press Import, check:
+   - "Money accounts after the import": how much Cash / bKash will go down.
+     Only expenses dated on or after your Money start date (13 Nov 2026) take
+     money out of an account. Older ones are history only.
+   - The counts: New expenses (how many are history), PROFIT SHARE, Already
+     imported, Not an expense, Month is locked, No money account, Can't read.
+   - "New expenses by category": a "new category" tag means that category
+     will be created with Kaarbar's exact name. Example: Kaarbar's
+     "Subscriptions (Ai / Services)" does NOT match your "Subscriptions", so it
+     becomes a new category. If you want them in your existing one, rename it
+     in Kaarbar or rename your site category to the same name first.
+   - PROFIT SHARE rows: choose for each one who it was paid to (an investor,
+     or "Me — owner withdrawal"), or "Leave it out". With more than one
+     investor the screen cannot guess, so they start as "Leave it out".
+   Then: Careful actions -> "Import N…" -> password -> Import.
+
+5. Later, when you have new expenses in Kaarbar: export the Expense Report
+   again and upload it. Every Bill No already on the site is skipped, so only
+   the new rows come in.
+
+6. Made a mistake? Careful actions -> "Undo last import" on that card.
+
+How to unlock a month (if a row says "month is locked" and you want it in):
+Money -> Lock a month -> pick the month -> Careful actions -> "Unlock…" ->
+write the reason -> password. Upload the Expense Report again (the rows that
+came in already are skipped), then lock the month again the same way.
+
+================================================================================
+1. WHAT I DID
+================================================================================
+
+Part 1 — Looked before building (in the code AND the live database).
+
+- Customers. There are two kinds. Login customers are "profiles" (role
+  customer). Admin-only customers are rows in the "customers" table — the same
+  table "Add customer" on the Customers page and New order use. A customer is
+  keyed by phone: "ph:01XXXXXXXXX". Phones are cleaned to 01XXXXXXXXX by
+  bd_phone_key() in the database and bdPhoneKey() in the app (the same rule).
+  Orders with no phone are grouped by name ("n:<name>"). When someone later
+  signs up with the same phone, the Customers list automatically shows them
+  as one customer (it joins the two by phone). The admin row is staff-only:
+  the customer cannot read it. The import uses exactly this model; there is
+  no second customers table. Live: 5 rows in customers, 27 login customers,
+  49 orders, 5 opening dues.
+- Expenses. They are rows in "money_movements" with type "expense", a
+  category (money_categories) and a money account (money_accounts: Cash,
+  bKash, Bank, Nagad, With Steadfast). The amount is stored as minus. Your
+  Money start date is 13 Nov 2026 (confirmed). The money ledger, the account
+  balances, profit and the expense report already ignore every entry dated
+  before that date — so older expenses can be stored as history without
+  touching any balance. The normal "Add money" refuses dates before the start
+  date; the import has its own checked function for this. Month locks
+  (Batch 42): a trigger on money_movements refuses any change in a locked
+  month. No month is locked today.
+- Investor profit share / owner withdrawal: YES, Money already has both
+  ("investor_profit_share" with the investor, and "owner_withdrawal"). You
+  have 3 investors. So PROFIT SHARE rows are recorded there, never as an
+  expense.
+- What fires on insert: on customers — nothing. On money_movements — only the
+  month-lock check. The only Telegram trigger in the whole database is on
+  orders, and the import never touches orders. No SMS / WhatsApp / email code
+  is involved. So the import and undo send no message to anyone. The
+  Activity Log gets one line per import / undo.
+
+Part 2 — The screen "Import from Kaarbar" (Admin, TEAM & SETTINGS group,
+Super Admin only; the database refuses everyone else with is_admin()).
+
+- Files are read in the browser with the same Excel reader Batch 38 / 41 / 45
+  use (read-excel-file); no new library. The header is found by column name
+  (the first non-empty row that has the columns; title rows and empty rows
+  above it are passed over). A "Total" line at the bottom is ignored.
+- Customers card: preview with a tick box per party, the cleaned phone and
+  the group, counts, search (name or phone), group chips, the same-phone
+  rule, and the "Dues to check" list. Import adds admin customers (no login,
+  no password, no email, no message) in one database transaction; a customer
+  already on the site is never changed (checked again in the database). A
+  "No phone" customer gets the note "From Kaarbar - no phone" (with Kaarbar's
+  contact text if it was not a mobile number), so you can find them.
+- Expenses card: counts, accounts going down, totals by month and by
+  category, the PROFIT SHARE choice, and every row newest first (date,
+  category, amount, payment mode, Bill No, note — notes kept exactly,
+  Bengali and line breaks included). Each imported entry stores Kaarbar's
+  Bill No (one Bill No can only ever be on the site once) and which import
+  added it. Payment Mode is matched to an account by name ("Cash" -> Cash,
+  "bKash" -> bKash, also Bank / Nagad); any other mode is listed as "No money
+  account" and left out — no guessing.
+- Undo (Careful actions, password): Customers — removes what the last import
+  added, but keeps (and lists) anyone who since has an order, a payment, a
+  due or a login account. Expenses — removes what the last import added
+  (their amounts go back to the accounts) and removes the categories that
+  import created if nothing else uses them; rows in a month locked since
+  then are kept and listed.
+
+Part 3 — Tests (made-up data only; no real name, phone or address anywhere).
+
+- 20 unit tests: header under empty rows, columns in any order, wrong report,
+  phone cleaning (+880 / 880 / spaces / dashes), dates and amounts, notes
+  kept exactly, every customer group, same-phone ticking, dues only listed,
+  every expense status, Bill No twice, PROFIT SHARE never an expense, second
+  upload, start-date money rule, locked month, account matching, totals.
+- 43 database checks run against the live database inside ONE transaction
+  that is always rolled back (nothing stays): a customer and an anonymous
+  visitor are refused, the password is required, import / undo of both
+  cards, dues and orders untouched, Bill No de-duplication, the money rule
+  on real balances, month locks, categories.
+- 4 screen tests at 360 px with made-up Kaarbar files (the database answers
+  are given in the browser, so nothing is imported). Screenshots are in
+  reports/batch-49-screens/.
+- The menu test from Batch 25 now expects the new menu item.
+
+Build and tests (end of batch)
+------------------------------
+  Build: passed, zero errors.
+  Unit tests: 599 of 599 passed (20 new).
+  Full browser run (npm run verify, once): 273 passed, 128 skipped, 37 failed.
+  - All Batch 49 tests passed (the 43-check database test and the 4 screen
+    tests), and all Batch 25 tests passed (the menu test was updated for the
+    new item).
+  - 34 failures are in the old files already known to fail because of the
+    live shop's state (batches 23, 26, 27, 28, 29, 30, 32, 33, 35, 40, 41, 42),
+    for the same reasons earlier reports gave. Not touched.
+  - 3 failures in files not on that old list, none touched by this batch:
+    * batch-48 "a Nagad order at 360 px": re-run alone 3 times, passed 3 of 3.
+      A timing flake.
+    * batch-47 "delete confirm field keeps focus": fails every time because
+      the live order it opens now has a "Cancel…" careful action, so the
+      test's "Cancel" button matches two buttons. Live-shop state, not code
+      from this batch (the order page was not changed).
+    * batch-45 "database: stock comes back": fails every time with "cannot
+      change return type of existing function". That test re-applies the old
+      Batch 45 SQL; the Batch 48 SQL (migration-049) has since been run on
+      the live database and changed one of those functions. Live-database
+      state; the Batch 49 SQL is not live yet, so it cannot be the cause.
+  So: no new failure comes from this batch's work.
+
+================================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+================================================================================
+
+Paste ALL of this into Supabase -> SQL Editor -> Run. Safe to run more than once.
+It is also saved as supabase/migration-050-batch49.sql.
+
+-- =====================================================================
+-- Batch 49 — Import customers and expenses from Kaarbar
+--
+-- Paste the whole file into the Supabase SQL Editor and press Run.
+-- It is safe to run more than once. It does not change any existing
+-- customer, order, payment, due, stock, lot or money amount.
+--
+--   1. kaarbar_imports: one row per import (customers or expenses), so
+--      "Undo last import" removes exactly what that import added.
+--   2. customers.kaarbar_import_id — which import added this customer.
+--   3. money_movements.kaarbar_import_id and kaarbar_bill_no — which
+--      import added this expense, and Kaarbar's own Bill No (one Bill No
+--      is only ever imported once, so a newer Expense Report brings in
+--      only the new rows).
+--   4. Functions, all Super Admin only (is_admin(), checked here in the
+--      database), and the import / undo ones also need the password typed
+--      in the last 5 minutes (the same rule as locking a month):
+--        kaarbar_status            what the screen needs to classify rows
+--        kaarbar_customers_check   who is already on the site + their due
+--        kaarbar_import_customers  adds admin customers (no login, no message)
+--        kaarbar_undo_customers
+--        kaarbar_import_expenses   adds expenses / profit share
+--        kaarbar_undo_expenses
+--
+-- Nothing here sends any message: the only Telegram trigger in the
+-- database is on orders, and these functions never touch orders.
+-- Expenses dated before the Money start date are stored as history; the
+-- money ledger already ignores entries before the start date, so they do
+-- not change any account balance.
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------
+-- 1. kaarbar_imports
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS kaarbar_imports (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind                text NOT NULL CHECK (kind IN ('customers', 'expenses')),
+  row_count           integer NOT NULL DEFAULT 0,
+  total_amount        numeric NOT NULL DEFAULT 0,
+  created_categories  uuid[] NOT NULL DEFAULT '{}',
+  created_by          uuid,
+  created_by_username text,
+  -- clock time, so two imports in one transaction still come in order.
+  created_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
+  undone_at           timestamptz,
+  undone_by_username  text,
+  undo_kept           jsonb
+);
+
+ALTER TABLE kaarbar_imports ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON kaarbar_imports FROM anon, authenticated;
+GRANT ALL ON kaarbar_imports TO service_role;
+
+-- ---------------------------------------------------------------------
+-- 2 + 3. Marks on the imported rows
+-- ---------------------------------------------------------------------
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS kaarbar_import_id uuid
+  REFERENCES kaarbar_imports(id) ON DELETE SET NULL;
+ALTER TABLE money_movements ADD COLUMN IF NOT EXISTS kaarbar_import_id uuid
+  REFERENCES kaarbar_imports(id) ON DELETE SET NULL;
+ALTER TABLE money_movements ADD COLUMN IF NOT EXISTS kaarbar_bill_no text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_money_movements_kaarbar_bill
+  ON money_movements (kaarbar_bill_no) WHERE kaarbar_bill_no IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_money_movements_kaarbar_import
+  ON money_movements (kaarbar_import_id) WHERE kaarbar_import_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_customers_kaarbar_import
+  ON customers (kaarbar_import_id) WHERE kaarbar_import_id IS NOT NULL;
+
+-- ---------------------------------------------------------------------
+-- 4. Functions
+-- ---------------------------------------------------------------------
+
+-- Super Admin, and (for import / undo) the password typed again.
+CREATE OR REPLACE FUNCTION kaarbar_require(p_password boolean)
+RETURNS void
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Only the Super Admin can import from Kaarbar.';
+  END IF;
+  IF p_password AND NOT money_password_recent() THEN
+    RAISE EXCEPTION 'Type your password again to confirm.';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_require(boolean) FROM PUBLIC, anon, authenticated;
+
+-- One category name for matching: lower case, single spaces.
+CREATE OR REPLACE FUNCTION kaarbar_name_key(p_name text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT lower(regexp_replace(btrim(COALESCE(p_name, '')), '\s+', ' ', 'g'));
+$$;
+
+CREATE OR REPLACE FUNCTION kaarbar_last_import(p_kind text)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT jsonb_build_object('id', i.id, 'at', i.created_at, 'by', i.created_by_username,
+                            'count', i.row_count, 'total', i.total_amount)
+  FROM kaarbar_imports i
+  WHERE i.kind = p_kind AND i.undone_at IS NULL
+  ORDER BY i.created_at DESC
+  LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_last_import(text) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION kaarbar_status()
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM kaarbar_require(false);
+  RETURN jsonb_build_object(
+    'start_date', money_start_date(),
+    'today', inventory_dhaka_today(),
+    'locked_months', COALESCE((SELECT jsonb_agg(to_char(month, 'YYYY-MM') ORDER BY month)
+                               FROM money_month_locks WHERE locked), '[]'::jsonb),
+    'bill_nos', COALESCE((SELECT jsonb_agg(kaarbar_bill_no) FROM money_movements
+                          WHERE kaarbar_bill_no IS NOT NULL), '[]'::jsonb),
+    'last_customers', kaarbar_last_import('customers'),
+    'last_expenses', kaarbar_last_import('expenses'));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_status() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_status() TO authenticated;
+
+-- p_rows: [{n, phone_key, name}]. For each row: the customer already on
+-- the site with that phone (or, with no phone, that name) and what the
+-- site says they owe today (orders still due + previous balance left).
+CREATE OR REPLACE FUNCTION kaarbar_customers_check(p_rows jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_out jsonb;
+BEGIN
+  PERFORM kaarbar_require(false);
+  WITH r AS (
+    SELECT (e ->> 'n')::integer AS n,
+           NULLIF(btrim(COALESCE(e ->> 'phone_key', '')), '') AS pk,
+           lower(btrim(COALESCE(e ->> 'name', ''))) AS nm
+    FROM jsonb_array_elements(COALESCE(p_rows, '[]'::jsonb)) e
+  ), keys AS (
+    SELECT k.customer_key, k.due, bd_phone_key(o.customer_phone) AS pk, o.customer_name, o.created_at
+    FROM order_customer_keys() k JOIN orders o ON o.id = k.order_id
+  ), dues AS (
+    SELECT d.phone_key, sum(d.order_due + d.previous_left) AS amount
+    FROM money_customer_dues() d WHERE d.phone_key IS NOT NULL GROUP BY d.phone_key
+  )
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'n', r.n,
+           'site_key', m.key,
+           'site_name', m.name,
+           'site_due', CASE WHEN r.pk IS NOT NULL THEN COALESCE(d.amount, 0)
+                            ELSE COALESCE((SELECT sum(k.due) FROM keys k WHERE k.customer_key = 'n:' || r.nm), 0) END)
+         ORDER BY r.n), '[]'::jsonb)
+  INTO v_out
+  FROM r
+  LEFT JOIN dues d ON d.phone_key = r.pk
+  LEFT JOIN LATERAL (
+    SELECT x.key, x.name FROM (
+      SELECT 1 AS ord, 'p:' || p.id AS key, p.full_name AS name, p.created_at AS ts
+      FROM profiles p WHERE r.pk IS NOT NULL AND p.role = 'customer' AND bd_phone_key(p.phone) = r.pk
+      UNION ALL
+      SELECT 2, k.customer_key, k.customer_name, k.created_at FROM keys k WHERE r.pk IS NOT NULL AND k.pk = r.pk
+      UNION ALL
+      SELECT 3, c.customer_key, c.full_name, c.created_at FROM customers c WHERE r.pk IS NOT NULL AND c.phone_key = r.pk
+      UNION ALL
+      SELECT 4, c.customer_key, c.full_name, c.created_at FROM customers c WHERE r.pk IS NULL AND c.customer_key = 'n:' || r.nm
+      UNION ALL
+      SELECT 5, k.customer_key, k.customer_name, k.created_at FROM keys k WHERE r.pk IS NULL AND k.customer_key = 'n:' || r.nm
+    ) x ORDER BY x.ord, x.ts LIMIT 1
+  ) m ON true;
+  RETURN v_out;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_customers_check(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_customers_check(jsonb) TO authenticated;
+
+-- p_rows: [{name, phone_key (or null), contact}]. Adds admin customers
+-- (no login account, no email, no password, no message). A customer
+-- already on the site is never changed: that row is skipped.
+CREATE OR REPLACE FUNCTION kaarbar_import_customers(p_rows jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import  uuid;
+  v_row     jsonb;
+  v_name    text;
+  v_pk      text;
+  v_key     text;
+  v_contact text;
+  v_added   integer := 0;
+  v_skipped integer := 0;
+  v_n       integer;
+BEGIN
+  PERFORM kaarbar_require(true);
+  IF jsonb_typeof(p_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(p_rows) = 0 THEN
+    RAISE EXCEPTION 'Tick at least one customer.';
+  END IF;
+
+  INSERT INTO kaarbar_imports (kind, created_by, created_by_username)
+  VALUES ('customers', auth.uid(), current_actor_username())
+  RETURNING id INTO v_import;
+
+  FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+    v_name := btrim(COALESCE(v_row ->> 'name', ''));
+    v_pk := NULLIF(btrim(COALESCE(v_row ->> 'phone_key', '')), '');
+    v_contact := NULLIF(btrim(COALESCE(v_row ->> 'contact', '')), '');
+    IF v_name = '' THEN
+      RAISE EXCEPTION 'A customer has no name. Preview the file again.';
+    END IF;
+    IF v_pk IS NOT NULL AND v_pk !~ '^01[3-9][0-9]{8}$' THEN
+      RAISE EXCEPTION 'The phone "%" is not a Bangladeshi mobile number. Preview the file again.', v_pk;
+    END IF;
+    v_key := CASE WHEN v_pk IS NOT NULL THEN 'ph:' || v_pk ELSE 'n:' || lower(v_name) END;
+
+    IF (v_pk IS NOT NULL AND (
+          EXISTS (SELECT 1 FROM profiles p WHERE p.role = 'customer' AND bd_phone_key(p.phone) = v_pk)
+          OR EXISTS (SELECT 1 FROM orders o WHERE bd_phone_key(o.customer_phone) = v_pk)
+          OR EXISTS (SELECT 1 FROM customers c WHERE c.phone_key = v_pk)))
+       OR EXISTS (SELECT 1 FROM customers c WHERE c.customer_key = v_key)
+       OR (v_pk IS NULL AND EXISTS (SELECT 1 FROM order_customer_keys() k WHERE k.customer_key = v_key)) THEN
+      v_skipped := v_skipped + 1;
+      CONTINUE;
+    END IF;
+
+    INSERT INTO customers (customer_key, phone_key, full_name, phone, note, added_by_hand,
+                           kaarbar_import_id, created_by, created_by_username, updated_by_username)
+    VALUES (v_key, v_pk, v_name, COALESCE(v_pk, ''),
+            CASE WHEN v_pk IS NOT NULL THEN 'From Kaarbar'
+                 WHEN v_contact IS NOT NULL THEN 'From Kaarbar - no phone (Kaarbar contact: ' || v_contact || ')'
+                 ELSE 'From Kaarbar - no phone' END,
+            true, v_import, auth.uid(), current_actor_username(), current_actor_username())
+    ON CONFLICT (customer_key) DO NOTHING;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n > 0 THEN
+      v_added := v_added + 1;
+    ELSE
+      v_skipped := v_skipped + 1;
+    END IF;
+  END LOOP;
+
+  UPDATE kaarbar_imports SET row_count = v_added WHERE id = v_import;
+  PERFORM write_activity('kaarbar.customers_imported', 'kaarbar_import', v_import::text, 'Kaarbar customers',
+    format('Imported %s customers from Kaarbar%s', v_added,
+           CASE WHEN v_skipped > 0 THEN format(' (%s already on the site, skipped)', v_skipped) ELSE '' END),
+    jsonb_build_object('added', v_added, 'skipped', v_skipped));
+  RETURN jsonb_build_object('import_id', v_import, 'added', v_added, 'skipped', v_skipped);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_import_customers(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_import_customers(jsonb) TO authenticated;
+
+-- Removes the customers the last customer import added — except anyone
+-- who since has an order, a payment, a due or a login account.
+CREATE OR REPLACE FUNCTION kaarbar_undo_customers()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import  uuid;
+  v_c       customers%ROWTYPE;
+  v_reason  text;
+  v_kept    jsonb := '[]'::jsonb;
+  v_removed integer := 0;
+BEGIN
+  PERFORM kaarbar_require(true);
+  SELECT id INTO v_import FROM kaarbar_imports
+  WHERE kind = 'customers' AND undone_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
+  IF v_import IS NULL THEN
+    RAISE EXCEPTION 'There is no customer import to undo.';
+  END IF;
+
+  FOR v_c IN SELECT * FROM customers WHERE kaarbar_import_id = v_import FOR UPDATE LOOP
+    v_reason := CASE
+      WHEN EXISTS (SELECT 1 FROM order_customer_keys() k WHERE k.customer_key = v_c.customer_key)
+        OR (v_c.phone_key IS NOT NULL AND EXISTS (SELECT 1 FROM orders o WHERE bd_phone_key(o.customer_phone) = v_c.phone_key))
+        THEN 'has an order'
+      WHEN v_c.phone_key IS NOT NULL AND EXISTS (SELECT 1 FROM customer_due_payments x WHERE x.phone_key = v_c.phone_key)
+        THEN 'has a payment'
+      WHEN v_c.phone_key IS NOT NULL AND EXISTS (SELECT 1 FROM customer_opening_dues x WHERE x.phone_key = v_c.phone_key)
+        THEN 'has a due'
+      WHEN v_c.phone_key IS NOT NULL AND EXISTS (
+             SELECT 1 FROM profiles p WHERE p.role = 'customer' AND bd_phone_key(p.phone) = v_c.phone_key)
+        THEN 'has a login account'
+    END;
+    IF v_reason IS NULL THEN
+      DELETE FROM customers WHERE customer_key = v_c.customer_key;
+      v_removed := v_removed + 1;
+    ELSE
+      v_kept := v_kept || jsonb_build_object('name', v_c.full_name, 'phone', v_c.phone, 'reason', v_reason);
+    END IF;
+  END LOOP;
+
+  UPDATE kaarbar_imports SET undone_at = now(), undone_by_username = current_actor_username(), undo_kept = v_kept
+  WHERE id = v_import;
+  PERFORM write_activity('kaarbar.customers_undone', 'kaarbar_import', v_import::text, 'Kaarbar customers',
+    format('Undid the Kaarbar customer import: removed %s customers%s', v_removed,
+           CASE WHEN jsonb_array_length(v_kept) > 0 THEN format(', kept %s', jsonb_array_length(v_kept)) ELSE '' END),
+    jsonb_build_object('removed', v_removed, 'kept', v_kept));
+  RETURN jsonb_build_object('removed', v_removed, 'kept', v_kept);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_undo_customers() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_undo_customers() TO authenticated;
+
+-- p_rows: [{bill_no, date, kind, category, account_id, party_id, amount, note}]
+-- kind: 'expense', 'investor_profit_share' (party_id = the investor) or
+-- 'owner_withdrawal'. A Bill No already on the site is skipped. A row in
+-- a locked month refuses the whole import (the screen leaves those out).
+CREATE OR REPLACE FUNCTION kaarbar_import_expenses(p_rows jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_import   uuid;
+  v_row      jsonb;
+  v_bill     text;
+  v_date     date;
+  v_kind     text;
+  v_amount   numeric;
+  v_acc      money_accounts%ROWTYPE;
+  v_cat      uuid;
+  v_cat_name text;
+  v_party    uuid;
+  v_created  uuid[] := '{}';
+  v_added    integer := 0;
+  v_skipped  integer := 0;
+  v_total    numeric := 0;
+BEGIN
+  PERFORM kaarbar_require(true);
+  IF money_start_date() IS NULL THEN
+    RAISE EXCEPTION 'Confirm your opening balances in Money first.';
+  END IF;
+  IF jsonb_typeof(p_rows) IS DISTINCT FROM 'array' OR jsonb_array_length(p_rows) = 0 THEN
+    RAISE EXCEPTION 'There is nothing to import.';
+  END IF;
+
+  INSERT INTO kaarbar_imports (kind, created_by, created_by_username)
+  VALUES ('expenses', auth.uid(), current_actor_username())
+  RETURNING id INTO v_import;
+
+  FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+    v_bill := NULLIF(btrim(COALESCE(v_row ->> 'bill_no', '')), '');
+    v_date := NULLIF(v_row ->> 'date', '')::date;
+    v_kind := v_row ->> 'kind';
+    v_amount := round(NULLIF(v_row ->> 'amount', '')::numeric, 2);
+    IF v_bill IS NULL THEN
+      RAISE EXCEPTION 'A row has no Bill No. Preview the file again.';
+    END IF;
+    IF v_date IS NULL OR v_date > inventory_dhaka_today() THEN
+      RAISE EXCEPTION 'Bill No % has no date or a future date.', v_bill;
+    END IF;
+    IF v_amount IS NULL OR v_amount <= 0 OR v_amount > 1000000000 THEN
+      RAISE EXCEPTION 'Bill No % has no amount above 0.', v_bill;
+    END IF;
+    IF v_kind NOT IN ('expense', 'investor_profit_share', 'owner_withdrawal') THEN
+      RAISE EXCEPTION 'Bill No % is not an expense.', v_bill;
+    END IF;
+    IF money_month_locked(v_date) THEN
+      RAISE EXCEPTION '% is locked: Bill No % can''t be added. Preview the file again.', to_char(v_date, 'FMMonth YYYY'), v_bill;
+    END IF;
+    IF EXISTS (SELECT 1 FROM money_movements WHERE kaarbar_bill_no = v_bill) THEN
+      v_skipped := v_skipped + 1;
+      CONTINUE;
+    END IF;
+    v_acc := money_check_account(NULLIF(v_row ->> 'account_id', '')::uuid);
+
+    v_cat := NULL;
+    v_party := NULL;
+    IF v_kind = 'expense' THEN
+      v_cat_name := regexp_replace(btrim(COALESCE(v_row ->> 'category', '')), '\s+', ' ', 'g');
+      IF v_cat_name = '' THEN
+        RAISE EXCEPTION 'Bill No % has no category.', v_bill;
+      END IF;
+      SELECT id INTO v_cat FROM money_categories
+      WHERE kaarbar_name_key(name) = kaarbar_name_key(v_cat_name)
+      ORDER BY archived, sort_order LIMIT 1;
+      IF v_cat IS NULL THEN
+        INSERT INTO money_categories (name, sort_order)
+        VALUES (v_cat_name, COALESCE((SELECT max(sort_order) FROM money_categories), 0) + 1)
+        RETURNING id INTO v_cat;
+        v_created := v_created || v_cat;
+      END IF;
+    ELSIF v_kind = 'investor_profit_share' THEN
+      v_party := NULLIF(v_row ->> 'party_id', '')::uuid;
+      IF NOT EXISTS (SELECT 1 FROM parties_payable WHERE id = v_party AND kind = 'investor') THEN
+        RAISE EXCEPTION 'Pick the investor for Bill No %.', v_bill;
+      END IF;
+    END IF;
+
+    INSERT INTO money_movements (entry_date, account_id, amount, type, category_id, party_id, note,
+                                 kaarbar_import_id, kaarbar_bill_no, created_by, created_by_username)
+    VALUES (v_date, v_acc.id, -v_amount, v_kind, v_cat, v_party,
+            NULLIF(COALESCE(v_row ->> 'note', ''), ''),
+            v_import, v_bill, auth.uid(), current_actor_username());
+    v_added := v_added + 1;
+    v_total := v_total + v_amount;
+  END LOOP;
+
+  UPDATE kaarbar_imports SET row_count = v_added, total_amount = v_total, created_categories = v_created
+  WHERE id = v_import;
+  PERFORM write_activity('kaarbar.expenses_imported', 'kaarbar_import', v_import::text, 'Kaarbar expenses',
+    format('Imported %s expenses from Kaarbar (%s)%s', v_added, money_short(v_total),
+           CASE WHEN v_skipped > 0 THEN format(', %s already on the site skipped', v_skipped) ELSE '' END),
+    jsonb_build_object('added', v_added, 'skipped', v_skipped, 'total', v_total,
+                       'new_categories', cardinality(v_created)));
+  RETURN jsonb_build_object('import_id', v_import, 'added', v_added, 'skipped', v_skipped,
+                            'total', v_total, 'new_categories', cardinality(v_created));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_import_expenses(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_import_expenses(jsonb) TO authenticated;
+
+-- Removes the entries the last expense import added (which also takes
+-- their amount back out of the money accounts) and the categories it
+-- created, when nothing else uses them. Entries in a month locked since
+-- are kept and listed.
+CREATE OR REPLACE FUNCTION kaarbar_undo_expenses()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_imp     kaarbar_imports%ROWTYPE;
+  v_kept    jsonb;
+  v_removed integer;
+  v_total   numeric;
+BEGIN
+  PERFORM kaarbar_require(true);
+  SELECT * INTO v_imp FROM kaarbar_imports
+  WHERE kind = 'expenses' AND undone_at IS NULL ORDER BY created_at DESC LIMIT 1 FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'There is no expense import to undo.';
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object('bill_no', m.kaarbar_bill_no, 'date', m.entry_date,
+                                               'amount', -m.amount, 'reason', 'month is locked')
+                            ORDER BY m.entry_date), '[]'::jsonb)
+  INTO v_kept
+  FROM money_movements m WHERE m.kaarbar_import_id = v_imp.id AND money_month_locked(m.entry_date);
+
+  SELECT count(*), COALESCE(-sum(amount), 0) INTO v_removed, v_total
+  FROM money_movements WHERE kaarbar_import_id = v_imp.id AND NOT money_month_locked(entry_date);
+  DELETE FROM money_movements WHERE kaarbar_import_id = v_imp.id AND NOT money_month_locked(entry_date);
+
+  DELETE FROM money_categories c
+  WHERE c.id = ANY (v_imp.created_categories)
+    AND NOT EXISTS (SELECT 1 FROM money_movements m WHERE m.category_id = c.id);
+
+  UPDATE kaarbar_imports SET undone_at = now(), undone_by_username = current_actor_username(), undo_kept = v_kept
+  WHERE id = v_imp.id;
+  PERFORM write_activity('kaarbar.expenses_undone', 'kaarbar_import', v_imp.id::text, 'Kaarbar expenses',
+    format('Undid the Kaarbar expense import: removed %s entries (%s)%s', v_removed, money_short(v_total),
+           CASE WHEN jsonb_array_length(v_kept) > 0 THEN format(', kept %s in locked months', jsonb_array_length(v_kept)) ELSE '' END),
+    jsonb_build_object('removed', v_removed, 'total', v_total, 'kept', v_kept));
+  RETURN jsonb_build_object('removed', v_removed, 'total', v_total, 'kept', v_kept);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION kaarbar_undo_expenses() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION kaarbar_undo_expenses() TO authenticated;
+
+COMMIT;
+
+================================================================================
+3. WHAT I COULD NOT FINISH
+================================================================================
+
+- I did not run the SQL on the live database (that needs you). It was tried
+  inside a rolled-back transaction on the live database and works; nothing
+  stayed.
+- The real Kaarbar files were never seen. The screen was built from the
+  column list you gave. If Kaarbar's real export uses a column name I did not
+  expect, the screen says exactly which column is missing — send me that
+  message.
+- "If the site allows two customers with one phone, he may tick both": the
+  site does NOT allow that (one customer per phone number is how customers
+  are keyed). So in a same-phone pair only one can be ticked.
+
+================================================================================
+4. WHAT I FOUND ALONG THE WAY
+================================================================================
+
+- Running one browser test file the way CLAUDE.md says
+  ("npx playwright test e2e/<file>.spec.ts") runs EVERY parallel test as
+  well, because the "serial" group depends on the "parallel" group. I ran it
+  that way twice by mistake before I noticed (two whole-suite runs extra,
+  one at a time, not at the same time). The right way for one file is:
+    npx playwright test --project=serial --no-deps e2e/<file>.spec.ts
+  (or --project=parallel for a parallel file). CLAUDE.md should be updated.
+- My first full verify was stopped after 10 minutes because I set too short
+  a time limit; I checked nothing was left running and started it again
+  (never two at once). The results above are from the complete second run.
+- Batch 25's "every admin page" tests failed 2 of 5 full runs of that file on
+  this branch (the first two) with "Failed to fetch dynamically imported module
+  AdminPage-….js" (the local test server cut off the download of the admin
+  page's code; the network trace shows the request ended with no answer).
+  The same test passed alone, passed in the last three runs (including the
+  final full verify), and passed on main. The new screen is not opened in those tests. I believe
+  it is a test-server hiccup, but I could not prove it, so I am telling you.
+- "Subscriptions (Ai / Services)" and similar Kaarbar names will not match
+  your shorter site categories (rule: same name ignoring case and spaces), so
+  several new categories may appear. The preview marks each one first.
+
+================================================================================
+5. DESIGN DECISIONS
+================================================================================
+
+- Menu place: ADMIN / TEAM & SETTINGS group, next to Activity Log, with the
+  Super Admin pill. "Import / Export" (Catalog) is for products and can be
+  opened by staff; this one is money and customers, Super Admin only.
+- Colour: no orange on the screen itself. Ticks, the "New" tag and the Import
+  buttons are near-black; everything else is grey. The confirm sheet keeps
+  the site's usual confirm button.
+- Expenses dated before the start date are still stored (as history, visible
+  in Money -> Expenses for their dates) — they never change a balance, profit
+  or report, because those already start at 13 Nov 2026.
+- Rows with an unknown payment mode are left out whatever their date (also
+  history ones), so nothing is put on a guessed account. Add the account in
+  Money (e.g. "Card") and upload again; only the missing rows come in.
+- PROFIT SHARE: with one investor it is picked for you; if the note contains
+  an investor's first name, that investor is picked; otherwise "Leave it
+  out" until you choose. "Me — owner withdrawal" is offered too, since Money
+  has it.
+- The import is checked again in the database (not only on the phone): Super
+  Admin, password in the last 5 minutes, valid mobile number, no overwrite,
+  Bill No once, locked months refused, amounts above 0, no future dates.
+- Imported customers are marked "added by hand", so they appear in Customers
+  even with no orders, exactly like "Add customer".
+
+================================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done — for you to decide)
+================================================================================
+
+1. Category mapping step (small). Let you map a Kaarbar category to an
+   existing site category in the preview ("Subscriptions (Ai / Services)" ->
+   "Subscriptions") instead of only exact names. Cleaner expense reports.
+2. Supplier import (medium). Parties with Payable > 0 are skipped now; Money
+   could record them as suppliers with their opening payable, so "To give"
+   matches Kaarbar.
+3. One customer, many phones (medium). Real shops have customers with two
+   numbers; today the site keys by one phone (plus an "alternative phone"
+   field that is not used for matching). Matching on both would cut
+   duplicates.
+4. Fix the CLAUDE.md single-file test command (small) — see section 4. It
+   quietly costs Supabase bandwidth on every batch.
+5. Stop using Kaarbar side by side (large, business). Two sets of books drift
+   apart; the "Dues to check" list shows where. Once orders, dues and
+   expenses all live on the site, Kaarbar can be retired.
