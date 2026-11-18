@@ -1,0 +1,383 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useToast } from '../../../hooks/useToast';
+import { readKaarbarFile } from '../../../lib/kaarbar/api';
+import {
+  buildDrafts,
+  choiceId,
+  choiceLabel,
+  itemCounts,
+  itemSaveRows,
+  needsMatch,
+  needsPrice,
+  pickChoice,
+  pickHidden,
+  readItemList,
+  searchChoices,
+  type ItemDraft,
+  type ItemRow,
+  type SiteChoice,
+} from '../../../lib/kaarbar/oldSales';
+import { removeHiddenProducts, saveItems, type KeptProduct, type OldSalesStatus } from '../../../lib/kaarbar/oldSalesApi';
+import { moneyText } from '../../../lib/money/format';
+import { BottomSheet } from '../../shared/BottomSheet';
+import { AdminSearch, ChipRow } from '../ui/AdminUi';
+import { importWhen, PasswordSheet } from './KaarbarImportTab';
+
+type Filter = 'all' | 'needs' | 'matched' | 'hidden';
+
+const PAGE = 60;
+
+const TAGS: Record<ItemDraft['how'], string> = { auto: 'Auto', hand: 'By hand', hidden: 'Hidden', none: '' };
+
+/**
+ * Batch 50 Step 1: Kaarbar's Item List → every item matched to a site
+ * product (or to a new hidden product) once, with the buying price the
+ * old bills use. Saved with the password; can be opened and changed later.
+ */
+export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesStatus; onChanged: () => Promise<void> }) {
+  const { showToast } = useToast();
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [twice, setTwice] = useState<string[]>([]);
+  const rows = useRef<readonly ItemRow[]>([]);
+  const [drafts, setDrafts] = useState<ItemDraft[]>(() => buildDrafts([], status.items, status.choices));
+  const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
+  const [shown, setShown] = useState(PAGE);
+  const [picking, setPicking] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<'save' | 'remove' | null>(null);
+  const [kept, setKept] = useState<KeptProduct[] | null>(null);
+  const [dirty, setDirty] = useState(false);
+
+  // A fresh status (after saving) is the new starting point.
+  useEffect(() => {
+    setDrafts(buildDrafts(rows.current, status.items, status.choices));
+    setDirty(false);
+  }, [status]);
+
+  const pick = async (file: File | null) => {
+    if (!file) return;
+    setFileName(file.name);
+    setFileError(null);
+    setKept(null);
+    try {
+      const sheets = await readKaarbarFile(file);
+      let firstError: string | null = null;
+      for (const cells of sheets) {
+        const read = readItemList(cells);
+        if (!read.error) {
+          rows.current = read.rows;
+          setTwice(read.twice);
+          const next = buildDrafts(read.rows, status.items, status.choices);
+          setDrafts(next);
+          setDirty(true);
+          setFilter(next.some((d) => needsMatch(d) || needsPrice(d)) ? 'needs' : 'all');
+          setSearch('');
+          setShown(PAGE);
+          return;
+        }
+        firstError ??= read.error;
+      }
+      setFileError(firstError ?? 'The file is empty.');
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : 'Could not read the file.');
+    }
+  };
+
+  const update = (key: string, change: (d: ItemDraft) => ItemDraft) => {
+    setDrafts((list) => list.map((d) => (d.key === key ? change(d) : d)));
+    setDirty(true);
+  };
+
+  const counts = useMemo(() => itemCounts(drafts), [drafts]);
+  const needs = useMemo(() => drafts.filter((d) => needsMatch(d) || needsPrice(d)).length, [drafts]);
+  const saveRows = useMemo(() => itemSaveRows(drafts), [drafts]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return drafts.filter((d) => {
+      if (filter === 'needs' && !(needsMatch(d) || needsPrice(d))) return false;
+      if (filter === 'matched' && !(d.how === 'auto' || d.how === 'hand')) return false;
+      if (filter === 'hidden' && d.how !== 'hidden') return false;
+      if (q === '') return true;
+      return d.name.toLowerCase().includes(q) || (d.choice ? choiceLabel(d.choice).toLowerCase().includes(q) : false);
+    });
+  }, [drafts, filter, search]);
+
+  const picked = drafts.find((d) => d.key === picking) ?? null;
+
+  const doSave = async (): Promise<string | null> => {
+    if (!saveRows) return 'Some items still need a product or a buying price.';
+    const answer = await saveItems(saveRows);
+    if (!answer.ok) return answer.error;
+    setSheet(null);
+    showToast(
+      `Saved ${saveRows.length} item${saveRows.length === 1 ? '' : 's'}${answer.data.hiddenMade > 0 ? ` · ${answer.data.hiddenMade} hidden product${answer.data.hiddenMade === 1 ? '' : 's'} made` : ''}`
+    );
+    await onChanged();
+    return null;
+  };
+
+  const doRemove = async (): Promise<string | null> => {
+    const answer = await removeHiddenProducts();
+    if (!answer.ok) return answer.error;
+    setSheet(null);
+    setKept(answer.data.kept);
+    showToast(`Removed ${answer.data.removed} hidden product${answer.data.removed === 1 ? '' : 's'}`);
+    await onChanged();
+    return null;
+  };
+
+  const last = status.lastProducts;
+  const madeCount = status.items.filter((i) => i.madeProductId).length;
+
+  return (
+    <section className="adm-ocard kb-card" aria-label="Step 1 · Old products" data-testid="kb-products">
+      <h2 className="kb-card__title">Step 1 · Old products</h2>
+      <p className="inv-muted">
+        From Kaarbar: Reports → Item List Report → Excel. Match every Kaarbar item to a product on the site once. The old bills in Step 2 use
+        this list and its buying prices.
+      </p>
+      <label className="adm-btn kb-file">
+        {fileName ? 'Pick another file' : 'Pick the Item List Report'}
+        <input type="file" accept=".xlsx" hidden onChange={(e) => void pick(e.target.files?.[0] ?? null)} data-testid="kb-products-file" />
+      </label>
+      {fileName && <p className="inv-muted kb-filename">{fileName}</p>}
+      {!fileName && status.items.length > 0 && (
+        <p className="inv-muted" data-testid="kb-products-saved">
+          Saved list: {status.items.length} items{last ? ` (saved ${importWhen(last.at)})` : ''}. Change a match or a price below and save again,
+          or pick the file again to add new items.
+        </p>
+      )}
+      {fileError && (
+        <p className="inv-error" role="alert" data-testid="kb-products-error">
+          {fileError}
+        </p>
+      )}
+      {twice.length > 0 && <p className="inv-muted">Twice in the file (kept once): {twice.join(', ')}</p>}
+
+      {drafts.length > 0 && (
+        <div className="inv-stack" data-testid="kb-products-preview">
+          <ul className="kb-counts" aria-label="Items">
+            <li className="kb-counts__item" data-testid="kb-pcount-matched">
+              <span>Matched</span>
+              <b>{counts.matched}</b>
+            </li>
+            <li className="kb-counts__item" data-testid="kb-pcount-hand">
+              <span>Pick by hand</span>
+              <b>{counts.byHand}</b>
+            </li>
+            <li className="kb-counts__item" data-testid="kb-pcount-hidden">
+              <span>New hidden product</span>
+              <b>{counts.hidden}</b>
+            </li>
+            <li className="kb-counts__item" data-testid="kb-pcount-price">
+              <span>Buying price missing</span>
+              <b>{counts.noPrice}</b>
+            </li>
+          </ul>
+
+          <AdminSearch value={search} onChange={setSearch} placeholder="Search an item" label="Search the items" />
+          <ChipRow
+            label="Show"
+            active={filter}
+            onSelect={(id) => {
+              setFilter(id as Filter);
+              setShown(PAGE);
+            }}
+            chips={[
+              { id: 'all', label: 'All', count: drafts.length },
+              { id: 'needs', label: 'Needs you', count: needs },
+              { id: 'matched', label: 'Matched', count: counts.matched },
+              { id: 'hidden', label: 'New hidden', count: counts.hidden },
+            ]}
+          />
+
+          <ul className="kb-list" data-testid="kb-items">
+            {visible.slice(0, shown).map((d) => (
+              <ItemRowView key={d.key} draft={d} onPick={() => setPicking(d.key)} onPrice={(price) => update(d.key, (x) => ({ ...x, price, priceFrom: 'typed' }))} />
+            ))}
+          </ul>
+          {visible.length === 0 && <p className="inv-muted">{filter === 'needs' ? 'Nothing needs you.' : 'No item matches.'}</p>}
+          {visible.length > shown && (
+            <button type="button" className="adm-btn adm-btn--ghost" onClick={() => setShown((s) => s + PAGE)}>
+              Show {Math.min(PAGE, visible.length - shown)} more
+            </button>
+          )}
+
+          <div className="kb-savebar">
+            <button
+              type="button"
+              className="adm-btn kb-go"
+              disabled={!saveRows || !dirty}
+              onClick={() => setSheet('save')}
+              data-testid="kb-products-save"
+            >
+              Save product list
+            </button>
+            <span className="inv-muted" data-testid="kb-products-save-note">
+              {!saveRows
+                ? `${needs} item${needs === 1 ? '' : 's'} still need${needs === 1 ? 's' : ''} a product or a buying price.`
+                : dirty
+                  ? `${drafts.length} items ready.`
+                  : 'Saved. Nothing changed.'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {kept && kept.length > 0 && (
+        <div className="kb-notice" data-testid="kb-products-kept">
+          <b>Kept {kept.length} hidden product{kept.length === 1 ? '' : 's'}:</b>
+          <ul>
+            {kept.map((k) => (
+              <li key={k.name}>
+                {k.name} — {k.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <section className="adm-careful kb-careful" aria-label="Careful actions" data-testid="kb-products-careful">
+        <h3 className="adm-careful__title">Careful actions</h3>
+        <p className="adm-ocard__muted">You will be asked for your password.</p>
+        <ul className="adm-careful__list">
+          <li className="adm-careful__row">
+            <span className="adm-careful__text">
+              <span className="adm-careful__name">Remove hidden products made by the import</span>
+              <span className="adm-careful__explain">
+                {madeCount > 0
+                  ? `${madeCount} made. Only those with no orders, no lots, no old bills and never shown in the shop are removed.`
+                  : 'The import has not made any hidden product.'}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="adm-btn adm-btn--sm adm-careful__btn adm-careful__btn--red"
+              disabled={madeCount === 0}
+              onClick={() => setSheet('remove')}
+              data-testid="kb-products-remove"
+            >
+              Remove…
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <ChoicePicker
+        draft={picked}
+        choices={status.choices}
+        onClose={() => setPicking(null)}
+        onChoose={(c) => {
+          if (picked) update(picked.key, (d) => (c === 'hidden' ? pickHidden(d) : pickChoice(d, c)));
+          setPicking(null);
+        }}
+      />
+
+      <PasswordSheet
+        isOpen={sheet === 'save'}
+        title="Save the product list?"
+        text={`${drafts.length} items.${counts.hidden > 0 ? ` Items marked Hidden get a product of their own that is never shown in the shop.` : ''} Nothing in the shop changes, and no buying price of a product already on the site is changed.`}
+        confirmLabel="Save"
+        onConfirm={doSave}
+        onClose={() => setSheet(null)}
+      />
+      <PasswordSheet
+        isOpen={sheet === 'remove'}
+        title="Remove the hidden products?"
+        text="Removes the hidden products the import made, except any that has orders, is in a lot, is used by old bills or was ever shown in the shop. Items that pointed at a removed product need a product again."
+        confirmLabel="Remove"
+        danger
+        onConfirm={doRemove}
+        onClose={() => setSheet(null)}
+      />
+    </section>
+  );
+}
+
+function ItemRowView({ draft: d, onPick, onPrice }: { draft: ItemDraft; onPick: () => void; onPrice: (price: string) => void }) {
+  const missingPrice = needsPrice(d);
+  const choiceText = d.how === 'hidden' ? (d.saved?.madeProductId ? `${d.name} (hidden product)` : 'New hidden product') : d.choice ? choiceLabel(d.choice) : null;
+  return (
+    <li className="kb-row kb-row--stack kb-item" data-testid="kb-item-row" data-how={d.how}>
+      <span className="kb-item__label">KAARBAR</span>
+      <span className="kb-row__name">{d.name}</span>
+      <button type="button" className={`kb-pick${choiceText ? '' : ' kb-pick--empty'}`} onClick={onPick} data-testid="kb-item-pick">
+        <span className="kb-pick__text">{choiceText ?? 'Pick a site product'}</span>
+        {d.how !== 'none' && <span className={`kb-tag kb-tag--${d.how}`}>{TAGS[d.how]}</span>}
+      </button>
+      <label className="kb-price">
+        <span className="kb-price__label">Buying price (per pack)</span>
+        <input
+          className={`form-input kb-price__input${missingPrice ? ' kb-price__input--missing' : ''}`}
+          inputMode="decimal"
+          value={d.price}
+          placeholder="৳"
+          onChange={(e) => onPrice(e.target.value)}
+          aria-label={`Buying price of ${d.name}`}
+          aria-invalid={missingPrice}
+          data-testid="kb-item-price"
+        />
+      </label>
+      {d.priceFrom === 'site' && <span className="kb-row__sub">From the site. Change it if you paid differently then.</span>}
+      {d.priceFrom === 'kaarbar' && <span className="kb-row__sub">Kaarbar&apos;s purchase price.</span>}
+      {d.saved && d.saved.billLines > 0 && <span className="kb-row__sub">Used by {d.saved.billLines} old bill lines: a new price corrects their profit too.</span>}
+    </li>
+  );
+}
+
+function ChoicePicker({
+  draft,
+  choices,
+  onClose,
+  onChoose,
+}: {
+  draft: ItemDraft | null;
+  choices: readonly SiteChoice[];
+  onClose: () => void;
+  onChoose: (choice: SiteChoice | 'hidden') => void;
+}) {
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (draft) setQuery('');
+  }, [draft]);
+  const list = useMemo(() => (draft ? searchChoices(query, draft.name, choices).slice(0, 40) : []), [draft, query, choices]);
+  return (
+    <BottomSheet isOpen={draft !== null} onClose={onClose} title="Pick the site product" panelClassName="kb-picker">
+      <div className="kb-picker__body" data-testid="kb-picker">
+        {draft && (
+          <p className="kb-picker__for">
+            <span className="kb-item__label">KAARBAR</span>
+            <b>{draft.name}</b>
+          </p>
+        )}
+        <AdminSearch value={query} onChange={setQuery} placeholder="Search site products" label="Search site products" />
+        <ul className="kb-picker__list">
+          {list.map((c) => {
+            const on = draft?.choice !== null && draft?.choice !== undefined && choiceId(draft.choice) === choiceId(c);
+            return (
+              <li key={choiceId(c)}>
+                <button type="button" className={`kb-picker__row${on ? ' kb-picker__row--on' : ''}`} onClick={() => onChoose(c)} data-testid="kb-picker-choice">
+                  <span className="kb-picker__name">{c.name}</span>
+                  <span className="kb-row__sub">
+                    {[c.option, !c.isActive ? 'Hidden' : null, c.costPerPack !== null ? `buying ${moneyText(c.costPerPack)}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {list.length === 0 && <li className="inv-muted kb-picker__none">No site product matches.</li>}
+          <li>
+            <button type="button" className="kb-picker__row kb-picker__row--hidden" onClick={() => onChoose('hidden')} data-testid="kb-picker-hidden">
+              <span className="kb-picker__name">+ Add as new hidden product</span>
+              <span className="kb-row__sub">Never shown in the shop. Only for old sales.</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </BottomSheet>
+  );
+}

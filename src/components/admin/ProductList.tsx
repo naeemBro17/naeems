@@ -53,6 +53,11 @@ function stockLabel(product: Product, threshold: number): { tone: 'ok' | 'low'; 
  * rows as a table. Tapping a row opens the product editor; Edit, Feature on
  * home, View on site and Delete live in the ⋮ menu.
  */
+/** Batch 50: a product with price 0 can't be shown in the shop. */
+function noPriceMessage(error: { message?: string }): string | null {
+  return error.message?.includes('Set a price') ? 'Set a price before showing this product.' : null;
+}
+
 export function ProductList() {
   const { products, categories, settings, isLoading, refetch, patchProductLocal, variantsFor } = useProducts();
   const { showToast } = useToast();
@@ -215,7 +220,7 @@ export function ProductList() {
       .eq('id', product.id);
     if (error) {
       patchProductLocal(product.id, { is_active: product.is_active });
-      showToast('Could not update the product. Please try again.', 'error');
+      showToast(noPriceMessage(error) ?? 'Could not update the product. Please try again.', 'error');
     }
   };
 
@@ -245,7 +250,7 @@ export function ProductList() {
       .in('id', ids);
     setIsBulkSaving(false);
     if (error) {
-      showToast('Could not update the products. Please try again.', 'error');
+      showToast(noPriceMessage(error) ?? 'Could not update the products. Please try again.', 'error');
       return;
     }
     for (const id of ids) patchProductLocal(id, { is_active: isActive });

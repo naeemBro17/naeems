@@ -14,7 +14,7 @@ import {
   previewOpeningDues,
   undoOpening,
 } from '../../../lib/money/api';
-import { dayText, moneyText, openingDueAmount, parseAmount, readDueRows } from '../../../lib/money/format';
+import { dayText, moneyText, openingDueAmount, signedMoney, parseAmount, readDueRows } from '../../../lib/money/format';
 import { buildDuesTemplate, readDuesFile } from '../../../lib/money/xlsx';
 import type { DueChoice, MoneyAccount, OpeningPayableInput, OpeningPreview } from '../../../lib/money/types';
 import { AdminPageHeader, SkeletonRows } from '../ui/AdminUi';
@@ -187,6 +187,11 @@ export function OpeningView({ onBack }: { onBack: () => void }) {
             <span>Customer dues (previous balances): {saved.dues.length}</span>
             <span>{moneyText(saved.dues.reduce((s, d) => s + d.amount, 0))}</span>
           </div>
+          {saved.corrected !== 0 && (
+            <p className="inv-muted" data-testid="opening-corrected">
+              Previous balances corrected later: {signedMoney(saved.corrected, true)}
+            </p>
+          )}
           <div className="inv-line">
             <span>What I owed: {saved.payables.length}</span>
             <span>{moneyText(saved.payables.reduce((s, d) => s + d.amount, 0))}</span>

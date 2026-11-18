@@ -6,18 +6,23 @@ import { AdminPageHeader, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { ConfirmSheet } from '../OrderActionCards';
 import { KaarbarCustomersCard } from './KaarbarCustomersCard';
 import { KaarbarExpensesCard } from './KaarbarExpensesCard';
+import { KaarbarProductsCard } from './KaarbarProductsCard';
+import { KaarbarSalesCard } from './KaarbarSalesCard';
+import { fetchOldSalesStatus, type OldSalesStatus } from '../../../lib/kaarbar/oldSalesApi';
 import '../../../styles/adminInventory.css';
 import '../../../styles/kaarbar.css';
 
 /**
  * Batch 49: Admin → Import from Kaarbar. Two cards — Customers and
- * Expenses. Each reads a Kaarbar Excel report here in the browser, shows
+ * Expenses. Batch 50 adds Step 1 · Old products and Step 2 · Old sales. Each reads a Kaarbar Excel report here in the browser, shows
  * what will happen to every row, and saves nothing until the Super Admin
  * confirms with the password. Undo is under Careful actions.
  */
 export function KaarbarImportTab() {
   const [status, setStatus] = useState<KaarbarStatus | null>(null);
   const [error, setError] = useState<{ text: string; needsUpdate: boolean } | null>(null);
+  const [oldStatus, setOldStatus] = useState<OldSalesStatus | null>(null);
+  const [oldError, setOldError] = useState<{ text: string; needsUpdate: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const answer = await fetchKaarbarStatus();
@@ -29,15 +34,26 @@ export function KaarbarImportTab() {
     }
   }, []);
 
+  const loadOld = useCallback(async () => {
+    const answer = await fetchOldSalesStatus();
+    if (answer.ok) {
+      setOldStatus(answer.data);
+      setOldError(null);
+    } else {
+      setOldError({ text: answer.error, needsUpdate: answer.needsUpdate });
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadOld();
+  }, [load, loadOld]);
 
   return (
     <section className="inv kb" aria-label="Import from Kaarbar">
-      <AdminPageHeader title="Import from Kaarbar" subtitle="Customers and expenses from your Kaarbar reports" />
+      <AdminPageHeader title="Import from Kaarbar" subtitle="Customers, expenses and old sales from your Kaarbar reports" />
       <p className="inv-muted">
-        Pick a report you exported from Kaarbar as Excel. The file is read on this phone and is never uploaded. Nothing is saved until you
+        Pick a report you exported from Kaarbar (Excel, or PDF for the party statements). The file is read on this phone and is never uploaded. Nothing is saved until you
         press Import and type your password. No message is sent to anyone.
       </p>
       {error ? (
@@ -55,6 +71,19 @@ export function KaarbarImportTab() {
         <>
           <KaarbarCustomersCard status={status} onChanged={load} />
           <KaarbarExpensesCard status={status} onChanged={load} />
+          {oldError ? (
+            <div className="kb-notice" role="alert" data-testid="kb-old-needs-update">
+              <b>{oldError.needsUpdate ? 'Old products and old sales need the Batch 50 database update (migration-051).' : oldError.text}</b>
+              {oldError.needsUpdate && <span>Run the SQL from the Batch 50 report in the Supabase SQL Editor, then open this page again.</span>}
+            </div>
+          ) : !oldStatus ? (
+            <SkeletonRows rows={2} thumb={false} />
+          ) : (
+            <>
+              <KaarbarProductsCard status={oldStatus} onChanged={loadOld} />
+              <KaarbarSalesCard status={oldStatus} onChanged={loadOld} />
+            </>
+          )}
         </>
       )}
     </section>

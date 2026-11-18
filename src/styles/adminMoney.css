@@ -183,3 +183,59 @@
   padding-top: 8px;
   border-top: 1px solid var(--adm-line);
 }
+
+/* Batch 50: customer page — old Kaarbar bills and previous-balance corrections. */
+
+.old-bill + .old-bill {
+  border-top: 1px solid var(--adm-row-line);
+}
+
+.old-bill__chev {
+  transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.old-bill__chev--open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .old-bill__chev {
+    transition: none;
+  }
+}
+
+.old-bill__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 14px 12px;
+}
+
+.old-bill__item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.money-prev-line {
+  align-items: center;
+}
+
+.money-prev-line__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.money-correct__now {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.money-correct__after {
+  margin: 0;
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}

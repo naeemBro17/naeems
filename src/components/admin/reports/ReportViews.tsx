@@ -19,6 +19,7 @@ import {
   dayBookSheets,
   expensesSheets,
   expiringRows,
+  hasOldSales,
   investorsSheet,
   lotsSheet,
   pnlLines,
@@ -80,6 +81,12 @@ export function ProfitLossView({ onBack }: ViewProps) {
             </p>
           )}
           <MissingCostNote count={data.parts.items_missing_cost} />
+          {hasOldSales(data) && (
+            <p className="inv-muted" data-testid="pnl-old-note">
+              Includes old Kaarbar sales ({data.parts.old_bills ?? 0} bill{data.parts.old_bills === 1 ? '' : 's'} in these dates). They are history
+              only, so the Money page does not count them.
+            </p>
+          )}
           <ReportTable sheet={sheet} testId="pnl-table" strongRows={strong} subRows={subs} />
         </>
       )}
@@ -168,9 +175,18 @@ export function ProductsView({ onBack }: ViewProps) {
       {data && sheets && (
         <>
           <div className="rep-stats">
-            <Big label="Sales" value={moneyText(data.totals.sales)} testId="products-sales" />
-            <Big label="Profit on goods" value={signedMoney(sum([data.totals.sales, -data.totals.cost]))} testId="products-profit" />
+            <Big label="Sales" value={moneyText(sum([data.totals.sales, data.old_totals?.old_sales ?? 0]))} testId="products-sales" />
+            <Big
+              label="Profit on goods"
+              value={signedMoney(sum([data.totals.sales, -data.totals.cost, data.old_totals?.old_sales ?? 0, -(data.old_totals?.old_cost ?? 0)]))}
+              testId="products-profit"
+            />
           </div>
+          {(data.old_totals?.old_bills ?? 0) > 0 && (
+            <p className="inv-muted" data-testid="products-old-note">
+              Includes old Kaarbar sales of {moneyText(data.old_totals?.old_sales ?? 0)} (marked Kaarbar in the lists).
+            </p>
+          )}
           <ChipRow label="Products" active={tab} onSelect={setTab} chips={PRODUCT_TABS.map((t) => ({ id: t.id, label: t.label }))} />
           <ReportTable sheet={sheets[tab]} testId={`products-${tab}`} limit={150} empty="No products here." />
         </>

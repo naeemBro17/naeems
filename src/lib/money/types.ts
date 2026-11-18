@@ -190,6 +190,8 @@ export interface MoneyPosition {
   unplaced_payouts: UnplacedPayout[];
   to_receive: number;
   previous_balances: number;
+  /** Batch 50: previous balances corrected later (inside previous_balances; absent before migration-051). */
+  previous_corrections?: number;
   customer_advances: number;
   stock_value: number;
   goods_on_open_orders: number;
@@ -253,6 +255,8 @@ export interface CustomerMoneyHistory {
   phone_key: string | null;
   previous: { id: string; amount: number; at: string; choice: string; kaarbar_amount: number | null; site_due_then: number | null }[];
   previous_left: number;
+  /** Batch 50: previous balances corrected later (newest first; empty before migration-051). */
+  corrections: { id: string; at: string; old_amount: number; new_amount: number; note: string | null; by: string | null }[];
   payments: { id: string; amount: number; date: string; account: string; note: string | null; by: string | null }[];
   reminders: { at: string; amount: number; how: 'whatsapp' | 'copied'; by: string | null }[];
 }

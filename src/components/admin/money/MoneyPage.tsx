@@ -212,6 +212,7 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
                 <Line label="Not shop money (in − out)" value={pos.since_start.not_shop_money} sign="=" />
                 <Line label="Count differences" value={pos.since_start.count_differences} sign="=" />
                 <Line label="Orders from before Inventory mode (outside profit)" value={pos.outside} sign="=" />
+                {(pos.previous_corrections ?? 0) !== 0 && <Line label="Previous balances corrected later" value={pos.previous_corrections ?? 0} sign="=" />}
                 <Line label="Should be" value={pos.expected ?? 0} sign="=" strong />
               </div>
             )}
