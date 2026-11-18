@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useToast } from '../../../hooks/useToast';
 import { readKaarbarFile } from '../../../lib/kaarbar/api';
 import {
@@ -343,6 +343,19 @@ function ChoicePicker({
     if (draft) setQuery('');
   }, [draft]);
   const list = useMemo(() => (draft ? searchChoices(query, draft.name, choices).slice(0, 40) : []), [draft, query, choices]);
+  // Arrow keys move between the rows (from the search box too); the
+  // focused row scrolls into view.
+  const listRef = useRef<HTMLUListElement>(null);
+  const moveFocus = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('.kb-picker__row') ?? []);
+    if (rows.length === 0) return;
+    e.preventDefault();
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    const next = at < 0 ? (e.key === 'ArrowDown' ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, at + (e.key === 'ArrowDown' ? 1 : -1)));
+    rows[next].focus();
+    rows[next].scrollIntoView({ block: 'nearest' });
+  };
   return (
     <BottomSheet isOpen={draft !== null} onClose={onClose} title="Pick the site product" panelClassName="kb-picker">
       <div className="kb-picker__body" data-testid="kb-picker">
@@ -352,8 +365,16 @@ function ChoicePicker({
             <b>{draft.name}</b>
           </p>
         )}
-        <AdminSearch value={query} onChange={setQuery} placeholder="Search site products" label="Search site products" />
-        <ul className="kb-picker__list">
+        <div onKeyDown={moveFocus}>
+          <AdminSearch value={query} onChange={setQuery} placeholder="Search site products" label="Search site products" />
+        </div>
+        <ul ref={listRef} className="kb-picker__list" tabIndex={-1} onKeyDown={moveFocus} data-testid="kb-picker-list">
+          <li>
+            <button type="button" className="kb-picker__row kb-picker__row--hidden" onClick={() => onChoose('hidden')} data-testid="kb-picker-hidden">
+              <span className="kb-picker__name">+ Add as new hidden product</span>
+              <span className="kb-row__sub">Never shown in the shop. Only for old sales.</span>
+            </button>
+          </li>
           {list.map((c) => {
             const on = draft?.choice !== null && draft?.choice !== undefined && choiceId(draft.choice) === choiceId(c);
             return (
@@ -370,12 +391,6 @@ function ChoicePicker({
             );
           })}
           {list.length === 0 && <li className="inv-muted kb-picker__none">No site product matches.</li>}
-          <li>
-            <button type="button" className="kb-picker__row kb-picker__row--hidden" onClick={() => onChoose('hidden')} data-testid="kb-picker-hidden">
-              <span className="kb-picker__name">+ Add as new hidden product</span>
-              <span className="kb-row__sub">Never shown in the shop. Only for old sales.</span>
-            </button>
-          </li>
         </ul>
       </div>
     </BottomSheet>

@@ -276,16 +276,17 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(preview).toBeVisible({ timeout: 15_000 });
     const count = (id: string) => page.getByTestId(`kb-pcount-${id}`).locator('b');
     await expect(count('matched')).toHaveText('2');
-    await expect(count('hand')).toHaveText('3');
-    await expect(count('hidden')).toHaveText('0');
+    await expect(count('hand')).toHaveText('0');
+    // No sure match: a new hidden product by default, tagged without opening the picker.
+    await expect(count('hidden')).toHaveText('3');
     await expect(count('price')).toHaveText('2');
-    // "Needs you" is the starting view.
+    // "Needs you" is the starting view (the two with no price).
     const rows = page.getByTestId('kb-item-row');
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('Hidden');
     await expect(page.getByTestId('kb-products-save')).toBeDisabled();
-    await expect(page.getByTestId('kb-products-save-note')).toHaveText('3 items still need a product or a buying price.');
+    await expect(page.getByTestId('kb-products-save-note')).toHaveText('2 items still need a product or a buying price.');
     const row = (name: string) => rows.filter({ hasText: name });
-    await expect(row('Test Old Serum Discontinued').getByTestId('kb-item-price')).toHaveValue('350');
     await expect(row('Test Mystery Balm').getByTestId('kb-item-price')).toHaveAttribute('aria-invalid', 'true');
 
     // The matched ones, with the site's buying price.
@@ -294,23 +295,26 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(row('Test Gentle Cleanser 236 ML')).toContainText('Auto');
     await expect(row('Test Gentle Cleanser 236 ML').getByTestId('kb-item-price')).toHaveValue('1500');
     await expect(row('Test Gentle Cleanser 236 ML')).toContainText('From the site. Change it if you paid differently then.');
-    await page.getByRole('button', { name: /^Needs you/ }).click();
+    await page.getByRole('button', { name: /^All/ }).click();
 
     // Night Cream: two options → pick by hand.
     await row('Test Night Cream').getByTestId('kb-item-pick').click();
     const picker = page.getByTestId('kb-picker');
     await expect(picker).toBeVisible();
-    await expect(picker.getByTestId('kb-picker-hidden')).toContainText('+ Add as new hidden product');
+    // "+ Add as new hidden product" is the first row; arrow keys move down the list.
+    await expect(picker.locator('.kb-picker__row').first()).toHaveAttribute('data-testid', 'kb-picker-hidden');
+    await picker.getByLabel('Search site products').press('ArrowDown');
+    await expect(picker.getByTestId('kb-picker-hidden')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(picker.getByTestId('kb-picker-choice').first()).toBeFocused();
+    const scrolls = await picker.getByTestId('kb-picker-list').evaluate((el) => getComputedStyle(el).overflowY === 'auto' && el.clientHeight > 0);
+    expect(scrolls, 'the list is its own scroll area').toBe(true);
     await noSidewaysScroll(page);
     await page.screenshot({ path: `${SHOTS}/${theme}-01-step1-picker-open.png` });
     await picker.getByTestId('kb-picker-choice').filter({ hasText: '100 ml' }).click();
     await expect(picker).toBeHidden();
 
-    // Old Serum and Mystery Balm: new hidden products.
-    await row('Test Old Serum Discontinued').getByTestId('kb-item-pick').click();
-    await page.getByTestId('kb-picker-hidden').click();
-    await row('Test Mystery Balm').getByTestId('kb-item-pick').click();
-    await page.getByTestId('kb-picker-hidden').click();
+    // Old Serum and Mystery Balm are already new hidden products.
     await row('Test Mystery Balm').getByTestId('kb-item-price').fill('120');
     await expect(page.getByTestId('kb-products-save')).toBeEnabled();
     // The card's main button is near-black (light) / near-white (dark), never orange.
@@ -323,6 +327,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(row('Test Night Cream')).toContainText('By hand');
     await expect(row('Test Night Cream').getByTestId('kb-item-price')).toHaveValue('1600');
     await expect(row('Test Old Serum Discontinued')).toContainText('New hidden product');
+    await expect(row('Test Old Serum Discontinued').getByTestId('kb-item-price')).toHaveValue('350');
     await expect(count('hidden')).toHaveText('2');
     await noSidewaysScroll(page);
     await noOrangeOnCard(page, 'kb-products');

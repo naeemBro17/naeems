@@ -579,3 +579,32 @@
   border-color: var(--adm-text);
   color: var(--adm-card);
 }
+
+/* The picker list is the one thing that scrolls (mouse wheel, touch,
+   arrow keys): the sheet is a column and the list takes what is left. */
+.sheet-panel.kb-picker {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kb-picker .sheet-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.kb-picker .kb-picker__body {
+  flex: 1;
+  height: auto;
+}
+
+.kb-picker__list:focus {
+  outline: none;
+}
+
+.kb-picker__row:focus-visible {
+  outline: 2px solid var(--adm-text);
+  outline-offset: -2px;
+}
