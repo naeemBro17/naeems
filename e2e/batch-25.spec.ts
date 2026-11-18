@@ -221,7 +221,7 @@ test('a limited role sees only its items, and the database refuses the rest', as
   await page.goto('/admin');
   await expect(page.locator('.adm-sidebar__brand')).toHaveText(`NAEEM'S ${ROLE_NAME.toUpperCase()}`, { timeout: 15_000 });
   expect((await page.locator('.adm-sidebar__label').allInnerTexts()).map((t) => t.trim())).toEqual([
-    'Home', 'Orders', 'Products', 'Categories', 'My Profile',
+    'Home', 'Orders', 'Shopping list', 'Products', 'Categories', 'My Profile',
   ]);
   // A Super-Admin page by URL falls back to Home.
   await page.goto('/admin?tab=team');
@@ -409,7 +409,8 @@ test('no emoji anywhere in the rendered admin', async ({ page }) => {
   await useSessionInPage(page, admin);
   for (const p of ADMIN_PAGES) {
     await page.goto(`/admin${p.query}`);
-    await expect(page.locator('.adm-page-header').first()).toBeVisible({ timeout: 15_000 });
+    // Batch 51: Home's header is the hero card.
+    await expect(page.locator('.adm-page-header, .adm-hero').first()).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(400);
     // Batch 33: what customers wrote (review quotes) is their own text and
     // may hold emoji; only the admin's own words are checked.

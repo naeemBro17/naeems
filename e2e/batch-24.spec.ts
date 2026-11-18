@@ -202,7 +202,7 @@ test('Staff login works, and the moderator sees only Orders', async ({ page }) =
   // Batch 25: Home (everyone) + what the role allows, and nothing else.
   await expect(page.locator('.adm-tabbar__tab').first()).toBeVisible();
   const labels = await page.locator('.adm-tabbar__tab .adm-tabbar__label').allInnerTexts();
-  expect(labels.map((t) => t.trim())).toEqual(['Home', 'Orders', 'My Profile']);
+  expect(labels.map((t) => t.trim())).toEqual(['Home', 'Orders', 'Shopping list', 'My Profile']);
   await expect(page.locator('.adm-page-header__eyebrow')).toHaveText(`NAEEM'S ${ROLE_NAME.toUpperCase()}`);
   await page.locator('.adm-tabbar__tab', { hasText: 'My Profile' }).click();
   await expect(page.getByRole('main')).toContainText(MOD_USERNAME);

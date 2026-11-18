@@ -83,7 +83,7 @@ export function AdminHomeHero({ eyebrow, greeting, date }: AdminHomeHeroProps) {
         <GlassClock />
       </div>
       <div className="adm-hero__text">
-        <p className="adm-hero__eyebrow">{eyebrow}</p>
+        <p className="adm-page-header__eyebrow adm-hero__eyebrow">{eyebrow}</p>
         <h1 className="adm-hero__greeting adm-page-header__title">{greeting}</h1>
         <p className="adm-hero__date">{date}</p>
       </div>

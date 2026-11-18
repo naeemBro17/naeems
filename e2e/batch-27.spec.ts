@@ -175,7 +175,7 @@ test.describe('Part 1 — product page', () => {
   });
 
   test('opening and closing a section keeps its header at the same screen position (±2 px)', async ({ page }) => {
-    await page.goto('/product/cerave-moisturizing-lotion-236ml');
+    await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
     const closed = page.locator('.accordion__header[aria-expanded="false"]').first();
     await expect(closed).toBeVisible();
     const title = ((await closed.textContent()) ?? '').trim();
@@ -201,7 +201,7 @@ test.describe('Part 1 — product page', () => {
   });
 
   test('no tap highlight anywhere on the shop', async ({ page }) => {
-    await page.goto('/product/cerave-moisturizing-lotion-236ml');
+    await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
     await expect(page.locator('.accordion__header').first()).toBeVisible();
     const colours = await page.evaluate(() =>
       ['.accordion__header', '[data-testid="add-to-cart"]', '.detail-header__back', '.product-card', 'body'].map(
@@ -224,7 +224,7 @@ test.describe('Part 1 — product page', () => {
     test.setTimeout(60_000);
     const opened: string[] = [];
     context.on('page', (p) => opened.push(p.url()));
-    await page.goto('/product/cerave-moisturizing-lotion-236ml');
+    await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
     const header = page.getByRole('button', { name: 'Video review', exact: true });
     await header.click();
 
