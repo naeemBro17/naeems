@@ -523,6 +523,9 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await scrollElementTo(firstAdd, 160);
     await firstAdd.click();
     const card = cardNamed(page, name);
+    // Batch 51: let the stepper finish popping in at a fixed spot first.
+    await scrollElementTo(card, 160);
+    await page.waitForTimeout(400);
     await card.getByRole('button', { name: `One more ${name}` }).click();
 
     // Cart page shows 2; change it to 3 there.

@@ -174,10 +174,28 @@ not run.
   "pre-inventory units" counter (used only when switching Off → On) is
   not reduced when you raise a short line by editing. Both are small and
   only matter in Off mode.
-- No full `npm run verify` was possible before the quick checks
-  finished; the final results are in the summary I gave at the end of
-  the session.
-
+- Test results. Build OK, all 647 unit tests pass, the Batch 51 browser
+  file passes 20/20 (incl. the 53 database checks). The full
+  `npm run verify` ran once: 278 passed, 31 failed. I went through every
+  failure. The ones caused by this batch (older tests expecting the old
+  menu, the product header without the heart, the old wording / toast,
+  the Home header, the delivery-line spacing, products that now sit a
+  little lower) are fixed and re-run: batch-24, 25, 27, 28 and 29 (the
+  stock / note test) pass (batch-27 + 28 together: 44/44).
+  Still failing and NOT caused by this batch — the live data changed
+  since those tests were written:
+  * no product is "uncounted" any more and Inventory mode is On, so tests
+    that need an uncounted product or mode Off fail (batch-29 floating
+    cart / Removed-Undo, batch-26 Restock, batch-30 edit-order message,
+    batch-33 "two carts", batch-42 stock-count page);
+  * "Show rider's phone" is On in the live shop (batch-35);
+  * the Kaarbar data is already imported (batch-49);
+  * batch-45's own old migration copy clashes with today's place_order
+    (since Batch 48);
+  * pictures missing from Storage (batch-40);
+  * batch-32 expects the order address from before Batch 35;
+  * batch-48 was a timing flake (passed 3 of 3 re-runs).
+  These need their own small test-maintenance batch.
 
 ---------------------------------------------------------------------
 4. WHAT I FOUND ALONG THE WAY
@@ -204,6 +222,12 @@ not run.
   Orders), Categories moves to More.
 - The product page writes "In stock" while cards write "In Stock" (older
   styling, left as it was).
+- First screen on the product page: at 390×844 and 412 px the option
+  chips and Add to Cart stay on the first screen with the new delivery
+  line. On a small 360×740 phone, a product with options now has its
+  option chips about 32 px under the buy bar (before this batch they
+  cleared it by only 12 px); the approved delivery text wraps to two
+  lines there. A later batch can tighten the spacing for small phones.
 
 
 ---------------------------------------------------------------------

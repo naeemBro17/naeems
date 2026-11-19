@@ -522,6 +522,10 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(price).not.toHaveText(basePrice);
     await expect(price).toHaveText(await page.locator('.pdp-sheet .product-detail__price').textContent() ?? '');
 
+    // Batch 51: the extra test option row sits below the fold, so tapping it
+    // scrolled the page and the buy bar hid (by design); back to the top.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(page.getByTestId('buy-bar')).toHaveAttribute('data-shown', 'true');
     await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('1');
     const lines = await cartLines(page);
