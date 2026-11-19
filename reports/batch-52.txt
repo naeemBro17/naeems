@@ -1,0 +1,557 @@
+BATCH 52 — Link previews, Open in new tab, "Share as a combo", leave Facebook's in-app browser
+Branch: feature/batch-52-share-combo (from main after Batch 51 was merged)
+Version: 1.52.0
+SQL file: supabase/migration-053-batch52.sql
+
+========================================================================
+1. WHAT I DID
+========================================================================
+
+PART 1 — LINK PREVIEWS (Facebook, Messenger, WhatsApp)
+
+How product previews worked before: link-preview robots (Facebook,
+WhatsApp, …) do not run the shop's code; they only read the HTML the server
+sends. vercel.json already sent ONLY robot visitors of /product/... to a
+small server function, api/product-og.ts, which looked the product up and
+returned a tiny HTML page with the preview tags (photo, "{name} — Naeem's",
+and a description made of brand + PRICE + the start of the description).
+Real shoppers never touch that function.
+
+What changed:
+- The tag-building is now in ONE shared file (api/_og.ts) used by the
+  product preview and the new combo preview, so they can never drift apart.
+- Product links: same full square product photo, nothing drawn on it.
+  Title is now "{product name} — NAEEM'S". Description is now
+  "100% authentic. Imported for you." The PRICE IS GONE. The photo is
+  declared as 1200 × 1200 so Messenger shows it big. Site name "NAEEM'S".
+- Shop link (home, and any page without its own preview): a new designed
+  banner public/og-shop.jpg (1200 × 630, 79 KB) — frame 1 of your mockup,
+  with your new wording: "100% authentic skincare, imported for you."
+  ("imported for you." in the glass style), the sub-line "From Australia,
+  USA, Canada, Korea, Japan, India & UK — straight to your door.", the two
+  chips "Cash on delivery" · "All over Bangladesh", and a fan of 3 real
+  product photos (CeraVe Foaming Cleanser, Avène Thermal Spring Water,
+  Celimax Retinal Shot) on white cards — NO names and NO prices, each photo
+  whole. Title "NAEEM'S — 100% Authentic Skincare", description "Imported
+  from Australia, USA, Canada, Korea, Japan, India & UK. Cash on delivery
+  all over Bangladesh." (The three photos were downloaded once by hand to
+  make the picture; nothing downloads them at run time.)
+  The picture: reports/batch-52-screens/shop-preview-og-shop.jpg
+- Combo links (/c/{code}): a wide picture (1200 × 630) with the combo's
+  photos (up to 4), each shown whole on a soft light background, and a
+  small dark glass badge "PICKED FOR YOU". Title "{combo name} — picked for
+  you by NAEEM'S", description "{n} products, hand-picked by Naeem. 100%
+  authentic."
+- Brand links keep their own preview; only their fallback picture is now
+  the new banner.
+- All tags checked: og:title, og:description, og:image + width/height,
+  og:url, og:type, twitter:card = summary_large_image. The real tags the
+  functions return are in reports/batch-52-screens/preview-tags.txt (also
+  copied in section 4 below).
+
+PART 2 — OPEN IN NEW TAB
+
+Everything that takes you to another page is now a real link. A long-press
+on a phone, or right-click / Ctrl-click / middle-click on a computer, offers
+"Open in new tab". A normal tap works exactly as before (no page reload;
+the "you have unsaved changes" guard, scroll memory and animations still
+run). Buttons that DO something (save, delete, add to cart) stay buttons.
+Changed in this batch:
+  Admin
+  - Side menu (computer) and bottom tab bar (phone) — every section.
+  - More page — every row.
+  - Home: the "needs attention" rows, the Shopping list tile, the order
+    tiles (Today, To confirm, Shipped, This month), Profit and Money cards.
+  - Shopping list: each order number.
+  - Steadfast payouts: each payout row and each order number; one payout's
+    page: each order number.
+  - Customer page: each order row.
+  - Inventory menu rows, Money menu rows, Reports "Monthly stock count" /
+    "Lock a month".
+  - Sales profit / Sold without stock / Write-offs / Reports order list:
+    order numbers. Give an offer: "Open product".
+  - Combos: name and Open are links.
+  (Orders, Products, Customers lists and lots were already done in Batch 47.)
+  Shop
+  - Bottom bar (Home, Search, Cart, Account) and the floating glass cart.
+  - Side menu: Admin Panel, Wholesale Account, About Us, Delivery Info,
+    Return Policy, Terms, Privacy.
+  - Category circles (link = Home filtered by that category) and Expert.
+  - Product cards: the product NAME is a real link (long-press it). See
+    "Design decisions" for why not the whole card.
+  - Order placed page: "View my order" and "Continue shopping".
+  - Already links before: cart product names, account menu rows, brand
+    links, combo product rows.
+
+PART 3 — "SHARE AS A COMBO"
+
+- Cart (admin only): under the cart, above the Checkout bar, a dark card
+  "ONLY YOU SEE THIS" (lock icon) / "Picked these for a customer?" / "Turn
+  this cart into a link. Your customer opens it and adds everything in one
+  tap." and a light-outline "Share as a combo" button. It shows only when
+  the real signed-in role is admin (the same isAdmin check the rest of the
+  shop uses) — it is not in the page at all for anyone else. Checkout stays
+  the one orange button.
+- "Share as a combo" sheet: "{n} products · total ৳{total}", the product
+  thumbnails, Combo name (required, up to 60 letters), Note for the customer
+  (optional, up to 300 letters), orange "Create link". It saves the name,
+  note, and each cart line (product, option, quantity), who made it, when,
+  and a short code. No prices are saved.
+- "Your combo link is ready": black circle with a tick, the name and total,
+  the link with Copy (turns into "Copied"), four share buttons — WhatsApp,
+  Messenger (on a phone: Messenger's share screen; on a computer: copies
+  the link and says "Link copied — paste it in Messenger"), Copy, More (the
+  phone's own share sheet; on a computer without one it copies) — "Your
+  customer will see this in the chat:" with the preview, and "Clear my
+  cart".
+- Customer page /c/{code}: the product photos at the top (whole, never cut),
+  soft glass background like the wishlist, "★ PICKED FOR YOU BY NAEEM", the
+  combo name, "Naeem's note" card (only when there is a note), the products
+  with today's price and today's stock in Batch 51 words (In Stock / Only
+  {n} left — order soon / Sold out) — tapping one opens the product — then
+  "Total" in near-black bold, the retail total struck through, and an
+  outlined "You save ৳{x}" (only when there is a saving). Sold-out items are
+  not counted. Orange "Add all to cart" adds every available item with its
+  quantity, following the Batch 51 order limit and stock (and counting what
+  is already in the cart), then opens the cart. When something was sold
+  out: "Added {n} items. {m} sold out." Under it "Want to change something?
+  Chat with us" → WhatsApp with "Hi! About my combo: {combo name}". Works
+  for logged-out visitors; not listed anywhere in the shop. A deleted or
+  unknown code shows "This combo isn't available anymore." with "Browse the
+  shop".
+- Admin → Combos (new menu item under Shopping list): each combo with its
+  thumbnails, number of products, today's total, the date, and Open / Copy
+  link / Share / Delete ("Delete this combo? Its link will stop working.").
+  Links never expire unless deleted. Deleting also removes its preview
+  picture.
+- Database: two new tables (combos, combo_items) with row security — only
+  the admin can make, list, change or delete; anyone with the link reads
+  ONE combo through a function that returns only what the customer page
+  needs. Combos never touch stock, orders, money or promo codes. Coupons
+  work as normal in the cart, because a combo just fills the normal cart.
+
+PART 4 — LEAVING FACEBOOK'S IN-APP BROWSER
+
+- The shop recognises Facebook, Messenger and Instagram's own browsers.
+- Android: on arrival — before anything is drawn, so nothing can be lost —
+  the page reopens the SAME address in Chrome (if Chrome is not installed,
+  the phone just stays on the normal address). This happens once per visit
+  only, so it can never loop. If it does not work, the small bar below
+  shows (saying "Chrome" instead of "Safari").
+- iPhone (Apple does not allow the jump): a small, calm bar at the top:
+  "For Google login and faster checkout, open this page in Safari." with
+  "How?". "How?" opens a small sheet: "Tap ••• in the corner of the
+  screen, then choose Open in browser." and a "Copy link" button. ✕ hides
+  the bar for the rest of the visit.
+- Tapping a Google login button inside these browsers no longer goes to
+  Google's error page: the same help appears (Android tries Chrome again).
+- Normal browsers see nothing different.
+
+WHAT HAPPENS WHEN A LINK IS OPENED FROM FACEBOOK
+- Android: the page opens in Facebook's browser for a moment, then Chrome
+  opens on the same page by itself. The customer continues in Chrome
+  (Google login works there). If Chrome does not open, they see the small
+  bar and can tap "How?".
+- iPhone: the page stays in Facebook's browser with the small bar at the
+  top. Shopping works; only Google login needs Safari. "How?" explains
+  where to tap; "Copy link" lets them paste it into Safari.
+
+STEP BY STEP — MAKE, SHARE AND DELETE A COMBO
+1. Run the SQL in section 2 once.
+2. On the shop (signed in as admin), add the products to your cart with
+   the right quantities and options.
+3. Open the cart. Under the products you see the dark card "ONLY YOU SEE
+   THIS". Tap "Share as a combo".
+4. Type a name (e.g. "Sadia's glow routine") and, if you like, a note.
+   Tap "Create link".
+5. "Your combo link is ready": tap WhatsApp or Messenger to send it, or
+   Copy and paste it anywhere. The picture under it is what your customer
+   sees in the chat.
+6. Tap "Clear my cart" to start the next combo (or close the sheet to keep
+   your cart).
+7. Later: Admin → Combos (in the menu, under Shopping list; on the phone
+   it is on the More page). Open = see it as the customer does; Copy link;
+   Share = the same share buttons; Delete = the link stops working.
+
+STEP BY STEP — REFRESH OLD PREVIEWS ON FACEBOOK (Sharing Debugger)
+Facebook keeps old previews for a while. After this batch is live:
+1. On a computer, open https://developers.facebook.com/tools/debug/ and
+   log in with your Facebook account.
+2. Paste the link (e.g. https://naeems-all.vercel.app/ or a product link)
+   in the box and press "Debug".
+3. Press "Scrape Again". The preview at the bottom should now show the new
+   picture and words.
+4. Do this for the home link and for any product link you share often.
+   (WhatsApp has no such tool: its preview refreshes by itself after some
+   days; a link with something added, like ?v=2 at the end, shows the new
+   preview at once.)
+
+========================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+========================================================================
+
+Supabase → SQL Editor → New query → paste EVERYTHING between the lines →
+Run. Safe to run more than once. Until it is run: the cart card shows and
+"Create link" says "Combos are not set up yet. Run the Batch 52 SQL in
+Supabase first."; Admin → Combos says the same; a combo link shows "This
+combo isn't available anymore." Nothing else depends on it.
+
+-------------------------------- copy from here --------------------------------
+-- =====================================================================
+-- Batch 52 — "Share as a combo"
+--
+-- Paste the whole file into the Supabase SQL Editor and press Run.
+-- It is safe to run more than once.
+--
+-- A  combos: one shareable list of products Naeem picked for a customer
+--    (name, optional note, the link code, the preview picture).
+-- B  combo_items: the products in it (product, option, quantity).
+-- C  Only the admin (is_admin()) can create, list, change or delete them.
+-- D  get_combo(code): anyone with the link (also logged-out visitors) reads
+--    ONE combo by its code — only what the customer page needs. Nobody
+--    else can list combos.
+--
+-- Combos never touch stock, orders, money or promo codes. There is no
+-- combo price: the shop's normal prices apply.
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------- A, B
+CREATE TABLE IF NOT EXISTS public.combos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- The link: /c/{code}. 8 letters / digits, never easy to guess.
+  code text NOT NULL UNIQUE CHECK (code ~ '^[a-z2-9]{8}$'),
+  name text NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 60),
+  note text CHECK (note IS NULL OR char_length(note) <= 300),
+  -- The wide picture link previews show (drawn once when it is made).
+  preview_url text,
+  created_by uuid REFERENCES auth.users (id) ON DELETE SET NULL DEFAULT auth.uid(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.combo_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  combo_id uuid NOT NULL REFERENCES public.combos (id) ON DELETE CASCADE,
+  product_id uuid NOT NULL REFERENCES public.products (id) ON DELETE CASCADE,
+  -- The chosen option; null = the product itself (or its own base option).
+  variant_id uuid,
+  quantity integer NOT NULL CHECK (quantity BETWEEN 1 AND 99),
+  sort_order integer NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS combo_items_combo_idx ON public.combo_items (combo_id, sort_order);
+CREATE INDEX IF NOT EXISTS combos_created_idx ON public.combos (created_at DESC);
+
+-- ------------------------------------------------------------------- C
+ALTER TABLE public.combos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.combo_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS combos_admin_all ON public.combos;
+CREATE POLICY combos_admin_all ON public.combos
+  FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS combo_items_admin_all ON public.combo_items;
+CREATE POLICY combo_items_admin_all ON public.combo_items
+  FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+REVOKE ALL ON public.combos FROM anon;
+REVOKE ALL ON public.combo_items FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.combos TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.combo_items TO authenticated;
+
+-- Makes a combo and its lines in one step. Returns the new combo's id.
+CREATE OR REPLACE FUNCTION public.admin_create_combo(
+  p_code text,
+  p_name text,
+  p_note text,
+  p_items jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_id uuid;
+  v_item jsonb;
+  v_index integer := 0;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only the admin can make a combo.' USING ERRCODE = '42501';
+  END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'A combo needs at least one product.';
+  END IF;
+  IF jsonb_array_length(p_items) > 50 THEN
+    RAISE EXCEPTION 'A combo can have up to 50 products.';
+  END IF;
+
+  INSERT INTO public.combos (code, name, note)
+  VALUES (p_code, btrim(p_name), NULLIF(btrim(coalesce(p_note, '')), ''))
+  RETURNING id INTO v_id;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) LOOP
+    INSERT INTO public.combo_items (combo_id, product_id, variant_id, quantity, sort_order)
+    VALUES (
+      v_id,
+      (v_item ->> 'product_id')::uuid,
+      NULLIF(v_item ->> 'variant_id', '')::uuid,
+      (v_item ->> 'quantity')::integer,
+      v_index
+    );
+    v_index := v_index + 1;
+  END LOOP;
+
+  RETURN v_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_create_combo(text, text, text, jsonb) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.admin_create_combo(text, text, text, jsonb) TO authenticated;
+
+-- ------------------------------------------------------------------- D
+-- One combo by its code: name, note, picture and lines. Null when the
+-- code is unknown or the combo was deleted. Prices and stock are NOT
+-- here: the customer page reads today's from the shop, like every page.
+CREATE OR REPLACE FUNCTION public.get_combo(p_code text)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT jsonb_build_object(
+    'code', c.code,
+    'name', c.name,
+    'note', c.note,
+    'preview_url', c.preview_url,
+    'items', coalesce((
+      SELECT jsonb_agg(
+        jsonb_build_object('product_id', i.product_id, 'variant_id', i.variant_id, 'quantity', i.quantity)
+        ORDER BY i.sort_order
+      )
+      FROM public.combo_items i
+      WHERE i.combo_id = c.id
+    ), '[]'::jsonb)
+  )
+  FROM public.combos c
+  WHERE p_code ~ '^[a-z2-9]{8}$' AND c.code = p_code;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_combo(text) FROM public;
+GRANT EXECUTE ON FUNCTION public.get_combo(text) TO anon, authenticated;
+
+COMMIT;
+-------------------------------- copy to here ----------------------------------
+
+To check it worked, run:
+  select to_regclass('public.combos') as combos, to_regclass('public.combo_items') as items;
+Both should show a name (not null).
+
+========================================================================
+3. WHAT I COULD NOT FINISH
+========================================================================
+
+Nothing from the task list is left undone. Two honest limits:
+
+- I could not open the Vercel preview of this branch from here (its
+  address is shortened by Vercel and I have no Vercel login), so the live
+  check of the robot-only preview functions is: Vercel built them without
+  error, and I ran the same functions on this computer against the live
+  shop (output in section 4). After merging, please do the Sharing
+  Debugger steps above — that is the real proof on facebook.com.
+- Combo previews will show the shop banner (not the collage) until you run
+  the SQL in section 2, and for combos made before it was run (none can
+  be made before).
+
+TESTS
+- npm run build: passed, zero errors (the usual "large file" notes for
+  the admin and PDF parts are old, not errors).
+- Unit tests (vitest): 675 of 675 passed, including 28 new Batch 52 tests
+  (preview tags for product / home / combo and "no price in any preview",
+  combo totals with sold-out items skipped, savings, order-limit units,
+  combo code shape, Facebook / Messenger / Instagram on Android and
+  iPhone vs Chrome / Safari, the Android "open in Chrome" link, collage
+  layout, admin page addresses).
+- Browser tests for this batch (e2e/batch-52.spec.ts): 19 of 19 passed —
+  the database rules in one rolled-back transaction (admin only to make /
+  list / change / delete, anyone reads one combo by its code, customers
+  and logged-out visitors refused, stock / orders / promo codes
+  untouched), the customer page (normal, sold-out, deleted, order limit),
+  the admin cart card and sheets, Admin → Combos, Messenger on a computer,
+  Ctrl+click opening a new tab, the iPhone bar and sheet, Google login in
+  Facebook's browser, Android's once-only jump, and a normal browser
+  seeing nothing new. No combo was ever saved (all combo database calls
+  are answered in the browser), so none needed deleting. No real Storage
+  file was downloaded (the suite fails a test that does).
+- npm run verify (the full run, once at the end): 241 passed, 29 failed.
+  I went through every failure:
+  * Caused by this batch — older tests that looked for a "button" where
+    there is now a link, the new Combos menu item, the new preview title,
+    and the product name now inside a link: batch-25, batch-27 (6),
+    batch-31, batch-47, batch-48 ("View my order"), policy-pages and
+    (earlier, during the batch) back-known-good, batch-32, batch-43,
+    history, home, one-transition-system, phone-back, product-
+    transitions, search. All fixed and re-run on their own: all pass.
+  * NOT caused by this batch — the same list Batch 51's report already
+    gave (live data changed since those tests were written): no product
+    with a tracked stock number any more (batch-24, 30, 32, 33, 35, 36,
+    37, fix-order-actions), the order limit of 4 now enforced (batch-39),
+    Money books / stock-count state (batch-41, 42), Batch 26 Restock,
+    pictures missing from Storage (batch-40), batch-45's old migration
+    copy, live settings that changed (batch-48, 49, 51 database tests),
+    and two network timeouts (batch-23 YouTube, batch-34 Telegram).
+    These still need their own test-maintenance batch.
+- Note: once during the batch I started a re-run of 4 files that pulled
+  in the whole first half of the suite (those files sit in the group that
+  depends on the other one). That was one extra partial run against the
+  live Supabase project; afterwards I re-ran single files only.
+
+========================================================================
+4. WHAT I FOUND ALONG THE WAY
+========================================================================
+
+- The test list in the prompt asked for unit tests of 'price "From"' and a
+  "delivery part" in the preview text. Part 1 of the same prompt says no
+  price in any preview (your brand decision), so there is no price or
+  delivery text to test; instead a unit test proves no price appears in
+  any preview.
+- public/og-image.png (the old preview picture) is still saved on every
+  shopper's phone by the offline cache (about its size each first visit).
+  Nothing uses it any more except as history; it can be deleted in a later
+  batch. I left it, since deleting files is not this batch's task.
+- The home page's search-engine description (not the preview) still said
+  "Authentic Australian skincare …". I changed it to the same countries
+  line as the preview, so Google and Facebook say the same thing.
+- Raw tags a link-preview robot gets (from the real functions, run against
+  the live shop):
+    === PRODUCT  /product/avne-thermal-spring-water-300-ml
+    <meta charset="utf-8">
+    <title>Avène Thermal Spring Water 300 ml — NAEEM&#39;S</title>
+    <meta name="description" content="100% authentic. Imported for you.">
+    <meta property="og:type" content="product">
+    <meta property="og:site_name" content="NAEEM&#39;S">
+    <meta property="og:title" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+    <meta property="og:description" content="100% authentic. Imported for you.">
+    <meta property="og:image" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+    <meta property="og:image:secure_url" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="1200">
+    <meta property="og:image:alt" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+    <meta property="og:url" content="https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+    <meta name="twitter:description" content="100% authentic. Imported for you.">
+    <meta name="twitter:image" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+    <link rel="canonical" href="https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml">
+    
+    === COMBO  /c/k7m2xq9p (before the SQL is run, falls back to the shop preview)
+    <meta charset="utf-8">
+    <title>NAEEM&#39;S — 100% Authentic Skincare</title>
+    <meta name="description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="NAEEM&#39;S">
+    <meta property="og:title" content="NAEEM&#39;S — 100% Authentic Skincare">
+    <meta property="og:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+    <meta property="og:image" content="https://naeems-all.vercel.app/og-shop.jpg">
+    <meta property="og:image:secure_url" content="https://naeems-all.vercel.app/og-shop.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="NAEEM&#39;S — 100% Authentic Skincare">
+    <meta property="og:url" content="https://naeems-all.vercel.app/c/k7m2xq9p">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NAEEM&#39;S — 100% Authentic Skincare">
+    <meta name="twitter:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+    <meta name="twitter:image" content="https://naeems-all.vercel.app/og-shop.jpg">
+    <link rel="canonical" href="https://naeems-all.vercel.app/c/k7m2xq9p">
+    
+    === HOME  /  (dist/index.html)
+    <meta name="description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+    <meta property="og:site_name" content="NAEEM'S" />
+    <meta property="og:title" content="NAEEM'S — 100% Authentic Skincare" />
+    <meta property="og:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+    <meta property="og:image" content="https://naeems-all.vercel.app/og-shop.jpg" />
+    <meta property="og:image:secure_url" content="https://naeems-all.vercel.app/og-shop.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="NAEEM'S — 100% Authentic Skincare" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://naeems-all.vercel.app/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NAEEM'S — 100% Authentic Skincare" />
+    <meta name="twitter:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+    <meta name="twitter:image" content="https://naeems-all.vercel.app/og-shop.jpg" />
+    <link rel="canonical" href="https://naeems-all.vercel.app/" />
+    <title>NAEEM'S</title>
+
+========================================================================
+5. DESIGN DECISIONS
+========================================================================
+
+- Combo collage picture: drawn ONCE in your browser when you press
+  "Create link" (from the products' photos), saved as one small JPG in
+  Storage (folder combos/), and its address saved with the combo. A
+  Facebook / WhatsApp preview then reads only that one file — the product
+  photos are never downloaded per preview, and nothing is generated on the
+  server. Simplest and cheapest. If drawing or saving the picture fails,
+  the link still works and its preview shows the shop banner.
+- Product cards: only the NAME became a real link, not the whole card. A
+  link over the whole card would sit on top of the product photo, whose
+  long-press menu is deliberately blocked (so people can't save your
+  photos), and would have changed how every tap on a card is handled.
+  Tapping anywhere on the card still opens the product as before.
+- Share buttons are neutral (dark icons on light circles), not WhatsApp
+  green / Messenger purple, to keep the one-orange, neutral look and not
+  add new accent colours.
+- The admin card sits at the end of the cart list, right above the sticky
+  Total + Checkout bar (the shop's cart keeps the total in that bar).
+- The "Share as a combo" total uses the normal shop prices a customer pays
+  (offer, else retail), not wholesale — the same prices the customer page
+  shows.
+- Combo codes: 8 letters/digits from an alphabet without look-alikes (no
+  0/o, 1/l/i) — about 850 billion possibilities, so a code can't be guessed.
+- "Add all to cart" with nothing sold out shows a short "Added {n} items"
+  toast and opens the cart (you gave the wording only for the sold-out
+  case). If everything in a combo is sold out the button reads "Sold out"
+  and can't be tapped.
+- Extra wording I wrote (not given in the prompt): "Making the link…",
+  "Give the combo a name.", "Cart cleared", "Link copied",
+  "Combo deleted", "Could not load this combo." / "Check your connection
+  and try again." / "Try again", Admin → Combos subtitle "Product picks you
+  shared as a link. Make one from your cart.", empty list "No combos yet" /
+  "Add products to your cart, then tap Share as a combo.", the in-app sheet
+  title "Open in Safari" (or Chrome), and the Google-login message "Google
+  login does not work inside this app. Open this page in your browser to
+  log in."
+- Facebook's wording check: current Facebook / Messenger / Instagram name
+  the option "Open in browser" (some versions say "Open in external
+  browser"), and the ••• button is in the bottom-right corner in recent
+  versions, not always at the top. So the sheet says "Tap ••• in the
+  corner of the screen, then choose Open in browser."
+
+========================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done — for you to decide)
+========================================================================
+
+1. Combos in the shop (you said "later"): a "Naeem's picks" row on Home
+   built from chosen combos. Why: ready-made routines raise order size.
+   Size: medium.
+2. Combo link analytics: count how many times each combo was opened and
+   added to cart (Admin → Combos). Why: shows which recommendations
+   actually sell. Size: small–medium.
+3. Remove the old og-image.png from the offline cache (see section 4).
+   Why: every first visit downloads a picture nobody uses. Size: small.
+4. Per-category and per-brand designed preview pictures like the shop
+   banner. Why: shared brand/category links look as premium as the home
+   link. Size: medium.
+5. A "share this product" button for customers on the product page (uses
+   the phone's share sheet). Why: free word-of-mouth from Messenger, where
+   your customers already are. Size: small.

@@ -442,12 +442,12 @@ test('Part 3: on a computer, another sidebar item asks first; products and custo
   await page.goto(`/admin/products/${product.id}/edit`);
   await expect(page.getByTestId('product-page')).toBeVisible({ timeout: 20_000 });
   await page.locator('#pf-name').first().fill(`${product.name} (typed)`);
-  await page.getByRole('navigation', { name: 'Admin sections' }).first().getByRole('button', { name: 'Customers' }).click();
+  await page.getByRole('navigation', { name: 'Admin sections' }).first().getByRole('link', { name: 'Customers' }).click();
   const ask = page.getByRole('dialog', { name: 'Discard changes?' });
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Keep editing' }).click();
   await expect(page.locator('#pf-name').first()).toHaveValue(`${product.name} (typed)`);
-  await page.getByRole('navigation', { name: 'Admin sections' }).first().getByRole('button', { name: 'Customers' }).click();
+  await page.getByRole('navigation', { name: 'Admin sections' }).first().getByRole('link', { name: 'Customers' }).click();
   await ask.getByRole('button', { name: 'Discard' }).click();
   await expect(page).toHaveURL(/tab=customers/, { timeout: 10_000 });
   // Nothing was saved.

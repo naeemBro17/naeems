@@ -85,7 +85,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
   }) => {
     const errors = collectPageErrors(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('link', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(/\/search/);
     const searchInput = page.getByRole('combobox', { name: 'Search products' });
     await searchInput.fill('cerave');
@@ -109,7 +109,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
   test('Account -> Home via phone back: crossfade, no black or blank frame', async ({ page }) => {
     const errors = collectPageErrors(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Account' }).click();
+    await page.getByRole('link', { name: 'Account', exact: true }).click();
     await expect(page).toHaveURL(/\/account/);
 
     await assertCleanTransition(page, async () => {

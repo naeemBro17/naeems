@@ -1,3 +1,4 @@
+import { ActionLink } from '../../shared/ActionLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminPath } from '../../../lib/adminPages';
@@ -130,9 +131,9 @@ export function OffersView({ onBack }: { onBack: () => void }) {
                     <span>{moneyText(e.value)}</span>
                   </div>
                   <div className="smart-actions">
-                    <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => navigate(adminPath.editProduct(e.row.product_id))}>
+                    <ActionLink className="adm-btn adm-btn--ghost adm-btn--sm" to={adminPath.editProduct(e.row.product_id)} onOpen={() => navigate(adminPath.editProduct(e.row.product_id))}>
                       Open product
-                    </button>
+                    </ActionLink>
                     <button
                       type="button"
                       className="adm-btn adm-btn--ghost adm-btn--sm"

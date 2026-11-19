@@ -122,7 +122,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
   test.describe('search result', () => {
     async function openSearchResult(page: Page) {
       await page.goto('/');
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await page.getByRole('link', { name: 'Search', exact: true }).click();
       await expect(page).toHaveURL(/\/search/);
       const searchInput = page.getByRole('combobox', { name: 'Search products' });
       await searchInput.fill('cerave');
@@ -184,7 +184,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
   test.describe('Home <-> Account', () => {
     test('there and back, both in-app, one clean transition each way', async ({ page }) => {
       await page.goto('/');
-      await assertSingleCleanTransition(page, () => page.getByRole('button', { name: 'Account' }).click());
+      await assertSingleCleanTransition(page, () => page.getByRole('link', { name: 'Account', exact: true }).click());
       await expect(page).toHaveURL(/\/account/);
 
       await assertSingleCleanTransition(
@@ -197,7 +197,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
 
     test('phone back from Account is one clean transition', async ({ page }) => {
       await page.goto('/');
-      await page.getByRole('button', { name: 'Account' }).click();
+      await page.getByRole('link', { name: 'Account', exact: true }).click();
       await expect(page).toHaveURL(/\/account/);
 
       await assertSingleCleanTransition(page, () => page.goBack(), { expectNavVisible: true });
@@ -208,7 +208,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
   test.describe('Home <-> Cart', () => {
     test('there and back, both in-app, one clean transition each way', async ({ page }) => {
       await page.goto('/');
-      await assertSingleCleanTransition(page, () => page.getByRole('button', { name: 'Cart' }).click());
+      await assertSingleCleanTransition(page, () => page.getByRole('link', { name: 'Cart', exact: true }).click());
       await expect(page).toHaveURL(/\/cart/);
 
       await assertSingleCleanTransition(
@@ -221,7 +221,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
 
     test('phone back from Cart is one clean transition', async ({ page }) => {
       await page.goto('/');
-      await page.getByRole('button', { name: 'Cart' }).click();
+      await page.getByRole('link', { name: 'Cart', exact: true }).click();
       await expect(page).toHaveURL(/\/cart/);
 
       await assertSingleCleanTransition(page, () => page.goBack(), { expectNavVisible: true });

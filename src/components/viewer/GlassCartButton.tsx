@@ -1,3 +1,4 @@
+import { ActionLink } from '../shared/ActionLink';
 import { useLocation } from 'react-router-dom';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { CartIcon } from './CartButton';
@@ -46,12 +47,12 @@ export function GlassCartButton() {
   if (itemCount <= 0 || !onThisPage) return null;
 
   return (
-    <button
-      type="button"
+    <ActionLink
+      to="/cart"
       className={`glass-cart${onProductPage ? ' glass-cart--pdp' : ''}${
         onProductPage && buyBar !== 'shown' ? ' glass-cart--bar-away' : ''
       }`}
-      onClick={() => navigate('/cart')}
+      onOpen={() => navigate('/cart')}
       aria-label={`Open cart, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
       data-testid="glass-cart"
     >
@@ -59,6 +60,6 @@ export function GlassCartButton() {
         <CartIcon className="glass-cart__icon" />
         <CartCountBadge count={itemCount} testId="glass-cart-badge" />
       </span>
-    </button>
+    </ActionLink>
   );
 }

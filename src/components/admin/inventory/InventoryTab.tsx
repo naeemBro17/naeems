@@ -83,15 +83,15 @@ function InventoryHome({ onOpen, lotHref }: { onOpen: ReturnType<typeof useInvNa
       </div>
 
       <ListGroup title="TOOLS">
-        <ListRow icon="restock" label="Opening stock" detail={opening ? 'Saved (L-000)' : 'Not uploaded'} onClick={() => onOpen('opening')} />
-        <ListRow icon="alert" label="Stock check" onClick={() => onOpen('check')} />
-        <ListRow icon="tag" label="Set buying prices" onClick={() => onOpen('prices')} />
-        <ListRow icon="chart" label="Compare stock (shop vs lots)" onClick={() => onOpen('compare')} />
-        <ListRow icon="chart" label="Sales profit" onClick={() => onOpen('profit')} />
-        <ListRow icon="alert" label="Sold without stock" onClick={() => onOpen('shortfalls')} />
-        <ListRow icon="alert" label="Give an offer (expiring stock)" onClick={() => onOpen('offers')} />
-        <ListRow icon="restock" label="Buying list (next trip)" onClick={() => onOpen('buying')} />
-        <ListRow icon="restock" label={modeOn ? 'Inventory mode: On' : 'Turn on Inventory mode (check first)'} detail={modeOn ? 'On' : 'Off'} onClick={() => onOpen('mode')} />
+        <ListRow icon="restock" label="Opening stock" detail={opening ? 'Saved (L-000)' : 'Not uploaded'} to={lotHref('opening')} onClick={() => onOpen('opening')} />
+        <ListRow icon="alert" label="Stock check" to={lotHref('check')} onClick={() => onOpen('check')} />
+        <ListRow icon="tag" label="Set buying prices" to={lotHref('prices')} onClick={() => onOpen('prices')} />
+        <ListRow icon="chart" label="Compare stock (shop vs lots)" to={lotHref('compare')} onClick={() => onOpen('compare')} />
+        <ListRow icon="chart" label="Sales profit" to={lotHref('profit')} onClick={() => onOpen('profit')} />
+        <ListRow icon="alert" label="Sold without stock" to={lotHref('shortfalls')} onClick={() => onOpen('shortfalls')} />
+        <ListRow icon="alert" label="Give an offer (expiring stock)" to={lotHref('offers')} onClick={() => onOpen('offers')} />
+        <ListRow icon="restock" label="Buying list (next trip)" to={lotHref('buying')} onClick={() => onOpen('buying')} />
+        <ListRow icon="restock" label={modeOn ? 'Inventory mode: On' : 'Turn on Inventory mode (check first)'} detail={modeOn ? 'On' : 'Off'} to={lotHref('mode')} onClick={() => onOpen('mode')} />
       </ListGroup>
 
       <h2 className="inv-section">Lots</h2>

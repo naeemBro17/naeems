@@ -1,3 +1,4 @@
+import { ActionLink } from '../../shared/ActionLink';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchShortfalls } from '../../../lib/inventory/api';
@@ -56,9 +57,9 @@ export function ShortfallsView({ onBack }: { onBack: () => void }) {
             <div key={s.id} className="inv-item" data-testid="inv-shortfall">
               <div className="inv-item__head">
                 <span className="inv-item__name">{s.label}</span>
-                <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => navigate(adminPath.order(s.order_number))}>
+                <ActionLink className="adm-btn adm-btn--ghost adm-btn--sm" to={adminPath.order(s.order_number)} onOpen={() => navigate(adminPath.order(s.order_number))}>
                   {s.order_number}
-                </button>
+                </ActionLink>
               </div>
               <div className="inv-line">
                 <span>Units</span>

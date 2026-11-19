@@ -5,11 +5,18 @@ import App from './App';
 import { appHistory } from './lib/appHistory';
 import { pageForPath, preloadShopPages } from './lib/routePages';
 import { trackInputModality } from './lib/inputModality';
+import { leaveInAppBrowserOnStart } from './lib/inAppBrowser';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/orderTracking.css';
 import './styles/batch51.css';
 import './styles/wishlist.css';
+import './styles/batch52.css';
+
+// Batch 52 Part 4: opened inside Facebook / Messenger / Instagram on
+// Android → reopen this same address in Chrome, once, before anything is
+// drawn or tapped (Google login does not work in their browser).
+leaveInAppBrowserOnStart();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -393,7 +393,7 @@ test('Tasks 8 + 10: "Order placed" says Pay on delivery for cash on delivery (To
   expect(decodeURIComponent(href.split('text=')[1] ?? '')).toContain('NM-4747');
   // Neutral, not a second orange button.
   const bg = await help.evaluate((el) => getComputedStyle(el).backgroundColor);
-  const primaryBg = await page.getByRole('button', { name: 'View my order' }).evaluate((el) => getComputedStyle(el).backgroundColor);
+  const primaryBg = await page.getByRole('link', { name: 'View my order' }).evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(bg).not.toBe(primaryBg);
   await page.screenshot({ path: `${SHOTS}/09-order-placed-cod.png`, fullPage: true });
 

@@ -1,9 +1,10 @@
-// Vercel serverless function — Batch 19 Part 3 (link previews).
+// Vercel serverless function — Batch 19 Part 3 (link previews); Batch 52
+// Part 1 changed the words (no price, "— NAEEM'S").
 //
 // Link-preview bots (Facebook, WhatsApp, Twitter, Telegram, Slack, LinkedIn,
 // Discord) don't run JavaScript, so a shared /product/:slug link only ever
 // sees index.html's one static description — never that product's real
-// name/price/photo (see reports/batch-15.txt). vercel.json rewrites
+// name/photo (see reports/batch-15.txt). vercel.json rewrites
 // /product/:slug to this function, but ONLY when the request's User-Agent
 // matches one of those bots (a `has` condition on the rewrite) — a real
 // visitor's browser always gets the normal single-page app, unchanged and
@@ -11,7 +12,10 @@
 //
 // Deliberately typed against the small slice of req/res this file actually
 // uses rather than depending on @vercel/node, so no new dependency is
-// needed just for this one function.
+// needed just for this one function. The tags come from ./_og.ts (shared
+// with combo-og.ts); the ".js" ending is how Vercel finds it once built.
+
+import { SITE_URL, isSafeIdentifier, productPreview, renderPreviewHtml, shopPreview } from './_og.js';
 
 interface MinimalRequest {
   query: Record<string, string | string[] | undefined>;
@@ -23,92 +27,8 @@ interface MinimalResponse {
   send(body: string): void;
 }
 
-const SITE_URL = 'https://naeems-all.vercel.app';
-const FALLBACK_IMAGE = `${SITE_URL}/og-image.png`;
-const FALLBACK_DESCRIPTION = 'Premium Australian skincare — check prices instantly';
-
-/** Same shape ProductDetailPage.tsx's safeIdentifier() validates against —
- *  a slug/sku can only ever be alphanumeric plus hyphen/underscore. */
-function isSafeIdentifier(value: string): boolean {
-  return /^[A-Za-z0-9_-]{1,120}$/.test(value);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatTaka(amount: number): string {
-  return '৳' + amount.toLocaleString('en-BD');
-}
-
-interface OgFields {
-  title: string;
-  description: string;
-  image: string;
-  url: string;
-}
-
-/**
- * Batch 36 Part 2: descriptions written with the editor are HTML; link
- * previews get plain text (same rule as src/lib/richTextPlain.ts — this
- * function is deployed on its own, so it keeps its own copy).
- */
-function plainText(value: string): string {
-  if (!/^\s*<(p|h3|ul|ol|div)[\s>]/i.test(value)) return value.replace(/\s+/g, ' ').trim();
-  return value
-    .replace(/<(br|\/p|\/h3|\/li|\/div)\s*\/?>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function renderHtml({ title, description, image, url }: OgFields): string {
-  const safeTitle = escapeHtml(title);
-  const safeDescription = escapeHtml(description);
-  const safeImage = escapeHtml(image);
-  const safeUrl = escapeHtml(url);
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>${safeTitle}</title>
-<meta name="description" content="${safeDescription}">
-<meta property="og:type" content="product">
-<meta property="og:site_name" content="Naeem's">
-<meta property="og:title" content="${safeTitle}">
-<meta property="og:description" content="${safeDescription}">
-<meta property="og:image" content="${safeImage}">
-<meta property="og:url" content="${safeUrl}">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${safeTitle}">
-<meta name="twitter:description" content="${safeDescription}">
-<meta name="twitter:image" content="${safeImage}">
-</head>
-<body>
-<h1>${safeTitle}</h1>
-<p>${safeDescription}</p>
-</body>
-</html>
-`;
-}
-
 interface ProductRow {
   name: string;
-  brand: string | null;
-  description: string | null;
-  retail_price: number;
-  offer_price: number | null;
   image_url: string | null;
   image_urls: string[] | null;
 }
@@ -121,15 +41,9 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
   // function from re-querying Supabase on every single crawl.
   res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600');
 
+  const url = slug ? `${SITE_URL}/product/${slug}` : `${SITE_URL}/`;
   const fallback = () => {
-    res.status(200).send(
-      renderHtml({
-        title: "Naeem's — Authentic Skincare",
-        description: FALLBACK_DESCRIPTION,
-        image: FALLBACK_IMAGE,
-        url: slug ? `${SITE_URL}/product/${slug}` : SITE_URL,
-      })
-    );
+    res.status(200).send(renderPreviewHtml(shopPreview(url)));
   };
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -143,7 +57,7 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
   try {
     const apiUrl =
       `${supabaseUrl}/rest/v1/products_view?` +
-      `select=name,brand,description,retail_price,offer_price,image_url,image_urls` +
+      `select=name,image_url,image_urls` +
       `&or=(slug.eq.${slug},sku.eq.${slug})&is_active=eq.true&limit=1`;
     const apiRes = await fetch(apiUrl, {
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
@@ -158,25 +72,9 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
       fallback();
       return;
     }
-
-    const price =
-      product.offer_price !== null && product.offer_price < product.retail_price
-        ? product.offer_price
-        : product.retail_price;
-    const image = product.image_urls?.[0] ?? product.image_url ?? FALLBACK_IMAGE;
-    const brandPrefix = product.brand ? `${product.brand} — ` : '';
-    const description = `${brandPrefix}${formatTaka(price)}${
-      product.description ? ` — ${plainText(product.description).slice(0, 150)}` : ''
-    }`;
-
-    res.status(200).send(
-      renderHtml({
-        title: `${product.name} — Naeem's`,
-        description,
-        image,
-        url: `${SITE_URL}/product/${slug}`,
-      })
-    );
+    // The main photo, whole and square — nothing drawn on it.
+    const image = product.image_urls?.[0] ?? product.image_url ?? null;
+    res.status(200).send(renderPreviewHtml(productPreview(product.name, image, url)));
   } catch {
     fallback();
   }

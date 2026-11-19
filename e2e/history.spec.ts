@@ -7,12 +7,12 @@ test.describe('Back-button history hygiene', () => {
     await page.goto('/');
     const start = await page.evaluate(() => window.history.length);
 
-    await page.getByRole('button', { name: 'Account' }).click();
+    await page.getByRole('link', { name: 'Account', exact: true }).click();
     await expect(page).toHaveURL(/\/account/);
     await page.getByRole('button', { name: 'Go back' }).click();
     await expect(page).toHaveURL('/');
 
-    await page.getByRole('button', { name: 'Cart', exact: true }).click();
+    await page.getByRole('link', { name: 'Cart', exact: true }).click();
     await expect(page).toHaveURL(/\/cart/);
     await page.goBack();
     await expect(page).toHaveURL('/');

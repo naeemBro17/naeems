@@ -1,3 +1,4 @@
+import { isNewTabClick } from '../../lib/adminPages';
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../../lib/protectImage';
 import { useNavigate } from 'react-router-dom';
@@ -31,9 +32,28 @@ interface ProductCardProps {
  * card's text area, the browser's normal word wrapping, two lines tall
  * always (so prices line up across a row), "…" only past two lines. Nothing
  * measures or splits the name; the text node is the name exactly.
+ *
+ * Batch 52 Part 2: with an href, the name is a real link, so a long-press
+ * (phone) or right-click / Ctrl-click (computer) offers "Open in new tab".
+ * A normal tap is left to the card, which opens the product as before.
  */
-export function ProductCardName({ name }: { name: string }) {
-  return <h3 className="product-card__name">{name}</h3>;
+export function ProductCardName({ name, href }: { name: string; href?: string }) {
+  if (!href) return <h3 className="product-card__name">{name}</h3>;
+  return (
+    <h3 className="product-card__name">
+      <a
+        href={href}
+        className="product-card__name-link"
+        tabIndex={-1}
+        onClick={(e) => {
+          if (isNewTabClick(e)) e.stopPropagation();
+          else e.preventDefault();
+        }}
+      >
+        {name}
+      </a>
+    </h3>
+  );
 }
 
 export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
@@ -153,7 +173,7 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
         </div>
 
         <div className="product-card__body">
-          <ProductCardName name={product.name} />
+          <ProductCardName name={product.name} href={productPath(product)} />
 
           <div className="product-card__prices">
             {fromPrice !== null ? (

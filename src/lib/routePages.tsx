@@ -63,6 +63,7 @@ export const OrderSuccessPage = routePage(() => import('../features/checkout/Ord
 export const AdminAccessPage = routePage(() => import('../pages/AdminAccessPage'), (m) => m.AdminAccessPage);
 export const WholesalerAccessPage = routePage(() => import('../pages/WholesalerAccessPage'), (m) => m.WholesalerAccessPage);
 export const AccountPage = routePage(() => import('../pages/AccountPage'), (m) => m.AccountPage);
+export const ComboPage = routePage(() => import('../pages/ComboPage'), (m) => m.ComboPage);
 export const WishlistPage = routePage(() => import('../pages/WishlistPage'), (m) => m.WishlistPage);
 export const OrdersListPage = routePage(() => import('../pages/OrdersListPage'), (m) => m.OrdersListPage);
 export const OrderDetailPage = routePage(() => import('../pages/OrderDetailPage'), (m) => m.OrderDetailPage);
@@ -80,6 +81,7 @@ export function pageForPath(pathname: string): RoutePage | null {
   if (pathname.startsWith('/product/')) return ProductDetailPage;
   if (pathname.startsWith('/brand/')) return BrandPage;
   if (pathname.startsWith('/orders/')) return OrderDetailPage;
+  if (pathname.startsWith('/c/')) return ComboPage;
   const exact: Record<string, RoutePage> = {
     '/search': SearchPage,
     '/contact': ContactExpertPage,

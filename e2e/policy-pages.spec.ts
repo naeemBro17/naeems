@@ -13,7 +13,7 @@ test.describe('Policy pages', () => {
     for (const [label, path] of pages) {
       await page.goto('/');
       await page.getByRole('button', { name: 'Open menu' }).click();
-      await page.getByRole('button', { name: label }).click();
+      await page.locator('.menu-list').getByRole('link', { name: label }).click();
       await expect(page).toHaveURL(new RegExp(path.replace('/', '\\/') + '$'));
       // No dead ends per CLAUDE.md — every screen has a visible way back.
       const backControl = page.getByRole('button', { name: /go back|back/i }).first();

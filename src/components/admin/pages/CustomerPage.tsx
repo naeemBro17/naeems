@@ -1,3 +1,5 @@
+import { adminPath } from '../../../lib/adminPages';
+import { ActionLink } from '../../shared/ActionLink';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { AdminFormPage } from '../AdminFormPage';
@@ -207,14 +209,8 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
             <div className="adm-group__box adm-group__box--inset">
               {orders.map((o) => {
                 const label = isOrderStatus(o.status) ? ORDER_STATUS_LABELS[o.status] : o.status;
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className="adm-row"
-                    disabled={!canOpenOrders}
-                    onClick={() => onOpenOrder(o.order_number)}
-                  >
+                const content = (
+                  <>
                     <span className="adm-row__label">
                       <b>{o.order_number}</b>
                       <span className="adm-row__sub">
@@ -225,6 +221,16 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
                     {o.total !== null && <span className="adm-price">{formatTakaBd(o.total)}</span>}
                     {o.due ? <span className="adm-customer__order-due">{formatTakaBd(o.due)} due</span> : null}
                     {canOpenOrders && <AdminIcon name="chevron-right" className="adm-row__chevron adm-row__chevron--tight" />}
+                  </>
+                );
+                // Batch 52: a real link (Open in new tab) when it can open.
+                return canOpenOrders ? (
+                  <ActionLink key={o.id} to={adminPath.order(o.order_number)} className="adm-row" onOpen={() => onOpenOrder(o.order_number)}>
+                    {content}
+                  </ActionLink>
+                ) : (
+                  <button key={o.id} type="button" className="adm-row" disabled>
+                    {content}
                   </button>
                 );
               })}

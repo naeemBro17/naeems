@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AdminIcon } from './ui/AdminIcon';
-import { groupNavItems, type AdminSection, type NavItem } from '../../lib/adminNav';
+import { groupNavItems, sectionPath, type AdminSection, type NavItem } from '../../lib/adminNav';
+import { ActionLink } from '../shared/ActionLink';
 
 interface AdminLayoutProps {
   active: AdminSection;
@@ -65,17 +66,17 @@ export function AdminLayout({
             <div key={group.id} className="adm-sidebar__group">
               {group.label && <p className="adm-sidebar__heading">{group.label}</p>}
               {groupItems.map((item) => (
-                <button
+                <ActionLink
                   key={item.id}
-                  type="button"
+                  to={sectionPath(item.id)}
                   className={`adm-sidebar__item${active === item.id ? ' adm-sidebar__item--on' : ''}`}
                   aria-current={active === item.id ? 'page' : undefined}
-                  onClick={() => onNavigate(item.id)}
+                  onOpen={() => onNavigate(item.id)}
                 >
                   <AdminIcon name={item.icon} />
                   <span className="adm-sidebar__label">{item.label}</span>
                   {badge(item)}
-                </button>
+                </ActionLink>
               ))}
             </div>
           ))}
@@ -94,19 +95,19 @@ export function AdminLayout({
 
       <nav className="adm-tabbar" aria-label="Admin sections">
         {tabs.map((tab) => (
-          <button
+          <ActionLink
             key={tab.id}
-            type="button"
+            to={sectionPath(tab.id)}
             className={`adm-tabbar__tab${activeTab === tab.id ? ' adm-tabbar__tab--on' : ''}`}
             aria-current={activeTab === tab.id ? 'page' : undefined}
-            onClick={() => onNavigate(tab.id)}
+            onOpen={() => onNavigate(tab.id)}
           >
             <span className="adm-tabbar__icon">
               <AdminIcon name={tab.icon} />
               {badge(tab)}
             </span>
             <span className="adm-tabbar__label">{tab.tabLabel ?? tab.label}</span>
-          </button>
+          </ActionLink>
         ))}
       </nav>
     </div>

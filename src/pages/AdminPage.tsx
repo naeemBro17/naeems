@@ -22,6 +22,7 @@ import { BannerTextsTab } from '../components/admin/BannerTextsTab';
 import { BrandsTab } from '../components/admin/BrandsTab';
 import { PayoutsTab } from '../components/admin/PayoutsTab';
 import { ShoppingListTab } from '../components/admin/ShoppingListTab';
+import { CombosTab } from '../components/admin/CombosTab';
 import { fetchShoppingList, type ShoppingLoad } from '../lib/shoppingList';
 import { InventoryTab } from '../components/admin/inventory/InventoryTab';
 import { MoneyTab } from '../components/admin/money/MoneyTab';
@@ -271,6 +272,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
           />
         )}
+        {active === 'combos' && <CombosTab />}
         {active === 'products' && <ProductList />}
         {active === 'categories' && (
           <>

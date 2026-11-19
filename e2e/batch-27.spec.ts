@@ -705,7 +705,8 @@ test.describe('Part 5 — card titles use the full card width', () => {
             const cs = getComputedStyle(body);
             const innerW = body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
             const titleW = title.getBoundingClientRect().width;
-            const text = title.firstChild as Text;
+            // Batch 52: the name sits in a link inside the title (Open in new tab).
+            const text = (title.querySelector('a') ?? title).firstChild as Text;
             const words: { start: number; end: number }[] = [];
             const re = /\S+/g;
             let m: RegExpExecArray | null;

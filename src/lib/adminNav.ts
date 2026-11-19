@@ -10,6 +10,7 @@ export type AdminSection =
   | 'home'
   | 'orders'
   | 'shopping'
+  | 'combos'
   | 'payouts'
   | 'money'
   | 'reports'
@@ -35,6 +36,7 @@ export type AdminIconName =
   | 'home'
   | 'orders'
   | 'shopping'
+  | 'combos'
   | 'payouts'
   | 'reports'
   | 'customers'
@@ -92,6 +94,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'orders', label: 'Orders', icon: 'orders', group: 'main' },
   // Batch 51 Part 3: what to buy for open orders; with "View orders".
   { id: 'shopping', label: 'Shopping list', icon: 'shopping', group: 'main' },
+  // Batch 52: shareable product picks for customers; Super Admin only
+  // (the database refuses anyone else, is_admin()).
+  { id: 'combos', label: 'Combos', icon: 'combos', group: 'main' },
   // Batch 36 Part 1: under Orders; only with "View profit & costs".
   { id: 'payouts', label: 'Steadfast payouts', tabLabel: 'Payouts', icon: 'payouts', group: 'main' },
   // Batch 41: accounts, expenses, investors, profit; "View profit & costs"
@@ -199,6 +204,15 @@ export function bottomTabs(visible: readonly NavItem[]): NavItem[] {
 /** What the More page lists: every visible item not in the bottom bar. */
 export function moreItems(visible: readonly NavItem[], tabs: readonly NavItem[]): NavItem[] {
   return visible.filter((i) => !tabs.some((t) => t.id === i.id));
+}
+
+/** Batch 52: a section's own address (for real links: Open in new tab). */
+export function sectionPath(section: AdminSection, params: Record<string, string> = {}): string {
+  const search = new URLSearchParams();
+  if (section !== 'home') search.set('tab', section);
+  for (const [key, value] of Object.entries(params)) search.set(key, value);
+  const text = search.toString();
+  return text === '' ? '/admin' : `/admin?${text}`;
 }
 
 export function navItem(section: AdminSection): NavItem {

@@ -168,7 +168,7 @@ test('Give an offer (phone): red Give offer, amber Watch, the reason, the floor 
   test.setTimeout(90_000);
   await mockRpc(page, 'smart_offer_rows', offerFixture());
   await adminAt(page, '/admin?tab=inventory');
-  await page.getByRole('button', { name: /Give an offer/ }).click();
+  await page.getByRole('link', { name: /Give an offer/ }).click();
   const list = page.getByTestId('offers-list');
   await expect(list).toBeVisible({ timeout: 20_000 });
   const rows = list.getByTestId('offer-row');
@@ -221,7 +221,7 @@ test('Buying list (phone): packs rounded up, on the way counted, Skip — not mo
   test.setTimeout(90_000);
   await mockRpc(page, 'smart_buying_rows', BUYING);
   await adminAt(page, '/admin?tab=inventory');
-  await page.getByRole('button', { name: /Buying list/ }).click();
+  await page.getByRole('link', { name: /Buying list/ }).click();
   await page.getByTestId('buying-source').selectOption('s-1', { timeout: 20_000 });
   const rows = page.getByTestId('buying-row');
   await expect(rows).toHaveCount(3);

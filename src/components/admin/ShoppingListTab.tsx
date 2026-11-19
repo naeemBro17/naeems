@@ -1,3 +1,5 @@
+import { adminPath } from '../../lib/adminPages';
+import { ActionLink } from '../shared/ActionLink';
 import { useState } from 'react';
 import { useToast } from '../../hooks/useToast';
 import { shoppingRowName, shoppingTotals, type ShoppingLoad } from '../../lib/shoppingList';
@@ -91,9 +93,9 @@ export function ShoppingListTab({ list, onReload, onOpenOrder }: ShoppingListTab
                     {row.orders.map((o, i) => (
                       <span key={o.id}>
                         {i > 0 && ', '}
-                        <button type="button" className="adm-shop__order" onClick={() => onOpenOrder(o.number)}>
+                        <ActionLink className="adm-shop__order" to={adminPath.order(o.number)} onOpen={() => onOpenOrder(o.number)}>
                           {o.number}
-                        </button>
+                        </ActionLink>
                       </span>
                     ))}
                   </p>

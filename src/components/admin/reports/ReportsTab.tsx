@@ -60,8 +60,8 @@ export function ReportsTab() {
             ))}
           </ListGroup>
           <ListGroup title="EVERY MONTH">
-            <ListRow icon="restock" label="Monthly stock count" onClick={() => navigate({ search: '?tab=money&m=stock-count' })} />
-            <ListRow icon="lock" label="Lock a month" onClick={() => navigate({ search: '?tab=money&m=lock' })} />
+            <ListRow icon="restock" label="Monthly stock count" to="/admin?tab=money&m=stock-count" onClick={() => navigate({ search: '?tab=money&m=stock-count' })} />
+            <ListRow icon="lock" label="Lock a month" to="/admin?tab=money&m=lock" onClick={() => navigate({ search: '?tab=money&m=lock' })} />
           </ListGroup>
         </section>
       );

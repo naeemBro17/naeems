@@ -1,3 +1,5 @@
+import { sectionPath } from '../../lib/adminNav';
+import { ActionLink } from '../shared/ActionLink';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchCustomersV3, fetchDashboard, type DashboardData } from '../../lib/adminData';
@@ -100,6 +102,8 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
     icon: 'orders' | 'low-stock' | 'reviews' | 'wholesalers' | 'receipt' | 'payouts' | 'clock' | 'alert' | 'restock' | 'products' | 'customers';
     count?: number;
     text: string;
+    /** Batch 52: the page address (a real link). */
+    to: string;
     open: () => void;
   }[] = [];
   if (data?.to_confirm !== undefined && data.to_confirm > 0) {
@@ -108,6 +112,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'orders',
       count: data.to_confirm,
       text: `order${data.to_confirm === 1 ? '' : 's'} waiting to confirm`,
+      to: sectionPath('orders', { ostatus: 'pending' }),
       open: () => onOpen('orders', { ostatus: 'pending' }),
     });
   }
@@ -117,6 +122,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'low-stock',
       count: data.low_stock,
       text: `product${data.low_stock === 1 ? '' : 's'} low on stock`,
+      to: sectionPath('products', { pstock: 'low' }),
       open: () => onOpen('products', { pstock: 'low' }),
     });
   }
@@ -127,6 +133,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'clock',
       count: att.expiring,
       text: `product${att.expiring === 1 ? '' : 's'} expiring before ${att.expiring === 1 ? 'it sells' : 'they sell'}`,
+      to: sectionPath('reports', { r: 'stock' }),
       open: () => onOpen('reports', { r: 'stock' }),
     });
   }
@@ -136,6 +143,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'alert',
       count: att.sold_without_stock,
       text: `sold without stock (still open)`,
+      to: sectionPath('inventory', { inv: 'shortfalls' }),
       open: () => onOpen('inventory', { inv: 'shortfalls' }),
     });
   }
@@ -145,6 +153,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'customers',
       count: att.dues_over_30,
       text: `customer${att.dues_over_30 === 1 ? '' : 's'} owing for over 30 days (${formatTakaBd(att.dues_over_30_amount)})`,
+      to: sectionPath('reports', { r: 'customers' }),
       open: () => onOpen('reports', { r: 'customers' }),
     });
   }
@@ -155,6 +164,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       count: att.no_buy_price,
       text: `product${att.no_buy_price === 1 ? '' : 's'} with no buy price (in no lot yet)`,
       // Batch 45: straight to Set buying prices.
+      to: sectionPath('inventory', { inv: 'prices' }),
       open: () => onOpen('inventory', { inv: 'prices' }),
     });
   }
@@ -166,6 +176,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
         att.count_planned > 0
           ? `Monthly stock count: ${att.count_done} of ${att.count_planned} counted`
           : 'Monthly stock count is due',
+      to: sectionPath('money', { m: 'stock-count' }),
       open: () => onOpen('money', { m: 'stock-count' }),
     });
   }
@@ -174,6 +185,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       key: 'due',
       icon: 'receipt',
       text: `${formatTakaBd(due.total)} due from ${due.customers} customer${due.customers === 1 ? '' : 's'}`,
+      to: sectionPath('customers', { cshow: 'due', csort: 'due' }),
       open: () => onOpen('customers', { cshow: 'due', csort: 'due' }),
     });
   }
@@ -183,6 +195,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'payouts',
       count: unpaidCount,
       text: `order${unpaidCount === 1 ? '' : 's'} not paid by Steadfast after ${UNPAID_AFTER_DAYS} days`,
+      to: sectionPath('payouts'),
       open: () => onOpen('payouts'),
     });
   }
@@ -192,6 +205,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'reviews',
       count: data.reviews_pending,
       text: `new review${data.reviews_pending === 1 ? '' : 's'} to approve`,
+      to: sectionPath('reviews'),
       open: () => onOpen('reviews'),
     });
   }
@@ -201,6 +215,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       icon: 'wholesalers',
       count: data.wholesalers_pending,
       text: `wholesaler${data.wholesalers_pending === 1 ? '' : 's'} to approve`,
+      to: sectionPath('wholesalers', { wstatus: 'pending' }),
       open: () => onOpen('wholesalers', { wstatus: 'pending' }),
     });
   }
@@ -229,6 +244,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
                   row.text
                 )
               }
+              to={row.to}
               onClick={row.open}
             />
           ))
@@ -244,7 +260,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       <AdminHomeHero eyebrow={title} greeting={`${greeting()}, ${name}`} date={homeDateLabel()} />
 
       {shoppingCount > 0 && (
-        <button type="button" className="adm-ocard adm-home__shop" onClick={() => onOpen('shopping')} data-testid="home-shopping">
+        <ActionLink className="adm-ocard adm-home__shop" to={sectionPath('shopping')} onOpen={() => onOpen('shopping')} data-testid="home-shopping">
           <span className="adm-home__shop-text">
             <span className="adm-home__shop-label">Shopping list</span>
             <span className="adm-home__shop-count">
@@ -252,7 +268,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
             </span>
           </span>
           <AdminIcon name="chevron-right" />
-        </button>
+        </ActionLink>
       )}
 
       {isLoading ? (
@@ -280,7 +296,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
           {canSeeCosts && hasOrderCards && <h2 className="adm-home__section-title">Orders</h2>}
           {hasOrderCards && data && (
             <div className="adm-kpis">
-              <button type="button" className="adm-kpi" onClick={() => onOpen('orders')} data-testid="kpi-today">
+              <ActionLink className="adm-kpi" to={sectionPath('orders')} onOpen={() => onOpen('orders')} data-testid="kpi-today">
                 <span className="adm-kpi__label">Today</span>
                 <span className="adm-kpi__value" data-testid="kpi-today-count">{data.today_orders}</span>
                 <span className="adm-kpi__sub" data-testid="kpi-today-total">
@@ -288,11 +304,10 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
                     ? `order${data.today_orders === 1 ? '' : 's'} · ${formatTakaBd(data.today_total)}`
                     : `order${data.today_orders === 1 ? '' : 's'} placed`}
                 </span>
-              </button>
-              <button
-                type="button"
+              </ActionLink>
+              <ActionLink
                 className={`adm-kpi${data.to_confirm ? ' adm-kpi--attn' : ''}`}
-                onClick={() => onOpen('orders', { ostatus: 'pending' })}
+                to={sectionPath('orders', { ostatus: 'pending' })} onOpen={() => onOpen('orders', { ostatus: 'pending' })}
                 data-testid="kpi-confirm"
               >
                 <span className="adm-kpi__label">To confirm</span>
@@ -304,18 +319,17 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
                     all clear
                   </span>
                 )}
-              </button>
-              <button
-                type="button"
+              </ActionLink>
+              <ActionLink
                 className="adm-kpi"
-                onClick={() => onOpen('orders', { ostatus: 'shipped' })}
+                to={sectionPath('orders', { ostatus: 'shipped' })} onOpen={() => onOpen('orders', { ostatus: 'shipped' })}
                 data-testid="kpi-way"
               >
                 <span className="adm-kpi__label">With courier</span>
                 <span className="adm-kpi__value" data-testid="kpi-way-count">{data.on_the_way}</span>
                 <span className="adm-kpi__sub">Steadfast</span>
-              </button>
-              <button type="button" className="adm-kpi" onClick={() => onOpen('orders')} data-testid="kpi-month">
+              </ActionLink>
+              <ActionLink className="adm-kpi" to={sectionPath('orders')} onOpen={() => onOpen('orders')} data-testid="kpi-month">
                 <span className="adm-kpi__label">This month</span>
                 {sales && data.month_total !== undefined ? (
                   <>
@@ -332,7 +346,7 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
                     <span className="adm-kpi__sub">orders</span>
                   </>
                 )}
-              </button>
+              </ActionLink>
             </div>
           )}
 

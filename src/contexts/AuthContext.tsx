@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import type { Profile, StaffMember, StaffPermission } from '../types';
 import { fetchOwnStaffMember, logStaffEvent, staffEmail } from '../lib/staff';
 import { listDevices, needsTwoStepCode, sessionHasVerifiedFactor } from '../lib/mfa';
+import { currentInApp, requestInAppHelp } from '../lib/inAppBrowser';
 
 /** Result of a sign-in / sign-up attempt: an error message, or the profile. */
 export interface AuthResult {
@@ -360,6 +361,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Batch 47: replace = the page that started the login is swapped for
       // Google's, so after coming back Back does not land on it again.
       const replace = options?.replace === true;
+      // Batch 52 Part 4: Google refuses logins inside Facebook / Messenger /
+      // Instagram's own browser — show how to leave it instead of Google's
+      // error page.
+      if (currentInApp().inApp) {
+        requestInAppHelp();
+        return { error: 'Google login does not work inside this app. Open this page in your browser to log in.' };
+      }
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectTo ?? window.location.href, skipBrowserRedirect: replace },

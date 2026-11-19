@@ -100,7 +100,7 @@ test.describe('Product open/close transitions', () => {
     page,
   }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('link', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(/\/search/);
     const searchInput = page.getByRole('combobox', { name: 'Search products' });
     await searchInput.fill('cerave');
@@ -121,7 +121,7 @@ test.describe('Product open/close transitions', () => {
   test('Home <-> Account crossfades without a black or blank frame', async ({ page }) => {
     await page.goto('/');
     await assertCleanTransition(page, async () => {
-      await page.getByRole('button', { name: 'Account' }).click();
+      await page.getByRole('link', { name: 'Account', exact: true }).click();
     });
     await expect(page).toHaveURL(/\/account/);
 

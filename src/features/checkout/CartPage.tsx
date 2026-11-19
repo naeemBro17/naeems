@@ -25,12 +25,17 @@ import { cartBuyAfterNote, type LimitReason } from '../../lib/sellRules';
 import { lineKey } from '../../lib/cartStock';
 import { StockNotice } from '../../components/checkout/StockNotice';
 import { useCartStockCheck } from '../../hooks/useCartStockCheck';
+import { MakeComboSheet, ShareComboCard } from '../../components/combo/ComboShare';
+import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from './types';
 
 export function CartPage() {
   useDocumentTitle("Your Cart — NAEEM'S");
   const { items, subtotal, updateQuantity } = useCheckoutState();
-  const { session } = useAuth();
+  const { session, isAdmin } = useAuth();
+  const { clearCart } = useCart();
+  // Batch 52: the admin's "Share as a combo" (real session role, never CSS).
+  const [comboOpen, setComboOpen] = useState(false);
   const navigate = useNavigate();
   const { variantsFor, settings } = useProducts();
   const sell = useSellLimit();
@@ -95,6 +100,10 @@ export function CartPage() {
     [items]
   );
   const notCovered = useCartCover(coverLines);
+  const comboItems = useMemo(
+    () => items.map((item) => ({ product_id: item.product.id, variant_id: item.variantId, quantity: item.quantity })),
+    [items]
+  );
 
   return (
     <div className="viewer-shell detail-shell">
@@ -193,6 +202,7 @@ export function CartPage() {
             ))}
           </ul>
         )}
+        {isAdmin && items.length > 0 && <ShareComboCard onOpen={() => setComboOpen(true)} />}
       </main>
 
       {items.length > 0 && (
@@ -205,6 +215,10 @@ export function CartPage() {
             Checkout
           </button>
         </div>
+      )}
+
+      {isAdmin && (
+        <MakeComboSheet isOpen={comboOpen} onClose={() => setComboOpen(false)} items={comboItems} onClearCart={clearCart} />
       )}
 
       <CheckoutLoginSheet
