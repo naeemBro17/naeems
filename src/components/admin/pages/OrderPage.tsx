@@ -15,6 +15,7 @@ import {
   isEarlyStageOrder,
 } from '../../../lib/orders';
 import { OrderProfitBox } from '../inventory/OrderProfitBox';
+import { useCourierCostsRefresh } from '../../../lib/inventory/courierLabel';
 import { lineQuantityText, orderItemCount, soldInUnits } from '../../../lib/orderLines';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSafetyLock } from '../../../contexts/SafetyLockContext';
@@ -103,6 +104,9 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const { settings, refetch: refetchProducts } = useProducts();
   const canMarkDamaged = canSeeCosts && settings.inventory_mode === 'true';
   const [payoutInfo, setPayoutInfo] = useState<LoadState<OrderPayoutInfo | null> | null>(null);
+  // Batch 53: read the payout again when the page comes back into view or
+  // the Payouts page refreshes; a changed courier row re-reads the profit.
+  const courierTick = useCourierCostsRefresh();
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing'>('loading');
@@ -156,6 +160,27 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
       alive = false;
     };
   }, [orderNumber, canSeeCosts]);
+
+  const steadfastBooked = !!order?.steadfast_consignment_id;
+  useEffect(() => {
+    if (courierTick === 0 || !orderId || !canSeeCosts || !steadfastBooked) return;
+    let alive = true;
+    void fetchOrderPayout(orderId).then((answer) => {
+      if (alive) setPayoutInfo(answer);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [courierTick, orderId, canSeeCosts, steadfastBooked]);
+  const courierRow =
+    payoutInfo?.kind === 'ready' && payoutInfo.data
+      ? `${payoutInfo.data.payout_id ?? ''}:${payoutInfo.data.total_kept}:${payoutInfo.data.net_received}`
+      : 'none';
+  // Batch 53: "fees" on the Steadfast line = what came out of the payout;
+  // a delivery bill paid outside it is named on its own.
+  const paidSeparately = payoutInfo?.kind === 'ready' && payoutInfo.data ? toPaisa(payoutInfo.data.bill_paid_separately) : 0;
+  const inPayoutKept =
+    payoutInfo?.kind === 'ready' && payoutInfo.data ? toPaisa(payoutInfo.data.total_kept) - paidSeparately : 0;
 
   const reload = useCallback(async () => {
     if (!orderId) return;
@@ -772,20 +797,26 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                     {canSeeCosts && payoutInfo?.kind === 'ready' && (
                       payoutInfo.data ? (
                         <p className="adm-payouts__paid" data-testid="order-steadfast-paid">
-                          {toPaisa(payoutInfo.data.net_received) + toPaisa(payoutInfo.data.total_kept) > 0 ? (
+                          {toPaisa(payoutInfo.data.net_received) + inPayoutKept > 0 ? (
                             <>
                               Steadfast paid{' '}
                               <b title={takaExact(toPaisa(payoutInfo.data.net_received))}>{takaWhole(toPaisa(payoutInfo.data.net_received))}</b>
                               {payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''} (fees{' '}
-                              <span title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</span>)
+                              <span title={takaExact(inPayoutKept)}>{takaWhole(inPayoutKept)}</span>)
                             </>
                           ) : (
                             // Batch 46: prepaid or returned — nothing collected,
                             // Steadfast only kept its charge (never "paid −৳61").
                             <>
                               Steadfast collected nothing and kept{' '}
-                              <b title={takaExact(toPaisa(payoutInfo.data.total_kept))}>{takaWhole(toPaisa(payoutInfo.data.total_kept))}</b>{' '}
+                              <b title={takaExact(inPayoutKept)}>{takaWhole(inPayoutKept)}</b>{' '}
                               in fees{payoutInfo.data.paid_at ? ` on ${shortDhakaDate(payoutInfo.data.paid_at)}` : ''}
+                            </>
+                          )}
+                          {paidSeparately > 0 && (
+                            <>
+                              {' · '}delivery bill{' '}
+                              <span title={takaExact(paidSeparately)}>{takaWhole(paidSeparately)}</span> paid outside this payout
                             </>
                           )}
                           {payoutInfo.data.payout_id && (
@@ -936,7 +967,7 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
             </section>
 
             {/* Batch 39: profit — only with "View profit & costs". */}
-            {canSeeCosts && <OrderProfitBox orderId={order.id} version={`${order.status}:${order.updated_at}`} />}
+            {canSeeCosts && <OrderProfitBox orderId={order.id} version={`${order.status}:${order.updated_at}:${courierRow}`} />}
 
             {/* Fix 1.38.1: everything that changes the order, at the very bottom. */}
             <CarefulActionsCard actions={careful} />

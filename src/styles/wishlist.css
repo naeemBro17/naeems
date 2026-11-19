@@ -637,3 +637,201 @@
   font-weight: 700;
   text-decoration: none;
 }
+
+/* ---------- Batch 53 Part 3: Account page — soft glass background ----------
+   batch51-mockup.png frame 3. A pale base with three soft colour glows
+   (peach, sage, lilac) behind the page; the rows sit in ONE frosted-glass
+   card (the only backdrop-filter on the page; the Pre-orders sheet is the
+   second, and only while it is open). Every glass layer has a plain
+   see-through fallback. Text stays near-black / near-white. No orange. */
+:root {
+  --acct-page-bg:      #F3F1EF;
+  --acct-glow-peach:   #FFD2BD;
+  --acct-glow-sage:    #CFE7DF;
+  --acct-glow-lilac:   #DCDCF0;
+  --acct-glow-opacity: 0.9;
+  --acct-glass-bg:     rgba(255, 255, 255, 0.55);
+  --acct-glass-solid:  rgba(255, 255, 255, 0.88);
+  --acct-glass-border: rgba(255, 255, 255, 0.75);
+  --acct-glass-shadow: 0 8px 30px rgba(20, 20, 40, 0.08);
+  --acct-glass-inset:  rgba(255, 255, 255, 0.9);
+  --acct-divider:      rgba(0, 0, 0, 0.06);
+  --acct-icon-bg:      rgba(255, 255, 255, 0.8);
+  --acct-icon-border:  rgba(0, 0, 0, 0.05);
+  --acct-side-text:    #6E6E73;
+  --acct-sheet-bg:     rgba(255, 255, 255, 0.72);
+  --acct-sheet-solid:  rgba(255, 255, 255, 0.96);
+  --acct-sheet-text:   #3A3A3C;
+  --acct-dim:          rgba(0, 0, 0, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --acct-page-bg:      #1A1816;
+    --acct-glow-peach:   #5A3828;
+    --acct-glow-sage:    #2C4A40;
+    --acct-glow-lilac:   #3A3852;
+    --acct-glow-opacity: 0.55;
+    --acct-glass-bg:     rgba(52, 48, 45, 0.55);
+    --acct-glass-solid:  rgba(40, 37, 35, 0.94);
+    --acct-glass-border: rgba(255, 255, 255, 0.1);
+    --acct-glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    --acct-glass-inset:  rgba(255, 255, 255, 0.07);
+    --acct-divider:      rgba(255, 255, 255, 0.07);
+    --acct-icon-bg:      rgba(255, 255, 255, 0.08);
+    --acct-icon-border:  rgba(255, 255, 255, 0.08);
+    --acct-side-text:    #A1A1A6;
+    --acct-sheet-bg:     rgba(44, 41, 38, 0.8);
+    --acct-sheet-solid:  rgba(36, 34, 32, 0.98);
+    --acct-sheet-text:   #D1D1D6;
+    --acct-dim:          rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme='dark'] {
+  --acct-page-bg:      #1A1816;
+  --acct-glow-peach:   #5A3828;
+  --acct-glow-sage:    #2C4A40;
+  --acct-glow-lilac:   #3A3852;
+  --acct-glow-opacity: 0.55;
+  --acct-glass-bg:     rgba(52, 48, 45, 0.55);
+  --acct-glass-solid:  rgba(40, 37, 35, 0.94);
+  --acct-glass-border: rgba(255, 255, 255, 0.1);
+  --acct-glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --acct-glass-inset:  rgba(255, 255, 255, 0.07);
+  --acct-divider:      rgba(255, 255, 255, 0.07);
+  --acct-icon-bg:      rgba(255, 255, 255, 0.08);
+  --acct-icon-border:  rgba(255, 255, 255, 0.08);
+  --acct-side-text:    #A1A1A6;
+  --acct-sheet-bg:     rgba(44, 41, 38, 0.8);
+  --acct-sheet-solid:  rgba(36, 34, 32, 0.98);
+  --acct-sheet-text:   #D1D1D6;
+  --acct-dim:          rgba(0, 0, 0, 0.4);
+}
+
+.account-page--glass {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Fixed behind the page (it does not scroll with it, and never makes the
+   page wider: the glows are clipped to the screen). */
+.account-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--acct-page-bg);
+  pointer-events: none;
+}
+
+.account-glow__blob {
+  position: absolute;
+  border-radius: 50%;
+  opacity: var(--acct-glow-opacity);
+  filter: blur(60px);
+}
+
+.account-glow__blob--peach {
+  width: 300px;
+  height: 300px;
+  left: -90px;
+  top: 60px;
+  background: var(--acct-glow-peach);
+}
+
+.account-glow__blob--sage {
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  top: 300px;
+  background: var(--acct-glow-sage);
+}
+
+.account-glow__blob--lilac {
+  width: 260px;
+  height: 260px;
+  left: 40px;
+  bottom: -60px;
+  background: var(--acct-glow-lilac);
+}
+
+/* Delivery details: the same see-through look, but no blur of its own. */
+.account-page--glass .account-card {
+  border: 1px solid var(--acct-glass-border);
+  border-radius: 24px;
+  background: var(--acct-glass-solid);
+  box-shadow: var(--acct-glass-shadow), inset 0 1px 0 var(--acct-glass-inset);
+}
+
+.account-page--glass .acct-glass {
+  border-radius: 24px;
+  background: var(--acct-glass-bg);
+  border: 1px solid var(--acct-glass-border);
+  box-shadow: var(--acct-glass-shadow), inset 0 1px 0 var(--acct-glass-inset);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+
+.account-page--glass .acct-row {
+  gap: 14px;
+  padding: 14px 18px;
+  border-top-color: var(--acct-divider);
+}
+
+.account-page--glass .acct-row__icon {
+  border-radius: 12px;
+  background: var(--acct-icon-bg);
+  border: 1px solid var(--acct-icon-border);
+}
+
+.account-page--glass .acct-row__label {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.account-page--glass .acct-row__count,
+.account-page--glass .acct-row__chevron {
+  color: var(--acct-side-text);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .account-page--glass .acct-glass {
+    background: var(--acct-glass-solid);
+  }
+}
+
+/* The Pre-orders sheet: the same glass, a little more opaque; a light
+   dim behind it. */
+.acct-sheet {
+  background: var(--acct-sheet-bg);
+  border: 1px solid var(--acct-glass-border);
+  border-bottom: 0;
+  border-radius: 32px 32px 0 0;
+  box-shadow: var(--acct-glass-shadow), inset 0 1px 0 var(--acct-glass-inset);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .acct-sheet {
+    background: var(--acct-sheet-solid);
+  }
+}
+
+.sheet-backdrop:has(> .acct-sheet) {
+  background: var(--acct-dim);
+}
+
+.acct-sheet .sheet-title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.acct-sheet__text {
+  color: var(--acct-sheet-text);
+}
+
+/* The email under the name sits on the glow: the darker secondary grey
+   keeps it readable (WCAG AA) in both themes. */
+.account-page--glass .account-header__email {
+  color: var(--color-text-secondary);
+}

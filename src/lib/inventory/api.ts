@@ -267,7 +267,7 @@ export async function fetchOrderProfit(orderId: string): Promise<LoadState<Order
   if (error) return fail(error);
   return {
     kind: 'ready',
-    data: numbers(data as OrderProfit, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'courier_charge', 'cod_fee', 'profit', 'margin', 'filled_adjustments']),
+    data: numbers(data as OrderProfit, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'courier_charge', 'cod_fee', 'bill_paid_separately', 'profit', 'margin', 'filled_adjustments']),
   };
 }
 

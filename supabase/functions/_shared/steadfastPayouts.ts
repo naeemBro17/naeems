@@ -94,6 +94,10 @@ export interface PayoutSummary {
   codTotalPaisa: number | null;
   feeTotalPaisa: number | null;
   deliveryTotalPaisa: number | null;
+  /** Batch 53: "paid_bills" — delivery bills of parcels in this payout that
+   *  were paid some other way, so they are NOT taken out of this payout
+   *  (total = amount − charges − due_bills, checked on every stored payout). */
+  paidBillsPaisa: number | null;
   raw: Json;
 }
 
@@ -122,6 +126,7 @@ function readPayoutSummary(obj: Json): PayoutSummary | null {
     codTotalPaisa: hasNet ? optionalPaisa(obj, 'amount') : null,
     feeTotalPaisa: optionalPaisa(obj, 'charges'),
     deliveryTotalPaisa: optionalPaisa(obj, 'due_bills'),
+    paidBillsPaisa: optionalPaisa(obj, 'paid_bills'),
     raw: obj,
   };
 }
@@ -176,6 +181,10 @@ export interface PayoutItem {
   codFeePaisa: number;
   otherPaisa: number;
   netPaisa: number;
+  /** Batch 53: this parcel's delivery bill when it was paid outside this
+   *  payout (its share of "paid_bills"). A real cost of the order, but not
+   *  taken out of this payout, so it is not in netPaisa. */
+  paidSeparatelyPaisa: number;
   /** True when the COD fee was not in the answer and was worked out as 1%. */
   feeEstimated: boolean;
   /** Steadfast gave this parcel's own delivery charge. */
@@ -239,6 +248,7 @@ export function readPayoutItem(obj: Json): PayoutItem | null {
     codFeePaisa,
     otherPaisa,
     netPaisa,
+    paidSeparatelyPaisa: 0,
     feeEstimated: !feeGiven,
     chargeGiven: hasAny(obj, CHARGE_KEYS),
     notDelivered,
@@ -301,6 +311,8 @@ export interface OrderForMatch {
   /** The delivery fee on our order — the guide for splitting Steadfast's
    *  payout-level delivery charges between parcels. */
   delivery_fee?: number | null;
+  /** Batch 53: 'inside_dhaka' / 'outside_dhaka' / 'hand_delivered'. */
+  delivery_zone?: string | null;
   /** The order's "COD via Steadfast" payment row, if any (Batch 46). */
   steadfast_cod_paid?: number;
 }
@@ -333,18 +345,118 @@ export function splitExactly(totalPaisa: number, weights: readonly number[]): nu
   return floors;
 }
 
+/** Batch 53: the delivery fees in Settings, used only as the weight of
+ *  each zone when a payout's bills are shared (never as a price). */
+export interface ZoneFees {
+  inside: number;
+  outside: number;
+}
+
+export const DEFAULT_ZONE_FEES: ZoneFees = { inside: 70, outside: 130 };
+
+/** The split weight of one parcel: its order's zone fee from Settings
+ *  (every parcel of one zone weighs the same); without a zone, the order's
+ *  own delivery fee; otherwise null (the average of the others is used). */
+export function zoneWeight(
+  order: Pick<OrderForMatch, 'delivery_zone' | 'delivery_fee'> | null | undefined,
+  fees: ZoneFees
+): number | null {
+  if (!order) return null;
+  if (order.delivery_zone === 'inside_dhaka' && fees.inside > 0) return fees.inside;
+  if (order.delivery_zone === 'outside_dhaka' && fees.outside > 0) return fees.outside;
+  return order.delivery_fee !== null && order.delivery_fee !== undefined && order.delivery_fee > 0 ? order.delivery_fee : null;
+}
+
 /**
- * Steadfast's real payout answer gives the COD fee ("charges") and the
- * delivery charges ("due_bills") only as payout totals, not per parcel.
- * They are split here so every payout still adds up to the paisa: the COD
- * fee by each parcel's COD, the delivery charges by our own order's
- * delivery fee (inside / outside Dhaka) where known, otherwise equally.
+ * Batch 53: which parcels' bills were "paid_bills" (paid outside this
+ * payout) and which were "due_bills" (taken out of it). Steadfast gives
+ * only the two totals. Parcels of the same weight are interchangeable, so
+ * only how many of each weight sit on the "paid" side matters: every count
+ * is tried and the one whose weight share is closest to
+ * paid ÷ (due + paid) wins. Ties: more parcels with nothing to collect on
+ * the "paid" side (their bill cannot come out of their own cash), then
+ * fewer parcels on the "paid" side. Inside a weight, parcels with nothing
+ * to collect go to the "paid" side first, then the earliest.
+ */
+export function paidSeparatelySide(
+  codsPaisa: readonly number[],
+  weights: readonly number[],
+  duePaisa: number,
+  paidPaisa: number
+): boolean[] {
+  const n = weights.length;
+  if (n === 0) return [];
+  if (paidPaisa <= 0) return weights.map(() => false);
+  if (duePaisa <= 0) return weights.map(() => true);
+  // One parcel holds both kinds of bill: it stays on the "due" side and
+  // carries the paid bills too (see allocatePayoutTotals).
+  if (n === 1) return [false];
+  const groups = new Map<number, number[]>();
+  weights.forEach((w, i) => groups.set(w, [...(groups.get(w) ?? []), i]));
+  const keys = [...groups.keys()];
+  // Inside a weight: nothing-to-collect parcels first, then by position.
+  const ordered = keys.map((k) =>
+    [...(groups.get(k) ?? [])].sort((a, b) => Number(codsPaisa[a] > 0) - Number(codsPaisa[b] > 0) || a - b)
+  );
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const target = paidPaisa / (duePaisa + paidPaisa);
+  let bestCounts: number[] | null = null;
+  let bestScore = 0;
+  let bestZeroCod = 0;
+  let bestSize = 0;
+  const counts = keys.map(() => 0);
+  const visit = (g: number): void => {
+    if (g === keys.length) {
+      const size = counts.reduce((a, b) => a + b, 0);
+      if (size === 0 || size === n) return;
+      const paidWeight = counts.reduce((sum, c, k) => sum + c * keys[k], 0);
+      const score = Math.abs(paidWeight / totalWeight - target);
+      const zeroCod = counts.reduce((sum, c, k) => sum + ordered[k].slice(0, c).filter((i) => codsPaisa[i] <= 0).length, 0);
+      const tie = bestCounts !== null && Math.abs(score - bestScore) <= 1e-9;
+      const better =
+        bestCounts === null ||
+        (!tie && score < bestScore) ||
+        (tie && (zeroCod > bestZeroCod || (zeroCod === bestZeroCod && size < bestSize)));
+      if (better) {
+        bestCounts = [...counts];
+        bestScore = score;
+        bestZeroCod = zeroCod;
+        bestSize = size;
+      }
+      return;
+    }
+    for (let c = 0; c <= ordered[g].length; c += 1) {
+      counts[g] = c;
+      visit(g + 1);
+    }
+    counts[g] = 0;
+  };
+  visit(0);
+  const side = weights.map(() => false);
+  const chosen: number[] = bestCounts ?? keys.map(() => 0);
+  chosen.forEach((c, k) => {
+    for (const i of ordered[k].slice(0, c)) side[i] = true;
+  });
+  return side;
+}
+
+/**
+ * Steadfast's real payout answer gives the COD fee ("charges"), the
+ * delivery bills taken from this payout ("due_bills") and the bills paid
+ * some other way ("paid_bills") only as payout totals, not per parcel.
+ * They are split here so every payout still adds up to the paisa:
+ *   - the COD fee by each parcel's COD;
+ *   - Batch 53: the parcels are first put on the "due" or "paid" side
+ *     (paidSeparatelySide), then due_bills is shared over the "due" side
+ *     and paid_bills over the "paid" side, both by zone weight. A "paid"
+ *     bill is a cost of its order but not taken from this payout, so the
+ *     parcels' nets still add up to exactly what Steadfast paid.
  * Anything else Steadfast kept (paid − (COD − fee − delivery)) becomes
  * "other", split by COD. The per-order amounts are marked as estimates.
  */
 export function allocatePayoutTotals<T extends PayoutItem>(
   items: readonly T[],
-  summary: Pick<PayoutSummary, 'amountPaisa' | 'feeTotalPaisa' | 'deliveryTotalPaisa'>,
+  summary: Pick<PayoutSummary, 'amountPaisa' | 'feeTotalPaisa' | 'deliveryTotalPaisa'> & { paidBillsPaisa?: number | null },
   deliveryWeights: readonly (number | null)[]
 ): T[] {
   if (items.length === 0 || items.some((i) => i.chargeGiven)) return [...items];
@@ -354,7 +466,21 @@ export function allocatePayoutTotals<T extends PayoutItem>(
   const known = deliveryWeights.filter((w): w is number => w !== null && w > 0);
   const fallback = known.length > 0 ? known.reduce((a, b) => a + b, 0) / known.length : 1;
   const weights = deliveryWeights.map((w) => (w !== null && w > 0 ? w : fallback));
-  const delivery = splitExactly(summary.deliveryTotalPaisa ?? 0, weights);
+  const duePaisa = summary.deliveryTotalPaisa ?? 0;
+  const paidPaisa = Math.max(0, summary.paidBillsPaisa ?? 0);
+  const paidSide = paidSeparatelySide(cods, weights, duePaisa, paidPaisa);
+  const share = (total: number, onPaidSide: boolean): number[] => {
+    const idx = weights.map((_, i) => i).filter((i) => paidSide[i] === onPaidSide);
+    const parts = splitExactly(total, idx.map((i) => weights[i]));
+    const out = weights.map(() => 0);
+    idx.forEach((i, k) => {
+      out[i] = parts[k];
+    });
+    return out;
+  };
+  const delivery = share(duePaisa, false);
+  // One parcel with both kinds of bill carries the paid bills itself.
+  const separately = items.length === 1 ? [paidPaisa] : share(paidPaisa, true);
   const codSum = cods.reduce((a, b) => a + b, 0);
   const feeSum = fees.reduce((a, b) => a + b, 0);
   const deliverySum = delivery.reduce((a, b) => a + b, 0);
@@ -369,6 +495,7 @@ export function allocatePayoutTotals<T extends PayoutItem>(
     deliveryChargePaisa: delivery[i],
     otherPaisa: others[i],
     netPaisa: item.codPaisa - fees[i] - delivery[i] - others[i],
+    paidSeparatelyPaisa: separately[i],
     feeEstimated: true,
   }));
 }
@@ -504,6 +631,10 @@ export interface PayoutItemRow {
   cod_fee: number;
   other_deduction: number;
   net_paid: number;
+  /** Batch 53: this parcel's share of "paid_bills" (not in net_paid). */
+  bill_paid_separately: number;
+  /** Batch 53: which split wrote the money columns (see migration-054). */
+  split_rule: string;
   expected_cod: number | null;
   fee_estimated: boolean;
   match_status: MatchStatus;
@@ -518,12 +649,16 @@ export interface CourierCostRow {
   delivery_charge: number;
   cod_fee: number;
   other_deduction: number;
+  /** Batch 53: the order's bill paid outside the payout (in total_kept,
+   *  not in net_received). */
+  bill_paid_separately: number;
   total_kept: number;
   cod_collected: number;
   net_received: number;
   payout_id: string;
   paid_at: string | null;
   updated_at: string;
+  split_rule: string;
 }
 
 /** Where the sync keeps things. The Supabase version writes with the
@@ -535,6 +670,8 @@ export interface PayoutStore {
   /** Marks an already complete payout as seen again (nothing else changes). */
   touchPayout(paymentId: string, at: string): Promise<void>;
   findOrders(invoices: string[], consignmentIds: string[]): Promise<OrderForMatch[]>;
+  /** Batch 53: the zone delivery fees in Settings (split weights only). */
+  zoneFees?(): Promise<ZoneFees>;
   /** Order ids already in a payout other than `payoutId`. */
   ordersInOtherPayouts(orderIds: string[], payoutId: string): Promise<Set<string>>;
   /** Insert or update by (payout_id, item_key). */
@@ -562,6 +699,12 @@ function moneyText(paisa: number): string {
   return `৳${fromPaisa(paisa).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Batch 53: written on every payout line and courier row by this code.
+ *  migration-054 marks the rows it recalculated 'b53-backfill'; a database
+ *  guard keeps those numbers when an older copy of this code (which does
+ *  not send split_rule) reads the payout again before the deploy. */
+export const SPLIT_RULE = 'b53';
+
 export function payoutItemRow(payoutId: string, m: MatchedItem): PayoutItemRow {
   return {
     payout_id: payoutId,
@@ -574,6 +717,8 @@ export function payoutItemRow(payoutId: string, m: MatchedItem): PayoutItemRow {
     cod_fee: fromPaisa(m.codFeePaisa),
     other_deduction: fromPaisa(m.otherPaisa),
     net_paid: fromPaisa(m.netPaisa),
+    bill_paid_separately: fromPaisa(m.paidSeparatelyPaisa),
+    split_rule: SPLIT_RULE,
     expected_cod: m.expectedCodPaisa === null ? null : fromPaisa(m.expectedCodPaisa),
     fee_estimated: m.feeEstimated,
     match_status: m.status,
@@ -591,19 +736,22 @@ export function payoutItemRow(payoutId: string, m: MatchedItem): PayoutItemRow {
  *  are left out so an order is never costed twice. */
 export function courierCostRow(payoutId: string, paidAt: string | null, m: MatchedItem, now: string): CourierCostRow | null {
   if (!m.orderId || m.reason === 'duplicate') return null;
-  const kept = m.deliveryChargePaisa + m.codFeePaisa + m.otherPaisa;
+  // Batch 53: a bill paid outside the payout is still this order's cost.
+  const kept = m.deliveryChargePaisa + m.codFeePaisa + m.otherPaisa + m.paidSeparatelyPaisa;
   return {
     order_id: m.orderId,
     courier: 'steadfast',
     delivery_charge: fromPaisa(m.deliveryChargePaisa),
     cod_fee: fromPaisa(m.codFeePaisa),
     other_deduction: fromPaisa(m.otherPaisa),
+    bill_paid_separately: fromPaisa(m.paidSeparatelyPaisa),
     total_kept: fromPaisa(kept),
     cod_collected: fromPaisa(m.codPaisa),
     net_received: fromPaisa(m.netPaisa),
     payout_id: payoutId,
     paid_at: paidAt,
     updated_at: now,
+    split_rule: SPLIT_RULE,
   };
 }
 
@@ -680,6 +828,7 @@ export async function syncSteadfastPayouts(
       codTotalPaisa: summary.codTotalPaisa ?? more.codTotalPaisa ?? null,
       feeTotalPaisa: summary.feeTotalPaisa ?? more.feeTotalPaisa ?? null,
       deliveryTotalPaisa: summary.deliveryTotalPaisa ?? more.deliveryTotalPaisa ?? null,
+      paidBillsPaisa: summary.paidBillsPaisa ?? more.paidBillsPaisa ?? null,
     };
     const payoutId = await store.upsertPayout(baseRow(merged, true, stamp, items.length));
 
@@ -688,13 +837,14 @@ export async function syncSteadfastPayouts(
       items.map((i) => i.consignmentId).filter((v): v is string => v !== null)
     );
     const elsewhere = await store.ordersInOtherPayouts(orders.map((o) => o.id), payoutId);
+    const fees = store.zoneFees ? await store.zoneFees() : DEFAULT_ZONE_FEES;
     const weights = items.map((i) => {
       const o = orders.find(
         (x) =>
           (i.invoice !== null && x.order_number.toUpperCase() === i.invoice.toUpperCase()) ||
           (i.consignmentId !== null && x.steadfast_consignment_id === i.consignmentId)
       );
-      return o?.delivery_fee ?? null;
+      return zoneWeight(o, fees);
     });
     const matched = matchItems(allocatePayoutTotals(items, merged, weights), orders, elsewhere);
     await store.upsertItems(matched.map((m) => payoutItemRow(payoutId, m)));

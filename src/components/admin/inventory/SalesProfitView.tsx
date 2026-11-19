@@ -9,6 +9,7 @@ import { formatTakaBd } from '../../../lib/adminNav';
 import { AdminPageHeader, ChipRow, EmptyState, SkeletonRows } from '../ui/AdminUi';
 import { formatLotDate } from './invFormat';
 import { MissingCostNote } from './MissingCostNote';
+import { courierLabel } from '../../../lib/inventory/courierLabel';
 
 type Range = 'today' | 'month' | 'custom';
 
@@ -161,7 +162,12 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
                         </span>
                       </span>
                       <span className="inv-line">
-                        <span>Delivery · courier{o.courier_known ? '' : ' (not known yet)'}</span>
+                        <span>
+                          Delivery · courier
+                          {courierLabel(o.courier_kind, o.courier_known) && (
+                            <span className="adm-courier-tag">{courierLabel(o.courier_kind, o.courier_known)?.label}</span>
+                          )}
+                        </span>
                         <span>
                           +{formatTakaBd(o.delivery)} · −{formatTakaBd(o.courier)}
                         </span>

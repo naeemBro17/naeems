@@ -5,20 +5,18 @@ import { AdminIcon } from './ui/AdminIcon';
 import { clockParts } from '../../lib/adminClock';
 
 /**
- * Batch 51 Part 5: the iPhone-lock-screen clock — 12-hour hours:minutes
- * without AM/PM in glass digits, the seconds small beside the minutes.
- * Its own component: it ticks once a second without re-rendering the
- * dashboard, waits for the next whole second, and stops while the tab is
- * hidden. The digits are tabular, so nothing jumps.
+ * Batch 53 Part 1: re-renders only its own part, once per `periodMs`, on
+ * the whole second / minute; stops while the tab is hidden and catches up
+ * when it comes back.
  */
-export const GlassClock = memo(function GlassClock() {
+function useTick(periodMs: number): Date {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     let timer = 0;
     const tick = () => {
       setNow(new Date());
-      timer = window.setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+      timer = window.setTimeout(tick, periodMs - (Date.now() % periodMs) + 5);
     };
     const start = () => {
       window.clearTimeout(timer);
@@ -31,18 +29,53 @@ export const GlassClock = memo(function GlassClock() {
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', start);
     };
-  }, []);
+  }, [periodMs]);
 
-  const t = clockParts(now);
+  return now;
+}
+
+/** One glass number. `data-t` feeds the top highlight (::after) with the
+ *  same digits, so the two can never differ. */
+function GlassDigits({ value, className = '' }: { value: string; className?: string }) {
+  return (
+    <span className={`adm-clock__d ${className}`.trim()} data-t={value}>
+      {value}
+    </span>
+  );
+}
+
+/** The seconds: the only part that changes every second. */
+const ClockSeconds = memo(function ClockSeconds() {
+  const t = clockParts(useTick(1000));
+  return (
+    <span className="adm-clock__s" data-testid="admin-clock-seconds">
+      <GlassDigits value={t.seconds} />
+    </span>
+  );
+});
+
+/**
+ * Batch 51 Part 5 / Batch 53 Part 1: the iPhone-lock-screen clock —
+ * 12-hour hours:minutes without AM/PM in "liquid glass" digits (soft
+ * see-through grey, a thin light edge, a bright top highlight, a soft
+ * shadow under them), the seconds small at the bottom right of the
+ * minutes. Hours and minutes re-render once a minute; the seconds are
+ * their own component. Its size comes from the card's width (container
+ * units), so the widest time always fits; the digits are tabular, so
+ * nothing jumps. Nothing animates.
+ */
+export const GlassClock = memo(function GlassClock() {
+  const t = clockParts(useTick(60_000));
   return (
     <p className="adm-clock" role="timer" aria-label={`${t.hours}:${t.minutes}`} data-testid="admin-clock">
-      <span className="adm-clock__hm" aria-hidden="true">
-        {t.hours}
-        <span className="adm-clock__colon">:</span>
-        {t.minutes}
-      </span>
-      <span className="adm-clock__s" aria-hidden="true" data-testid="admin-clock-seconds">
-        {t.seconds}
+      <span className="adm-clock__t" aria-hidden="true">
+        <GlassDigits value={t.hours} />
+        <span className="adm-clock__dots">
+          <i />
+          <i />
+        </span>
+        <GlassDigits value={t.minutes} />
+        <ClockSeconds />
       </span>
     </p>
   );

@@ -13,3 +13,7 @@ blob-report
 
 backups/
 .verify
+
+# Mockups Naeem saves for a batch (kept local, never committed)
+reports/*/mockups/*
+!reports/batch-51-screens/mockups/*

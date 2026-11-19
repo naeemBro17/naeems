@@ -4,6 +4,7 @@
 // "View profit & costs"; nobody but the service role can write them.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { DEFAULT_ZONE_FEES } from './steadfastPayouts.ts';
 import type {
   CourierCostRow,
   OrderForMatch,
@@ -11,6 +12,7 @@ import type {
   PayoutRow,
   PayoutStore,
   StoredPayout,
+  ZoneFees,
 } from './steadfastPayouts.ts';
 
 interface OrderRow {
@@ -22,6 +24,7 @@ interface OrderRow {
   steadfast_consignment_id: string | null;
   steadfast_cod_amount: number | string | null;
   delivery_fee: number | string | null;
+  delivery_zone: string | null;
 }
 
 interface PaymentRow {
@@ -59,6 +62,15 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
           .or('match_reason.neq.order_not_found,invoice.ilike.NM-*');
         if (openErr) fail('Reading payout items', openErr.message);
         for (const r of (open ?? []) as { payout_id: string }[]) toCheck.add(r.payout_id);
+        // Batch 53: a payout last split by an older copy of this code (no
+        // split_rule) is read once more, so its bills are shared the new way.
+        const { data: old, error: oldErr } = await db
+          .from('steadfast_payout_items')
+          .select('payout_id')
+          .in('payout_id', ids)
+          .is('split_rule', null);
+        if (oldErr) fail('Reading payout items', oldErr.message);
+        for (const r of (old ?? []) as { payout_id: string }[]) toCheck.add(r.payout_id);
       }
       for (const r of rows) {
         out.set(r.steadfast_payment_id, { id: r.id, itemsSynced: r.items_synced, hasToCheck: toCheck.has(r.id) });
@@ -82,7 +94,7 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
     },
 
     async findOrders(invoices: string[], consignmentIds: string[]): Promise<OrderForMatch[]> {
-      const columns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount, delivery_fee';
+      const columns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount, delivery_fee, delivery_zone';
       const found = new Map<string, OrderRow>();
       if (invoices.length > 0) {
         const { data, error } = await db.from('orders').select(columns).in('order_number', invoices);
@@ -119,8 +131,26 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
         steadfast_cod_amount: o.steadfast_cod_amount === null ? null : Number(o.steadfast_cod_amount),
         paid_before_courier: Math.round((paid.get(o.id) ?? 0) * 100) / 100,
         delivery_fee: o.delivery_fee === null ? null : Number(o.delivery_fee),
+        delivery_zone: o.delivery_zone,
         steadfast_cod_paid: Math.round((viaSteadfast.get(o.id) ?? 0) * 100) / 100,
       }));
+    },
+
+    async zoneFees(): Promise<ZoneFees> {
+      const { data, error } = await db
+        .from('app_settings')
+        .select('key, value')
+        .in('key', ['delivery_fee_inside_dhaka', 'delivery_fee_outside_dhaka']);
+      if (error) fail('Reading delivery fees', error.message);
+      const read = (key: string, fallback: number): number => {
+        const row = ((data ?? []) as { key: string; value: unknown }[]).find((r) => r.key === key);
+        const n = Number(row?.value);
+        return Number.isFinite(n) && n > 0 ? n : fallback;
+      };
+      return {
+        inside: read('delivery_fee_inside_dhaka', DEFAULT_ZONE_FEES.inside),
+        outside: read('delivery_fee_outside_dhaka', DEFAULT_ZONE_FEES.outside),
+      };
     },
 
     async ordersInOtherPayouts(orderIds: string[], payoutId: string): Promise<Set<string>> {

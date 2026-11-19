@@ -574,3 +574,20 @@
   font-size: var(--adm-fs-small);
   color: var(--adm-text-2);
 }
+
+/* Batch 53: how sure a courier + COD fee is ("From Steadfast", "Share of
+   payout", "Expected", "No courier") — small and grey, never orange. */
+.adm-courier-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: var(--adm-fs-micro);
+  font-weight: 500;
+  color: var(--adm-muted);
+  white-space: nowrap;
+}
+
+.adm-courier-note {
+  display: block;
+  font-size: var(--adm-fs-micro);
+  color: var(--adm-muted);
+}

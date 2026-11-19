@@ -78,6 +78,9 @@ export interface UnpaidOrder {
 export interface OrderPayoutInfo {
   net_received: number;
   total_kept: number;
+  /** Batch 53: the delivery bill paid outside the payout (in total_kept,
+   *  not in net_received). 0 until migration-054 is run. */
+  bill_paid_separately: number;
   paid_at: string | null;
   payment_id: string | null;
   payout_id: string | null;
@@ -238,20 +241,22 @@ export async function fetchUnpaidOrders(): Promise<UnpaidOrder[]> {
 /** "Steadfast paid ৳X on 8 Oct" for one order, or null (not paid yet, or
  *  this person may not see it). */
 export async function fetchOrderPayout(orderId: string): Promise<LoadState<OrderPayoutInfo | null>> {
-  const { data, error } = await supabase
-    .from('order_courier_costs')
-    .select('net_received, total_kept, paid_at, payout_id, steadfast_payouts(steadfast_payment_id)')
-    .eq('order_id', orderId)
-    .maybeSingle();
+  const columns = 'net_received, total_kept, paid_at, payout_id, steadfast_payouts(steadfast_payment_id)';
+  const read = (cols: string) =>
+    supabase.from('order_courier_costs').select(cols).eq('order_id', orderId).maybeSingle<Record<string, unknown>>();
+  // Batch 53: bill_paid_separately exists once migration-054 is run.
+  let { data, error } = await read(`${columns}, bill_paid_separately`);
+  if (isMissingColumn(error)) ({ data, error } = await read(columns));
   if (error) return isMissingSchema(error) ? { kind: 'no-db' } : { kind: 'error', message: error.message };
   if (!data) return { kind: 'ready', data: null };
-  const row = data as Record<string, unknown>;
+  const row = data;
   const payout = row.steadfast_payouts as { steadfast_payment_id?: string } | null;
   return {
     kind: 'ready',
     data: {
       net_received: num(row.net_received),
       total_kept: num(row.total_kept),
+      bill_paid_separately: num(row.bill_paid_separately),
       paid_at: (row.paid_at as string | null) ?? null,
       payout_id: (row.payout_id as string | null) ?? null,
       payment_id: payout?.steadfast_payment_id ?? null,
