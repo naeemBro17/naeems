@@ -85,8 +85,8 @@ export function PackSizePanel({ productId }: { productId: string }) {
       {rows.map((row) => {
         const changed = row.unit !== row.savedUnit || row.pack !== String(row.savedPack);
         return (
-          <div key={row.key} className="form-row" data-testid="pack-size-row">
-            {rows.length > 1 && <span className="form-helper">{row.label}</span>}
+          <div key={row.key} className="form-row pack-size-row" data-testid="pack-size-row">
+            {rows.length > 1 && <span className="form-helper pack-size-row__label">{row.label}</span>}
             <label className="form-field">
               <span className="form-label">Stock unit</span>
               <select
@@ -116,7 +116,7 @@ export function PackSizePanel({ productId }: { productId: string }) {
               />
             </label>
             {changed && (
-              <button type="button" className="button button--secondary" onClick={() => void save(row)} disabled={savingKey === row.key} data-testid="pack-size-save">
+              <button type="button" className="button button--secondary pack-size-row__save" onClick={() => void save(row)} disabled={savingKey === row.key} data-testid="pack-size-save">
                 {savingKey === row.key ? <span className="spinner" aria-hidden="true" /> : 'Save pack size'}
               </button>
             )}

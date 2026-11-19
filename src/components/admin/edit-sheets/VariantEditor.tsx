@@ -25,7 +25,13 @@ export const STOCK_FROM_LOTS_HINT =
 
 interface VariantEditorProps {
   productId: string;
+  /** False when the surrounding section already says "Variants". */
+  showLabel?: boolean;
 }
+
+/** An offer lower than the retail price (the shop shows it struck through). */
+const hasOffer = (variant: ProductVariant): boolean =>
+  variant.offer_price !== null && variant.offer_price < variant.retail_price;
 
 const numberOrNull = (value: string): number | null =>
   value.trim() === '' ? null : Number(value);
@@ -210,7 +216,7 @@ function VariantForm({
         </button>
         <button
           type="button"
-          className="button button--primary button--small"
+          className="button button--secondary button--small"
           onClick={onSubmit}
           disabled={isSaving}
         >
@@ -226,7 +232,7 @@ function VariantForm({
  * Each variant saves on its own, immediately, and the shared variant list is
  * reloaded so the grid's "from" price and the detail page follow.
  */
-export function VariantEditor({ productId }: VariantEditorProps) {
+export function VariantEditor({ productId, showLabel = true }: VariantEditorProps) {
   const { products, variantsFor, allVariants, reloadVariants, settings } = useProducts();
   // Batch 52.1: while Inventory mode is On, lots set each option's stock.
   const stockFromLots = settings.inventory_mode === 'true';
@@ -338,7 +344,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
 
   return (
     <div className="form-field variant-editor">
-      <span className="form-label">Variants</span>
+      {showLabel && <span className="form-label">Variants</span>}
 
       {variants.length === 0 ? (
         <p className="edit-sheet__empty">
@@ -350,13 +356,23 @@ export function VariantEditor({ productId }: VariantEditorProps) {
             <li key={variant.id} className="variant-list__item">
               <div className={`variant-list__row${variant.in_stock ? '' : ' variant-list__row--out'}`}>
                 <span className="variant-list__region">{variant.region}</span>
-                <span className="variant-list__size">{variant.size}</span>
-                <span className="variant-list__price">{formatTaka(variant.retail_price)}</span>
-                {stockFromLots ? (
-                  <span className="variant-list__stock" data-testid="variant-stock-text">
-                    From lots: {variant.stock_quantity ?? 0}
+                <span className="variant-list__main">
+                  <span className="variant-list__size">{variant.size}</span>
+                  {stockFromLots && (
+                    <span className="variant-list__stock" data-testid="variant-stock-text">
+                      From lots: {variant.stock_quantity ?? 0}
+                    </span>
+                  )}
+                </span>
+                <span className="variant-list__prices">
+                  <span className="variant-list__price">
+                    {formatTaka(hasOffer(variant) ? (variant.offer_price as number) : variant.retail_price)}
                   </span>
-                ) : (
+                  {hasOffer(variant) && (
+                    <s className="variant-list__retail">{formatTaka(variant.retail_price)}</s>
+                  )}
+                </span>
+                {stockFromLots ? null : (
                   <Toggle
                     small
                     checked={variant.in_stock}

@@ -10806,3 +10806,134 @@ html.vt-fade::view-transition-new(root) {
   border-radius: 12px;
   color: var(--color-text-primary);
 }
+
+/* ---------- Batch 52.1 Part 2: the product editor in titled sections ----------
+   One column (phone, and the shop's quick-edit sheet). The side sections
+   (Shop, Photos, Reference) share one wrapper so the Edit product page can
+   put them in a right-hand column on a computer (admin.css); here the
+   wrapper is invisible and `order` sets the phone order. */
+.pform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pform__side {
+  display: contents;
+}
+
+.pform__section--basics { order: 1; }
+.pform__section--shop { order: 2; }
+.pform__section--photos { order: 3; }
+.pform__section--price { order: 4; }
+.pform__section--stock { order: 5; }
+.pform__section--variants { order: 6; }
+.pform__section--details { order: 7; }
+.pform__section--reference { order: 8; }
+.pform__footer { order: 9; }
+
+.pform__section {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.pform__heading {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
+.pform__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pform__fields > .form-field {
+  min-width: 0;
+}
+
+.pform__row > * {
+  min-width: 0;
+}
+
+.pform__row--3 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* A panel inside a section is part of it, not a card of its own. */
+.pform__section .admin-panel {
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.pack-size-row__label {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.pack-size-row__save {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 559px) {
+  .pform__row--wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 640px) {
+  .pform__row--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Variant rows: region · size (stock under it) · prices · actions. */
+.variant-list__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.variant-list__main .variant-list__size {
+  flex: none;
+}
+
+.variant-list__prices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  line-height: 1.25;
+}
+
+.variant-list__retail {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+/* Fields of different heights in one row: the ৳ box keeps its own height
+   (it grows to fill the column otherwise and its sign drifts down). */
+.pform .form-field > .money-input {
+  flex: none;
+}
+
+/* Read-only while Inventory mode is On: plainly not a box to type in. */
+.pform .form-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

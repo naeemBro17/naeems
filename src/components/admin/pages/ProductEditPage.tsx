@@ -60,6 +60,7 @@ export function ProductEditPage({ productId, onBack, onCreated }: ProductEditPag
       backLabel="Back to products"
       onBack={onBack}
       testId="product-page"
+      className="adm-ppage"
       secondary={product ? { label: 'View on site', href: productPath(product), testId: 'product-view-on-site' } : undefined}
       primary={
         ready
