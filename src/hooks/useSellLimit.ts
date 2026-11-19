@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProducts } from '../contexts/ProductContext';
-import { limitReason, maxQuantity, orderLimit, type Buyer, type LimitReason, type StockFacts } from '../lib/sellRules';
+import { limitReason, orderLimit, type LimitReason } from '../lib/sellRules';
+import { maxQuantity, optionStockFacts, productStockFacts, type Buyer, type StockFacts } from '../lib/buyRule';
 import type { Product, ProductVariant } from '../types';
 
 export interface SellLimit {
@@ -22,14 +23,13 @@ export interface SellLimit {
  */
 export function useSellLimit(): SellLimit {
   const { settings } = useProducts();
-  const { isWholesalerOrAdmin } = useAuth();
+  const { isAdmin, isWholesalerOrAdmin } = useAuth();
   const limit = orderLimit(settings);
-  const buyer: Buyer = isWholesalerOrAdmin ? 'wholesaler' : 'customer';
+  const buyer: Buyer = isAdmin ? 'admin' : isWholesalerOrAdmin ? 'wholesaler' : 'customer';
 
   const factsFor = useCallback((product: Product, option: ProductVariant | null): StockFacts => {
-    const keepSelling = (option ? option.keep_selling ?? product.keep_selling : product.keep_selling) === true;
-    const stock = option ? option.stock_quantity ?? null : product.stock_quantity ?? null;
-    return { keepSelling, stock };
+    // Batch 52.1: the shared rule (an option follows its product).
+    return option ? optionStockFacts(option, product.keep_selling) : productStockFacts(product);
   }, []);
 
   return useMemo(

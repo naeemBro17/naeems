@@ -392,7 +392,9 @@ test('Products: row opens Edit; Delete only in the ⋮ menu and confirmed; Low s
   // Low stock chip = live products at or below the threshold.
   const threshold = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.low_stock_threshold');
   const limit = Number(threshold.data?.[0]?.value ?? '5');
-  const low = await select<{ id: string }[]>(null, `products_view?select=id&is_active=eq.true&stock_quantity=lte.${limit}`);
+  // Batch 52.1: counted as the admin, like the page. Since Batch 51 the view
+  // hides keep-selling stock numbers from visitors, so a visitor counts fewer.
+  const low = await select<{ id: string }[]>(admin.accessToken, `products_view?select=id&is_active=eq.true&stock_quantity=lte.${limit}`);
   const lowCount = (low.data ?? []).length;
   const chip = page.locator('.adm-chip', { hasText: 'Low stock' });
   await expect(chip).toContainText(String(lowCount));

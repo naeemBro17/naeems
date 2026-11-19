@@ -1,4 +1,7 @@
 import type { Product } from '../types';
+import { isBuyable, productStockFacts } from './buyRule';
+
+export { stockLimit } from './buyRule';
 
 /**
  * Stock availability, derived from stock_quantity rather than set
@@ -23,7 +26,7 @@ export function hasStock(product: Product): boolean {
  * list keeps the real stock (hasStock).
  */
 export function isInStock(product: Product): boolean {
-  return product.keep_selling === true || hasStock(product);
+  return isBuyable(productStockFacts(product));
 }
 
 /**
@@ -52,12 +55,3 @@ export function statusFromQuantity(
   return fallback === 'out_of_stock' ? 'in_stock' : fallback;
 }
 
-/**
- * The most units of one cart line a shopper may have (Batch 27): the tracked
- * stock count when the product (or option) tracks one, otherwise no limit.
- * A blank count means "not tracking exact quantity", never zero.
- */
-export function stockLimit(stockQuantity: number | null | undefined): number {
-  if (stockQuantity === null || stockQuantity === undefined) return Number.POSITIVE_INFINITY;
-  return Math.max(0, Math.floor(stockQuantity));
-}

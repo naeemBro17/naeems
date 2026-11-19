@@ -19,9 +19,19 @@ import type { ProductVariant, VariantFormData } from '../../../types';
 
 const VARIANT_NOTE_MAX_LENGTH = 200;
 
+/** The product form's own words (Batch 39) for stock that comes from lots. */
+export const STOCK_FROM_LOTS_HINT =
+  'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.';
+
 interface VariantEditorProps {
   productId: string;
+  /** False when the surrounding section already says "Variants". */
+  showLabel?: boolean;
 }
+
+/** An offer lower than the retail price (the shop shows it struck through). */
+const hasOffer = (variant: ProductVariant): boolean =>
+  variant.offer_price !== null && variant.offer_price < variant.retail_price;
 
 const numberOrNull = (value: string): number | null =>
   value.trim() === '' ? null : Number(value);
@@ -30,6 +40,7 @@ function VariantForm({
   variantId,
   form,
   isSaving,
+  stockFromLots,
   knownRegions,
   knownSizes,
   onChange,
@@ -42,6 +53,9 @@ function VariantForm({
   variantId: string;
   form: VariantFormData;
   isSaving: boolean;
+  /** Batch 52.1: Inventory mode is On — In Stock and Stock Quantity come
+   *  from lots (the database sets them), so they are shown read-only. */
+  stockFromLots: boolean;
   /** Existing Region/Size values already used in the catalog, for the
    *  guided picker — see GuidedField. */
   knownRegions: string[];
@@ -121,14 +135,21 @@ function VariantForm({
             onChange={(e) => onChange({ wholesale_price: e.target.value })}
           />
         </div>
-        <div className="form-field form-field--toggle variant-form__stock">
-          <span className="toggle-label">In Stock</span>
-          <Toggle
-            checked={form.in_stock}
-            onChange={(in_stock) => onChange({ in_stock })}
-            label="In stock"
-          />
-        </div>
+        {stockFromLots ? (
+          <div className="form-field variant-form__stock" data-testid="variant-in-stock-readonly">
+            <span className="form-label">In Stock</span>
+            <p className="form-readonly">{form.in_stock ? 'Yes' : 'No'}</p>
+          </div>
+        ) : (
+          <div className="form-field form-field--toggle variant-form__stock">
+            <span className="toggle-label">In Stock</span>
+            <Toggle
+              checked={form.in_stock}
+              onChange={(in_stock) => onChange({ in_stock })}
+              label="In stock"
+            />
+          </div>
+        )}
       </div>
 
       <div className="form-field">
@@ -141,11 +162,14 @@ function VariantForm({
           inputMode="numeric"
           placeholder="Not tracked"
           className="form-input"
-          value={form.stock_quantity}
+          value={stockFromLots && form.stock_quantity === '' ? '0' : form.stock_quantity}
+          disabled={stockFromLots}
           onChange={(e) => onChange({ stock_quantity: e.target.value })}
         />
-        <p className="form-helper">
-          Leave blank to use the In Stock toggle above instead of an exact count.
+        <p className="form-helper" data-testid="variant-stock-hint">
+          {stockFromLots
+            ? STOCK_FROM_LOTS_HINT
+            : 'Leave blank to use the In Stock toggle above instead of an exact count.'}
         </p>
       </div>
 
@@ -192,7 +216,7 @@ function VariantForm({
         </button>
         <button
           type="button"
-          className="button button--primary button--small"
+          className="button button--secondary button--small"
           onClick={onSubmit}
           disabled={isSaving}
         >
@@ -208,8 +232,10 @@ function VariantForm({
  * Each variant saves on its own, immediately, and the shared variant list is
  * reloaded so the grid's "from" price and the detail page follow.
  */
-export function VariantEditor({ productId }: VariantEditorProps) {
-  const { products, variantsFor, allVariants, reloadVariants } = useProducts();
+export function VariantEditor({ productId, showLabel = true }: VariantEditorProps) {
+  const { products, variantsFor, allVariants, reloadVariants, settings } = useProducts();
+  // Batch 52.1: while Inventory mode is On, lots set each option's stock.
+  const stockFromLots = settings.inventory_mode === 'true';
   const { showToast } = useToast();
   const variants = variantsFor(productId);
 
@@ -318,7 +344,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
 
   return (
     <div className="form-field variant-editor">
-      <span className="form-label">Variants</span>
+      {showLabel && <span className="form-label">Variants</span>}
 
       {variants.length === 0 ? (
         <p className="edit-sheet__empty">
@@ -330,14 +356,30 @@ export function VariantEditor({ productId }: VariantEditorProps) {
             <li key={variant.id} className="variant-list__item">
               <div className={`variant-list__row${variant.in_stock ? '' : ' variant-list__row--out'}`}>
                 <span className="variant-list__region">{variant.region}</span>
-                <span className="variant-list__size">{variant.size}</span>
-                <span className="variant-list__price">{formatTaka(variant.retail_price)}</span>
-                <Toggle
-                  small
-                  checked={variant.in_stock}
-                  onChange={() => void handleToggleStock(variant)}
-                  label={`${variant.region} ${variant.size} in stock`}
-                />
+                <span className="variant-list__main">
+                  <span className="variant-list__size">{variant.size}</span>
+                  {stockFromLots && (
+                    <span className="variant-list__stock" data-testid="variant-stock-text">
+                      From lots: {variant.stock_quantity ?? 0}
+                    </span>
+                  )}
+                </span>
+                <span className="variant-list__prices">
+                  <span className="variant-list__price">
+                    {formatTaka(hasOffer(variant) ? (variant.offer_price as number) : variant.retail_price)}
+                  </span>
+                  {hasOffer(variant) && (
+                    <s className="variant-list__retail">{formatTaka(variant.retail_price)}</s>
+                  )}
+                </span>
+                {stockFromLots ? null : (
+                  <Toggle
+                    small
+                    checked={variant.in_stock}
+                    onChange={() => void handleToggleStock(variant)}
+                    label={`${variant.region} ${variant.size} in stock`}
+                  />
+                )}
                 <RowIconButton
                   label={`Edit ${variant.region} ${variant.size}`}
                   onClick={() => (editingId === variant.id ? closeForm() : startEdit(variant))}
@@ -357,6 +399,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
                   variantId={variant.id}
                   form={form}
                   isSaving={isSaving}
+                  stockFromLots={stockFromLots}
                   knownRegions={knownRegions}
                   knownSizes={knownSizes}
                   onChange={(patch) =>
@@ -376,6 +419,7 @@ export function VariantEditor({ productId }: VariantEditorProps) {
           variantId={newVariantId}
           form={form}
           isSaving={isSaving}
+          stockFromLots={stockFromLots}
           knownRegions={knownRegions}
           knownSizes={knownSizes}
           onChange={(patch) =>

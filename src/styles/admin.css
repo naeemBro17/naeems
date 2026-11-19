@@ -3947,3 +3947,65 @@ a.adm-lrow__open:focus-visible {
   font-size: var(--adm-fs-small);
   color: var(--adm-muted);
 }
+
+/* ---------- Batch 52.1 Part 2: Edit product page ---------- */
+.adm .pform__section,
+.adm .pform__section .admin-panel {
+  border-color: var(--adm-line);
+}
+
+.adm .pform__section {
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card);
+}
+
+.adm .pform__heading {
+  font-size: var(--adm-fs-section);
+  color: var(--adm-text);
+}
+
+.adm .variant-list__retail {
+  color: var(--adm-muted);
+}
+
+/* Computer: main details left, a narrower right column with the shop
+   switches, photos and the SKU. Save stays in the sticky top bar. */
+@media (min-width: 1024px) {
+  .adm-ppage .adm-fpage__body {
+    max-width: 1200px;
+  }
+
+  .adm-ppage .pform {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    column-gap: var(--adm-s5);
+    row-gap: 0;
+    align-items: start;
+  }
+
+  .adm-ppage .pform > .pform__section {
+    grid-column: 1;
+    margin-bottom: var(--adm-s4);
+  }
+
+  .adm-ppage .pform__side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--adm-s4);
+    grid-column: 2;
+    grid-row: 1 / span 6;
+  }
+
+  .adm-ppage .pform__section {
+    padding: 20px 22px;
+  }
+}
+
+.adm .pform__section .admin-panel {
+  margin: 0;
+  padding: var(--adm-s3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--adm-line);
+  border-radius: 0;
+  background: none;
+}

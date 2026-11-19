@@ -1,5 +1,7 @@
 import type { AppSettings } from '../types';
-import { stockLimit } from './stockStatus';
+import { maxQuantity, stockLimit, type Buyer, type StockFacts } from './buyRule';
+
+export { maxQuantity, type Buyer, type StockFacts };
 
 /**
  * Batch 51: keep selling when out of stock, the order limit, and the
@@ -22,24 +24,6 @@ export const DEFAULT_DELIVERY_BUY_AFTER = '3–5 days';
 export function orderLimit(settings: Pick<SellSettings, 'order_limit_per_item'>): number {
   const n = Number.parseInt(String(settings.order_limit_per_item ?? '').replace(/\D/g, ''), 10);
   return Number.isFinite(n) && n >= 1 ? n : DEFAULT_ORDER_LIMIT;
-}
-
-/** Who is adding to the cart: wholesalers have no order limit. */
-export type Buyer = 'customer' | 'wholesaler';
-
-/** What the shop knows about one product option's stock. `stock` is null
- *  when the number is not shown (a keep-selling product, for a customer)
- *  or not counted. */
-export interface StockFacts {
-  keepSelling: boolean;
-  stock: number | null;
-}
-
-/** The most of one product option that may be in the cart. */
-export function maxQuantity(facts: StockFacts, limit: number, buyer: Buyer): number {
-  if (buyer === 'wholesaler') return facts.keepSelling ? Number.POSITIVE_INFINITY : stockLimit(facts.stock);
-  if (facts.keepSelling) return limit;
-  return Math.min(stockLimit(facts.stock), limit);
 }
 
 /** Why + stopped: the order limit, or the last of the stock. */

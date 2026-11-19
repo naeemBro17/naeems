@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl, productCardPath, smallCopyPath } from '../../lib/supabase';
 import { slugify } from '../../lib/format';
@@ -486,184 +486,245 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   }, [canSave, isSaving, loadingText, onState]);
   const saveLabel = loadingText ? LOADING_TEXT_LABEL : product ? 'Save Changes' : 'Add Product';
 
+  // Batch 52.1 Part 2: the same fields, grouped into sections. One column
+  // on a phone; on the Edit product page at 1024 px and wider the side
+  // sections (Shop, Photos, Reference) sit in a narrow right column.
   return (
-    <form id={formId} onSubmit={handleSubmit} className="form" noValidate>
-      {product && (
+    <form id={formId} onSubmit={handleSubmit} className="form pform" noValidate>
+      <FormSection id="basics" title="Basics">
         <div className="form-field">
-          <span className="form-label">SKU</span>
-          <p className="form-readonly">{product.sku}</p>
-          <p className="form-helper">
-            Generated automatically and kept for reference. Not shown to viewers.
-          </p>
+          <label className="form-label" htmlFor="pf-name">
+            Product Name <span className="form-required" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="pf-name"
+            type="text"
+            className={`form-input${fieldError('name') ? ' form-input--error' : ''}`}
+            value={form.name}
+            onChange={(e) => setField('name', e.target.value)}
+            onBlur={() => markTouched('name')}
+            required
+            aria-required="true"
+          />
+          {fieldError('name') && (
+            <p className="form-error" role="alert">
+              {fieldError('name')}
+            </p>
+          )}
         </div>
-      )}
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-name">
-          Product Name <span className="form-required" aria-hidden="true">*</span>
-        </label>
-        <input
-          id="pf-name"
-          type="text"
-          className={`form-input${fieldError('name') ? ' form-input--error' : ''}`}
-          value={form.name}
-          onChange={(e) => setField('name', e.target.value)}
-          onBlur={() => markTouched('name')}
-          required
-          aria-required="true"
-        />
-        {fieldError('name') && (
-          <p className="form-error" role="alert">
-            {fieldError('name')}
-          </p>
-        )}
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-brand">
-          Brand
-        </label>
-        <input
-          id="pf-brand"
-          type="text"
-          className="form-input"
-          placeholder="e.g. CeraVe — shown above the product name"
-          value={form.brand}
-          onChange={(e) => setField('brand', e.target.value)}
-          list="pf-brand-options"
-          autoComplete="off"
-        />
-        <datalist id="pf-brand-options">
-          {brandNames.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-        <p className="form-helper">
-          Pick a brand from the list. A new name makes a new brand (set its logo in Brands).
-        </p>
-      </div>
-
-      {/* Batch 36 Part 2: the three long texts use the Word-like editor. */}
-      <RichTextField
-        id="pf-description"
-        resetKey={product?.id ?? 'new'}
-        onReady={markTextReady}
-        label="Description"
-        value={form.description}
-        onChange={(html) => setField('description', html)}
-        placeholder="What makes this product worth buying — ingredients, benefits, how to use, etc."
-        helper='Shown on the detail page under "About this product".'
-      />
-
-      <RichTextField
-        id="pf-how-to-use"
-        resetKey={product?.id ?? 'new'}
-        onReady={markTextReady}
-        label="How to Use"
-        value={form.how_to_use}
-        onChange={(html) => setField('how_to_use', html)}
-        placeholder="Apply morning and night to clean, dry skin…"
-        helper="Detail-page accordion. Leave blank to hide the section."
-      />
-
-      <RichTextField
-        id="pf-key-ingredients"
-        resetKey={product?.id ?? 'new'}
-        onReady={markTextReady}
-        label="Key Ingredients"
-        value={form.key_ingredients}
-        onChange={(html) => setField('key_ingredients', html)}
-        placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
-        helper="Detail-page accordion. Leave blank to hide the section."
-      />
-
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-youtube">
-          Video Review URL
-        </label>
-        <input
-          id="pf-youtube"
-          type="url"
-          className="form-input"
-          placeholder="https://youtube.com/watch?v=…"
-          value={form.youtube_url}
-          onChange={(e) => setField('youtube_url', e.target.value)}
-        />
-        <p className="form-helper">
-          Detail-page accordion. Leave blank to hide the section.
-        </p>
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-category">
-          Category
-        </label>
-        <select
-          id="pf-category"
-          className="form-input form-select"
-          value={form.category_id}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-        >
-          <option value="">No category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-          <option value={CREATE_CATEGORY_VALUE}>+ Create new category</option>
-        </select>
-        {showNewCategory && (
-          <div className="inline-mini-form">
+        <div className="form-row pform__row pform__row--wide">
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-brand">
+              Brand
+            </label>
             <input
+              id="pf-brand"
               type="text"
               className="form-input"
-              placeholder="New category name"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              aria-label="New category name"
+              placeholder="e.g. CeraVe — shown above the product name"
+              value={form.brand}
+              onChange={(e) => setField('brand', e.target.value)}
+              list="pf-brand-options"
+              autoComplete="off"
             />
-            <button
-              type="button"
-              className="button button--primary button--small"
-              onClick={handleSaveNewCategory}
-              disabled={isSavingCategory || newCategoryName.trim() === ''}
-            >
-              {isSavingCategory ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-            </button>
-            <button
-              type="button"
-              className="button button--secondary button--small"
-              onClick={() => {
-                setShowNewCategory(false);
-                setNewCategoryName('');
-              }}
-            >
-              Cancel
-            </button>
+            <datalist id="pf-brand-options">
+              {brandNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <p className="form-helper">
+              Pick a brand from the list. A new name makes a new brand (set its logo in Brands).
+            </p>
           </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-category">
+              Category
+            </label>
+            <select
+              id="pf-category"
+              className="form-input form-select"
+              value={form.category_id}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+            >
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+              <option value={CREATE_CATEGORY_VALUE}>+ Create new category</option>
+            </select>
+            {showNewCategory && (
+              <div className="inline-mini-form">
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="New category name"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  aria-label="New category name"
+                />
+                <button
+                  type="button"
+                  className="button button--primary button--small"
+                  onClick={handleSaveNewCategory}
+                  disabled={isSavingCategory || newCategoryName.trim() === ''}
+                >
+                  {isSavingCategory ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary button--small"
+                  onClick={() => {
+                    setShowNewCategory(false);
+                    setNewCategoryName('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {product && (
+          <div className="form-field">
+            <div className="form-row pform__row">
+              <GuidedField
+                id="pf-region"
+                label="Region"
+                value={form.region}
+                options={knownRegions}
+                placeholder="e.g. AU"
+                onChange={(region) => setField('region', region)}
+              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="pf-size">Size</label>
+                <input
+                  id="pf-size"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. 50 ml"
+                  value={form.size}
+                  onChange={(e) => setField('size', e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="form-helper">
+              Optional label for this product itself. With no variants added
+              below, it just shows as text on the detail page (no selector).
+              Once you add a real variant, this product's own price/stock
+              becomes the first selectable option under this label.
+            </p>
+          </div>
+        )}
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-note">
+            Note
+          </label>
+          <textarea
+            id="pf-note"
+            className="form-input form-textarea"
+            maxLength={NOTE_MAX_LENGTH}
+            rows={3}
+            value={form.note}
+            onChange={(e) => setField('note', e.target.value)}
+          />
+          <p className="form-helper form-helper--counter">
+            {form.note.length} / {NOTE_MAX_LENGTH}
+          </p>
+        </div>
+
+        <ChipGroup
+          label="Skin Type (optional)"
+          options={SKIN_TYPES}
+          selected={form.skin_types}
+          onChange={(skin_types) => setField('skin_types', skin_types)}
+        />
+
+        <ChipGroup
+          label="Skin Condition (optional)"
+          options={SKIN_CONDITIONS}
+          selected={form.skin_conditions}
+          onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
+        />
+      </FormSection>
+
+      <div className="pform__side">
+        <FormSection id="shop" title="Shop">
+          <div className="form-field form-field--toggle">
+            <span className="toggle-label">Active (visible to viewers)</span>
+            <Toggle
+              checked={form.is_active}
+              onChange={(is_active) => setField('is_active', is_active)}
+              label="Active"
+            />
+          </div>
+          {form.is_active && form.retail_price.trim() !== '' && Number(form.retail_price) === 0 && (
+            <p className="form-error" role="alert" data-testid="product-no-price">
+              Set a price before showing this product.
+            </p>
+          )}
+
+          <div className="form-field form-field--toggle">
+            <span className="toggle-label">Featured (shown in the bento grid)</span>
+            <Toggle
+              checked={form.is_featured}
+              onChange={(is_featured) => setField('is_featured', is_featured)}
+              label="Featured"
+            />
+          </div>
+        </FormSection>
+
+        <FormSection id="photos" title="Photos">
+          <div className="form-field">
+            <span className="form-label visually-hidden">Product Images</span>
+            <ImageUploader
+              images={images}
+              onAddFiles={(files) => {
+                setUploadError(null);
+                setImages((prev) => [
+                  ...prev,
+                  ...files.map((file) => ({
+                    id: `new-${nextImageKey++}`,
+                    url: null,
+                    file,
+                  })),
+                ]);
+              }}
+              onRemove={(id) => {
+                setImages((prev) => prev.filter((img) => img.id !== id));
+              }}
+              onReorder={setImages}
+              isUploading={isUploadingImage}
+              uploadError={uploadError}
+            />
+          </div>
+        </FormSection>
+
+        {product && (
+          <FormSection id="reference" title="Reference">
+            <div className="form-field">
+              <span className="form-label">SKU</span>
+              <p className="form-readonly">{product.sku}</p>
+              <p className="form-helper">
+                Generated automatically and kept for reference. Not shown to viewers.
+              </p>
+            </div>
+          </FormSection>
         )}
       </div>
 
-      <ChipGroup
-        label="Skin Type (optional)"
-        options={SKIN_TYPES}
-        selected={form.skin_types}
-        onChange={(skin_types) => setField('skin_types', skin_types)}
-      />
-
-      <ChipGroup
-        label="Skin Condition (optional)"
-        options={SKIN_CONDITIONS}
-        selected={form.skin_conditions}
-        onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
-      />
-
-      <div className="form-row">
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-retail">
-            Retail Price ৳ <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <MoneyInput
+      <FormSection id="price" title="Price">
+        <div className="pform__row pform__row--3">
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-retail">
+              Retail Price ৳ <span className="form-required" aria-hidden="true">*</span>
+            </label>
+            <MoneyInput
               id="pf-retail"
               min="0"
               step="0.01"
@@ -674,18 +735,41 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
               required
               aria-required="true"
             />
-          {fieldError('retail_price') && (
-            <p className="form-error" role="alert">
-              {fieldError('retail_price')}
-            </p>
-          )}
-        </div>
+            {fieldError('retail_price') && (
+              <p className="form-error" role="alert">
+                {fieldError('retail_price')}
+              </p>
+            )}
+          </div>
 
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-wholesale">
-            Wholesale Price ৳
-          </label>
-          <MoneyInput
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-offer">
+              Offer Price ৳ (optional)
+            </label>
+            <MoneyInput
+              id="pf-offer"
+              min="0"
+              step="0.01"
+              className={fieldError('offer_price') ? 'form-input--error' : undefined}
+              value={form.offer_price}
+              onChange={(e) => setField('offer_price', e.target.value)}
+              onBlur={() => markTouched('offer_price')}
+            />
+            <p className="form-helper">
+              Leave blank for no offer. Must be lower than the retail price.
+            </p>
+            {fieldError('offer_price') && (
+              <p className="form-error" role="alert">
+                {fieldError('offer_price')}
+              </p>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-wholesale">
+              Wholesale Price ৳
+            </label>
+            <MoneyInput
               id="pf-wholesale"
               min="0"
               step="0.01"
@@ -694,222 +778,166 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
               onChange={(e) => setField('wholesale_price', e.target.value)}
               onBlur={() => markTouched('wholesale_price')}
             />
-          {fieldError('wholesale_price') && (
-            <p className="form-error" role="alert">
-              {fieldError('wholesale_price')}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-offer">
-          Offer Price ৳ (optional)
-        </label>
-        <MoneyInput
-              id="pf-offer"
-            min="0"
-            step="0.01"
-            className={fieldError('offer_price') ? 'form-input--error' : undefined}
-            value={form.offer_price}
-            onChange={(e) => setField('offer_price', e.target.value)}
-            onBlur={() => markTouched('offer_price')}
-            />
-        <p className="form-helper">
-          Leave blank for no offer. Must be lower than the retail price.
-        </p>
-        {fieldError('offer_price') && (
-          <p className="form-error" role="alert">
-            {fieldError('offer_price')}
-          </p>
-        )}
-      </div>
-
-      <div className="form-row">
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-stock-status">
-            Stock Status <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <select
-            id="pf-stock-status"
-            className="form-input form-select"
-            value={derivedStatus}
-            disabled={quantityDrivesStatus || stockFromLots}
-            onChange={(e) =>
-              setField('stock_status', e.target.value as ProductFormData['stock_status'])
-            }
-          >
-            <option value="in_stock">In Stock</option>
-            <option value="low_stock">Low Stock</option>
-            <option value="out_of_stock">Out of Stock</option>
-          </select>
-          <p className="form-helper">
-            {quantityDrivesStatus
-              ? 'Set automatically from the stock quantity.'
-              : 'Used only while no exact quantity is tracked.'}
-          </p>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-quantity">
-            Stock Quantity
-          </label>
-          <input
-            id="pf-quantity"
-            type="number"
-            min="0"
-            step="1"
-            inputMode="numeric"
-            placeholder="e.g. 25"
-            className={`form-input${fieldError('stock_quantity') ? ' form-input--error' : ''}`}
-            value={form.stock_quantity}
-            disabled={stockFromLots}
-            onChange={(e) => setField('stock_quantity', e.target.value)}
-            onBlur={() => markTouched('stock_quantity')}
-          />
-          <p className="form-helper">
-            {stockFromLots
-              ? 'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.'
-              : 'Leave blank if not tracking exact quantity'}
-          </p>
-          {fieldError('stock_quantity') && (
-            <p className="form-error" role="alert">
-              {fieldError('stock_quantity')}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {keepSellingReady && (
-        <div className="form-field">
-          <div className="form-field--toggle">
-            <span className="toggle-label">Keep selling when out of stock</span>
-            <Toggle
-              checked={form.keep_selling}
-              onChange={(keep_selling) => setField('keep_selling', keep_selling)}
-              label="Keep selling when out of stock"
-            />
+            {fieldError('wholesale_price') && (
+              <p className="form-error" role="alert">
+                {fieldError('wholesale_price')}
+              </p>
+            )}
           </div>
-          <p className="form-helper" data-testid="keep-selling-hint">
-            Customers can order this even when stock is 0. You buy it after the order comes in.
-          </p>
         </div>
-      )}
+      </FormSection>
 
-      <div className="form-field">
-        <label className="form-label" htmlFor="pf-note">
-          Note
-        </label>
-        <textarea
-          id="pf-note"
-          className="form-input form-textarea"
-          maxLength={NOTE_MAX_LENGTH}
-          rows={3}
-          value={form.note}
-          onChange={(e) => setField('note', e.target.value)}
-        />
-        <p className="form-helper form-helper--counter">
-          {form.note.length} / {NOTE_MAX_LENGTH}
-        </p>
-      </div>
+      <FormSection id="stock" title="Stock">
+        <div className="form-row pform__row">
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-stock-status">
+              Stock Status <span className="form-required" aria-hidden="true">*</span>
+            </label>
+            <select
+              id="pf-stock-status"
+              className="form-input form-select"
+              value={derivedStatus}
+              disabled={quantityDrivesStatus || stockFromLots}
+              onChange={(e) =>
+                setField('stock_status', e.target.value as ProductFormData['stock_status'])
+              }
+            >
+              <option value="in_stock">In Stock</option>
+              <option value="low_stock">Low Stock</option>
+              <option value="out_of_stock">Out of Stock</option>
+            </select>
+            <p className="form-helper">
+              {quantityDrivesStatus
+                ? 'Set automatically from the stock quantity.'
+                : 'Used only while no exact quantity is tracked.'}
+            </p>
+          </div>
 
-      <div className="form-field">
-        <span className="form-label">Product Images</span>
-        <ImageUploader
-          images={images}
-          onAddFiles={(files) => {
-            setUploadError(null);
-            setImages((prev) => [
-              ...prev,
-              ...files.map((file) => ({
-                id: `new-${nextImageKey++}`,
-                url: null,
-                file,
-              })),
-            ]);
-          }}
-          onRemove={(id) => {
-            setImages((prev) => prev.filter((img) => img.id !== id));
-          }}
-          onReorder={setImages}
-          isUploading={isUploadingImage}
-          uploadError={uploadError}
-        />
-      </div>
-
-      {product && (
-        <>
-          <div className="form-row">
-            <GuidedField
-              id="pf-region"
-              label="Region"
-              value={form.region}
-              options={knownRegions}
-              placeholder="e.g. AU"
-              onChange={(region) => setField('region', region)}
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-quantity">
+              Stock Quantity
+            </label>
+            <input
+              id="pf-quantity"
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              placeholder="e.g. 25"
+              className={`form-input${fieldError('stock_quantity') ? ' form-input--error' : ''}`}
+              value={form.stock_quantity}
+              disabled={stockFromLots}
+              onChange={(e) => setField('stock_quantity', e.target.value)}
+              onBlur={() => markTouched('stock_quantity')}
             />
-            <div className="form-field">
-              <label className="form-label" htmlFor="pf-size">Size</label>
-              <input
-                id="pf-size"
-                type="text"
-                className="form-input"
-                placeholder="e.g. 50 ml"
-                value={form.size}
-                onChange={(e) => setField('size', e.target.value)}
+            <p className="form-helper">
+              {stockFromLots
+                ? 'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.'
+                : 'Leave blank if not tracking exact quantity'}
+            </p>
+            {fieldError('stock_quantity') && (
+              <p className="form-error" role="alert">
+                {fieldError('stock_quantity')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {keepSellingReady && (
+          <div className="form-field">
+            <div className="form-field form-field--toggle">
+              <span className="toggle-label">Keep selling when out of stock</span>
+              <Toggle
+                checked={form.keep_selling}
+                onChange={(keep_selling) => setField('keep_selling', keep_selling)}
+                label="Keep selling when out of stock"
               />
             </div>
+            <p className="form-helper" data-testid="keep-selling-hint">
+              Customers can order this even when stock is 0. You buy it after the order comes in.
+            </p>
           </div>
-          <p className="form-helper">
-            Optional label for this product itself. With no variants added
-            below, it just shows as text on the detail page (no selector).
-            Once you add a real variant, this product's own price/stock
-            becomes the first selectable option under this label.
-          </p>
-        </>
-      )}
+        )}
+
+        {product && <PackSizePanel productId={product.id} />}
+        {/* Batch 41 Part 5. */}
+        {product && <RemoveStockPanel productId={product.id} />}
+      </FormSection>
 
       {/* Variants only make sense for a product that already exists —
           a newly-created one has no id to attach them to yet. */}
-      {product && <VariantEditor productId={product.id} />}
-      {product && <PackSizePanel productId={product.id} />}
-      {/* Batch 41 Part 5. */}
-      {product && <RemoveStockPanel productId={product.id} />}
-
-      <div className="form-field form-field--toggle">
-        <span className="toggle-label">Featured (shown in the bento grid)</span>
-        <Toggle
-          checked={form.is_featured}
-          onChange={(is_featured) => setField('is_featured', is_featured)}
-          label="Featured"
-        />
-      </div>
-
-      <div className="form-field form-field--toggle">
-        <span className="toggle-label">Active (visible to viewers)</span>
-        <Toggle
-          checked={form.is_active}
-          onChange={(is_active) => setField('is_active', is_active)}
-          label="Active"
-        />
-      </div>
-      {form.is_active && form.retail_price.trim() !== '' && Number(form.retail_price) === 0 && (
-        <p className="form-error" role="alert" data-testid="product-no-price">
-          Set a price before showing this product.
-        </p>
+      {product && (
+        <FormSection id="variants" title="Variants">
+          <VariantEditor productId={product.id} showLabel={false} />
+        </FormSection>
       )}
 
-      {footerVariant === 'sheet' ? (
-        <SheetFooter
-          onCancel={onCancel}
-          isSaving={isSaving}
-          disabled={requiredEmpty || hasBlockingErrors || loadingText}
-          saveLabel={saveLabel}
+      {/* Batch 36 Part 2: the three long texts use the Word-like editor. */}
+      <FormSection id="details" title="Product page text">
+        <RichTextField
+          id="pf-description"
+          resetKey={product?.id ?? 'new'}
+          onReady={markTextReady}
+          label="Description"
+          value={form.description}
+          onChange={(html) => setField('description', html)}
+          placeholder="What makes this product worth buying — ingredients, benefits, how to use, etc."
+          helper='Shown on the detail page under "About this product".'
         />
+
+        <RichTextField
+          id="pf-how-to-use"
+          resetKey={product?.id ?? 'new'}
+          onReady={markTextReady}
+          label="How to Use"
+          value={form.how_to_use}
+          onChange={(html) => setField('how_to_use', html)}
+          placeholder="Apply morning and night to clean, dry skin…"
+          helper="Detail-page accordion. Leave blank to hide the section."
+        />
+
+        <RichTextField
+          id="pf-key-ingredients"
+          resetKey={product?.id ?? 'new'}
+          onReady={markTextReady}
+          label="Key Ingredients"
+          value={form.key_ingredients}
+          onChange={(html) => setField('key_ingredients', html)}
+          placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
+          helper="Detail-page accordion. Leave blank to hide the section."
+        />
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="pf-youtube">
+            Video Review URL
+          </label>
+          <input
+            id="pf-youtube"
+            type="url"
+            className="form-input"
+            placeholder="https://youtube.com/watch?v=…"
+            value={form.youtube_url}
+            onChange={(e) => setField('youtube_url', e.target.value)}
+          />
+          <p className="form-helper">
+            Detail-page accordion. Leave blank to hide the section.
+          </p>
+        </div>
+      </FormSection>
+
+      {footerVariant === 'sheet' ? (
+        <div className="pform__footer">
+          <SheetFooter
+            onCancel={onCancel}
+            isSaving={isSaving}
+            disabled={requiredEmpty || hasBlockingErrors || loadingText}
+            saveLabel={saveLabel}
+          />
+        </div>
       ) : footerVariant === 'page' ? null : (
         <button
           type="submit"
-          className="button button--primary button--full"
+          className="button button--primary button--full pform__footer"
           disabled={isSaving || requiredEmpty || hasBlockingErrors || loadingText}
         >
           {isSaving ? <span className="spinner" aria-hidden="true" /> : saveLabel}
@@ -929,5 +957,21 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
         }}
       />
     </form>
+  );
+}
+
+/** Batch 52.1 Part 2: one titled group of fields. */
+function FormSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section
+      className={`pform__section pform__section--${id}`}
+      aria-labelledby={`pf-section-${id}`}
+      data-testid={`pf-section-${id}`}
+    >
+      <h2 className="pform__heading" id={`pf-section-${id}`}>
+        {title}
+      </h2>
+      <div className="pform__fields">{children}</div>
+    </section>
   );
 }
