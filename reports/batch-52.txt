@@ -357,7 +357,60 @@ Both should show a name (not null).
 3. WHAT I COULD NOT FINISH
 ========================================================================
 
-TESTS_PLACEHOLDER
+Nothing from the task list is left undone. Two honest limits:
+
+- I could not open the Vercel preview of this branch from here (its
+  address is shortened by Vercel and I have no Vercel login), so the live
+  check of the robot-only preview functions is: Vercel built them without
+  error, and I ran the same functions on this computer against the live
+  shop (output in section 4). After merging, please do the Sharing
+  Debugger steps above — that is the real proof on facebook.com.
+- Combo previews will show the shop banner (not the collage) until you run
+  the SQL in section 2, and for combos made before it was run (none can
+  be made before).
+
+TESTS
+- npm run build: passed, zero errors (the usual "large file" notes for
+  the admin and PDF parts are old, not errors).
+- Unit tests (vitest): 675 of 675 passed, including 28 new Batch 52 tests
+  (preview tags for product / home / combo and "no price in any preview",
+  combo totals with sold-out items skipped, savings, order-limit units,
+  combo code shape, Facebook / Messenger / Instagram on Android and
+  iPhone vs Chrome / Safari, the Android "open in Chrome" link, collage
+  layout, admin page addresses).
+- Browser tests for this batch (e2e/batch-52.spec.ts): 19 of 19 passed —
+  the database rules in one rolled-back transaction (admin only to make /
+  list / change / delete, anyone reads one combo by its code, customers
+  and logged-out visitors refused, stock / orders / promo codes
+  untouched), the customer page (normal, sold-out, deleted, order limit),
+  the admin cart card and sheets, Admin → Combos, Messenger on a computer,
+  Ctrl+click opening a new tab, the iPhone bar and sheet, Google login in
+  Facebook's browser, Android's once-only jump, and a normal browser
+  seeing nothing new. No combo was ever saved (all combo database calls
+  are answered in the browser), so none needed deleting. No real Storage
+  file was downloaded (the suite fails a test that does).
+- npm run verify (the full run, once at the end): 241 passed, 29 failed.
+  I went through every failure:
+  * Caused by this batch — older tests that looked for a "button" where
+    there is now a link, the new Combos menu item, the new preview title,
+    and the product name now inside a link: batch-25, batch-27 (6),
+    batch-31, batch-47, batch-48 ("View my order"), policy-pages and
+    (earlier, during the batch) back-known-good, batch-32, batch-43,
+    history, home, one-transition-system, phone-back, product-
+    transitions, search. All fixed and re-run on their own: all pass.
+  * NOT caused by this batch — the same list Batch 51's report already
+    gave (live data changed since those tests were written): no product
+    with a tracked stock number any more (batch-24, 30, 32, 33, 35, 36,
+    37, fix-order-actions), the order limit of 4 now enforced (batch-39),
+    Money books / stock-count state (batch-41, 42), Batch 26 Restock,
+    pictures missing from Storage (batch-40), batch-45's old migration
+    copy, live settings that changed (batch-48, 49, 51 database tests),
+    and two network timeouts (batch-23 YouTube, batch-34 Telegram).
+    These still need their own test-maintenance batch.
+- Note: once during the batch I started a re-run of 4 files that pulled
+  in the whole first half of the suite (those files sit in the group that
+  depends on the other one). That was one extra partial run against the
+  live Supabase project; afterwards I re-ran single files only.
 
 ========================================================================
 4. WHAT I FOUND ALONG THE WAY
