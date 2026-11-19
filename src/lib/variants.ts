@@ -1,4 +1,5 @@
 import type { Product, ProductVariant, VariantFormData, VariantOption } from '../types';
+import { isBuyable, optionStockFacts } from './buyRule';
 import type { DisplayPrice } from './pricing';
 
 /**
@@ -152,11 +153,7 @@ export function validateVariantForm(form: VariantFormData): string | null {
  */
 export function isVariantInStock(variant: ProductVariant): boolean {
   // Batch 51: "Keep selling when out of stock" covers every option.
-  if (variant.keep_selling === true) return true;
-  if (variant.stock_quantity !== null && variant.stock_quantity !== undefined) {
-    return variant.stock_quantity > 0;
-  }
-  return variant.in_stock;
+  return isBuyable(optionStockFacts(variant));
 }
 
 /** Leading number in a Size string ("340g" → 340, "50 ml" → 50) — Infinity

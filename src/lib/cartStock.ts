@@ -5,6 +5,7 @@
 // message, instead of the customer meeting an error.
 import { supabase } from './supabase';
 import { PRODUCTS_VIEW } from '../contexts/ProductContext';
+import { optionStockFacts, productStockFacts, unitsSellable, type StockFacts } from './buyRule';
 
 /** One cart line, as far as stock is concerned. */
 export interface StockLine {
@@ -19,7 +20,8 @@ export interface LiveStock {
   name: string;
   /** Option label ("AU · 340g"), when the line is an option. */
   label: string | null;
-  /** Units that can be sold; null = not counted (only "in / out of stock"). */
+  /** Units that can be sold; null = no stock cap (keep selling, or not
+   *  counted and in stock). */
   available: number | null;
 }
 
@@ -45,9 +47,9 @@ export function lineKey(productId: string, variantId: string | null): string {
 
 /**
  * The lines that ask for more than is left, with what is left. Same rules
- * as place_order(): a counted stock is the limit; an uncounted product is
- * fine unless marked out of stock; a hidden product or a missing option is
- * sold out.
+ * as place_order() (buyRule.ts): keep selling has no stock cap; otherwise a
+ * counted stock is the limit and an uncounted product is fine unless marked
+ * out of stock; a hidden product or a missing option is sold out.
  */
 export function stockChanges(lines: StockLine[], live: Map<string, LiveStock>): StockChange[] {
   const changes: StockChange[] = [];
@@ -74,6 +76,7 @@ interface ProductStockRow {
   is_active: boolean;
   stock_quantity: number | null;
   stock_status: string | null;
+  keep_selling?: boolean;
 }
 
 interface VariantStockRow {
@@ -83,6 +86,14 @@ interface VariantStockRow {
   size: string | null;
   in_stock: boolean;
   stock_quantity: number | null;
+}
+
+/** Batch 52.1: the shared rule's units, null when stock sets no cap. Staff
+ *  read the real stock number of keep-selling products (the database hides
+ *  it only from shoppers), so the rule — never the number alone — decides. */
+function sellableOrNull(facts: StockFacts): number | null {
+  const units = unitsSellable(facts);
+  return Number.isFinite(units) ? units : null;
 }
 
 /** Live stock for the given lines, or null when it could not be read (the
@@ -97,7 +108,7 @@ export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, Li
   const [productRes, variantRes] = await Promise.all([
     supabase
       .from(PRODUCTS_VIEW)
-      .select('id, name, is_active, stock_quantity, stock_status')
+      .select('id, name, is_active, stock_quantity, stock_status, keep_selling')
       .in('id', productIds),
     variantIds.length > 0
       ? supabase
@@ -127,13 +138,7 @@ export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, Li
       live.set(key, {
         name: product.name,
         label: null,
-        available: !product.is_active
-          ? 0
-          : product.stock_quantity !== null
-            ? product.stock_quantity
-            : product.stock_status === 'out_of_stock'
-              ? 0
-              : null,
+        available: !product.is_active ? 0 : sellableOrNull(productStockFacts(product)),
       });
       continue;
     }
@@ -147,11 +152,7 @@ export async function fetchLiveStock(lines: StockLine[]): Promise<Map<string, Li
       available:
         !product.is_active || !variant || variant.product_id !== line.productId
           ? 0
-          : variant.stock_quantity !== null
-            ? variant.stock_quantity
-            : variant.in_stock
-              ? null
-              : 0,
+          : sellableOrNull(optionStockFacts(variant, product.keep_selling)),
     });
   }
   return live;

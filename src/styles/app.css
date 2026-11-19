@@ -7006,6 +7006,15 @@ html.vt-fade::view-transition-new(root) {
   white-space: nowrap;
 }
 
+/* Batch 52.1: Inventory mode On — the option's stock as text, not a switch. */
+.variant-list__stock {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .variant-form {
   display: flex;
   flex-direction: column;
