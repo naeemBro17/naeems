@@ -103,6 +103,9 @@ export interface OrderSnapshot {
   /** True once the Order placed animation has played (a reload shows the
    *  final state without playing it again). */
   celebrated?: boolean;
+  /** Batch 51: something in it was not covered by stock when it was
+   *  placed (the "Arriving …" line uses the slower time). */
+  buysLater?: boolean;
   /** Why the order-level discount was given (Batch 22) — undefined/null for
    *  a real checkout order (its discount, if any, is always a promo code). */
   orderDiscountReason?: DiscountReason | null;

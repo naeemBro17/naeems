@@ -8,6 +8,8 @@ import { trackInputModality } from './lib/inputModality';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/orderTracking.css';
+import './styles/batch51.css';
+import './styles/wishlist.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

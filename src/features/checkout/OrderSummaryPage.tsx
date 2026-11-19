@@ -246,6 +246,7 @@ export function OrderSummaryPage() {
       advanceDiscount: advance,
       advanceRule: advance > 0 ? { type: rule.type, value: rule.value } : null,
       saved: result.saved ? { total: result.saved.total, advanceDiscount: result.saved.advanceDiscount } : null,
+      buysLater: result.buysLater,
     });
     resetAfterOrder();
     navigate('/checkout/success');

@@ -16,6 +16,9 @@ import { trackAddToCart } from '../../lib/analytics';
 import { BottomSheet } from '../shared/BottomSheet';
 import { VariantSelector } from './VariantSelector';
 import { CartIcon } from './CartButton';
+import { LimitPopup } from './LimitPopup';
+import { useSellLimit } from '../../hooks/useSellLimit';
+import type { LimitReason } from '../../lib/sellRules';
 
 /**
  * The card's cart button for a product with Region/Size options (Batch 23
@@ -38,8 +41,10 @@ export function VariantPickerSheet({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
   const { showToast } = useToast();
+  const sell = useSellLimit();
+  const [limitPopup, setLimitPopup] = useState<LimitReason | null>(null);
   const options = useMemo(() => variantOptionsFor(product, variants), [product, variants]);
   const [selected, setSelected] = useState<VariantOption>(options[0]);
 
@@ -55,6 +60,13 @@ export function VariantPickerSheet({
 
   const handleAdd = () => {
     const label = variantOptionLabel(selected, product.name);
+    // Batch 51: never past the order limit (or the last of the stock).
+    const facts = sell.factsFor(product, selected);
+    const inCart = items.find((i) => i.productId === product.id && i.variantId === selected.id)?.quantity ?? 0;
+    if (inCart + 1 > sell.maxFor(facts)) {
+      setLimitPopup(sell.reasonFor(facts));
+      return;
+    }
     addItem(product.id, mainPrice, { id: selected.id, label });
     trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
     if (typeof navigator.vibrate === 'function') {
@@ -86,7 +98,7 @@ export function VariantPickerSheet({
                 <span className="variant-picker__save">Save {savePercent}%</span>
               )}
             </p>
-            <p className="variant-picker__stock">{inStock ? 'In Stock' : 'Out of Stock'}</p>
+            <p className="variant-picker__stock">{inStock ? 'In Stock' : 'Sold out'}</p>
           </div>
         </div>
 
@@ -97,15 +109,25 @@ export function VariantPickerSheet({
           onSelect={setSelected}
         />
 
+        <div className="variant-picker__add">
+        {limitPopup && (
+          <LimitPopup
+            reason={limitPopup}
+            productName={product.name}
+            optionLabel={variantOptionLabel(selected, product.name)}
+            onClose={() => setLimitPopup(null)}
+          />
+        )}
         <button
           type="button"
           className={`button copy-button${inStock ? '' : ' copy-button--disabled'}`}
           disabled={!inStock}
           onClick={handleAdd}
         >
-          {inStock ? 'Add to Cart' : 'Out of Stock'}
+          {inStock ? 'Add to Cart' : 'Sold out'}
           {inStock && <CartIcon className="copy-button__icon" />}
         </button>
+        </div>
       </div>
     </BottomSheet>,
     document.body

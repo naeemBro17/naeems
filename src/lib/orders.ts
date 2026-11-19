@@ -166,6 +166,9 @@ export interface PlaceOrderResult {
   /** Batch 48: what the database saved (null before migration-049, whose
    *  place_order returns only the id and number). */
   saved: { total: number; discount: number; advanceDiscount: number } | null;
+  /** Batch 51: the order has something bought after the order (false
+   *  before migration-052). */
+  buysLater: boolean;
 }
 
 /**
@@ -203,12 +206,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     // place_order's RAISE EXCEPTION messages are written to be shown to the
     // customer as-is (stock/price/promo problems) — anything else falls
     // back to a generic message rather than leaking a raw Postgres error.
-    const friendly = /already|sign|stock|available|invalid|required|promo|no longer/i.test(
+    const friendly = /already|sign|stock|available|invalid|required|promo|no longer|limit/i.test(
       error.message
     )
       ? error.message
       : 'Could not place your order. Please try again.';
-    return { orderId: null, orderNumber: null, error: friendly, saved: null };
+    return { orderId: null, orderNumber: null, error: friendly, saved: null, buysLater: false };
   }
 
   const row = (
@@ -217,13 +220,17 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       | null
   )?.[0];
   if (!row) {
-    return { orderId: null, orderNumber: null, error: 'Could not place your order. Please try again.', saved: null };
+    return { orderId: null, orderNumber: null, error: 'Could not place your order. Please try again.', saved: null, buysLater: false };
   }
   const saved =
     row.total === undefined || row.total === null
       ? null
       : { total: Number(row.total), discount: Number(row.discount ?? 0), advanceDiscount: Number(row.advance_discount ?? 0) };
-  return { orderId: row.order_id, orderNumber: row.order_number, error: null, saved };
+  // Batch 51: the customer may read their own order; before migration-052
+  // the column is missing and the answer is simply "no".
+  const extra = await supabase.from('orders').select('buys_later').eq('id', row.order_id).maybeSingle();
+  const buysLater = !extra.error && (extra.data as { buys_later?: boolean } | null)?.buys_later === true;
+  return { orderId: row.order_id, orderNumber: row.order_number, error: null, saved, buysLater };
 }
 
 /** Cancel an order — customer's own while 'pending', or admin from

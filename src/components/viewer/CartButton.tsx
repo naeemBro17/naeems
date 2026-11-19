@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useCart } from '../../contexts/CartContext';
 import { useCartLine } from '../../hooks/useCartLine';
+import { LimitPopup } from './LimitPopup';
 import { trackAddToCart } from '../../lib/analytics';
 import type { Product, VariantOption } from '../../types';
 
@@ -74,7 +75,7 @@ function stop(e: MouseEvent | KeyboardEvent) {
  * the real cart quantity — read from the cart itself, so it always agrees
  * with the cart page, the product page and any other card of the product.
  * − at 1 takes it out of the cart and the button comes back. + stops at the
- * tracked stock count with a gentle message. A product with options opens
+ * order limit (Batch 51) and opens the limit popup. A product with options opens
  * its option picker first; after that the stepper follows the option added.
  */
 export function CartButton({
@@ -123,6 +124,14 @@ export function CartButton({
         >
           <PlusIcon />
         </button>
+        {line.popup && (
+          <LimitPopup
+            reason={line.popup}
+            productName={product.name}
+            optionLabel={line.optionLabel}
+            onClose={line.closePopup}
+          />
+        )}
       </div>
     );
   }
@@ -150,7 +159,7 @@ export function CartButton({
       disabled={outOfStock}
       aria-label={
         outOfStock
-          ? `${product.name} is out of stock`
+          ? `${product.name} is sold out`
           : hasVariants
             ? `Choose options for ${product.name}`
             : `Add ${product.name} to cart`

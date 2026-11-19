@@ -11,6 +11,15 @@ export const VARIANTS_VIEW = 'product_variants_view';
 export const VARIANT_SELECT =
   'id, product_id, region, size, retail_price, offer_price, wholesale_price, has_wholesale, in_stock, stock_quantity, image_url, image_url_thumb, note, source_product_id, sort_order, created_at';
 
+/** Batch 51: the same plus keep_selling / in_hand (migration-052). Until it
+ *  is run those columns are missing and VARIANT_SELECT is used instead. */
+export const VARIANT_SELECT_B51 = `${VARIANT_SELECT}, keep_selling, in_hand`;
+
+/** A column the query asked for is not there yet (migration not run). */
+export function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));
+}
+
 /** Variants of one product in display order. */
 export function sortVariants(variants: ProductVariant[]): ProductVariant[] {
   return [...variants].sort(
@@ -142,6 +151,8 @@ export function validateVariantForm(form: VariantFormData): string | null {
  * and only an explicit 0 forces Out of Stock.
  */
 export function isVariantInStock(variant: ProductVariant): boolean {
+  // Batch 51: "Keep selling when out of stock" covers every option.
+  if (variant.keep_selling === true) return true;
   if (variant.stock_quantity !== null && variant.stock_quantity !== undefined) {
     return variant.stock_quantity > 0;
   }
@@ -227,6 +238,8 @@ function baseOption(product: Product): VariantOption {
     source_product_id: null,
     sort_order: -1,
     created_at: product.created_at,
+    keep_selling: product.keep_selling,
+    in_hand: product.in_hand,
     isBase: true,
   };
 }

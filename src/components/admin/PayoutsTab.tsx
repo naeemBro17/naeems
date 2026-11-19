@@ -4,6 +4,8 @@ import {
   fetchPayouts,
   fetchSyncState,
   fetchUnpaidOrders,
+  fetchBooksStart,
+  balanceLine,
   monthLabel,
   monthOptions,
   monthTotals,
@@ -46,12 +48,14 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
   const [unpaid, setUnpaid] = useState<UnpaidOrder[]>([]);
   const [month, setMonth] = useState(() => dhakaMonthKey(new Date().toISOString()));
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [booksStart, setBooksStart] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [list, state, open] = await Promise.all([fetchPayouts(), fetchSyncState(), fetchUnpaidOrders()]);
+    const [list, state, open, start] = await Promise.all([fetchPayouts(), fetchSyncState(), fetchUnpaidOrders(), fetchBooksStart()]);
     setPayouts(list);
     setSync(state);
     setUnpaid(open);
+    setBooksStart(start);
   }, []);
 
   useEffect(() => {
@@ -98,8 +102,8 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
             <p className="adm-payouts__big" title={sync?.current_balance != null ? takaExact(toPaisa(sync.current_balance)) : undefined}>
               {sync?.current_balance != null ? takaWhole(toPaisa(sync.current_balance)) : '—'}
             </p>
-            <p className="adm-ocard__muted">
-              From {unpaid.length} delivered order{unpaid.length === 1 ? '' : 's'} · {updatedAgo(sync?.balance_at ?? null)}
+            <p className="adm-ocard__muted" data-testid="payouts-balance-line">
+              {balanceLine(sync?.current_balance ?? null, unpaid.length)} · {updatedAgo(sync?.balance_at ?? null)}
             </p>
           </div>
 
@@ -171,7 +175,7 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
           ) : (
             <div className="adm-payouts__list" data-testid="payouts-list">
               {list.map((p) => {
-                const pill = payoutPill(p);
+                const pill = payoutPill(p, booksStart);
                 const orders = payoutOrderCount(p);
                 return (
                   <button key={p.id} type="button" className="adm-payouts__row" onClick={() => onOpenPayout(p.id)}>

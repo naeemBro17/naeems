@@ -4,7 +4,7 @@ import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../../contexts/Produ
 import { useToast } from '../../hooks/useToast';
 import { formatTaka } from '../../lib/format';
 import { coverImage, productImages, cardImage } from '../../lib/productImages';
-import { isOutOfStock } from '../../lib/stockStatus';
+import { hasStock } from '../../lib/stockStatus';
 import { nextSku } from '../../lib/sku';
 import { uniqueProductSlug } from '../../lib/slugify';
 import { Modal } from '../shared/Modal';
@@ -144,7 +144,7 @@ export function CombineProductsSheet({
         retail_price: p.retail_price,
         offer_price: p.offer_price,
         wholesale_price: p.wholesale_price,
-        in_stock: !isOutOfStock(p),
+        in_stock: hasStock(p),
         stock_quantity: p.stock_quantity,
         image_url: coverImage(p),
         note: p.note,

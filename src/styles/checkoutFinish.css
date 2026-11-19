@@ -871,3 +871,26 @@
     display: none;
   }
 }
+
+/* Batch 51: "Arriving Fri, 20 – Sat, 21 Nov" — one small neutral line
+   under the order number. */
+.cf-onum:has(+ .cf-arrive) {
+  margin-bottom: 8px;
+}
+
+.cf-arrive {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cf-arrive svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}

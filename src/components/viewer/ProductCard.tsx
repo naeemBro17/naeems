@@ -184,7 +184,7 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
                 className={`product-card__dot product-card__dot--${outOfStock ? 'out' : 'in'}`}
                 aria-hidden="true"
               />
-              {outOfStock ? 'Out of Stock' : 'In Stock'}
+              {outOfStock ? 'Sold out' : 'In Stock'}
             </p>
             <div className="product-card__cart-slot">
               <CartButton

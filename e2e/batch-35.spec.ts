@@ -351,7 +351,8 @@ test('Part 4: one status pill per row, money pill only when owed, phone search f
 /* ---------------------------------------------------------------- Part 5 */
 
 for (const [utc, expected] of [
-  ['2026-10-08T22:00:00Z', 'Hello'], // 04:00 Dhaka
+  // Batch 51: 17:00–04:59 is "Good evening" again.
+  ['2026-10-08T22:00:00Z', 'Good evening'], // 04:00 Dhaka
   ['2026-10-09T03:00:00Z', 'Good morning'], // 09:00
   ['2026-10-09T08:00:00Z', 'Good afternoon'], // 14:00
   ['2026-10-09T14:00:00Z', 'Good evening'], // 20:00

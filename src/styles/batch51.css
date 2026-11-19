@@ -1,0 +1,229 @@
+/* Batch 51 — the shop's new pieces: the limit popup, the amber "Only N
+   left" dot, the product page delivery line, the cart's "Get it in 3–5
+   days", the glass wishlist heart, the account glass list, the Pre-orders
+   sheet and the Wishlist page. No orange anywhere here. */
+
+:root {
+  --color-stock-low:      #F59E0B;
+  --limit-pop-bg:         #FFFFFF;
+  --limit-pop-border:     rgba(0, 0, 0, 0.08);
+  --limit-pop-shadow:     0 12px 32px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  --wl-toast-bg:          rgba(28, 28, 30, 0.82);
+  --wl-toast-fg:          #FFFFFF;
+  --wl-heart-saved:       #1C1C1E;
+  --wl-glass-bg:          rgba(255, 255, 255, 0.55);
+  --wl-glass-strong:      rgba(255, 255, 255, 0.72);
+  --wl-glass-border:      rgba(255, 255, 255, 0.75);
+  --wl-glass-edge:        rgba(0, 0, 0, 0.05);
+  --wl-glass-shadow:      0 10px 30px rgba(30, 30, 50, 0.08), 0 1px 2px rgba(30, 30, 50, 0.05);
+  --wl-glass-solid:       #FFFFFF;
+  --wl-wash-1:            rgba(255, 196, 170, 0.55);
+  --wl-wash-2:            rgba(172, 230, 205, 0.5);
+  --wl-wash-3:            rgba(205, 192, 245, 0.5);
+  --wl-page-bg:           #F7F6F8;
+  --wl-pill-bg:           #1C1C1E;
+  --wl-pill-fg:           #FFFFFF;
+  --wl-pill-off-bg:       rgba(0, 0, 0, 0.06);
+  --wl-pill-off-fg:       #8E8E93;
+  --wl-badge-bg:          rgba(255, 255, 255, 0.85);
+  --wl-badge-border:      rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --limit-pop-bg:         #2C2C2E;
+    --limit-pop-border:     rgba(255, 255, 255, 0.1);
+    --limit-pop-shadow:     0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+    --wl-toast-bg:          rgba(44, 44, 46, 0.86);
+    --wl-heart-saved:       #FFFFFF;
+    --wl-glass-bg:          rgba(38, 38, 42, 0.55);
+    --wl-glass-strong:      rgba(38, 38, 42, 0.78);
+    --wl-glass-border:      rgba(255, 255, 255, 0.1);
+    --wl-glass-edge:        rgba(255, 255, 255, 0.04);
+    --wl-glass-shadow:      0 10px 30px rgba(0, 0, 0, 0.45);
+    --wl-glass-solid:       #1C1C1E;
+    --wl-wash-1:            rgba(255, 150, 110, 0.12);
+    --wl-wash-2:            rgba(90, 200, 160, 0.1);
+    --wl-wash-3:            rgba(150, 130, 240, 0.12);
+    --wl-page-bg:           #0B0B0D;
+    --wl-pill-bg:           #FFFFFF;
+    --wl-pill-fg:           #1C1C1E;
+    --wl-pill-off-bg:       rgba(255, 255, 255, 0.08);
+    --wl-pill-off-fg:       #8E8E93;
+    --wl-badge-bg:          rgba(255, 255, 255, 0.1);
+    --wl-badge-border:      rgba(255, 255, 255, 0.12);
+  }
+}
+
+:root[data-theme='dark'] {
+  --limit-pop-bg:         #2C2C2E;
+  --limit-pop-border:     rgba(255, 255, 255, 0.1);
+  --limit-pop-shadow:     0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --wl-toast-bg:          rgba(44, 44, 46, 0.86);
+  --wl-heart-saved:       #FFFFFF;
+  --wl-glass-bg:          rgba(38, 38, 42, 0.55);
+  --wl-glass-strong:      rgba(38, 38, 42, 0.78);
+  --wl-glass-border:      rgba(255, 255, 255, 0.1);
+  --wl-glass-edge:        rgba(255, 255, 255, 0.04);
+  --wl-glass-shadow:      0 10px 30px rgba(0, 0, 0, 0.45);
+  --wl-glass-solid:       #1C1C1E;
+  --wl-wash-1:            rgba(255, 150, 110, 0.12);
+  --wl-wash-2:            rgba(90, 200, 160, 0.1);
+  --wl-wash-3:            rgba(150, 130, 240, 0.12);
+  --wl-page-bg:           #0B0B0D;
+  --wl-pill-bg:           #FFFFFF;
+  --wl-pill-fg:           #1C1C1E;
+  --wl-pill-off-bg:       rgba(255, 255, 255, 0.08);
+  --wl-pill-off-fg:       #8E8E93;
+  --wl-badge-bg:          rgba(255, 255, 255, 0.1);
+  --wl-badge-border:      rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- Limit popup (Amazon style) ---------- */
+
+.limit-pop-anchor {
+  display: contents;
+}
+
+.limit-pop {
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: max-content;
+  max-width: min(272px, calc(100vw - 16px));
+  padding: 11px 8px 11px 14px;
+  border-radius: 14px;
+  background: var(--limit-pop-bg);
+  border: 1px solid var(--limit-pop-border);
+  box-shadow: var(--limit-pop-shadow);
+  color: var(--color-text-primary);
+  text-align: left;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto;
+}
+
+.limit-pop--shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.limit-pop__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.limit-pop__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.limit-pop__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.limit-pop__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: -4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.limit-pop__close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.limit-pop__arrow {
+  position: absolute;
+  bottom: -6px;
+  left: var(--arrow-x, 50%);
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--limit-pop-bg);
+  border-right: 1px solid var(--limit-pop-border);
+  border-bottom: 1px solid var(--limit-pop-border);
+  transform: rotate(45deg);
+}
+
+/* Opened below the stepper (no room above): the pointer is on top. */
+.limit-pop--below .limit-pop__arrow {
+  top: -6px;
+  bottom: auto;
+  border: 0;
+  border-left: 1px solid var(--limit-pop-border);
+  border-top: 1px solid var(--limit-pop-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .limit-pop {
+    transform: none;
+    transition: opacity 150ms linear;
+  }
+}
+
+/* ---------- Product page: amber dot and delivery line ---------- */
+
+.pdp-chip__dot--low,
+.stock-dot--low {
+  background: var(--color-stock-low);
+  box-shadow: 0 0 0 3.5px rgba(245, 158, 11, 0.2);
+}
+
+.pdp-eta {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.pdp-eta__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--color-text-primary);
+}
+
+/* ---------- Cart: "Get it in 3–5 days" ---------- */
+
+.checkout-cart__eta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}

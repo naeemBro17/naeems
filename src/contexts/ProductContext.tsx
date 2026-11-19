@@ -12,7 +12,8 @@ import { supabase } from '../lib/supabase';
 import { saveCache, loadCache } from '../lib/cache';
 import { useAuth } from './AuthContext';
 import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
-import { sortVariants, VARIANT_SELECT, VARIANTS_VIEW } from '../lib/variants';
+import { sortVariants } from '../lib/variants';
+import { fetchVariantRows } from '../lib/variantRows';
 import { BRANDS_TABLE, BRAND_SELECT } from '../lib/brands';
 import { markFirstLoadDone, useBackendDown } from '../lib/backendStatus';
 import type { Product, Category, AppSettings, ProductVariant, Brand } from '../types';
@@ -120,6 +121,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   invoice_community_line1: '',
   invoice_community_line2: '',
   invoice_show_community: 'true',
+
+  order_limit_per_item: '4',
+  delivery_time_dhaka: '1–2 days',
+  delivery_time_outside: '2–3 days',
+  delivery_time_buy_after: '3–5 days',
 };
 
 /**
@@ -180,6 +186,10 @@ const TEXT_SETTING_KEYS = [
   'invoice_community_line1',
   'invoice_community_line2',
   'invoice_show_community',
+  'order_limit_per_item',
+  'delivery_time_dhaka',
+  'delivery_time_outside',
+  'delivery_time_buy_after',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type TextSettingKey = (typeof TEXT_SETTING_KEYS)[number];
@@ -299,13 +309,13 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // Variants are non-critical and fetched apart from the product batch: a
   // missing view (migration-013 not run) must not take the catalog down.
   const reloadVariants = useCallback(async () => {
-    const { data, error } = await supabase.from(VARIANTS_VIEW).select(VARIANT_SELECT);
+    const { rows, error } = await fetchVariantRows(null);
     if (error) {
-      console.warn('Product variants unavailable:', error.message);
+      console.warn('Product variants unavailable:', error);
       return;
     }
     const grouped = new Map<string, ProductVariant[]>();
-    for (const row of (data ?? []) as ProductVariant[]) {
+    for (const row of rows) {
       const list = grouped.get(row.product_id) ?? [];
       list.push(row);
       grouped.set(row.product_id, list);

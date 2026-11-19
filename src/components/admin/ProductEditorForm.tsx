@@ -86,6 +86,7 @@ function emptyForm(): ProductFormData {
     is_active: true,
     skin_types: [],
     skin_conditions: [],
+    keep_selling: true,
   };
 }
 
@@ -126,6 +127,7 @@ function formFromProduct(product: Product): ProductFormData {
     is_active: product.is_active,
     skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
     skin_conditions: sanitizeSkinValues(product.skin_conditions, SKIN_CONDITIONS),
+    keep_selling: product.keep_selling !== false,
   };
 }
 
@@ -220,6 +222,10 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
     setShowNewCategory(false);
     setNewCategoryName('');
   }, [product]);
+
+  // Batch 51: the switch shows (and is saved) once migration-052 has
+  // added products.keep_selling — products_view then returns it.
+  const keepSellingReady = products.some((p) => p.keep_selling !== undefined);
 
   const errors = validate(form);
   const hasBlockingErrors = Object.keys(errors).length > 0;
@@ -422,6 +428,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       image_urls_thumb: imageThumbUrls,
       image_url: imageUrls[0] ?? null,
       is_active: form.is_active,
+      // Batch 51: only once migration-052 has added the column.
+      ...(keepSellingReady ? { keep_selling: form.keep_selling } : {}),
     };
 
     let result: { error: { code?: string } | null };
@@ -771,6 +779,22 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
           )}
         </div>
       </div>
+
+      {keepSellingReady && (
+        <div className="form-field">
+          <div className="form-field--toggle">
+            <span className="toggle-label">Keep selling when out of stock</span>
+            <Toggle
+              checked={form.keep_selling}
+              onChange={(keep_selling) => setField('keep_selling', keep_selling)}
+              label="Keep selling when out of stock"
+            />
+          </div>
+          <p className="form-helper" data-testid="keep-selling-hint">
+            Customers can order this even when stock is 0. You buy it after the order comes in.
+          </p>
+        </div>
+      )}
 
       <div className="form-field">
         <label className="form-label" htmlFor="pf-note">

@@ -445,3 +445,113 @@ export function CourierPanel() {
     </div>
   );
 }
+
+/**
+ * Batch 51: "Most of one item per order" and the three delivery times —
+ * one place, used everywhere (product page, cart, Order Placed). Nothing is
+ * typed per product.
+ */
+export function OrderLimitDeliveryPanel() {
+  const { settings, refetch } = useProducts();
+  const { showToast } = useToast();
+  const [limit, setLimit] = useState('');
+  const [dhaka, setDhaka] = useState('');
+  const [outside, setOutside] = useState('');
+  const [buyAfter, setBuyAfter] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLimit(settings.order_limit_per_item);
+    setDhaka(settings.delivery_time_dhaka);
+    setOutside(settings.delivery_time_outside);
+    setBuyAfter(settings.delivery_time_buy_after);
+  }, [settings.order_limit_per_item, settings.delivery_time_dhaka, settings.delivery_time_outside, settings.delivery_time_buy_after]);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    const n = Number(limit.trim());
+    if (!Number.isInteger(n) || n < 1 || n > 99) {
+      setError('Enter a whole number from 1 to 99.');
+      return;
+    }
+    const times = [dhaka, outside, buyAfter].map((t) => t.trim());
+    if (times.some((t) => !/\d/.test(t))) {
+      setError('Each delivery time needs a number of days, for example 1–2 days.');
+      return;
+    }
+    setError(null);
+    setIsSaving(true);
+    const { error: saveError } = await supabase.from('app_settings').upsert(
+      [
+        { key: 'order_limit_per_item', value: String(n) },
+        { key: 'delivery_time_dhaka', value: times[0] },
+        { key: 'delivery_time_outside', value: times[1] },
+        { key: 'delivery_time_buy_after', value: times[2] },
+      ],
+      { onConflict: 'key' }
+    );
+    setIsSaving(false);
+    if (saveError) {
+      showToast('Could not save. Please try again.', 'error');
+      return;
+    }
+    await refetch();
+    showToast('Saved');
+  };
+
+  return (
+    <div className="admin-panel" data-testid="order-limit-panel">
+      <h3 className="admin-panel__title">Order limit and delivery times</h3>
+      <p className="admin-panel__description">
+        Used everywhere in the shop. Wholesalers and your own New order have no limit.
+      </p>
+      <form onSubmit={handleSave} className="form" noValidate>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-order-limit">
+            Most of one item per order
+          </label>
+          <input
+            id="settings-order-limit"
+            type="number"
+            inputMode="numeric"
+            min="1"
+            max="99"
+            step="1"
+            className="form-input"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+          />
+          <p className="form-helper">Customers see “Limit {limit || '4'} per order” when they try to add more.</p>
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-delivery-dhaka">
+            Delivery in Dhaka
+          </label>
+          <input id="settings-delivery-dhaka" type="text" className="form-input" placeholder="1–2 days" value={dhaka} onChange={(e) => setDhaka(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-delivery-outside">
+            Delivery outside Dhaka
+          </label>
+          <input id="settings-delivery-outside" type="text" className="form-input" placeholder="2–3 days" value={outside} onChange={(e) => setOutside(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="settings-delivery-after">
+            Items we buy after the order
+          </label>
+          <input id="settings-delivery-after" type="text" className="form-input" placeholder="3–5 days" value={buyAfter} onChange={(e) => setBuyAfter(e.target.value)} />
+          <p className="form-helper">For products that keep selling when out of stock and have none at home.</p>
+        </div>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="button button--primary" disabled={isSaving}>
+          {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+        </button>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,807 @@
+-- =====================================================================
+-- Batch 51 — Keep selling when out of stock, order limit, delivery
+--            times, Shopping list, Wishlist, Steadfast clean-up
+--
+-- Paste the whole file into the Supabase SQL Editor and press Run.
+-- It is safe to run more than once.
+--
+-- A  Settings: "Most of one item per order" (4) and the three delivery
+--    times. Read by everyone, changed in Admin → Settings.
+-- B  products.keep_selling (default ON for every product): customers can
+--    order a product even when its stock is 0; Naeem buys it after the
+--    order comes in. OFF = sells only from stock (as before).
+-- C  products_view / product_variants_view: for a keep-selling product the
+--    real stock number never reaches a customer's (or wholesaler's)
+--    browser: they read "in stock" and no number. Staff see everything.
+--    New columns keep_selling and in_hand (at least one in stock).
+-- D  orders.buys_later: the order has something not covered by stock
+--    (the Order Placed page's "Arriving …" uses the slower time).
+-- E  order_item_unstocked (Inventory mode Off only): how many of a line
+--    were not taken from the stock number, so a cancel / return / delete /
+--    edit never gives back units that were never there.
+-- F  place_order: the order limit (not for wholesalers), keep-selling
+--    lines never refused for stock. Inventory mode On: the part stock does
+--    not cover becomes "sold without stock" (stock_shortfalls, Batch 39).
+--    Inventory mode Off: the stock number goes down only by what it covers.
+-- G  The give-back functions read E (cancel, returned, delete, reopen,
+--    edit order). Only the stock lines change; nothing else in them.
+-- H  cart_cover: for the cart's "Get it in 3–5 days" — yes / no per line,
+--    never a number.
+-- I  admin_shopping_list: what to buy for open orders.
+-- J  wishlist_items: a customer's saved products (own rows only).
+-- K  steadfast_unpaid_orders: an order paid in full to the shop directly,
+--    or cancelled on Steadfast, is not "not paid by Steadfast".
+--
+-- Nothing here changes money, profit, accounts or the Money position.
+-- =====================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------
+-- A. Settings
+-- ---------------------------------------------------------------------
+INSERT INTO app_settings (key, value) VALUES
+  ('order_limit_per_item', '4'),
+  ('delivery_time_dhaka', '1–2 days'),
+  ('delivery_time_outside', '2–3 days'),
+  ('delivery_time_buy_after', '3–5 days')
+ON CONFLICT (key) DO NOTHING;
+
+-- The most of one product option a customer may order (at least 1).
+CREATE OR REPLACE FUNCTION order_limit_per_item()
+RETURNS integer
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT GREATEST(COALESCE(
+    (SELECT NULLIF(regexp_replace(value, '\D', '', 'g'), '')::integer
+     FROM app_settings WHERE key = 'order_limit_per_item'), 4), 1);
+$$;
+
+-- ---------------------------------------------------------------------
+-- B. Keep selling when out of stock (per product, all its options)
+-- ---------------------------------------------------------------------
+ALTER TABLE products ADD COLUMN IF NOT EXISTS keep_selling boolean NOT NULL DEFAULT true;
+
+-- ---------------------------------------------------------------------
+-- C. The shop's read views
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE VIEW products_view AS
+SELECT p.id,
+    p.sku,
+    p.slug,
+    p.name,
+    p.brand,
+    p.category_id,
+    p.retail_price,
+    p.offer_price,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN 'in_stock'::text ELSE p.stock_status END AS stock_status,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN NULL::integer ELSE p.stock_quantity END AS stock_quantity,
+    p.note,
+    p.description,
+    p.how_to_use,
+    p.key_ingredients,
+    p.youtube_url,
+    p.skin_types,
+    p.skin_conditions,
+    p.region,
+    p.size,
+    p.image_url,
+    p.image_urls,
+    p.image_urls_thumb,
+    p.is_active,
+    p.is_featured,
+    p.created_at,
+    p.updated_at,
+    p.combined_from_product_id,
+    CASE WHEN is_wholesaler_or_admin() THEN p.wholesale_price ELSE NULL::numeric END AS wholesale_price,
+    (p.wholesale_price IS NOT NULL) AS has_wholesale,
+    p.brand_id,
+    p.keep_selling,
+    (CASE WHEN p.stock_quantity IS NOT NULL THEN p.stock_quantity > 0
+          ELSE p.stock_status <> 'out_of_stock' END) AS in_hand
+FROM products p;
+
+CREATE OR REPLACE VIEW product_variants_view AS
+SELECT pv.id,
+    pv.product_id,
+    pv.region,
+    pv.size,
+    pv.retail_price,
+    pv.offer_price,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN true ELSE pv.in_stock END AS in_stock,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN NULL::integer ELSE pv.stock_quantity END AS stock_quantity,
+    pv.image_url,
+    pv.note,
+    pv.sort_order,
+    pv.created_at,
+    pv.source_product_id,
+    CASE WHEN is_wholesaler_or_admin() THEN pv.wholesale_price ELSE NULL::numeric END AS wholesale_price,
+    (pv.wholesale_price IS NOT NULL) AS has_wholesale,
+    pv.image_url_thumb,
+    p.keep_selling,
+    (CASE WHEN pv.stock_quantity IS NOT NULL THEN pv.stock_quantity > 0 ELSE pv.in_stock END) AS in_hand
+FROM product_variants pv
+JOIN products p ON p.id = pv.product_id;
+
+GRANT SELECT ON products_view, product_variants_view TO anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- D. Orders: something in it is bought after the order
+-- ---------------------------------------------------------------------
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS buys_later boolean NOT NULL DEFAULT false;
+
+-- ---------------------------------------------------------------------
+-- E. Units of a line not taken from the stock number (Inventory mode Off)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS order_item_unstocked (
+  order_item_id uuid PRIMARY KEY REFERENCES order_items(id) ON DELETE CASCADE,
+  qty           integer NOT NULL CHECK (qty > 0),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE order_item_unstocked ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON order_item_unstocked FROM anon, authenticated;
+GRANT SELECT ON order_item_unstocked TO authenticated;
+DROP POLICY IF EXISTS order_item_unstocked_staff_read ON order_item_unstocked;
+CREATE POLICY order_item_unstocked_staff_read ON order_item_unstocked
+  FOR SELECT TO authenticated USING (staff_can('view_orders'));
+
+CREATE OR REPLACE FUNCTION order_item_unstocked_qty(p_item_id uuid)
+RETURNS integer
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE((SELECT qty FROM order_item_unstocked WHERE order_item_id = p_item_id), 0);
+$$;
+REVOKE ALL ON FUNCTION order_item_unstocked_qty(uuid) FROM PUBLIC, anon, authenticated;
+
+-- Whole packs of one product / option that can be sold from stock right
+-- now: the lots while Inventory mode is On, else the shop's stock number
+-- (an uncounted product: "enough" when marked in stock, else 0).
+CREATE OR REPLACE FUNCTION stock_packs_on_hand(p_product_id uuid, p_variant_id uuid, p_enough integer)
+RETURNS integer
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_qty  integer;
+  v_flag boolean;
+BEGIN
+  IF inventory_mode_on() THEN
+    RETURN GREATEST(floor(inventory_units_left(p_product_id, p_variant_id)::numeric
+                          / GREATEST(inventory_pack_size(p_product_id, p_variant_id), 1))::integer, 0);
+  END IF;
+  IF p_variant_id IS NULL THEN
+    SELECT stock_quantity, stock_status <> 'out_of_stock' INTO v_qty, v_flag FROM products WHERE id = p_product_id;
+  ELSE
+    SELECT stock_quantity, in_stock INTO v_qty, v_flag FROM product_variants WHERE id = p_variant_id;
+  END IF;
+  IF v_qty IS NOT NULL THEN
+    RETURN GREATEST(v_qty, 0);
+  END IF;
+  RETURN CASE WHEN COALESCE(v_flag, false) THEN p_enough ELSE 0 END;
+END;
+$$;
+REVOKE ALL ON FUNCTION stock_packs_on_hand(uuid, uuid, integer) FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- F. place_order
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.place_order(p_items jsonb, p_full_name text, p_phone text, p_division text, p_district text, p_thana text, p_address_line text, p_delivery_zone text, p_payment_method text, p_bkash_trx_id text DEFAULT NULL::text, p_bkash_sender text DEFAULT NULL::text, p_promo_code text DEFAULT NULL::text, p_customer_note text DEFAULT NULL::text)
+ RETURNS TABLE(order_id uuid, order_number text, total numeric, discount numeric, advance_discount numeric)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_uid              uuid := auth.uid();
+  v_item             jsonb;
+  v_product_id       uuid;
+  v_variant_id       uuid;
+  v_quantity         integer;
+  v_unit_price       numeric(10,2);
+  v_product_name     text;
+  v_variant_label    text;
+  v_image_url        text;
+  v_is_active        boolean;
+  v_stock_quantity   integer;
+  v_in_stock_flag    boolean;
+  v_keep             boolean;
+  v_region           text;
+  v_size             text;
+  v_subtotal         numeric(10,2) := 0;
+  v_delivery_fee     numeric(10,2);
+  v_discount         numeric(10,2) := 0;
+  v_advance          numeric(10,2) := 0;
+  v_advance_type     text;
+  v_advance_value    numeric(10,2);
+  v_total            numeric(10,2);
+  v_promo_row        promo_codes%ROWTYPE;
+  v_promo_ok         boolean;
+  v_order_id         uuid;
+  v_order_number     text;
+  v_item_count       integer := 0;
+  -- Batch 51
+  v_mode_on          boolean := inventory_mode_on();
+  v_no_limit         boolean := is_wholesaler_or_admin();
+  v_limit            integer := order_limit_per_item();
+  v_already          integer;
+  v_have             integer;
+  v_short            integer;
+  v_take             integer;
+  v_buys_later       boolean := false;
+  v_line             record;
+  v_item_id          uuid;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in to place an order.';
+  END IF;
+
+  IF p_payment_method NOT IN ('cod', 'bkash', 'nagad') THEN
+    RAISE EXCEPTION 'Invalid payment method.';
+  END IF;
+  IF p_payment_method = 'bkash' AND (p_bkash_trx_id IS NULL OR trim(p_bkash_trx_id) = '') THEN
+    RAISE EXCEPTION 'A bKash Transaction ID is required for bKash payment.';
+  END IF;
+  IF p_payment_method = 'nagad' AND (p_bkash_trx_id IS NULL OR trim(p_bkash_trx_id) = '') THEN
+    RAISE EXCEPTION 'A Nagad Transaction ID is required for Nagad payment.';
+  END IF;
+  IF p_delivery_zone NOT IN ('inside_dhaka', 'outside_dhaka') THEN
+    RAISE EXCEPTION 'Invalid delivery zone.';
+  END IF;
+  IF p_full_name IS NULL OR trim(p_full_name) = '' THEN
+    RAISE EXCEPTION 'Full name is required.';
+  END IF;
+  IF p_address_line IS NULL OR trim(p_address_line) = '' THEN
+    RAISE EXCEPTION 'Delivery address is required.';
+  END IF;
+  IF jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) = 0 THEN
+    RAISE EXCEPTION 'Your cart is empty.';
+  END IF;
+
+  SELECT COALESCE(
+    (SELECT value::numeric FROM app_settings WHERE key = 'delivery_fee_' || p_delivery_zone),
+    CASE WHEN p_delivery_zone = 'inside_dhaka' THEN 80 ELSE 130 END
+  ) INTO v_delivery_fee;
+
+  CREATE TEMP TABLE IF NOT EXISTS _place_lines (
+    seq           serial,
+    product_id    uuid,
+    variant_id    uuid,
+    product_name  text,
+    variant_label text,
+    image_url     text,
+    unit_price    numeric(10,2),
+    quantity      integer,
+    line_total    numeric(10,2),
+    keep_selling  boolean,
+    short_qty     integer,
+    tracked       boolean
+  ) ON COMMIT DROP;
+  TRUNCATE _place_lines;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_item_count := v_item_count + 1;
+    v_product_id := (v_item->>'product_id')::uuid;
+    v_variant_id := NULLIF(v_item->>'variant_id', '')::uuid;
+    -- Batch 45 Part 3: the product's own size is picked as an option whose
+    -- id is the product's id. It is the product row, not an option row.
+    IF v_variant_id = v_product_id THEN
+      v_variant_id := NULL;
+    END IF;
+    v_quantity   := (v_item->>'quantity')::integer;
+
+    IF v_product_id IS NULL OR v_quantity IS NULL OR v_quantity <= 0 THEN
+      RAISE EXCEPTION 'Invalid item in your cart.';
+    END IF;
+
+    IF v_variant_id IS NOT NULL THEN
+      SELECT
+        CASE WHEN pv.offer_price IS NOT NULL AND pv.offer_price < pv.retail_price
+             THEN pv.offer_price ELSE pv.retail_price END,
+        pv.stock_quantity,
+        pv.in_stock,
+        pv.region,
+        pv.size,
+        COALESCE(pv.image_url, p.image_url),
+        p.name,
+        p.is_active,
+        p.keep_selling
+      INTO v_unit_price, v_stock_quantity, v_in_stock_flag, v_region, v_size,
+           v_image_url, v_product_name, v_is_active, v_keep
+      FROM product_variants pv
+      JOIN products p ON p.id = pv.product_id
+      WHERE pv.id = v_variant_id AND pv.product_id = v_product_id;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'One of the items in your cart is no longer available.';
+      END IF;
+      v_variant_label := NULLIF(trim(both ' ' from concat_ws(' · ', NULLIF(v_region, ''), NULLIF(v_size, ''))), '');
+    ELSE
+      SELECT
+        CASE WHEN p.offer_price IS NOT NULL AND p.offer_price < p.retail_price
+             THEN p.offer_price ELSE p.retail_price END,
+        p.stock_quantity,
+        (p.stock_status <> 'out_of_stock'),
+        p.image_url,
+        p.name,
+        p.is_active,
+        p.keep_selling
+      INTO v_unit_price, v_stock_quantity, v_in_stock_flag, v_image_url, v_product_name, v_is_active, v_keep
+      FROM products p
+      WHERE p.id = v_product_id;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'One of the items in your cart is no longer available.';
+      END IF;
+      v_variant_label := NULL;
+    END IF;
+
+    IF NOT v_is_active THEN
+      RAISE EXCEPTION '"%" is no longer available.', v_product_name;
+    END IF;
+
+    SELECT COALESCE(sum(l.quantity), 0) INTO v_already
+    FROM _place_lines l
+    WHERE l.product_id = v_product_id AND l.variant_id IS NOT DISTINCT FROM v_variant_id;
+
+    -- Batch 51: the order limit (Admin → Settings). Wholesalers have none.
+    IF NOT v_no_limit AND v_already + v_quantity > v_limit THEN
+      RAISE EXCEPTION 'Limit % per order for "%".', v_limit, v_product_name;
+    END IF;
+
+    v_short := 0;
+    IF v_keep THEN
+      -- Never refused for stock. What stock does not cover is bought
+      -- after the order (Shopping list).
+      v_have := stock_packs_on_hand(v_product_id, v_variant_id, v_already + v_quantity);
+      IF v_mode_on THEN
+        v_have := v_have - v_already;
+      ELSIF v_stock_quantity IS NOT NULL THEN
+        -- Off: the stock number, already lowered by earlier lines.
+        v_have := GREATEST(v_stock_quantity, 0);
+      END IF;
+      v_short := GREATEST(v_quantity - GREATEST(v_have, 0), 0);
+      IF v_short > 0 THEN
+        v_buys_later := true;
+      END IF;
+    ELSIF v_stock_quantity IS NOT NULL THEN
+      IF v_stock_quantity < v_quantity THEN
+        RAISE EXCEPTION 'Only % of "%" left in stock.', v_stock_quantity, v_product_name;
+      END IF;
+    ELSIF NOT v_in_stock_flag THEN
+      RAISE EXCEPTION '"%" is out of stock.', v_product_name;
+    END IF;
+
+    INSERT INTO _place_lines (product_id, variant_id, product_name, variant_label, image_url, unit_price,
+                              quantity, line_total, keep_selling, short_qty, tracked)
+    VALUES (v_product_id, v_variant_id, v_product_name, v_variant_label, v_image_url, v_unit_price,
+            v_quantity, v_unit_price * v_quantity, v_keep, v_short, v_stock_quantity IS NOT NULL);
+
+    v_subtotal := v_subtotal + (v_unit_price * v_quantity);
+
+    IF v_stock_quantity IS NOT NULL THEN
+      -- Off: the stock number goes down only by what it covers. On: the
+      -- number follows the lots anyway (inventory_force_*_stock).
+      v_take := CASE WHEN v_mode_on THEN v_quantity ELSE v_quantity - v_short END;
+      IF v_variant_id IS NOT NULL THEN
+        UPDATE product_variants SET stock_quantity = GREATEST(stock_quantity - v_take, 0) WHERE id = v_variant_id;
+      ELSE
+        UPDATE products SET stock_quantity = GREATEST(stock_quantity - v_take, 0) WHERE id = v_product_id;
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF p_promo_code IS NOT NULL AND trim(p_promo_code) <> '' THEN
+    SELECT * INTO v_promo_row FROM promo_codes WHERE lower(code) = lower(trim(p_promo_code));
+    IF NOT FOUND OR NOT v_promo_row.active
+       OR (v_promo_row.max_uses IS NOT NULL AND v_promo_row.times_used >= v_promo_row.max_uses)
+       OR (v_promo_row.expires_at IS NOT NULL AND v_promo_row.expires_at <= now()) THEN
+      RAISE EXCEPTION 'This promo code is no longer valid.';
+    END IF;
+
+    v_discount := CASE WHEN v_promo_row.discount_type = 'percent'
+                        THEN v_subtotal * v_promo_row.discount_amount / 100
+                        ELSE v_promo_row.discount_amount END;
+    v_discount := LEAST(GREATEST(v_discount, 0), v_subtotal);
+
+    SELECT increment_promo_usage(p_promo_code) INTO v_promo_ok;
+    IF NOT v_promo_ok THEN
+      RAISE EXCEPTION 'This promo code is no longer valid.';
+    END IF;
+  END IF;
+
+  -- Batch 48: paying in advance (bKash / Nagad) takes the advance discount
+  -- off the products after the promo code. Delivery is never discounted.
+  -- Worked out here from the setting; the browser sends no amount. It is
+  -- not a promo code and never touches times_used.
+  SELECT a.amount, a.rule_type, a.rule_value
+    INTO v_advance, v_advance_type, v_advance_value
+    FROM advance_discount_amount(p_payment_method, v_subtotal - v_discount) a;
+  v_advance := COALESCE(v_advance, 0);
+  IF v_advance <= 0 THEN
+    v_advance := 0;
+    v_advance_type := NULL;
+    v_advance_value := NULL;
+  END IF;
+
+  v_total := GREATEST(v_subtotal + v_delivery_fee - v_discount - v_advance, 0);
+  v_order_number := next_order_number();
+
+  INSERT INTO orders (
+    order_number, customer_id, customer_name, customer_phone,
+    division, district, thana, address_line,
+    delivery_zone, delivery_fee, subtotal, discount, list_value,
+    promo_code, total, payment_method, bkash_trx_id, bkash_sender,
+    payment_status, customer_note,
+    advance_discount, advance_discount_type, advance_discount_value,
+    buys_later
+  ) VALUES (
+    v_order_number, v_uid, trim(p_full_name), p_phone,
+    p_division, p_district, p_thana, trim(p_address_line),
+    p_delivery_zone, v_delivery_fee, v_subtotal, v_discount + v_advance, v_subtotal,
+    NULLIF(trim(COALESCE(p_promo_code, '')), ''), v_total, p_payment_method,
+    NULLIF(trim(COALESCE(p_bkash_trx_id, '')), ''), NULLIF(trim(COALESCE(p_bkash_sender, '')), ''),
+    CASE WHEN p_payment_method IN ('bkash', 'nagad') THEN 'pending_verification' ELSE 'unpaid' END,
+    NULLIF(trim(COALESCE(p_customer_note, '')), ''),
+    v_advance, v_advance_type, v_advance_value,
+    v_buys_later
+  )
+  RETURNING id INTO v_order_id;
+
+  -- One line at a time, in cart order. Inventory mode On: a keep-selling
+  -- line may take more than the lots hold; the rest is recorded as "sold
+  -- without stock" (Batch 39). Every other line is refused when short.
+  FOR v_line IN SELECT * FROM _place_lines ORDER BY seq LOOP
+    PERFORM set_config('inventory.short_ok', CASE WHEN v_line.keep_selling THEN 'on' ELSE '' END, true);
+    INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_label, image_url, unit_price, quantity, line_total, list_price)
+    VALUES (v_order_id, v_line.product_id, v_line.variant_id, v_line.product_name, v_line.variant_label,
+            v_line.image_url, v_line.unit_price, v_line.quantity, v_line.line_total, v_line.unit_price)
+    RETURNING id INTO v_item_id;
+    IF NOT v_mode_on AND v_line.tracked AND v_line.short_qty > 0 THEN
+      INSERT INTO order_item_unstocked (order_item_id, qty) VALUES (v_item_id, v_line.short_qty);
+      UPDATE order_items
+      SET pre_inventory_units = (v_line.quantity - v_line.short_qty) * inventory_pack_size(v_line.product_id, v_line.variant_id)
+      WHERE id = v_item_id;
+    END IF;
+  END LOOP;
+  PERFORM set_config('inventory.short_ok', '', true);
+
+  INSERT INTO order_status_history (order_id, old_status, new_status, changed_by)
+  VALUES (v_order_id, NULL, 'pending', v_uid);
+
+  RETURN QUERY SELECT v_order_id, v_order_number, v_total, v_discount + v_advance, v_advance;
+END;
+$function$;
+
+-- ---------------------------------------------------------------------
+-- G. The give-back functions read order_item_unstocked
+-- ---------------------------------------------------------------------
+-- Admin → edit order: a quantity change. Lowering a line first gives up
+-- the units that were never taken from stock; raising a keep-selling
+-- line while Off takes only what the stock number has.
+CREATE OR REPLACE FUNCTION order_edit_line_stock(p_item_id uuid, p_new_qty integer, p_label text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_item  order_items%ROWTYPE;
+  v_unst  integer;
+  v_down  integer;
+  v_up    integer;
+  v_cut   integer;
+  v_keep  boolean;
+  v_stock integer;
+  v_take  integer;
+BEGIN
+  SELECT * INTO v_item FROM order_items WHERE id = p_item_id;
+  IF NOT FOUND OR p_new_qty = v_item.quantity THEN
+    RETURN;
+  END IF;
+  IF inventory_mode_on() THEN
+    -- The order_items triggers do it with the lots (as before).
+    PERFORM order_edit_stock(v_item.product_id, v_item.variant_id, v_item.quantity - p_new_qty, p_label);
+    RETURN;
+  END IF;
+  v_unst := order_item_unstocked_qty(p_item_id);
+  IF p_new_qty < v_item.quantity THEN
+    v_down := v_item.quantity - p_new_qty;
+    v_cut := LEAST(v_down, v_unst);
+    IF v_cut > 0 THEN
+      IF v_unst - v_cut > 0 THEN
+        UPDATE order_item_unstocked SET qty = v_unst - v_cut WHERE order_item_id = p_item_id;
+      ELSE
+        DELETE FROM order_item_unstocked WHERE order_item_id = p_item_id;
+      END IF;
+      -- inventory_order_item_changed lowers pre_inventory_units by the
+      -- whole change; the never-taken part was never in it.
+      UPDATE order_items SET pre_inventory_units = pre_inventory_units
+             + v_cut * inventory_pack_size(v_item.product_id, v_item.variant_id)
+      WHERE id = p_item_id;
+    END IF;
+    PERFORM order_edit_stock(v_item.product_id, v_item.variant_id, v_down - v_cut, p_label);
+    RETURN;
+  END IF;
+
+  v_up := p_new_qty - v_item.quantity;
+  SELECT keep_selling INTO v_keep FROM products WHERE id = v_item.product_id;
+  IF v_item.variant_id IS NOT NULL THEN
+    SELECT stock_quantity INTO v_stock FROM product_variants WHERE id = v_item.variant_id;
+  ELSE
+    SELECT stock_quantity INTO v_stock FROM products WHERE id = v_item.product_id;
+  END IF;
+  IF COALESCE(v_keep, false) AND v_stock IS NOT NULL AND v_stock < v_up THEN
+    v_take := GREATEST(v_stock, 0);
+    PERFORM order_edit_stock(v_item.product_id, v_item.variant_id, -v_take, p_label);
+    INSERT INTO order_item_unstocked (order_item_id, qty) VALUES (p_item_id, v_up - v_take)
+    ON CONFLICT (order_item_id) DO UPDATE SET qty = order_item_unstocked.qty + EXCLUDED.qty;
+  ELSE
+    PERFORM order_edit_stock(v_item.product_id, v_item.variant_id, -v_up, p_label);
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION order_edit_line_stock(uuid, integer, text) FROM PUBLIC, anon, authenticated;
+
+-- The live function bodies are patched in place, only on their stock
+-- lines (safe to run again: a patched body no longer has the old text).
+DO $patch$
+DECLARE
+  v_fn   regprocedure;
+  v_def  text;
+  v_new  text;
+  v_old  text;
+  v_with text;
+BEGIN
+  -- Cancel, returned, delete: give back only what was taken.
+  FOREACH v_fn IN ARRAY ARRAY['cancel_order(uuid,text)', 'admin_mark_order_returned(uuid,text)',
+                              'admin_delete_orders(uuid[])']::regprocedure[] LOOP
+    v_def := pg_get_functiondef(v_fn);
+    v_new := replace(v_def, 'stock_quantity + v_line.quantity',
+                     'stock_quantity + (v_line.quantity - order_item_unstocked_qty(v_line.id))');
+    IF v_new <> v_def THEN
+      EXECUTE v_new;
+    ELSIF position('order_item_unstocked_qty' IN v_def) = 0 THEN
+      RAISE EXCEPTION 'Batch 51: % has changed; its stock lines were not found.', v_fn;
+    END IF;
+  END LOOP;
+
+  -- Reopen a cancelled order: take again only what was taken before.
+  v_def := pg_get_functiondef('admin_reopen_order(uuid)'::regprocedure);
+  v_new := replace(v_def, '-v_line.quantity,', '-(v_line.quantity - order_item_unstocked_qty(v_line.id)),');
+  IF v_new <> v_def THEN
+    EXECUTE v_new;
+  ELSIF position('order_item_unstocked_qty' IN v_def) = 0 THEN
+    RAISE EXCEPTION 'Batch 51: admin_reopen_order has changed; its stock line was not found.';
+  END IF;
+
+  -- Edit order: a removed line gives back only what was taken; a quantity
+  -- change goes through order_edit_line_stock.
+  v_def := pg_get_functiondef('admin_edit_order(uuid,jsonb)'::regprocedure);
+  v_old := 'PERFORM order_edit_stock(v_old.product_id, v_old.variant_id, v_old.quantity, v_label);';
+  v_with := 'PERFORM order_edit_stock(v_old.product_id, v_old.variant_id, v_old.quantity - order_item_unstocked_qty(v_old.id), v_label);';
+  v_new := replace(v_def, v_old, v_with);
+  v_new := replace(v_new, 'PERFORM order_edit_stock(v_old.product_id, v_old.variant_id, v_old.quantity - v_qty, v_label);',
+                   'PERFORM order_edit_line_stock(v_old.id, v_qty, v_label);');
+  IF v_new <> v_def THEN
+    EXECUTE v_new;
+  ELSIF position('order_edit_line_stock' IN v_def) = 0 THEN
+    RAISE EXCEPTION 'Batch 51: admin_edit_order has changed; its stock lines were not found.';
+  END IF;
+END
+$patch$;
+
+-- ---------------------------------------------------------------------
+-- H. Cart: which lines are covered by stock (yes / no, never a number)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION cart_cover(p_lines jsonb)
+RETURNS TABLE(product_id uuid, variant_id uuid, covered boolean)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_line jsonb;
+  v_pid  uuid;
+  v_vid  uuid;
+  v_qty  integer;
+  v_keep boolean;
+BEGIN
+  IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' OR jsonb_array_length(p_lines) > 100 THEN
+    RETURN;
+  END IF;
+  FOR v_line IN SELECT * FROM jsonb_array_elements(p_lines) LOOP
+    BEGIN
+      v_pid := (v_line ->> 'product_id')::uuid;
+      v_vid := NULLIF(v_line ->> 'variant_id', '')::uuid;
+      v_qty := GREATEST(COALESCE((v_line ->> 'quantity')::integer, 1), 1);
+    EXCEPTION WHEN OTHERS THEN
+      CONTINUE;
+    END;
+    IF v_pid IS NULL THEN
+      CONTINUE;
+    END IF;
+    product_id := v_pid;
+    variant_id := v_vid;
+    IF v_vid = v_pid THEN
+      v_vid := NULL;
+    END IF;
+    SELECT p.keep_selling INTO v_keep FROM products p WHERE p.id = v_pid AND p.is_active;
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+    covered := NOT v_keep OR stock_packs_on_hand(v_pid, v_vid, v_qty) >= v_qty;
+    RETURN NEXT;
+  END LOOP;
+END;
+$$;
+REVOKE ALL ON FUNCTION cart_cover(jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cart_cover(jsonb) TO anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- I. Shopping list: what to buy for open orders
+-- ---------------------------------------------------------------------
+-- Inventory mode On: the open "sold without stock" rows (a lot that
+-- covers them fills them and they drop out). Off: the units not taken
+-- from the stock number, less any stock that has come in since (that
+-- stock goes to the oldest orders first). Only pending / confirmed /
+-- shipped orders count.
+CREATE OR REPLACE FUNCTION admin_shopping_list()
+RETURNS TABLE(product_id uuid, variant_id uuid, product_name text, option_label text,
+              qty integer, unit text, orders jsonb)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT staff_can('view_orders') THEN
+    RETURN;
+  END IF;
+  IF inventory_mode_on() THEN
+    RETURN QUERY
+    WITH open_rows AS (
+      SELECT s.product_id, s.variant_id, s.units, o.id AS oid, o.order_number, o.created_at,
+             oi.product_name AS pname, oi.variant_label AS vlabel
+      FROM stock_shortfalls s
+      JOIN orders o ON o.id = s.order_id
+      JOIN order_items oi ON oi.id = s.order_item_id
+      WHERE s.status = 'open' AND s.units > 0
+        AND o.status IN ('pending', 'confirmed', 'shipped') AND NOT o.stock_released
+    )
+    SELECT r.product_id, r.variant_id,
+           COALESCE(min(p.name), min(r.pname)),
+           COALESCE(NULLIF(min(concat_ws(' · ', NULLIF(v.region, ''), NULLIF(v.size, ''))), ''), min(r.vlabel)),
+           ceil(sum(r.units)::numeric / GREATEST(inventory_pack_size(r.product_id, r.variant_id), 1))::integer,
+           CASE WHEN inventory_pack_size(r.product_id, r.variant_id) > 1
+                THEN inventory_stock_unit(r.product_id, r.variant_id) ELSE NULL END,
+           (SELECT jsonb_agg(jsonb_build_object('id', x.oid, 'number', x.order_number) ORDER BY x.created_at)
+            FROM (SELECT DISTINCT r2.oid, r2.order_number, r2.created_at FROM open_rows r2
+                  WHERE r2.product_id = r.product_id AND r2.variant_id IS NOT DISTINCT FROM r.variant_id) x)
+    FROM open_rows r
+    LEFT JOIN products p ON p.id = r.product_id
+    LEFT JOIN product_variants v ON v.id = r.variant_id
+    GROUP BY r.product_id, r.variant_id
+    ORDER BY 3, 4;
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  WITH need AS (
+    SELECT oi.product_id, oi.variant_id, u.qty, o.id AS oid, o.order_number, o.created_at,
+           oi.product_name AS pname, oi.variant_label AS vlabel
+    FROM order_item_unstocked u
+    JOIN order_items oi ON oi.id = u.order_item_id
+    JOIN orders o ON o.id = oi.order_id
+    WHERE o.status IN ('pending', 'confirmed', 'shipped') AND NOT o.stock_released
+  ), ranked AS (
+    SELECT n.*,
+           sum(n.qty) OVER (PARTITION BY n.product_id, n.variant_id ORDER BY n.created_at, n.oid
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS run,
+           GREATEST(COALESCE(CASE WHEN n.variant_id IS NULL
+                                  THEN (SELECT p.stock_quantity FROM products p WHERE p.id = n.product_id)
+                                  ELSE (SELECT v.stock_quantity FROM product_variants v WHERE v.id = n.variant_id) END, 0), 0) AS have
+    FROM need n
+  ), left_rows AS (
+    SELECT r.*, LEAST(r.qty, GREATEST(r.run - r.have, 0))::integer AS still
+    FROM ranked r
+  )
+  SELECT l.product_id, l.variant_id,
+         COALESCE(min(p.name), min(l.pname)),
+         COALESCE(NULLIF(min(concat_ws(' · ', NULLIF(v.region, ''), NULLIF(v.size, ''))), ''), min(l.vlabel)),
+         sum(l.still)::integer,
+         NULL::text,
+         jsonb_agg(DISTINCT jsonb_build_object('id', l.oid, 'number', l.order_number))
+  FROM left_rows l
+  LEFT JOIN products p ON p.id = l.product_id
+  LEFT JOIN product_variants v ON v.id = l.variant_id
+  WHERE l.still > 0
+  GROUP BY l.product_id, l.variant_id
+  ORDER BY 3, 4;
+END;
+$$;
+REVOKE ALL ON FUNCTION admin_shopping_list() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION admin_shopping_list() TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- J. Wishlist (a customer's own saved products)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  customer_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  product_id  uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (customer_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS wishlist_items_product_idx ON wishlist_items (product_id);
+ALTER TABLE wishlist_items ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON wishlist_items FROM anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON wishlist_items TO authenticated;
+DROP POLICY IF EXISTS wishlist_own_read ON wishlist_items;
+CREATE POLICY wishlist_own_read ON wishlist_items
+  FOR SELECT TO authenticated USING (customer_id = auth.uid() OR is_admin());
+DROP POLICY IF EXISTS wishlist_own_add ON wishlist_items;
+CREATE POLICY wishlist_own_add ON wishlist_items
+  FOR INSERT TO authenticated WITH CHECK (customer_id = auth.uid());
+DROP POLICY IF EXISTS wishlist_own_remove ON wishlist_items;
+CREATE POLICY wishlist_own_remove ON wishlist_items
+  FOR DELETE TO authenticated USING (customer_id = auth.uid());
+
+-- ---------------------------------------------------------------------
+-- K. "Not paid by Steadfast": only orders whose money Steadfast still has
+-- ---------------------------------------------------------------------
+-- Left out now: an order the shop was paid for in full directly (bKash,
+-- cash, bank — not the automatic "collected by Steadfast" row), and a
+-- parcel cancelled on Steadfast (Steadfast collected nothing for it).
+CREATE OR REPLACE FUNCTION public.steadfast_unpaid_orders(p_days integer DEFAULT 7)
+ RETURNS TABLE(order_id uuid, order_number text, delivered_at timestamp with time zone)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_oldest timestamptz;
+BEGIN
+  IF NOT staff_can('view_profit_costs') THEN
+    RETURN;
+  END IF;
+  SELECT min(p.paid_at) INTO v_oldest FROM steadfast_payouts p WHERE p.items_synced;
+  IF v_oldest IS NULL THEN
+    RETURN;
+  END IF;
+  RETURN QUERY
+  WITH delivered AS (
+    SELECT o.id, o.order_number, o.steadfast_consignment_id, o.total, o.steadfast_status,
+           COALESCE((SELECT max(h.changed_at) FROM order_status_history h
+                     WHERE h.order_id = o.id AND h.new_status = 'delivered'), o.updated_at) AS at
+    FROM orders o
+    WHERE o.status = 'delivered'
+      AND o.steadfast_consignment_id IS NOT NULL
+  )
+  SELECT d.id, d.order_number, d.at
+  FROM delivered d
+  WHERE d.at < now() - make_interval(days => GREATEST(p_days, 0))
+    AND d.at >= v_oldest
+    AND COALESCE(d.steadfast_status, '') NOT IN ('cancelled', 'cancelled_approval_pending')
+    AND (SELECT COALESCE(sum(CASE WHEN p.kind = 'refund' THEN -p.amount ELSE p.amount END), 0)
+         FROM order_payments p
+         WHERE p.order_id = d.id AND p.source IS DISTINCT FROM 'steadfast_cod') < d.total
+    AND NOT EXISTS (
+      SELECT 1 FROM steadfast_payout_items i
+      WHERE i.order_id = d.id
+         OR i.consignment_id = d.steadfast_consignment_id
+         OR upper(i.invoice) = upper(d.order_number)
+    )
+  ORDER BY d.at;
+END;
+$function$;
+
+COMMIT;

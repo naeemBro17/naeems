@@ -18,7 +18,7 @@ describe('admin navigation', () => {
   it('Super Admin: sidebar groups in the mockup order, Brands in its reserved place (Batch 26)', () => {
     const groups = groupNavItems(visibleNavItems(superAdmin)).map((g) => [g.group.label, g.items.map((i) => i.label)]);
     expect(groups).toEqual([
-      ['', ['Home', 'Orders', 'Steadfast payouts', 'Money', 'Reports', 'Customers']],
+      ['', ['Home', 'Orders', 'Shopping list', 'Steadfast payouts', 'Money', 'Reports', 'Customers']],
       ['CATALOG', ['Products', 'Inventory', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Wholesalers', 'Reviews']],
       ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
@@ -31,7 +31,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'kaarbar', 'settings',
+      'shopping', 'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'kaarbar', 'settings',
     ]);
   });
 
@@ -39,15 +39,16 @@ describe('admin navigation', () => {
     const items = visibleNavItems(staffWith(['view_orders', 'edit_products', 'edit_categories', 'view_wholesalers']));
     const tabs = bottomTabs(items);
     expect(tabs).toHaveLength(5);
-    expect(tabs.map((t) => t.id)).toEqual(['home', 'orders', 'products', 'categories', 'more']);
-    expect(moreItems(items, tabs).map((i) => i.id)).toEqual(['wholesalers', 'profile']);
+    // Batch 51: the Shopping list (right under Orders) is the next item.
+    expect(tabs.map((t) => t.id)).toEqual(['home', 'orders', 'products', 'shopping', 'more']);
+    expect(moreItems(items, tabs).map((i) => i.id)).toEqual(['categories', 'wholesalers', 'profile']);
   });
 
   it('staff only see what they may open; empty groups are dropped', () => {
     const items = visibleNavItems(staffWith(['view_orders']));
-    expect(items.map((i) => i.id)).toEqual(['home', 'orders', 'profile']);
+    expect(items.map((i) => i.id)).toEqual(['home', 'orders', 'shopping', 'profile']);
     expect(groupNavItems(items).map((g) => g.group.id)).toEqual(['main', 'admin']);
-    expect(bottomTabs(items).map((t) => t.id)).toEqual(['home', 'orders', 'profile']);
+    expect(bottomTabs(items).map((t) => t.id)).toEqual(['home', 'orders', 'shopping', 'profile']);
   });
 
   it('Brands only with "Edit brands"', () => {
@@ -79,7 +80,13 @@ describe('titles and greeting', () => {
     expect(greeting(new Date('2026-10-01T02:00:00Z'))).toBe('Good morning'); // 08:00 Dhaka
     expect(greeting(new Date('2026-10-01T08:00:00Z'))).toBe('Good afternoon'); // 14:00
     expect(greeting(new Date('2026-10-01T14:00:00Z'))).toBe('Good evening'); // 20:00
-    expect(greeting(new Date('2026-09-30T20:30:00Z'))).toBe('Hello'); // 02:30 (Batch 35: night is Hello)
+    expect(greeting(new Date('2026-09-30T20:30:00Z'))).toBe('Good evening'); // 02:30 (Batch 51: night is evening again)
+    expect(greeting(new Date('2026-09-30T22:59:00Z'))).toBe('Good evening'); // 04:59
+    expect(greeting(new Date('2026-09-30T23:00:00Z'))).toBe('Good morning'); // 05:00
+    expect(greeting(new Date('2026-10-01T05:59:00Z'))).toBe('Good morning'); // 11:59
+    expect(greeting(new Date('2026-10-01T06:00:00Z'))).toBe('Good afternoon'); // 12:00
+    expect(greeting(new Date('2026-10-01T10:59:00Z'))).toBe('Good afternoon'); // 16:59
+    expect(greeting(new Date('2026-10-01T11:00:00Z'))).toBe('Good evening'); // 17:00
   });
 
   it('uses the first name, else the username', () => {

@@ -17,7 +17,7 @@ test.use({ serviceWorkers: 'block' });
  * limit.
  */
 
-const PDP = '/product/cerave-hydrating-cleanser';
+const PDP = '/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml';
 
 interface LiveProduct {
   id: string;
@@ -204,7 +204,8 @@ async function scrollToSolidHeader(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 1 — crystal glass header', () => {
-  test('only ← and Share; no cart button in the header', async ({ page }) => {
+  // Batch 51: ← and Share, plus the wishlist heart; still no cart button.
+  test('only ←, Share and the heart; no cart button in the header', async ({ page }) => {
     await openFresh(page, PDP);
     await page.evaluate(() =>
       localStorage.setItem(
@@ -216,7 +217,8 @@ test.describe('Part 1 — crystal glass header', () => {
     const header = page.getByTestId('pdp-header');
     await expect(header.getByRole('button', { name: 'Go back' })).toBeVisible();
     await expect(header.getByRole('button', { name: /^Share / })).toBeVisible();
-    await expect(header.getByRole('button')).toHaveCount(2);
+    await expect(header.getByTestId('wish-heart')).toBeVisible();
+    await expect(header.getByRole('button')).toHaveCount(3);
     await expect(header.getByTestId('header-cart')).toHaveCount(0);
     await expect(header.getByRole('button', { name: /cart/i })).toHaveCount(0);
     await emptyCart(page);
@@ -347,7 +349,7 @@ test.describe('Part 2 — rounded info sheet', () => {
       const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(bg)?.[1] ?? '1');
       expect(alpha, bg).toBeLessThan(0.3);
     }
-    await expect(page.getByTestId('stock-chip')).toHaveText(/In stock|Out of stock/);
+    await expect(page.getByTestId('stock-chip')).toHaveText(/In stock|Sold out|left — order soon/);
 
     // Trust plate: one element, three items, texts from Site texts.
     const plate = page.getByTestId('trust-plate');
@@ -440,12 +442,15 @@ test.describe('Part 3 — glass buy bar', () => {
     const qty = page.getByTestId('buy-bar-qty');
     await expect(qty).toHaveText('1');
     expect(await cartUnits(page)).toBe(1);
-    for (let i = 1; i < stock + 2; i++) await page.getByTestId('buy-bar-plus').click();
-    await expect(qty).toHaveText(String(stock));
-    await expect(page.locator('.toast', { hasText: `Only ${stock} in stock` }).first()).toBeVisible();
-    expect(await cartUnits(page)).toBe(stock);
+    // Batch 51: + stops at the order limit (4) or the stock, whichever is
+    // smaller, with the limit popup.
+    const cap = Math.min(stock, 4);
+    for (let i = 1; i < cap + 2; i++) await page.getByTestId('buy-bar-plus').click();
+    await expect(qty).toHaveText(String(cap));
+    await expect(page.getByTestId('limit-popup')).toBeVisible();
+    expect(await cartUnits(page)).toBe(cap);
 
-    for (let i = stock; i > 0; i--) await page.getByTestId('buy-bar-minus').click();
+    for (let i = cap; i > 0; i--) await page.getByTestId('buy-bar-minus').click();
     await expect(page.getByTestId('add-to-cart')).toBeVisible();
     await expect(page.getByTestId('buy-bar-stepper')).toHaveCount(0);
     expect(await cartUnits(page)).toBe(0);
@@ -456,6 +461,8 @@ test.describe('Part 3 — glass buy bar', () => {
   test('stays after a reload, never flips back by itself, and matches the cart page and the cards', async ({ page }) => {
     test.setTimeout(60_000);
     await openFresh(page, PDP);
+    // Batch 51: the name from the page (the old fixed product was renamed).
+    const pname = ((await page.locator('.product-detail__name').textContent()) ?? '').trim();
     await page.getByTestId('add-to-cart').click();
     await page.getByTestId('buy-bar-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
@@ -468,14 +475,14 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('2');
 
     await page.goto('/cart');
-    const row = page.locator('.checkout-cart__row', { hasText: 'CeraVe Hydrating Cleanser' }).first();
+    const row = page.locator('.checkout-cart__row', { hasText: pname }).first();
     await expect(row.locator('.checkout-cart__step-count')).toHaveText('2');
-    await page.getByRole('button', { name: 'Increase quantity of CeraVe Hydrating Cleanser' }).click();
+    await page.getByRole('button', { name: `Increase quantity of ${pname}` }).click();
     await expect(row.locator('.checkout-cart__step-count')).toHaveText('3');
 
-    await page.goto('/search?q=CeraVe%20Hydrating%20Cleanser');
+    await page.goto(`/search?q=${encodeURIComponent(pname)}`);
     const card = page.locator('.product-card', {
-      has: page.locator('.product-card__name', { hasText: /^CeraVe Hydrating Cleanser$/ }),
+      has: page.locator('.product-card__name', { hasText: pname }),
     }).first();
     await expect(card.getByTestId('card-stepper-qty')).toHaveText('3');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('3');
@@ -496,7 +503,7 @@ test.describe('Part 3 — glass buy bar', () => {
     const out = page.getByTestId('buy-bar-out');
     await expect(out).toBeVisible();
     await expect(out).toBeDisabled();
-    await expect(out).toHaveText('Out of stock');
+    await expect(out).toHaveText('Sold out');
     expect(await out.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe('rgb(255, 122, 69)');
     await expect(page.getByTestId('add-to-cart')).toHaveCount(0);
   });
@@ -515,6 +522,10 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(price).not.toHaveText(basePrice);
     await expect(price).toHaveText(await page.locator('.pdp-sheet .product-detail__price').textContent() ?? '');
 
+    // Batch 51: the extra test option row sits below the fold, so tapping it
+    // scrolled the page and the buy bar hid (by design); back to the top.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(page.getByTestId('buy-bar')).toHaveAttribute('data-shown', 'true');
     await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('1');
     const lines = await cartLines(page);
@@ -688,11 +699,12 @@ test.describe('Part 5 — one floating cart', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 6 — cart page', () => {
-  test('+ stops at the stock count with "Only N in stock"', async ({ page }) => {
+  test('+ stops at the stock count (or the order limit) with the limit popup', async ({ page }) => {
     const product = await smallStockProduct();
     test.skip(product === null, 'No product with a small tracked stock count today.');
     const p = product as LiveProduct;
-    const stock = p.stock_quantity as number;
+    // Batch 51: the most is the smaller of the stock and the order limit (4).
+    const stock = Math.min(p.stock_quantity as number, 4);
     await page.goto('/');
     await page.evaluate(
       ([id, qty]) =>
@@ -712,7 +724,7 @@ test.describe('Part 6 — cart page', () => {
     await plus.click();
     await plus.click();
     await expect(count).toHaveText(String(stock));
-    await expect(page.locator('.toast', { hasText: `Only ${stock} in stock` }).first()).toBeVisible();
+    await expect(page.getByTestId('limit-popup')).toBeVisible();
     expect(await cartUnits(page)).toBe(stock);
     await emptyCart(page);
   });

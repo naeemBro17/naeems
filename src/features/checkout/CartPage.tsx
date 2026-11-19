@@ -3,7 +3,7 @@
 // total and a "Checkout" button. Reads/writes via useCheckoutState (which
 // itself reads the cart from CartContext). Routes to DeliveryDetailsPage
 // on "Checkout".
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import { BackButton } from '../../components/shared/BackButton';
@@ -18,9 +18,11 @@ import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { trackInitiateCheckout } from '../../lib/analytics';
 import { useProducts } from '../../contexts/ProductContext';
-import { useToast } from '../../hooks/useToast';
-import { stockLimitMessage } from '../../hooks/useCartLine';
-import { stockLimit } from '../../lib/stockStatus';
+import { useSellLimit } from '../../hooks/useSellLimit';
+import { useCartCover } from '../../hooks/useCartCover';
+import { LimitPopup } from '../../components/viewer/LimitPopup';
+import { cartBuyAfterNote, type LimitReason } from '../../lib/sellRules';
+import { lineKey } from '../../lib/cartStock';
 import { StockNotice } from '../../components/checkout/StockNotice';
 import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import type { CartItem } from './types';
@@ -30,9 +32,11 @@ export function CartPage() {
   const { items, subtotal, updateQuantity } = useCheckoutState();
   const { session } = useAuth();
   const navigate = useNavigate();
-  const { variantsFor } = useProducts();
-  const { showToast } = useToast();
+  const { variantsFor, settings } = useProducts();
+  const sell = useSellLimit();
   const [showLoginSheet, setShowLoginSheet] = useState(false);
+  // Batch 51: the limit popup over one line's stepper.
+  const [popup, setPopup] = useState<{ key: string; reason: LimitReason } | null>(null);
   // Batch 33: catch a line that sold out while it sat in the cart.
   useCartStockCheck();
 
@@ -61,23 +65,36 @@ export function CartPage() {
     updateQuantity(item.product.id, item.quantity - 1, item.variantId);
   };
 
-  // + stops at the tracked stock count (Batch 28 Part 6) — the same limit
-  // the cards and the product page use: the option's own count for a line
-  // with an option, the product's count otherwise (blank = not tracked).
-  const lineLimit = (item: CartItem): number => {
+  // + stops at the order limit (Batch 51) — the same rule the cards and
+  // the product page use: the option's own stock for a line with an option
+  // that sells only from stock, the product's otherwise.
+  const lineFacts = (item: CartItem) => {
     const variant =
-      item.variantId !== null ? variantsFor(item.product.id).find((v) => v.id === item.variantId) : undefined;
-    return stockLimit(variant ? variant.stock_quantity : item.product.stock_quantity);
+      item.variantId !== null ? variantsFor(item.product.id).find((v) => v.id === item.variantId) ?? null : null;
+    return sell.factsFor(item.product, variant);
   };
+  const lineLimit = (item: CartItem): number => sell.maxFor(lineFacts(item));
 
   const handleIncrement = (item: CartItem) => {
-    const limit = lineLimit(item);
-    if (item.quantity >= limit) {
-      showToast(stockLimitMessage(limit), 'info');
+    if (item.quantity >= lineLimit(item)) {
+      setPopup({ key: lineKey(item.product.id, item.variantId), reason: sell.reasonFor(lineFacts(item)) });
       return;
     }
     updateQuantity(item.product.id, item.quantity + 1, item.variantId);
   };
+
+  // Batch 51: "Get it in 3–5 days" under a line stock does not fully cover.
+  const coverLines = useMemo(
+    () =>
+      items.map((item) => ({
+        productId: item.product.id,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        keepSelling: item.product.keep_selling === true,
+      })),
+    [items]
+  );
+  const notCovered = useCartCover(coverLines);
 
   return (
     <div className="viewer-shell detail-shell">
@@ -128,6 +145,11 @@ export function CartPage() {
                     <span className="checkout-cart__variant">{item.variantLabel}</span>
                   )}
                   <span className="checkout-cart__unit-price">{formatTaka(item.unitPrice)}</span>
+                  {notCovered.has(lineKey(item.product.id, item.variantId)) && (
+                    <span className="checkout-cart__eta" data-testid="cart-buy-after">
+                      {cartBuyAfterNote(settings)}
+                    </span>
+                  )}
                 </div>
 
                 <div className="checkout-cart__row-end">
@@ -135,7 +157,10 @@ export function CartPage() {
                     <button
                       type="button"
                       className="checkout-cart__step-btn"
-                      onClick={() => handleDecrement(item)}
+                      onClick={() => {
+                        setPopup(null);
+                        handleDecrement(item);
+                      }}
                       aria-label={`Decrease quantity of ${item.product.name}`}
                     >
                       &minus;
@@ -151,6 +176,14 @@ export function CartPage() {
                     >
                       +
                     </button>
+                    {popup && popup.key === lineKey(item.product.id, item.variantId) && (
+                      <LimitPopup
+                        reason={popup.reason}
+                        productName={item.product.name}
+                        optionLabel={item.variantLabel}
+                        onClose={() => setPopup(null)}
+                      />
+                    )}
                   </div>
                   <span className="checkout-cart__line-total">
                     {formatTaka(item.unitPrice * item.quantity)}

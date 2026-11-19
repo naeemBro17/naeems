@@ -31,3 +31,14 @@ export function orderHelpWhatsAppUrl(
   if (!base) return null;
   return `${base}${base.includes('?') ? '&' : '?'}text=${encodeURIComponent(`Hi, I have a question about order ${orderNumber}`)}`;
 }
+
+/** Batch 51: WhatsApp to the shop's number with a ready message (the
+ *  limit popup's "Need more? Chat with us on WhatsApp"). */
+export function shopWhatsAppMessageUrl(
+  settings: { shop_whatsapp_number?: string | null; expert_whatsapp_url?: string | null },
+  message: string
+): string | null {
+  const base = whatsAppChatUrl(settings.shop_whatsapp_number) ?? whatsAppUrl(settings.expert_whatsapp_url ?? '');
+  if (!base) return null;
+  return `${base}${base.includes('?') ? '&' : '?'}text=${encodeURIComponent(message)}`;
+}

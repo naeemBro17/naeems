@@ -58,6 +58,12 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
       <path d="M8 8h8M8 12h8M8 16h5" />
     </>
   ),
+  shopping: (
+    <>
+      <path d="M5 8h14l-1.2 11.2a2 2 0 01-2 1.8H8.2a2 2 0 01-2-1.8L5 8z" />
+      <path d="M9 8V6.5a3 3 0 016 0V8" />
+    </>
+  ),
   customers: (
     <>
       <circle cx="12" cy="12" r="9" />

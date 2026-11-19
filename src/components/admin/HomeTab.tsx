@@ -4,7 +4,7 @@ import { fetchCustomersV3, fetchDashboard, type DashboardData } from '../../lib/
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import { dueSummary, homeDateLabel, type DueSummary } from '../../lib/homeStats';
 import { formatTakaBd, greeting, greetingName, type AdminSection } from '../../lib/adminNav';
-import { AdminPageHeader, EmptyState, ListGroup, ListRow } from './ui/AdminUi';
+import { EmptyState, ListGroup, ListRow } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import { SalesChart } from './SalesChart';
 import { fetchUnpaidOrders, overdueOrders, UNPAID_AFTER_DAYS } from '../../lib/payouts';
@@ -13,6 +13,7 @@ import { dashboardRanges, type DashboardPeriod } from '../../lib/reports/periods
 import type { DashboardData as MoneyDashboard } from '../../lib/reports/types';
 import { dhakaToday } from '../../lib/inventory/api';
 import { DashboardTop } from './DashboardTop';
+import { AdminHomeHero } from './AdminHomeHero';
 import '../../styles/adminInventory.css';
 import '../../styles/adminMoney.css';
 import '../../styles/adminReports.css';
@@ -21,6 +22,8 @@ interface HomeTabProps {
   /** "NAEEM'S SUPER ADMIN" / "NAEEM'S <ROLE>". */
   title: string;
   onOpen: (section: AdminSection, params?: Record<string, string>) => void;
+  /** Batch 51: items on the Shopping list (the tile shows when > 0). */
+  shoppingCount?: number;
 }
 
 /**
@@ -29,7 +32,7 @@ interface HomeTabProps {
  * (admin_dashboard); a card only shows when this person may see that
  * section, and money only with "See sales figures".
  */
-export function HomeTab({ title, onOpen }: HomeTabProps) {
+export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
   const { staff, profile, can } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -238,7 +241,19 @@ export function HomeTab({ title, onOpen }: HomeTabProps) {
 
   return (
     <section aria-label="Home" className="adm-home">
-      <AdminPageHeader eyebrow={title} title={`${greeting()}, ${name}`} subtitle={homeDateLabel()} />
+      <AdminHomeHero eyebrow={title} greeting={`${greeting()}, ${name}`} date={homeDateLabel()} />
+
+      {shoppingCount > 0 && (
+        <button type="button" className="adm-ocard adm-home__shop" onClick={() => onOpen('shopping')} data-testid="home-shopping">
+          <span className="adm-home__shop-text">
+            <span className="adm-home__shop-label">Shopping list</span>
+            <span className="adm-home__shop-count">
+              {shoppingCount} item{shoppingCount === 1 ? '' : 's'} to buy
+            </span>
+          </span>
+          <AdminIcon name="chevron-right" />
+        </button>
+      )}
 
       {isLoading ? (
         <div className="adm-kpis" aria-label="Loading" role="status">

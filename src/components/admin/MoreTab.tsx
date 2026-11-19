@@ -6,6 +6,8 @@ interface MoreTabProps {
   items: readonly NavItem[];
   username: string | null;
   onOpen: (section: AdminSection) => void;
+  /** Batch 51: items on the Shopping list (its row shows the count). */
+  shoppingCount?: number;
 }
 
 /**
@@ -13,7 +15,7 @@ interface MoreTabProps {
  * that isn't one of the bottom tabs, in the same groups as the computer's
  * sidebar. Staff only see what their role allows; an empty group is hidden.
  */
-export function MoreTab({ items, username, onOpen }: MoreTabProps) {
+export function MoreTab({ items, username, onOpen, shoppingCount = 0 }: MoreTabProps) {
   const groups = groupNavItems(items);
   return (
     <section aria-label="More" className="adm-more">
@@ -26,6 +28,7 @@ export function MoreTab({ items, username, onOpen }: MoreTabProps) {
               icon={item.icon}
               label={item.moreLabel ?? item.label}
               pill={item.superAdminOnly ? 'Super Admin' : undefined}
+              count={item.id === 'shopping' && shoppingCount > 0 ? shoppingCount : undefined}
               onClick={() => onOpen(item.id)}
             />
           ))}
