@@ -1,3 +1,5 @@
+import { sectionPath } from '../../lib/adminNav';
+import { ActionLink } from '../shared/ActionLink';
 import { moneyText, signedMoney } from '../../lib/money/format';
 import { changePercent, changeText, type DashboardPeriod } from '../../lib/reports/periods';
 import type { DashboardData } from '../../lib/reports/types';
@@ -64,7 +66,7 @@ export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
         </div>
       ) : (
         <div className="dash-grid">
-          <button type="button" className="adm-ocard dash-card dash-profit" onClick={() => onOpen('reports', { r: 'pnl', rp: period })} data-testid="dash-profit">
+          <ActionLink className="adm-ocard dash-card dash-profit" to={sectionPath('reports', { r: 'pnl', rp: period })} onOpen={() => onOpen('reports', { r: 'pnl', rp: period })} data-testid="dash-profit">
             <span className="money-big-label">Your profit</span>
             <span className={`dash-big${p.your_profit < 0 ? ' money-out' : ''}`} data-testid="dash-your-profit">
               {signedMoney(p.your_profit)}
@@ -79,15 +81,15 @@ export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
               Left in the business {moneyText(p.left_in_business)}
             </span>
             {!s.confirmed && <span className="inv-muted dash-small">Opening balances not confirmed yet.</span>}
-          </button>
+          </ActionLink>
 
-          <button type="button" className="adm-ocard dash-card" onClick={() => onOpen('money')} data-testid="dash-roi">
+          <ActionLink className="adm-ocard dash-card" to={sectionPath('money')} onOpen={() => onOpen('money')} data-testid="dash-roi">
             <span className="money-big-label">Return on money in the business</span>
             <span className="dash-big" data-testid="dash-roi-value">
               {s.roi.percent === null ? '—' : `${s.roi.percent}%`}
             </span>
             <span className="inv-muted dash-small">Net profit {moneyText(p.net_profit)} ÷ average money in the business (as on the Money page).</span>
-          </button>
+          </ActionLink>
 
           <div className="adm-ocard dash-card inv-stack" data-testid="dash-money">
             <div className="dash-card__head">
@@ -115,9 +117,9 @@ export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
             <Row label="To receive" value={pos.to_receive + pos.previous_balances} testId="dash-receive" />
             <Row label="To give" value={pos.to_give} testId="dash-give" />
             <Row label="Stock value" value={pos.stock_value} testId="dash-stock" />
-            <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => onOpen('money')}>
+            <ActionLink className="adm-btn adm-btn--ghost adm-btn--sm" to={sectionPath('money')} onOpen={() => onOpen('money')}>
               Open Money
-            </button>
+            </ActionLink>
           </div>
         </div>
       )}

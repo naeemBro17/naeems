@@ -1,3 +1,5 @@
+import { adminPath } from '../../../lib/adminPages';
+import { ActionLink } from '../../shared/ActionLink';
 import { useCallback, useEffect, useState } from 'react';
 import {
   coveredByOpening,
@@ -171,9 +173,9 @@ function PayoutDetail({
                 <tr key={item.id} className={toCheck ? 'is-check' : settled ? 'is-settled' : undefined} data-testid="payout-line">
                   <td>
                     {item.order_id && item.invoice ? (
-                      <button type="button" className="adm-payouts__link" onClick={() => onOpenOrder(item.invoice ?? '')}>
+                      <ActionLink className="adm-payouts__link" to={adminPath.order(item.invoice ?? '')} onOpen={() => onOpenOrder(item.invoice ?? '')}>
                         {label}
-                      </button>
+                      </ActionLink>
                     ) : (
                       <span>{label}</span>
                     )}

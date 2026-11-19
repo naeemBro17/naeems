@@ -1,4 +1,4 @@
-import { groupNavItems, type AdminSection, type NavItem } from '../../lib/adminNav';
+import { groupNavItems, type AdminSection, type NavItem, sectionPath } from '../../lib/adminNav';
 import { AdminPageHeader, ListGroup, ListRow } from './ui/AdminUi';
 
 interface MoreTabProps {
@@ -29,6 +29,7 @@ export function MoreTab({ items, username, onOpen, shoppingCount = 0 }: MoreTabP
               label={item.moreLabel ?? item.label}
               pill={item.superAdminOnly ? 'Super Admin' : undefined}
               count={item.id === 'shopping' && shoppingCount > 0 ? shoppingCount : undefined}
+              to={sectionPath(item.id)}
               onClick={() => onOpen(item.id)}
             />
           ))}

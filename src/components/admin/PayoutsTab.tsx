@@ -1,3 +1,5 @@
+import { adminPath } from '../../lib/adminPages';
+import { ActionLink } from '../shared/ActionLink';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '../../hooks/useToast';
 import {
@@ -118,9 +120,9 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
                   {overdue.map((o, i) => (
                     <span key={o.order_id}>
                       {i > 0 && ', '}
-                      <button type="button" className="adm-payouts__link" onClick={() => onOpenOrder(o.order_number)}>
+                      <ActionLink className="adm-payouts__link" to={adminPath.order(o.order_number)} onOpen={() => onOpenOrder(o.order_number)}>
                         {o.order_number}
-                      </button>
+                      </ActionLink>
                     </span>
                   ))}
                   {' · delivered '}
@@ -178,7 +180,7 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
                 const pill = payoutPill(p, booksStart);
                 const orders = payoutOrderCount(p);
                 return (
-                  <button key={p.id} type="button" className="adm-payouts__row" onClick={() => onOpenPayout(p.id)}>
+                  <ActionLink key={p.id} className="adm-payouts__row" to={adminPath.payout(p.id)} onOpen={() => onOpenPayout(p.id)}>
                     <span className="adm-payouts__row-main">
                       <span className="adm-payouts__row-title">
                         {p.paid_at ? `${shortDhakaDate(p.paid_at)} · ` : ''}Payout #{p.steadfast_payment_id}
@@ -191,7 +193,7 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
                       <b title={takaExact(toPaisa(p.total_amount))}>{takaWhole(toPaisa(p.total_amount))}</b>
                       <span className={`adm-payouts__pill adm-payouts__pill--${pill.tone}`}>{pill.text}</span>
                     </span>
-                  </button>
+                  </ActionLink>
                 );
               })}
             </div>

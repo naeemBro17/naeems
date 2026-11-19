@@ -1,0 +1,61 @@
+=== PRODUCT  /product/avne-thermal-spring-water-300-ml
+<meta charset="utf-8">
+<title>Avène Thermal Spring Water 300 ml — NAEEM&#39;S</title>
+<meta name="description" content="100% authentic. Imported for you.">
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="NAEEM&#39;S">
+<meta property="og:title" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+<meta property="og:description" content="100% authentic. Imported for you.">
+<meta property="og:image" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+<meta property="og:image:secure_url" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+<meta property="og:image:type" content="image/webp">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="1200">
+<meta property="og:image:alt" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+<meta property="og:url" content="https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Avène Thermal Spring Water 300 ml — NAEEM&#39;S">
+<meta name="twitter:description" content="100% authentic. Imported for you.">
+<meta name="twitter:image" content="https://afkgkpuppmwmkyrbheew.supabase.co/storage/v1/object/public/product-images/products/41ba9235-6a6e-4326-9156-9274add5420b.webp">
+<link rel="canonical" href="https://naeems-all.vercel.app/product/avne-thermal-spring-water-300-ml">
+
+=== COMBO  /c/k7m2xq9p (before the SQL is run, falls back to the shop preview)
+<meta charset="utf-8">
+<title>NAEEM&#39;S — 100% Authentic Skincare</title>
+<meta name="description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NAEEM&#39;S">
+<meta property="og:title" content="NAEEM&#39;S — 100% Authentic Skincare">
+<meta property="og:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+<meta property="og:image" content="https://naeems-all.vercel.app/og-shop.jpg">
+<meta property="og:image:secure_url" content="https://naeems-all.vercel.app/og-shop.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="NAEEM&#39;S — 100% Authentic Skincare">
+<meta property="og:url" content="https://naeems-all.vercel.app/c/k7m2xq9p">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NAEEM&#39;S — 100% Authentic Skincare">
+<meta name="twitter:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.">
+<meta name="twitter:image" content="https://naeems-all.vercel.app/og-shop.jpg">
+<link rel="canonical" href="https://naeems-all.vercel.app/c/k7m2xq9p">
+
+=== HOME  /  (dist/index.html)
+<meta name="description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+<meta property="og:site_name" content="NAEEM'S" />
+<meta property="og:title" content="NAEEM'S — 100% Authentic Skincare" />
+<meta property="og:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+<meta property="og:image" content="https://naeems-all.vercel.app/og-shop.jpg" />
+<meta property="og:image:secure_url" content="https://naeems-all.vercel.app/og-shop.jpg" />
+<meta property="og:image:type" content="image/jpeg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="NAEEM'S — 100% Authentic Skincare" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://naeems-all.vercel.app/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="NAEEM'S — 100% Authentic Skincare" />
+<meta name="twitter:description" content="Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh." />
+<meta name="twitter:image" content="https://naeems-all.vercel.app/og-shop.jpg" />
+<link rel="canonical" href="https://naeems-all.vercel.app/" />
+<title>NAEEM'S</title>

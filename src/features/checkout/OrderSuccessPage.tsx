@@ -1,3 +1,4 @@
+import { ActionLink } from '../../components/shared/ActionLink';
 // The final confirmation screen after checkout. Reads the order snapshot
 // useCheckoutState captured the instant place_order() succeeded (not the
 // live cart, which is already cleared and reset by the time this page is
@@ -252,9 +253,9 @@ export function OrderSuccessPage() {
         </p>
 
         <div className="cf-acts cf-fu" style={fadeUp('.72s')}>
-          <button type="button" className="button button--primary button--full" onClick={() => navigate(`/orders/${lastOrder.orderId}`)}>
+          <ActionLink to={`/orders/${lastOrder.orderId}`} className="button button--primary button--full" onOpen={() => navigate(`/orders/${lastOrder.orderId}`)}>
             View my order
-          </button>
+          </ActionLink>
           <div className="cf-pair" style={helpHref ? undefined : { gridTemplateColumns: '1fr' }}>
             <button type="button" className="cf-ghost" onClick={() => void handleDownloadInvoice()} disabled={isMakingInvoice}>
               {isMakingInvoice ? <span className="spinner" aria-hidden="true" /> : <DownloadIcon />}
@@ -278,9 +279,9 @@ export function OrderSuccessPage() {
               Could not make the invoice. Check your connection and try again.
             </p>
           )}
-          <button type="button" className="cf-link" onClick={() => navigate('/')}>
+          <ActionLink to="/" className="cf-link" onOpen={() => navigate('/')}>
             Continue shopping
-          </button>
+          </ActionLink>
         </div>
       </main>
     </div>

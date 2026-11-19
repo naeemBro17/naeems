@@ -17,7 +17,7 @@ interface MinimalResponse {
 }
 
 const SITE_URL = 'https://naeems-all.vercel.app';
-const FALLBACK_IMAGE = `${SITE_URL}/og-image.png`;
+const FALLBACK_IMAGE = `${SITE_URL}/og-shop.jpg`;
 const FALLBACK_DESCRIPTION = 'Premium Australian skincare — check prices instantly';
 
 /** A brand link part is lowercase letters, digits and single hyphens. */

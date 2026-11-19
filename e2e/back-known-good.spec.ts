@@ -74,7 +74,7 @@ for (const kind of ['phone', 'in-app'] as const) {
   test.describe(`Back (${kind}) returns you exactly where you were`, () => {
     test('search: a picked category keeps its results, chip, scroll — no keyboard', async ({ page }) => {
       await page.goto('/');
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await page.getByRole('link', { name: 'Search', exact: true }).click();
       await expect(page).toHaveURL(/\/search/);
 
       const chips = page.locator('.search-quickpicks .chip');
@@ -110,7 +110,7 @@ for (const kind of ['phone', 'in-app'] as const) {
 
     test('search: a typed query keeps its results and scroll — no keyboard', async ({ page }) => {
       await page.goto('/');
-      await page.getByRole('button', { name: 'Search', exact: true }).click();
+      await page.getByRole('link', { name: 'Search', exact: true }).click();
       const input = page.getByRole('combobox', { name: 'Search products' });
       await input.fill('cerave');
       await page.keyboard.press('Enter');
@@ -277,7 +277,7 @@ test.describe('In-app back arrow — reverse hero (restored from Batch 21)', () 
   test('search result card', async ({ page }) => {
     await recordViewTransitions(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('link', { name: 'Search', exact: true }).click();
     await page.getByRole('combobox', { name: 'Search products' }).fill('cerave');
     await page.keyboard.press('Enter');
     await expect(page.locator('.product-card').first()).toBeVisible();

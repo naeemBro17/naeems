@@ -1,3 +1,5 @@
+import { adminPath } from '../../../lib/adminPages';
+import { ActionLink } from '../../shared/ActionLink';
 import { useEffect, useState } from 'react';
 import { dhakaToday } from '../../../lib/inventory/api';
 import type { LoadState } from '../../../lib/payouts';
@@ -68,9 +70,9 @@ export function WriteOffsView({ onBack, onOpenOrder }: { onBack: () => void; onO
                     {w.note ? ` · ${w.note}` : ''} · {w.lots.map((l) => `${l.units} ${l.code}`).join(', ')}
                   </span>
                   {w.order_number && (
-                    <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => onOpenOrder(w.order_number ?? '')}>
+                    <ActionLink className="adm-btn adm-btn--ghost adm-btn--sm" to={adminPath.order(w.order_number ?? '')} onOpen={() => onOpenOrder(w.order_number ?? '')}>
                       Open {w.order_number}
-                    </button>
+                    </ActionLink>
                   )}
                 </span>
                 <span className="inv-lot__side">

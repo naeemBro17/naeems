@@ -1,3 +1,4 @@
+import { ActionLink } from '../shared/ActionLink';
 import { useEffect, useState } from 'react';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -102,52 +103,40 @@ export function HamburgerMenu({ isOpen, onClose }: HamburgerMenuProps) {
               role check comes straight from AuthContext's session profile,
               never from CSS or client-side guessing. */}
           {isAdmin && (
-            <button
-              type="button"
-              className="menu-row menu-row--button"
-              onClick={() => goTo('/admin')}
-            >
+            <ActionLink to="/admin" className="menu-row menu-row--button" onOpen={() => goTo('/admin')}>
               <span className="menu-row__label">Admin Panel</span>
               <ChevronRight />
-            </button>
+            </ActionLink>
           )}
 
           {isApprovedWholesaler && (
-            <button
-              type="button"
-              className="menu-row menu-row--button"
-              onClick={() => goTo('/wholesaler-access')}
-            >
+            <ActionLink to="/wholesaler-access" className="menu-row menu-row--button" onOpen={() => goTo('/wholesaler-access')}>
               <span className="menu-row__label">Wholesale Account</span>
               <ChevronRight />
-            </button>
+            </ActionLink>
           )}
 
           {/* Policy/trust pages — Batch 19 Part 4. */}
-          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/about')}>
+          <ActionLink to="/about" className="menu-row menu-row--button" onOpen={() => goTo('/about')}>
             <span className="menu-row__label">About Us</span>
             <ChevronRight />
-          </button>
-          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/delivery')}>
+          </ActionLink>
+          <ActionLink to="/delivery" className="menu-row menu-row--button" onOpen={() => goTo('/delivery')}>
             <span className="menu-row__label">Delivery Info</span>
             <ChevronRight />
-          </button>
-          <button
-            type="button"
-            className="menu-row menu-row--button"
-            onClick={() => goTo('/return-policy')}
-          >
+          </ActionLink>
+          <ActionLink to="/return-policy" className="menu-row menu-row--button" onOpen={() => goTo('/return-policy')}>
             <span className="menu-row__label">Return Policy</span>
             <ChevronRight />
-          </button>
-          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/terms')}>
+          </ActionLink>
+          <ActionLink to="/terms" className="menu-row menu-row--button" onOpen={() => goTo('/terms')}>
             <span className="menu-row__label">Terms &amp; Conditions</span>
             <ChevronRight />
-          </button>
-          <button type="button" className="menu-row menu-row--button" onClick={() => goTo('/privacy')}>
+          </ActionLink>
+          <ActionLink to="/privacy" className="menu-row menu-row--button" onOpen={() => goTo('/privacy')}>
             <span className="menu-row__label">Privacy Policy</span>
             <ChevronRight />
-          </button>
+          </ActionLink>
         </div>
       ) : (
         <ComingSoon onBack={() => setScreen('root')} />

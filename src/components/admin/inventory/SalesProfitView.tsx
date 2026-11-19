@@ -1,3 +1,4 @@
+import { ActionLink } from '../../shared/ActionLink';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dhakaToday, fetchSalesProfit, packsText } from '../../../lib/inventory/api';
@@ -143,7 +144,7 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
           ) : (
             <div className="inv-stack" data-testid="inv-profit-orders">
               {data.orders.map((o) => (
-                <button key={o.order_id} type="button" className="inv-item inv-item--button" onClick={() => navigate(adminPath.order(o.order_number))}>
+                <ActionLink key={o.order_id} className="inv-item inv-item--button" to={adminPath.order(o.order_number)} onOpen={() => navigate(adminPath.order(o.order_number))}>
                   <span className="inv-item__head">
                     <span className="inv-item__name">{o.order_number}</span>
                     <span className="inv-badge inv-badge--grey">{o.status === 'returned' ? 'Returned' : o.status === 'cancelled' ? 'Cancelled' : 'Delivered'}</span>
@@ -171,7 +172,7 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
                       </span>
                     </>
                   )}
-                </button>
+                </ActionLink>
               ))}
             </div>
           )}

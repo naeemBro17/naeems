@@ -221,15 +221,15 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
       )}
 
       <ListGroup title="MONEY">
-        <ListRow icon="receipt" label="Expenses" onClick={() => onOpen('expenses')} />
-        <ListRow icon="payouts" label="Accounts" detail={pos ? moneyText(pos.accounts_total) : undefined} onClick={() => onOpen('accounts')} />
-        <ListRow icon="customers" label="Investors and what I owe" detail={pos ? moneyText(pos.to_give) : undefined} onClick={() => onOpen('people')} />
-        <ListRow icon="chart" label="End-of-day count" onClick={() => onOpen('count')} />
-        <ListRow icon="restock" label="Stock removed (write-offs)" onClick={() => onOpen('writeoffs')} />
-        <ListRow icon="restock" label="Monthly stock count" onClick={() => onOpen('stock-count')} />
-        <ListRow icon="lock" label="Lock a month" onClick={() => onOpen('lock')} />
-        <ListRow icon="settings" label="Expense categories" onClick={() => onOpen('categories')} />
-        <ListRow icon="lock" label="Opening balances" detail={data ? (data.confirmed ? `Since ${dayText(pos?.start_date ?? null)}` : 'Not confirmed') : undefined} onClick={() => onOpen('opening')} />
+        <ListRow icon="receipt" label="Expenses" to="/admin?tab=money&m=expenses" onClick={() => onOpen('expenses')} />
+        <ListRow icon="payouts" label="Accounts" detail={pos ? moneyText(pos.accounts_total) : undefined} to="/admin?tab=money&m=accounts" onClick={() => onOpen('accounts')} />
+        <ListRow icon="customers" label="Investors and what I owe" detail={pos ? moneyText(pos.to_give) : undefined} to="/admin?tab=money&m=people" onClick={() => onOpen('people')} />
+        <ListRow icon="chart" label="End-of-day count" to="/admin?tab=money&m=count" onClick={() => onOpen('count')} />
+        <ListRow icon="restock" label="Stock removed (write-offs)" to="/admin?tab=money&m=writeoffs" onClick={() => onOpen('writeoffs')} />
+        <ListRow icon="restock" label="Monthly stock count" to="/admin?tab=money&m=stock-count" onClick={() => onOpen('stock-count')} />
+        <ListRow icon="lock" label="Lock a month" to="/admin?tab=money&m=lock" onClick={() => onOpen('lock')} />
+        <ListRow icon="settings" label="Expense categories" to="/admin?tab=money&m=categories" onClick={() => onOpen('categories')} />
+        <ListRow icon="lock" label="Opening balances" detail={data ? (data.confirmed ? `Since ${dayText(pos?.start_date ?? null)}` : 'Not confirmed') : undefined} to="/admin?tab=money&m=opening" onClick={() => onOpen('opening')} />
       </ListGroup>
     </section>
   );

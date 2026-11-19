@@ -1,3 +1,4 @@
+import { ActionLink } from '../shared/ActionLink';
 import { useRef } from 'react';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { useCart } from '../../contexts/CartContext';
@@ -75,16 +76,18 @@ export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
   const { itemCount } = useCart();
 
   const tabs = [
-    { id: 'home' as const, label: 'Home', icon: <HomeIcon />, onClick: onHome },
+    { id: 'home' as const, label: 'Home', to: '/', icon: <HomeIcon />, onClick: onHome },
     {
       id: 'search' as const,
       label: 'Search',
+      to: '/search',
       icon: <SearchIcon />,
       onClick: () => navigate('/search'),
     },
     {
       id: 'cart' as const,
       label: 'Cart',
+      to: '/cart',
       icon: (
         <span className="bottom-nav__icon-wrap">
           <CartIcon className="bottom-nav__icon" />
@@ -98,6 +101,7 @@ export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
     {
       id: 'account' as const,
       label: 'Account',
+      to: '/account',
       icon: <AccountIcon />,
       onClick: onAccount,
     },
@@ -113,18 +117,18 @@ export function BottomNav({ activeTab, onHome, onAccount }: BottomNavProps) {
   return (
     <nav className="bottom-nav" aria-label="Main">
       {tabs.map((tab) => (
-        <button
+        <ActionLink
           key={tab.id}
-          type="button"
+          to={tab.to}
           className={`bottom-nav__tab${
             activeTab === tab.id ? ' bottom-nav__tab--active' : ''
           }${activeTab === tab.id && tabChanged ? ' bottom-nav__tab--changed' : ''}`}
-          onClick={tab.onClick}
+          onOpen={tab.onClick}
           aria-current={activeTab === tab.id ? 'page' : undefined}
         >
           {tab.icon}
           <span className="bottom-nav__label">{tab.label}</span>
-        </button>
+        </ActionLink>
       ))}
     </nav>
   );

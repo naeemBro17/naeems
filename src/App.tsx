@@ -16,6 +16,7 @@ import { ToastContainer } from './components/shared/ToastContainer';
 import { AnalyticsTracker } from './components/shared/AnalyticsTracker';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { ShopDownGate } from './components/shared/ShopDown';
+import { InAppBrowserBar } from './components/shared/InAppBrowserBar';
 import { PageTransition } from './components/shared/PageTransition';
 import { ViewerPage } from './pages/ViewerPage';
 import {
@@ -32,6 +33,7 @@ import {
   WholesalerAccessPage,
   AccountPage,
   WishlistPage,
+  ComboPage,
   OrdersListPage,
   OrderDetailPage,
   NotFoundPage,
@@ -139,6 +141,8 @@ export default function App() {
                   <ShopDownGate>
                     <AnalyticsTracker />
                     <LoginReturnTracker />
+                    {/* Batch 52 Part 4: only inside Facebook / Messenger / Instagram. */}
+                    <InAppBrowserBar />
                     <PageTransition>
                       <Suspense fallback={<RouteFallback />}>
                         <Routes>
@@ -161,6 +165,8 @@ export default function App() {
                           <Route path="/account" element={<AccountPage />} />
                           {/* Batch 51: the customer's saved products. */}
                           <Route path="/wishlist" element={<WishlistPage />} />
+                          {/* Batch 52: a combo Naeem shared (only people with the link). */}
+                          <Route path="/c/:code" element={<ComboPage />} />
                           <Route path="/orders" element={<OrdersListPage />} />
                           <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                           {/* Cart & checkout flow — see src/features/checkout. */}

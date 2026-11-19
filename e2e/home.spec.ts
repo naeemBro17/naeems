@@ -55,7 +55,7 @@ test.describe('Home — categories', () => {
     await expect(grid.first()).toBeVisible();
     const allCount = await settledCount(grid);
 
-    const circle = page.getByRole('button', { name: /^Show .* products$/ }).first();
+    const circle = page.getByRole('link', { name: /^Show .* products$/ }).first();
     await circle.click();
     await page.waitForTimeout(200);
     const filteredCount = await grid.count();

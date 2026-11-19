@@ -1,3 +1,5 @@
+import { adminPath } from '../../../lib/adminPages';
+import { ActionLink } from '../../shared/ActionLink';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { categoryShares, moneyText, signedMoney } from '../../../lib/money/format';
@@ -126,7 +128,7 @@ export function SalesView({ onBack, onOpenOrder }: ViewProps) {
             <ul className="rep-list" data-testid="sales-orders">
               {data.orders.slice(0, 200).map((o) => (
                 <li key={o.order_id}>
-                  <button type="button" className="rep-list__row" onClick={() => onOpenOrder?.(o.order_number)}>
+                  <ActionLink className="rep-list__row" to={adminPath.order(o.order_number)} onOpen={() => onOpenOrder?.(o.order_number)}>
                     <span>
                       <b>{o.order_number}</b> · {o.customer_name}
                       <span className="inv-muted"> · {sourceLabel(o.source)}{o.status === 'returned' ? ' · Returned' : ''}</span>
@@ -135,7 +137,7 @@ export function SalesView({ onBack, onOpenOrder }: ViewProps) {
                       {moneyText(o.total)}
                       {o.due > 0 && <span className="money-out"> · {moneyText(o.due)} unpaid</span>}
                     </span>
-                  </button>
+                  </ActionLink>
                 </li>
               ))}
             </ul>

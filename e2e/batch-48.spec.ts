@@ -317,7 +317,7 @@ async function placeAndCheck(page: Page, calls: PlacedCall[], method: 'cod' | 'b
   }
   await expect(page.getByRole('button', { name: 'View my order' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invoice' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue shopping' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Continue shopping' })).toBeVisible();
   await noSidewaysScroll(page);
 }
 

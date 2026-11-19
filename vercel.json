@@ -23,6 +23,17 @@
       "destination": "/api/brand-og?slug=:slug"
     },
     {
+      "source": "/c/:code",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|TelegramBot|Slackbot|LinkedInBot|Discordbot).*"
+        }
+      ],
+      "destination": "/api/combo-og?code=:code"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

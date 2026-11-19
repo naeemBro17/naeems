@@ -1,0 +1,940 @@
+/* Batch 52 — "Share as a combo" (the admin's cart card, the make / link-
+   ready sheets, the customer's /c/{code} page, Admin → Combos) and the bar
+   inside Facebook's in-app browser. The only orange is each screen's one
+   main button (.button--primary). Prices: near-black / white, bold. */
+
+:root {
+  --combo-card-bg:        #1C1C1E;
+  --combo-card-border:    transparent;
+  --combo-card-fg:        #FFFFFF;
+  --combo-card-muted:     rgba(255, 255, 255, 0.66);
+  --combo-card-btn:       rgba(255, 255, 255, 0.08);
+  --combo-card-btn-line:  rgba(255, 255, 255, 0.32);
+  --combo-tile-bg:        #FFFFFF;
+  --combo-field-bg:       #FFFFFF;
+  --combo-soft-bg:        #F5F5F7;
+  --combo-share-bg:       #FFFFFF;
+  --combo-tick-bg:        #1C1C1E;
+  --combo-tick-fg:        #FFFFFF;
+  --inapp-bar-bg:         #F5F5F7;
+  --inapp-bar-border:     #E5E5EA;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --combo-card-bg:        #1C1C1E;
+    --combo-card-border:    rgba(255, 255, 255, 0.12);
+    --combo-tile-bg:        #F4F4F6;
+    --combo-field-bg:       #2C2C2E;
+    --combo-soft-bg:        #2C2C2E;
+    --combo-share-bg:       #2C2C2E;
+    --combo-tick-bg:        #FFFFFF;
+    --combo-tick-fg:        #1C1C1E;
+    --inapp-bar-bg:         #1C1C1E;
+    --inapp-bar-border:     #38383A;
+  }
+}
+
+:root[data-theme='dark'] {
+  --combo-card-bg:        #1C1C1E;
+  --combo-card-border:    rgba(255, 255, 255, 0.12);
+  --combo-tile-bg:        #F4F4F6;
+  --combo-field-bg:       #2C2C2E;
+  --combo-soft-bg:        #2C2C2E;
+  --combo-share-bg:       #2C2C2E;
+  --combo-tick-bg:        #FFFFFF;
+  --combo-tick-fg:        #1C1C1E;
+  --inapp-bar-bg:         #1C1C1E;
+  --inapp-bar-border:     #38383A;
+}
+
+/* Prices: normal digits, near-black (white in dark), bold. */
+.combo-price {
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------ the admin's cart card */
+
+.combo-card {
+  margin: var(--space-4) 0 var(--space-2);
+  padding: 16px 18px 18px;
+  border-radius: 20px;
+  background: var(--combo-card-bg);
+  border: 1px solid var(--combo-card-border);
+  color: var(--combo-card-fg);
+}
+
+.combo-card__kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: var(--combo-card-muted);
+}
+
+.combo-card__kicker svg {
+  width: 13px;
+  height: 13px;
+}
+
+.combo-card__title {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--combo-card-fg);
+}
+
+.combo-card__text {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--combo-card-muted);
+}
+
+.combo-card__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--combo-card-btn-line);
+  background: var(--combo-card-btn);
+  color: var(--combo-card-fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.combo-card__button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ------------------------------------------------------------ the sheets */
+
+/* The sheet's small header title stays for screen readers; the big one
+   inside (mockup frames 2 and 3) is what you see. */
+.combo-sheet .sheet-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.combo-sheet .sheet-header {
+  justify-content: flex-end;
+}
+
+.combo-sheet {
+  max-height: 92vh;
+}
+
+.combo-make {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: var(--space-2);
+}
+
+.combo-make__title,
+.combo-ready__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+}
+
+.combo-make__sub,
+.combo-ready__sub {
+  margin: -8px 0 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.combo-make__error {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-danger);
+}
+
+.combo-thumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.combo-thumbs__item {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--combo-tile-bg);
+  border: 1px solid var(--color-border);
+}
+
+.combo-thumbs--sm .combo-thumbs__item {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.combo-thumbs__item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.combo-thumbs__more {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.combo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.combo-field__label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.combo-field__optional {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.combo-field__input {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--combo-field-bg);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 16px;
+}
+
+.combo-field__input--area {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.4;
+}
+
+.combo-field__input:focus {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 1px;
+}
+
+.combo-field__count {
+  align-self: flex-end;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.combo-ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  padding-bottom: var(--space-2);
+}
+
+.combo-ready__tick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--combo-tick-bg);
+  color: var(--combo-tick-fg);
+}
+
+.combo-ready__tick svg {
+  width: 28px;
+  height: 28px;
+}
+
+.combo-ready__sub {
+  margin-top: -6px;
+}
+
+.combo-ready__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 6px 6px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--combo-field-bg);
+}
+
+.combo-ready__url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.combo-ready__copy {
+  flex-shrink: 0;
+  min-width: 76px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--color-text-primary);
+  color: var(--color-bg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.combo-ready__share {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.combo-share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.combo-share__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--combo-share-bg);
+  color: var(--color-text-primary);
+}
+
+.combo-share__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.combo-ready__label {
+  align-self: flex-start;
+  margin: 4px 0 -4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.combo-preview {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--combo-soft-bg);
+  text-align: left;
+}
+
+.combo-preview__image {
+  aspect-ratio: 1200 / 630;
+  background: #F3F1EE;
+}
+
+.combo-preview__image img,
+.combo-preview__blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.combo-preview__body {
+  padding: 10px 12px 12px;
+}
+
+.combo-preview__title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.combo-preview__desc {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.combo-preview__site {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.combo-ready__clear {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ------------------------------------------- the customer's combo page */
+
+.combo-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.combo-collage {
+  display: grid;
+  gap: 6px;
+  aspect-ratio: 1 / 0.92;
+  padding: 6px;
+  border-radius: 24px;
+  background: var(--wl-glass-bg);
+  border: 1px solid var(--wl-glass-border);
+  box-shadow: var(--wl-glass-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.combo-collage--1 {
+  grid-template-columns: 1fr;
+}
+
+.combo-collage--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.combo-collage--3 {
+  grid-template-columns: 1.2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.combo-collage--3 .combo-collage__tile:first-child {
+  grid-row: span 2;
+}
+
+.combo-collage--4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.combo-collage__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--combo-tile-bg);
+}
+
+/* The whole photo, never cut (product tops stay in view). */
+.combo-collage__tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.combo-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 -8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--color-text-secondary);
+}
+
+.combo-kicker svg {
+  width: 13px;
+  height: 13px;
+}
+
+.combo-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.combo-note,
+.combo-list {
+  border-radius: 20px;
+  background: var(--wl-glass-bg);
+  border: 1px solid var(--wl-glass-border);
+  box-shadow: var(--wl-glass-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.combo-note {
+  padding: 12px 14px 14px;
+}
+
+.combo-note__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.combo-note__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--wl-pill-bg);
+  color: var(--wl-pill-fg);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.combo-note__text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.combo-list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.combo-row + .combo-row {
+  border-top: 1px solid var(--wl-glass-edge);
+}
+
+.combo-row__link {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.combo-row__photo {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--combo-tile-bg);
+}
+
+.combo-row__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.combo-row--out .combo-row__photo {
+  opacity: 0.5;
+}
+
+.combo-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.combo-row__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
+.combo-row__option {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.combo-row__stock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.combo-row__stock::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-stock-in);
+  flex-shrink: 0;
+}
+
+.combo-row__stock--low::before {
+  background: var(--color-stock-low);
+}
+
+.combo-row__stock--out::before {
+  background: var(--color-stock-out);
+}
+
+.combo-row__price {
+  font-size: 15px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.combo-row__qty {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.combo-row--out .combo-row__price .combo-price {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.combo-total {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 4px 4px 0;
+}
+
+.combo-total__label {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.combo-total__figures {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.combo-total__amount {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.combo-total__strike {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.combo-total__save {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.combo-add {
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.combo-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.combo-chat svg {
+  width: 18px;
+  height: 18px;
+}
+
+.combo-gone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18vh;
+  text-align: center;
+}
+
+.combo-gone__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.combo-gone__text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.combo-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.combo-loading__collage,
+.combo-loading__line {
+  display: block;
+  border-radius: 20px;
+  background: var(--wl-glass-bg);
+  border: 1px solid var(--wl-glass-border);
+}
+
+.combo-loading__collage {
+  aspect-ratio: 1 / 0.92;
+}
+
+.combo-loading__line {
+  height: 28px;
+  width: 70%;
+  border-radius: 10px;
+}
+
+.combo-loading__line--short {
+  width: 45%;
+}
+
+/* --------------------------------------------------------- Admin → Combos */
+
+.adm-combo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-combo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.adm-combo__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.adm-combo__main {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.adm-combo__name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.adm-combo__meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.adm-combo__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.adm-combo__delete {
+  margin-left: auto;
+  color: var(--color-danger);
+}
+
+/* ------------------------------------- Facebook in-app browser (Part 4) */
+
+.inapp-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  background: var(--inapp-bar-bg);
+  border-bottom: 1px solid var(--inapp-bar-border);
+}
+
+.inapp-bar__text {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.inapp-bar__how {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inapp-bar__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.inapp-bar__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.inapp-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: var(--space-2);
+}
+
+.inapp-sheet__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------- real links (Part 2) */
+
+/* A link that replaced a button keeps the button's look. Zero
+   specificity (:where), so each component's own styles always win. */
+:where(a.link-as-button) {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo-sheet {
+    animation: none;
+  }
+}
+
+/* Part 2: the product card's name is a real link (the card still opens
+   the product on a normal tap). */
+.product-card__name-link {
+  color: inherit;
+  text-decoration: none;
+  -webkit-touch-callout: default;
+}
+
+/* The floating cart button became a link: keep its icon centred. */
+a.glass-cart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

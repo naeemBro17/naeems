@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ThemeIcon } from '../../shared/ThemeToggle';
 import { AdminIcon, type AdminUiIconName } from './AdminIcon';
+import { ActionLink } from '../../shared/ActionLink';
 
 /* Shared pieces every admin page is built from (Batch 25). Styles live in
    src/styles/admin.css under .adm, so nothing here can reach the shop. */
@@ -285,6 +286,7 @@ export function ListRow({
   detail,
   onClick,
   href,
+  to,
   danger,
 }: {
   icon?: AdminUiIconName;
@@ -297,6 +299,9 @@ export function ListRow({
   detail?: string;
   onClick?: () => void;
   href?: string;
+  /** Batch 52: this row's own page address — the row becomes a real link
+   *  (Open in new tab); a normal tap still runs onClick. */
+  to?: string;
   danger?: boolean;
 }) {
   const content = (
@@ -315,6 +320,13 @@ export function ListRow({
       <a className={className} href={href} target="_blank" rel="noopener">
         {content}
       </a>
+    );
+  }
+  if (to && onClick) {
+    return (
+      <ActionLink to={to} className={className} onOpen={onClick}>
+        {content}
+      </ActionLink>
     );
   }
   return (

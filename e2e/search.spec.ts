@@ -5,7 +5,7 @@ test.describe('Search flow', () => {
     await page.goto('/');
     const startingHistoryLength = await page.evaluate(() => window.history.length);
 
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('link', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(/\/search/);
 
     const searchInput = page.getByRole('combobox', { name: 'Search products' });

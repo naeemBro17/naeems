@@ -1,3 +1,4 @@
+import { ActionLink } from '../shared/ActionLink';
 import { useMemo, useState, useEffect } from 'react';
 import { categoryCircleImage } from '../../lib/smallImages';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
@@ -240,6 +241,11 @@ export function BrowseCircles({
   const { settings, isLoading } = useProducts();
   const { isEditMode } = useAdminEdit();
   const [editorOpen, setEditorOpen] = useState(false);
+  // Batch 52: each circle is a real link to Home filtered by it (?cat=).
+  const categoryHref = (id: string | null): string => {
+    const slug = id === null ? null : categories.find((c) => c.id === id)?.slug ?? null;
+    return slug ? `/?cat=${encodeURIComponent(slug)}` : '/';
+  };
 
   // Saved visibility/order from Edit Mode. Empty → the curated default.
   const savedOrder = useMemo(
@@ -354,12 +360,12 @@ export function BrowseCircles({
           const Icon = entry.icon;
           const isSelected = selectedId === entry.categoryId;
           return (
-            <button
+            <ActionLink
               key={entry.key}
-              type="button"
+              to={categoryHref(isSelected ? null : entry.categoryId)}
               className="browse-item"
-              onClick={() => onSelect(isSelected ? null : entry.categoryId)}
-              aria-pressed={isSelected}
+              onOpen={() => onSelect(isSelected ? null : entry.categoryId)}
+              aria-current={isSelected ? 'true' : undefined}
               aria-label={`Show ${entry.label} products`}
             >
               <span
@@ -379,21 +385,21 @@ export function BrowseCircles({
                 )}
               </span>
               <span className="browse-item__label">{entry.label}</span>
-            </button>
+            </ActionLink>
           );
         })}
 
-        <button
-          type="button"
+        <ActionLink
+          to="/contact"
           className="browse-item"
-          onClick={() => navigate('/contact')}
+          onOpen={() => navigate('/contact')}
           aria-label="Talk to a skincare expert"
         >
           <span className="browse-circle browse-circle--expert">
             <ExpertIcon />
           </span>
           <span className="browse-item__label">Expert</span>
-        </button>
+        </ActionLink>
       </div>
 
       <BrowseEditSheet
