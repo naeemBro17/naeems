@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, useSessionInPage, type TestSession } from './helpers/api';
+import { insert, passwordSession, remove, select, useSessionInPage, type TestSession } from './helpers/api';
 import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 
 // Batch 52.1: "Keep selling when out of stock" must work in the cart.
@@ -370,4 +370,159 @@ test('database: a keep-OFF product at stock 0 is still refused, and the customer
   const adminMany = await placeOrderRolledBack({ ...base, p_items: [{ product_id: picks.plain.id, variant_id: null, quantity: 9 }] }, E2E_ADMIN_EMAIL);
   expect(adminMany.error, 'the admin has no limit').toBeUndefined();
   expect(adminMany.buys_later).toBe(true);
+});
+
+/* ------------------------------------------ Part 2: Edit product captures */
+
+const SHOTS = 'reports/batch-52-1-screens';
+const PHASE = process.env.B521_PHASE === 'before' ? 'before' : 'after';
+
+/** Captures the page top to bottom, one screen at a time. */
+async function screens(page: Page, name: string): Promise<void> {
+  const height = page.viewportSize()?.height ?? 844;
+  const total = await page.evaluate(() => document.documentElement.scrollHeight);
+  const step = Math.floor(height * 0.85);
+  let n = 1;
+  for (let y = 0; y < total && n <= 8; y += step, n += 1) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${SHOTS}/${PHASE}/${name}-${String(n).padStart(2, '0')}.png` });
+    if (y + height >= total) break;
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
+async function openEditor(page: Page, productId: string, width: number, theme: 'light' | 'dark'): Promise<void> {
+  await page.setViewportSize({ width, height: width >= 1024 ? 900 : 844 });
+  await page.emulateMedia({ colorScheme: theme });
+  await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
+  await useSessionInPage(page, admin);
+  await page.goto(`/admin/products/${productId}/edit`);
+  await expect(page.getByTestId('product-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('#pf-name')).toBeVisible({ timeout: 30_000 });
+  // The long-text editors have opened (Save no longer says "Loading text…").
+  await expect(page.getByRole('button', { name: /Save changes/ }).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(600);
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1280, 390]) {
+    test(`Edit product captures at ${width} px (${theme}, ${PHASE}): with options, without options, option editor open`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await openEditor(page, picks.withOption.id, width, theme);
+      // Inventory mode is On in the live shop: an option's stock is text.
+      await expect(page.getByTestId('variant-stock-text').first()).toHaveText(/^From lots: \d+$/);
+      await screens(page, `${width}-${theme}-with-options`);
+      await page.getByRole('button', { name: new RegExp(`^Edit ${picks.withOption.variant_label.split(' · ')[0]}`) }).first().click();
+      await expect(page.getByTestId('variant-stock-hint')).toHaveText(/Inventory mode is On/);
+      await page.getByTestId('variant-stock-hint').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${SHOTS}/${PHASE}/${width}-${theme}-option-editor-open.png` });
+
+      await openEditor(page, picks.plain.id, width, theme);
+      await screens(page, `${width}-${theme}-no-options`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(0);
+    });
+  }
+}
+
+/* --------------------------- Part 2: every kind of field still saves */
+
+interface SavedRow {
+  name: string;
+  brand: string | null;
+  category_id: string | null;
+  size: string | null;
+  note: string | null;
+  skin_types: string[];
+  retail_price: number;
+  offer_price: number | null;
+  wholesale_price: number | null;
+  keep_selling: boolean;
+  is_featured: boolean;
+  is_active: boolean;
+  youtube_url: string | null;
+  description: string | null;
+}
+
+test('Edit product after the redesign: text, select, chips, prices, switches and long text all save and come back after a reload (throwaway hidden product, deleted after)', async ({ page }) => {
+  test.setTimeout(180_000);
+  const tag = Date.now().toString(36);
+  // The API may add a product but not read every column back (the
+  // wholesale price is hidden), so it is found again through the view.
+  const created = await insert(admin.accessToken, 'products', {
+    sku: `E2E-B521-${tag}`,
+    slug: `e2e-b521-${tag}`,
+    name: `E2E B52.1 save check ${tag}`,
+    retail_price: 500,
+    stock_status: 'in_stock',
+    is_active: false,
+  }, false);
+  expect(created.error, 'throwaway product created').toBeNull();
+  const found = await select<{ id: string }[]>(admin.accessToken, `products_view?select=id&sku=eq.E2E-B521-${tag}`);
+  const id = found.data?.[0]?.id ?? '';
+  expect(id, 'throwaway product found').not.toBe('');
+  try {
+    const brands = await select<{ name: string }[]>(admin.accessToken, 'brands?select=name&order=name.asc&limit=1');
+    const brand = brands.data?.[0]?.name ?? '';
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await useSessionInPage(page, admin);
+    await page.goto(`/admin/products/${id}/edit`);
+    await expect(page.locator('#pf-name')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible({ timeout: 30_000 });
+
+    const newName = `E2E B52.1 save check ${tag} two`;
+    await page.locator('#pf-name').fill(newName);
+    if (brand) await page.locator('#pf-brand').fill(brand);
+    const category = await page.locator('#pf-category option').nth(1).getAttribute('value');
+    if (category) await page.locator('#pf-category').selectOption(category);
+    await page.locator('#pf-size').fill('50 ml');
+    await page.locator('#pf-note').fill('Batch 52.1 note');
+    await page.getByRole('button', { name: 'Oily', exact: true }).click();
+    await page.locator('#pf-retail').fill('600');
+    await page.locator('#pf-offer').fill('550');
+    await page.locator('#pf-wholesale').fill('450');
+    await page.getByRole('switch', { name: 'Keep selling when out of stock' }).click();
+    await page.getByRole('switch', { name: 'Featured' }).click();
+    await page.locator('#pf-youtube').fill('https://youtube.com/watch?v=b521');
+    const content = page.getByTestId('rt-editor-pf-description').locator('.rt-editor__content');
+    await content.click();
+    await page.keyboard.type('Batch 52.1 description');
+
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Saved ✓')).toBeVisible({ timeout: 30_000 });
+
+    const row = await select<SavedRow[]>(admin.accessToken, `products_view?id=eq.${id}&select=*`);
+    const saved = row.data?.[0];
+    expect(saved?.name).toBe(newName);
+    if (brand) expect(saved?.brand).toBe(brand);
+    if (category) expect(saved?.category_id).toBe(category);
+    expect(saved?.size).toBe('50 ml');
+    expect(saved?.note).toBe('Batch 52.1 note');
+    expect(saved?.skin_types).toContain('Oily');
+    expect(Number(saved?.retail_price)).toBe(600);
+    expect(Number(saved?.offer_price)).toBe(550);
+    expect(Number(saved?.wholesale_price)).toBe(450);
+    expect(saved?.keep_selling).toBe(false);
+    expect(saved?.is_featured).toBe(true);
+    expect(saved?.is_active).toBe(false);
+    expect(saved?.youtube_url).toBe('https://youtube.com/watch?v=b521');
+    expect(saved?.description ?? '').toContain('Batch 52.1 description');
+
+    // After a reload the page shows what was saved.
+    await page.reload();
+    await expect(page.locator('#pf-name')).toHaveValue(newName, { timeout: 30_000 });
+    await expect(page.locator('#pf-size')).toHaveValue('50 ml');
+    await expect(page.locator('#pf-retail')).toHaveValue('600');
+    await expect(page.locator('#pf-offer')).toHaveValue('550');
+    await expect(page.locator('#pf-wholesale')).toHaveValue('450');
+    await expect(page.getByRole('switch', { name: 'Keep selling when out of stock' })).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByRole('switch', { name: 'Featured' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('switch', { name: 'Active' })).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('#pf-youtube')).toHaveValue('https://youtube.com/watch?v=b521');
+  } finally {
+    const gone = await remove(admin.accessToken, `products?id=eq.${id}`);
+    expect(gone.error, 'throwaway product deleted').toBeNull();
+  }
 });
