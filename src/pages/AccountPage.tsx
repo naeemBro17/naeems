@@ -175,7 +175,13 @@ function CustomerAccountView() {
   };
 
   return (
-    <div className="account-page">
+    <div className="account-page account-page--glass">
+      {/* Batch 53 Part 3: the soft peach / sage / lilac glow behind the page (decoration only). */}
+      <div className="account-glow" aria-hidden="true">
+        <span className="account-glow__blob account-glow__blob--peach" />
+        <span className="account-glow__blob account-glow__blob--sage" />
+        <span className="account-glow__blob account-glow__blob--lilac" />
+      </div>
       <div className="account-header">
         {profile.photo_url && !photoFailed ? (
           <img

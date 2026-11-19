@@ -3621,12 +3621,19 @@ a.adm-lrow__open:focus-visible {
   --adm-hero-cool: rgba(150, 150, 160, 0.3);
   --adm-hero-text: #16161a;
   --adm-hero-muted: #6e6e76;
-  --adm-glass-top: rgba(28, 28, 32, 0.78);
-  --adm-glass-mid: rgba(28, 28, 32, 0.48);
-  --adm-glass-low: rgba(28, 28, 32, 0.24);
-  --adm-glass-edge: rgba(255, 255, 255, 0.95);
-  --adm-glass-shine: rgba(255, 255, 255, 0.85);
-  --adm-glass-shadow: rgba(20, 20, 30, 0.16);
+  /* Batch 53: light glass — darker see-through grey, a light edge.
+     The fill lies over the edge colour (see .adm-clock__d). */
+  --adm-glass-edge: rgba(255, 255, 255, 0.92);
+  --adm-glass-fill-top: rgba(40, 40, 50, 0.5);
+  --adm-glass-fill-mid: rgba(40, 40, 50, 0.56);
+  --adm-glass-fill-low: rgba(40, 40, 50, 0.62);
+  --adm-glass-stroke: rgba(255, 255, 255, 0.85);
+  --adm-glass-hi: rgba(255, 255, 255, 0.75);
+  --adm-glass-hi-low: rgba(255, 255, 255, 0.22);
+  --adm-glass-rim: rgba(20, 20, 30, 0.22);
+  --adm-glass-shadow: rgba(20, 20, 30, 0.2);
+  --adm-glass-dot-top: rgba(36, 36, 44, 0.46);
+  --adm-glass-dot-low: rgba(36, 36, 44, 0.3);
 }
 
 :root[data-theme='dark'] .adm {
@@ -3636,12 +3643,19 @@ a.adm-lrow__open:focus-visible {
   --adm-hero-cool: rgba(150, 150, 165, 0.28);
   --adm-hero-text: #f2f2f4;
   --adm-hero-muted: #a8a8b0;
-  --adm-glass-top: rgba(255, 255, 255, 0.94);
-  --adm-glass-mid: rgba(255, 255, 255, 0.55);
-  --adm-glass-low: rgba(255, 255, 255, 0.2);
-  --adm-glass-edge: rgba(255, 255, 255, 0.55);
-  --adm-glass-shine: rgba(255, 255, 255, 0.95);
-  --adm-glass-shadow: rgba(0, 0, 0, 0.45);
+  /* Batch 53: dark glass — glass-clock.png, picture 1. The fill lies
+     over the edge colour (see .adm-clock__d). */
+  --adm-glass-edge: rgba(168, 168, 176, 0.9);
+  --adm-glass-fill-top: rgba(14, 14, 18, 0.4);
+  --adm-glass-fill-mid: rgba(14, 14, 18, 0.5);
+  --adm-glass-fill-low: rgba(14, 14, 18, 0.58);
+  --adm-glass-stroke: rgba(255, 255, 255, 0.3);
+  --adm-glass-hi: rgba(255, 255, 255, 0.55);
+  --adm-glass-hi-low: rgba(255, 255, 255, 0.18);
+  --adm-glass-rim: rgba(255, 255, 255, 0.35);
+  --adm-glass-shadow: rgba(0, 0, 0, 0.6);
+  --adm-glass-dot-top: rgba(255, 255, 255, 0.34);
+  --adm-glass-dot-low: rgba(255, 255, 255, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -3652,12 +3666,19 @@ a.adm-lrow__open:focus-visible {
     --adm-hero-cool: rgba(150, 150, 165, 0.28);
     --adm-hero-text: #f2f2f4;
     --adm-hero-muted: #a8a8b0;
-    --adm-glass-top: rgba(255, 255, 255, 0.94);
-    --adm-glass-mid: rgba(255, 255, 255, 0.55);
-    --adm-glass-low: rgba(255, 255, 255, 0.2);
-    --adm-glass-edge: rgba(255, 255, 255, 0.55);
-    --adm-glass-shine: rgba(255, 255, 255, 0.95);
-    --adm-glass-shadow: rgba(0, 0, 0, 0.45);
+    /* Batch 53: dark glass — glass-clock.png, picture 1. The fill lies
+       over the edge colour (see .adm-clock__d). */
+    --adm-glass-edge: rgba(168, 168, 176, 0.9);
+    --adm-glass-fill-top: rgba(14, 14, 18, 0.4);
+    --adm-glass-fill-mid: rgba(14, 14, 18, 0.5);
+    --adm-glass-fill-low: rgba(14, 14, 18, 0.58);
+    --adm-glass-stroke: rgba(255, 255, 255, 0.3);
+    --adm-glass-hi: rgba(255, 255, 255, 0.55);
+    --adm-glass-hi-low: rgba(255, 255, 255, 0.18);
+    --adm-glass-rim: rgba(255, 255, 255, 0.35);
+    --adm-glass-shadow: rgba(0, 0, 0, 0.6);
+    --adm-glass-dot-top: rgba(255, 255, 255, 0.34);
+    --adm-glass-dot-low: rgba(255, 255, 255, 0.12);
   }
 }
 
@@ -3743,49 +3764,113 @@ a.adm-lrow__open:focus-visible {
   color: var(--adm-hero-muted);
 }
 
-/* The clock: big hours:minutes, small seconds bottom-aligned beside them. */
+/* Batch 53: the clock is sized from the card's width (container units),
+   so the widest time (12:08, 10:00 + seconds) always fits from 320 px up.
+   Every size inside it is in em: one font-size scales the whole clock. */
+.adm-hero__clock {
+  container-type: inline-size;
+}
+
 .adm-clock {
-  display: flex;
-  align-items: flex-end;
   margin: 0;
-  font-family: var(--font-sans);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-  line-height: 0.86;
-  letter-spacing: -0.045em;
+  /* "12:59" + seconds is about 3.06 em wide in this font (measured at
+     320–430 px): 31% of the card leaves room for the edge and shadow. */
+  font-size: min(31cqi, 128px);
+  line-height: 1;
   white-space: nowrap;
   user-select: none;
 }
 
-.adm-clock__hm {
+.adm-clock__t {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* One glass number, in three layers (nothing animates):
+   1. the digits themselves, solid in the edge colour and a hair wider
+      (text-shadow all round): this is the thin light edge. A text-stroke
+      would also draw the lines where the font's shapes overlap inside a
+      5 or a 9; a shadow has no inside lines.
+   2. ::before — the see-through glass fill on top, a little lighter at
+      the top; the edge layer only shows around it.
+   3. ::after — the bright highlight along the top edge.
+   The soft shadow under the digit is a filter on the whole number.
+   ::before / ::after take the digits from data-t (set from the same
+   value), and the whole clock is hidden from screen readers (its label
+   is on the clock itself). */
+.adm-clock__d {
+  --e: 0.01em;
   position: relative;
-  font-size: clamp(84px, 27vw, 128px);
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.015em;
+  line-height: 1;
+  color: var(--adm-glass-edge);
+  text-shadow:
+    var(--e) 0 0 var(--adm-glass-edge),
+    calc(var(--e) * -1) 0 0 var(--adm-glass-edge),
+    0 var(--e) 0 var(--adm-glass-edge),
+    0 calc(var(--e) * -1) 0 var(--adm-glass-edge),
+    calc(var(--e) * 0.7) calc(var(--e) * 0.7) 0 var(--adm-glass-edge),
+    calc(var(--e) * -0.7) calc(var(--e) * 0.7) 0 var(--adm-glass-edge),
+    calc(var(--e) * 0.7) calc(var(--e) * -0.7) 0 var(--adm-glass-edge),
+    calc(var(--e) * -0.7) calc(var(--e) * -0.7) 0 var(--adm-glass-edge);
+  filter: drop-shadow(0 0.03em 0.05em var(--adm-glass-shadow)) drop-shadow(0 -0.006em 0 var(--adm-glass-rim));
 }
 
-.adm-clock__s {
-  position: relative;
-  margin: 0 0 0.05em 0.08em;
-  font-size: clamp(30px, 9vw, 44px);
-  letter-spacing: -0.02em;
-}
-
-.adm-clock__colon {
-  margin: 0 0.01em;
-}
-
-/* Glass digits: a see-through gradient fill (brightest along the top
-   edge), a thin light rim and a soft shadow under them. */
-.adm-clock__hm,
-.adm-clock__s {
+.adm-clock__d::before,
+.adm-clock__d::after {
+  content: attr(data-t);
+  position: absolute;
+  left: 0;
+  top: 0;
   color: transparent;
-  background: linear-gradient(180deg, var(--adm-glass-shine) 0%, var(--adm-glass-top) 8%, var(--adm-glass-mid) 45%, var(--adm-glass-low) 100%);
+  text-shadow: none;
   -webkit-background-clip: text;
   background-clip: text;
-  /* A thin light rim from tight glows (a text outline would also draw
-     the lines where the font's strokes overlap inside a digit). */
-  filter: drop-shadow(0 0 0.6px var(--adm-glass-edge)) drop-shadow(0 -0.5px 0 var(--adm-glass-shine))
-    drop-shadow(0 10px 18px var(--adm-glass-shadow));
+  pointer-events: none;
+}
+
+.adm-clock__d::before {
+  background-image: linear-gradient(180deg, var(--adm-glass-fill-top) 0%, var(--adm-glass-fill-mid) 50%, var(--adm-glass-fill-low) 100%);
+}
+
+.adm-clock__d::after {
+  background-image: linear-gradient(180deg, var(--adm-glass-hi) 0%, transparent 22%, transparent 80%, var(--adm-glass-hi-low) 100%);
+}
+
+/* The colon: two small glass dots. */
+.adm-clock__dots {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.17em;
+  margin: 0 0.02em;
+}
+
+.adm-clock__dots i {
+  display: block;
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--adm-glass-dot-top), var(--adm-glass-dot-low));
+  border: 0.012em solid var(--adm-glass-stroke);
+  box-shadow: 0 0.02em 0.04em var(--adm-glass-shadow);
+}
+
+/* Seconds: the same glass, smaller, at the bottom right of the minutes.
+   Only this element changes every second; a cheaper shadow keeps that
+   repaint light on a phone. */
+.adm-clock__s {
+  align-self: flex-end;
+  margin: 0 0 0.05em 0.1em;
+  font-size: 0.38em;
+}
+
+.adm-clock__s .adm-clock__d {
+  filter: drop-shadow(0 0.04em 0.05em var(--adm-glass-shadow));
 }
 
 @media (min-width: 1024px) {
@@ -3817,14 +3902,12 @@ a.adm-lrow__open:focus-visible {
   .adm-hero__clock {
     justify-self: end;
     align-self: center;
+    /* Beside the greeting the clock sizes itself (no container units). */
+    container-type: normal;
   }
 
-  .adm-clock__hm {
-    font-size: 150px;
-  }
-
-  .adm-clock__s {
-    font-size: 52px;
+  .adm-clock {
+    font-size: clamp(96px, 10vw, 150px);
   }
 }
 

@@ -4,6 +4,7 @@ import type { OrderProfit } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
 import { formatTakaBd } from '../../../lib/adminNav';
 import { formatDhakaDateTime } from '../../../lib/orderTracking';
+import { courierLabel, useCourierCostsRefresh } from '../../../lib/inventory/courierLabel';
 
 function signedTaka(amount: number): string {
   return amount < 0 ? `−${formatTakaBd(-amount)}` : formatTakaBd(amount);
@@ -15,9 +16,13 @@ function signedTaka(amount: number): string {
  * profit with margin. Only rendered for "View profit & costs"; the
  * database (order_profit) refuses everyone else. Counted on the day the
  * order became Delivered; a Returned order's loss is the courier charge.
+ * Batch 53: the courier amount carries a small grey label (From Steadfast /
+ * Share of payout / Expected / No courier), and the card reads its numbers
+ * again when the page comes back into view or the Payouts page refreshes.
  */
 export function OrderProfitBox({ orderId, version }: { orderId: string; version: string }) {
   const [state, setState] = useState<LoadState<OrderProfit> | null>(null);
+  const refreshTick = useCourierCostsRefresh();
 
   useEffect(() => {
     let alive = true;
@@ -27,7 +32,7 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
     return () => {
       alive = false;
     };
-  }, [orderId, version]);
+  }, [orderId, version, refreshTick]);
 
   if (state === null || state.kind === 'no-db') return null;
   if (state.kind === 'error') {
@@ -39,6 +44,8 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
     );
   }
   const p = state.data;
+  const tag = courierLabel(p.courier_kind, p.courier_known);
+  const separately = p.bill_paid_separately ?? 0;
 
   return (
     <section className="adm-ocard" aria-label="Profit" data-testid="order-profit">
@@ -61,8 +68,19 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
             <span>Delivery charged to the customer</span>
             <span>+{formatTakaBd(p.delivery)}</span>
           </div>
-          <div className="adm-ototals__row">
-            <span>Courier + COD fee{p.courier_known ? '' : ' (not known yet)'}</span>
+          <div className="adm-ototals__row" data-testid="order-profit-courier">
+            <span>
+              Courier + COD fee
+              {tag && (
+                <span className="adm-courier-tag" data-testid="order-profit-courier-tag">
+                  {tag.label}
+                </span>
+              )}
+              {tag?.note && <span className="adm-courier-note">{tag.note}</span>}
+              {separately > 0 && (
+                <span className="adm-courier-note">Includes a delivery bill of {formatTakaBd(separately)} paid outside the payout</span>
+              )}
+            </span>
             <span>−{formatTakaBd(p.courier)}</span>
           </div>
           <div className="adm-ototals__row adm-ototals__row--strong" data-testid="order-profit-total">
@@ -79,7 +97,9 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
       )}
       {p.costed && p.filled_adjustments !== 0 && (
         <p className="adm-ocard__muted">
-          Cost adjustments for units sold without stock: {signedTaka(p.filled_adjustments)} (counted on the day the stock arrived).
+          {p.filled_adjustments > 0
+            ? `Cost of goods includes ${formatTakaBd(p.filled_adjustments)} extra, because the real price of a unit sold without stock turned out higher.`
+            : `Cost of goods includes ${formatTakaBd(-p.filled_adjustments)} less, because the real price of a unit sold without stock turned out lower.`}
         </p>
       )}
       <p className="adm-ocard__muted">

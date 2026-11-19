@@ -334,7 +334,8 @@ describe("Steadfast's real payout shape", () => {
     const parcels = [1630, 0, 760].map((cod, i) =>
       readPayoutItem({ consignment_id: 100 + i, invoice: '', cod_amount: cod, status: 'delivered' })
     ).filter((x) => x !== null);
-    const [p] = parsePaymentsList([{ ...REAL_PAYOUT, amount: 2390, total: 2138 }]).payouts;
+    // paid_bills 0: Batch 53 shares paid_bills separately (batch53.test.ts).
+    const [p] = parsePaymentsList([{ ...REAL_PAYOUT, amount: 2390, total: 2138, paid_bills: 0 }]).payouts;
     const split = allocatePayoutTotals(parcels, p, [130, 70, null]);
     expect(split.reduce((t, i) => t + i.codFeePaisa, 0)).toBe(2200);
     expect(split.reduce((t, i) => t + i.deliveryChargePaisa, 0)).toBe(23000);

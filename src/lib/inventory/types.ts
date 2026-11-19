@@ -1,4 +1,5 @@
 /** The Inventory tables: Batch 38 (migration-040) and Batch 39 (migration-042). */
+import type { CourierKind } from './courierLabel';
 
 export type LotKind = 'purchase' | 'opening';
 export type LotSourceType = 'import' | 'wholesale' | 'local';
@@ -177,8 +178,13 @@ export interface OrderProfit {
   delivery: number;
   courier: number;
   courier_known: boolean;
+  /** Batch 53 (migration-054): how sure the courier amount is. Missing
+   *  until that SQL is run. */
+  courier_kind?: CourierKind;
   courier_charge: number;
   cod_fee: number;
+  /** Batch 53: the delivery bill paid outside the payout (inside courier). */
+  bill_paid_separately?: number;
   profit: number;
   margin: number | null;
   counted_at: string | null;
@@ -196,6 +202,8 @@ export interface SalesProfitOrder {
   delivery: number;
   courier: number;
   courier_known: boolean;
+  /** Batch 53 (migration-054). */
+  courier_kind?: CourierKind;
   costed: boolean;
   profit: number;
   margin: number | null;

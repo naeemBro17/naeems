@@ -31,6 +31,7 @@ import { toPaisa } from '../../../supabase/functions/_shared/steadfastPayouts';
 import { AdminPageHeader, EmptyState, SkeletonRows } from './ui/AdminUi';
 import { AdminIcon } from './ui/AdminIcon';
 import '../../styles/adminPayouts.css';
+import { announceCourierCostsChanged } from '../../lib/inventory/courierLabel';
 
 interface PayoutsTabProps {
   onOpenPayout: (payoutId: string) => void;
@@ -68,6 +69,8 @@ export function PayoutsTab({ onOpenPayout, onOpenOrder }: PayoutsTabProps) {
     setIsRefreshing(true);
     const answer = await syncPayouts();
     await load();
+    // Batch 53: open order pages read their profit again.
+    announceCourierCostsChanged();
     setIsRefreshing(false);
     showToast(answer.ok ? 'Payouts updated' : (answer.error ?? 'Could not refresh'), answer.ok ? 'success' : 'error');
   };
