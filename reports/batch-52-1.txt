@@ -1,0 +1,260 @@
+BATCH 52.1 (urgent) — "Keep selling" works in the cart again + tidy Edit product page
+Branch: fix/batch-52-1-keep-selling      Version: 1.52.1
+=====================================================================
+
+No SQL to run. Merge the branch and the fix is live.
+
+
+---------------------------------------------------------------------
+1. WHAT I DID
+---------------------------------------------------------------------
+ROOT CAUSE (plain words)
+The cart has a safety check that runs each time the cart or the order
+summary opens: it reads the stock of every item and removes anything
+that is "just sold out". That check looked ONLY at the stock number. It
+never looked at "Keep selling when out of stock".
+- Customers and wholesalers were safe: the database hides the stock
+  number of keep-selling products from them (Batch 51), so the check had
+  no number to act on.
+- You (and any staff login) are NOT shown the hidden version — staff see
+  the real number. With Inventory mode On that number is 0, so the cart
+  removed the item with "Sorry, … just sold out. We've updated your
+  cart." That is exactly what you saw, for products with and without
+  options.
+The database itself was right all along: I ran a real order for the
+Cicaplast Baume B5+ (both sizes) on the live database as the test
+customer inside a transaction that was undone — it was accepted, marked
+"buy after order", and the 3 missing units were recorded as "sold
+without stock". Nothing was kept, and the order-number counter was put
+back.
+
+WHAT WAS FIXED
+- One shared rule (src/lib/buyRule.ts) now answers "can this be bought,
+  and how many?" for every screen: Keep selling ON → yes, up to the
+  order limit (4) for customers, no limit for wholesalers / admin;
+  Keep selling OFF → only what is in stock. An option (variant) always
+  follows its product's switch. The cart check now uses it, so it can
+  never disagree with the product page again.
+- Customers still never see the stock number of keep-selling products
+  (unchanged: the database hides it).
+- Edit product → Variants, with Inventory mode On: the switch next to
+  each option is gone (it was the option's "in stock" flag; Inventory
+  mode rewrites it from lots, which is why it snapped back). The row now
+  says "From lots: 0". Inside the option editor, "In Stock" shows Yes/No
+  as text and "Stock Quantity" is greyed out, with the hint "Inventory
+  mode is On: the stock number comes from lots (whole packs). Add a lot
+  to change it." With Inventory mode Off both work exactly as before.
+
+COULD CUSTOMERS BUY KEEP-SELLING PRODUCTS SINCE BATCH 51?
+Batch 51 was merged today (19 Nov, 11:42 Dhaka time). There have been
+NO orders at all since then (I checked the live orders table), so no
+real order was affected. By the code, a customer or wholesaler could
+add and order these products; only staff logins were blocked. But I
+cannot prove from real orders that a customer succeeded, because none
+ordered yet. The new browser test does prove it now (see Tests).
+
+EVERY PLACE THAT DECIDES "CAN THIS BE BOUGHT" (checked)
+ 1. Product card + card cart button + option picker sheet → shared rule.
+ 2. Product page button and the + / limit popup → shared rule.
+ 3. Add to cart itself → no stock check (never was).
+ 4. Cart + button → shared rule (order limit).
+ 5. Cart "just sold out" / "We've lowered … to what we have left" →
+    WAS THE BUG; now the shared rule.
+ 6. Order summary re-check (and the re-check after a refused order) →
+    same code as 5, fixed with it.
+ 7. Combo page "Add all to cart" → shared rule.
+ 8. Wishlist "Add to cart" → shared rule.
+ 9. cart_cover (database, "Get it in 3–5 days" note) → only a note,
+    never blocks; correct.
+10. place_order (database) → reads the product's keep_selling for the
+    product and every option; correct (proved on live, rolled back).
+11. Inventory-mode triggers that take units from lots → place_order
+    tells them a keep-selling line may run short; the rest is "sold
+    without stock" (Shopping list). Correct.
+12. Inventory-mode triggers that set in_stock / stock_quantity from lots
+    → set 0 / "out" on purpose; the shop views hide it from shoppers.
+13. Shop views (products_view, product_variants_view) → hide the number
+    from everyone but staff; options carry their product's keep_selling.
+14. Admin New order → unchanged, no limit. A keep-selling item at 0
+    still shows the old red "Sold out — none left in stock" and asks
+    "Sell anyway?"; saying yes saves it and records the shortage. It
+    works, but the red text is misleading — see section 4.
+
+TESTS (Part 1)
+- 28 unit tests: keep ON/OFF × stock 0 / 2 / 10 × customer /
+  wholesaler / admin × order limit; product and option; what the admin
+  sees vs. what a customer sees; the cart check with real-looking view
+  answers (admin at 0: kept; keep OFF at 0: removed; hidden product:
+  removed; the product's own size picked as an option).
+- Browser test e2e/batch-52-1.spec.ts, Inventory mode On, real live
+  products that have nothing in lots:
+  * as ADMIN: a keep-selling product (no options) and one with an option
+    go in the cart and survive two cart checks; a keep-OFF product shows
+    "Sold out" and cannot be added.
+  * as CUSTOMER: the same, then full checkout. "Place order" is caught
+    in the browser and the REAL place_order runs on the live database in
+    one transaction with inventory.test_mode on that is always rolled
+    back: accepted, "buy after order", every missing unit recorded as
+    sold without stock, both items on the Shopping list, shop stock
+    stays 0 (never negative).
+  * database: keep OFF at 0 refused; customer asking 99 refused by the
+    limit; admin asking 9 accepted.
+  Nothing is kept: transactions rolled back, order counter restored,
+  cart emptied.
+- I ran the admin test once against the OLD cart code: it failed with
+  exactly your "just sold out" message. With the fix it passes.
+
+WHY BATCH 51'S TESTS DID NOT CATCH THIS
+Batch 51's browser tests rewrote every product the shop loaded into the
+customer's version (stock number hidden), and they only ever shopped as
+a customer — never as the admin. So the cart check never met a real 0.
+Its database tests placed orders directly, never through the cart. The
+gap was "what a staff login sees in the cart", and no test looked there.
+
+Part 2 — Edit product page, tidied (layout only)
+The page is now in titled sections:
+  Basics (name, brand, category, region, size, note, skin type / skin
+  condition) · Shop (Active, Featured) · Photos · Price (retail, offer,
+  wholesale side by side) · Stock (status, quantity, Keep selling,
+  stock unit & pack size, Remove stock) · Variants · Product page text
+  (description, how to use, key ingredients, video link) · Reference
+  (SKU).
+- Computer (1024 px and wider): the page now uses the width (up to
+  1200 px). Main details on the left; a narrower right column with Shop,
+  Photos and SKU. Save stays in the sticky top bar.
+- Phone: one column in the order Basics → Shop → Photos → Price →
+  Stock → Variants → Product page text → Reference. Save stays docked at
+  the bottom (reachable with the thumb). Nothing cut off; no sideways
+  scroll (checked at 390 px).
+- The same sections appear in the shop's quick-edit sheet (card "…" →
+  Edit Product), one column.
+- Variant rows: region · size (with "From lots: N" under it) · offer
+  price with the retail price struck through · edit · delete.
+- Pack-size rows used to be misaligned (the option name took a column);
+  they now line up.
+- "Save Variant" is now a neutral button, so the main "Save changes" is
+  the only orange element on the screen.
+Every field, switch, button, check and saved value is the same as
+before. Proved by a browser test: it makes a hidden throwaway product,
+changes text, brand, category, size, note, a skin chip, all three
+prices, Keep selling, Featured, the video link and the description,
+saves, checks the database and the page after a reload, then deletes the
+product (confirmed gone on live).
+Captures (light + dark, 1280 px and 390 px, top to bottom, with and
+without options, option editor open, Inventory mode On):
+  reports/batch-52-1-screens/before/   reports/batch-52-1-screens/after/
+  reports/batch-52-1-screens/compare/  (before and after side by side)
+Note: the "before" set already shows the Part 1 "From lots: 0" text,
+because Part 1 was finished first.
+
+Build and tests
+- npm run build: passed, zero errors.
+- Unit tests (vitest): 703 of 703 passed (28 new).
+- This batch's browser file (e2e/batch-52-1.spec.ts): 8 of 8 passed
+  (Part 1 cart / checkout / database tests, 4 capture runs, the
+  save-every-field test).
+- npm run verify (the full run, once at the end): 256 passed,
+  20 failed, 124 skipped. I went through every failure:
+  * batch-25 "Low stock" chip — not caused by this batch, but a 1-line
+    test fix: the test counted low-stock products as a visitor, and
+    since Batch 51's SQL the shop hides keep-selling stock numbers from
+    visitors (35 vs. the page's correct 120). It now counts as the
+    admin, like the page. Re-run alone: passes.
+  * batch-52 database test — the command line could not log in to the
+    database once ("password authentication failed"). Re-run alone 3
+    times: 3 of 3 passed.
+  * The other 18 — the same list Batch 51 and 52 already reported as
+    not caused by their batches (live data changed since the tests were
+    written): no product with a tracked stock number any more (batch-24,
+    30, 32, 33, 35, 36, 37, fix-order-actions), the order limit of 4
+    (batch-39), Money / stock-count state (batch-41, 42), Batch 26
+    Restock, pictures missing from Storage (batch-40), batch-45's old
+    migration copy, live settings (batch-48, 49, 51 database tests),
+    YouTube network timeout (batch-23). They still need their own
+    test-maintenance batch.
+- Honest note: when I re-ran the batch-25 test on its own the first
+  time, Playwright also ran the whole "parallel" group before it (the
+  serial tests depend on that group). That was one extra partial run
+  against the live Supabase project. After that I used --no-deps so
+  only the one test ran.
+
+
+---------------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+---------------------------------------------------------------------
+None needed. The database was already right; the fix is in the shop's
+code. (I checked live: products.keep_selling, orders.buys_later,
+order_item_unstocked, cart_cover and the Batch 51 place_order are all
+there, and Inventory mode is On.)
+
+
+---------------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+---------------------------------------------------------------------
+- No "save %" preview in the Price section: the page never had one, and
+  this part was layout only, so I did not add one.
+- The photo strip in the narrow right column scrolls sideways (as it
+  already does on a phone) instead of wrapping into rows: the
+  drag-to-reorder works along one line only, and wrapping would break
+  dragging.
+- The database's rule lives in place_order (it was already correct). I
+  did not add a separate database function for the shared rule: it would
+  mean rewriting place_order on live for no change in behaviour. The
+  shop's code and the database now follow the same rule, and the tests
+  check both.
+
+
+---------------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+---------------------------------------------------------------------
+- Admin New order: a keep-selling item at stock 0 shows red "Sold out —
+  none left in stock" and asks "Sell anyway?". It works (saying yes
+  saves it and records the shortage), but the words are wrong for
+  keep-selling products. Fixing it properly needs a small change in the
+  database's admin_create_order, so I left it as asked ("unchanged").
+- Products page "Stock Status" select is still saved by the form while
+  Inventory mode is On (the database overwrites it from lots). Harmless,
+  but it is one more control that does nothing in that mode.
+- Possibly duplicated / weak fields (NOT removed): "Stock Status" and
+  "Stock Quantity" both describe stock, and with Inventory mode On
+  neither can be changed here; the product's own Region / Size and the
+  first option overlap in meaning (explained by the long helper text).
+- The repo has many changed screenshot files from older batches
+  (reports/batch-34…50, public/sitemap.xml) left over from earlier test
+  runs. I did not commit them.
+
+
+---------------------------------------------------------------------
+5. DESIGN DECISIONS
+---------------------------------------------------------------------
+- Sections as white cards with a short bold heading, same look as the
+  other admin cards; light and dark mode use the admin colours.
+- Right column = things you glance at or change rarely (Active,
+  Featured, photos, SKU); left = what you edit most (name, prices,
+  stock, variants, texts). Prices sit in one row of three on a computer.
+- On a phone "Shop" (Active / Featured) comes right after Basics so
+  hiding a product is near the top, as you asked for Live.
+- Brand and Category share a row on a computer and stack on a phone.
+- The variant row shows the offer price (what customers pay) in
+  near-black with the retail price struck through, like the shop.
+- With Inventory mode On, read-only stock shows as text or a greyed box
+  — never a switch that looks like it works.
+
+
+---------------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS (highest impact first)
+---------------------------------------------------------------------
+1. Test as every role. Weak now: shop tests mostly shop as a customer.
+   Why it matters: this bug only hit staff logins and slipped through.
+   Every shop flow test should run once as customer and once as admin.
+   Size: medium.
+2. Admin New order wording for keep-selling items (see section 4).
+   Why: a red "Sold out" makes staff refuse sales the shop wants. Size:
+   small (needs a small SQL change).
+3. Staff see real stock on the shop pages. Why: it is useful, but it
+   means staff and customers see different things; a small "Staff view"
+   note on the product page would avoid confusion. Size: small.
+4. An "unsaved changes" dot per section on Edit product. Why: on a long
+   page it is easy to forget a changed field far below. Size: small.
+5. Save % preview under the prices (e.g. "Customers save 14%"). Why:
+   catches a typo in the offer price before it goes live. Size: small.
