@@ -33,7 +33,8 @@ export type AdminUiIconName =
   | 'logout'
   | 'video'
   | 'restock'
-  | 'tag';
+  | 'tag'
+  | 'upload';
 
 /* Line icons, 24×24, drawn with currentColor — the same style as the Batch
    24 admin sidebar icons they replace. */
@@ -208,6 +209,8 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
   ),
   plus: <path d="M12 5v14M5 12h14" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  // Batch 54: an arrow up over a line (Upload Kaarbar PDF).
+  upload: <path d="M12 16V4M6 10l6-6 6 6M4 20h16" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
   alert: (
     <>

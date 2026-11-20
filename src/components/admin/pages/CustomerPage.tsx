@@ -17,7 +17,7 @@ import { CustomerNotesEditor } from '../CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../../lib/brandAdmin';
 import type { OrderStatus } from '../../../types';
 import { CustomerDueCard } from '../money/CustomerDueCard';
-import { OldPurchasesCard } from '../money/OldPurchasesCard';
+import { MergeOldSection } from '../kaarbar/merge/MergeOldSection';
 
 function shortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -182,6 +182,9 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
             />
           )}
 
+          {/* Batch 54: Merge old data (Super Admin) / old Kaarbar purchases — history only. */}
+          {can('view_profit_costs') && <MergeOldSection customerKey={customer.key} name={customer.full_name || customer.phone} phone={customer.phone} />}
+
           {customer.id && (
             <CustomerNotesEditor
               key={customer.id}
@@ -236,9 +239,6 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
               })}
             </div>
           )}
-
-          {/* Batch 50: old Kaarbar bills (history only). */}
-          {can('view_profit_costs') && <OldPurchasesCard customerKey={customer.key} phone={customer.phone} />}
 
           {mayManage && (
             <div className="adm-customer__manage" data-testid="customer-manage">

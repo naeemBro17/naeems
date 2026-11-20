@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import type { LastImport } from './api';
+import type { MergeBillRow, MergeItemRow } from './merge';
 import type { BillImportRow, ItemSaveRow, SavedItem, SiteChoice } from './oldSales';
 
 /**
@@ -131,4 +132,33 @@ export function undoSales(): Promise<Answer<{ removed: number; total: number; ke
     const r = (raw ?? {}) as Record<string, unknown>;
     return { removed: num(r.removed), total: num(r.total), kept: (r.kept ?? []) as KeptBill[] };
   });
+}
+
+/* ------------------------------------------- Batch 54: merge one customer */
+
+export const NEEDS_MERGE_UPDATE = 'This needs the Batch 54 database update (migration-055).';
+
+export interface MergeResult {
+  added: number;
+  skipped: number;
+  total: number;
+  hiddenMade: number;
+}
+
+/** Saves the items made or changed on the review page, then the bills,
+ *  linked to this customer — one call, all or nothing (migration-055). */
+export async function mergeCustomer(customerKey: string, phone: string, rows: { items: MergeItemRow[]; bills: MergeBillRow[] }): Promise<Answer<MergeResult>> {
+  const answer = await call('kaarbar_merge_customer', { p_customer_key: customerKey, p_items: rows.items, p_bills: rows.bills, p_phone: phone || null }, (raw) => {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    return { added: num(r.added), skipped: num(r.skipped), total: num(r.total), hiddenMade: num(r.hidden_made) };
+  });
+  return !answer.ok && answer.needsUpdate ? { ...answer, error: NEEDS_MERGE_UPDATE } : answer;
+}
+
+export async function undoCustomerMerge(customerKey: string): Promise<Answer<{ removed: number; total: number; kept: KeptBill[] }>> {
+  const answer = await call('kaarbar_undo_customer_merge', { p_customer_key: customerKey }, (raw) => {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    return { removed: num(r.removed), total: num(r.total), kept: (r.kept ?? []) as KeptBill[] };
+  });
+  return !answer.ok && answer.needsUpdate ? { ...answer, error: NEEDS_MERGE_UPDATE } : answer;
 }

@@ -465,6 +465,12 @@ function BillRow({ bill: b, party, isOpen, onToggle }: { bill: BillPreview; part
       </button>
       {isOpen && (
         <div className="kb-bill__body" data-testid="kb-bill-lines">
+          {/* Batch 54: why a bill can't be imported (e.g. it doesn't add up). */}
+          {b.status === 'bad' && (
+            <p className="kb-check-bad" role="alert" data-testid="kb-bill-problem">
+              {b.reason}
+            </p>
+          )}
           {products.map((l, i) => (
             <div key={`${l.key}-${i}`} className="kb-bill__line">
               <span className="kb-row__main">

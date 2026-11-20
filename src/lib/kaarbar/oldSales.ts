@@ -1,4 +1,5 @@
 import type { SheetCell } from '../inventory/opening';
+import { moneyText } from '../money/format';
 import { cellText, cleanPhone, findHeader, parseAmountCell, parseDateCell } from './parse';
 
 /**
@@ -409,6 +410,17 @@ export interface StatementBill {
   delivery: number;
   /** Lines + delivery − bill Total (a whole-bill discount). */
   billDiscount: number;
+  /** Batch 54: the bill's own Rec/Paid Amt and Due (null when not shown). */
+  paid: number | null;
+  due: number | null;
+  /** Batch 54: the first line of its Remarks (max 200 letters), or ''. */
+  note: string;
+}
+
+/** Batch 54: a "Payment In" row of the statement. */
+export interface StatementPayment {
+  date: string;
+  amount: number;
 }
 
 export interface Statement {
@@ -418,8 +430,14 @@ export interface Statement {
   /** "Total Sales (Sales - Sales Return)" in the header. */
   headerTotal: number | null;
   bills: StatementBill[];
-  /** Payment In and other rows that are not sales (left out). */
+  /** Payment In and other rows that are not sales (left out of the bills). */
   otherRows: number;
+  /** Batch 54: "Total Receivables" in the header (what the party owes). */
+  totalReceivables: number | null;
+  /** Batch 54: the "Report Generated on" day (yyyy-mm-dd). */
+  reportDate: string | null;
+  /** Batch 54: every Payment In row, in the order of the file. */
+  payments: StatementPayment[];
 }
 
 export const OLD_LAYOUT =
@@ -465,8 +483,82 @@ interface Segment {
 interface Line {
   page: number;
   y: number;
+  /** The pdf.js pieces of the line, left to right. */
+  parts: PdfText[];
   segs: Segment[];
   text: string;
+}
+
+/**
+ * Batch 54: one pdf.js piece that runs over a column edge ("…473mlTk.
+ * 3,999") is cut where the next cell starts: at a "Tk." / "৳" near the
+ * edge (an amount column), else at the start of the word nearest to it.
+ * Where each letter sits is worked out from the piece's own position and
+ * width. A piece with no place to cut near the edge is left whole.
+ */
+function splitAtCuts(p: PdfText, cuts: readonly number[]): PdfText[] {
+  const size = p.h > 0 ? p.h : 8;
+  const cut = cuts.find((c) => c > p.x + size * 0.5 && c < p.x + p.w - size * 0.25);
+  if (cut === undefined || p.str.length < 2) return [p];
+  const per = p.w / p.str.length;
+  // The piece ends inside the next column with an amount: that amount is
+  // the cell of that column (its own width may include the gap before it,
+  // so the letters' places are not used here).
+  const trailing = /(?:tk\.?|৳)\s*-?\d[\d,]*(?:\.\d+)?\s*$/i.exec(p.str);
+  if (trailing && trailing.index > 0) {
+    const at = trailing.index;
+    const left: PdfText = { ...p, str: p.str.slice(0, at), w: Math.max(0, cut - p.x - 1) };
+    const right: PdfText = { ...p, str: p.str.slice(at), x: cut, w: p.x + p.w - cut };
+    return [left, ...splitAtCuts(right, cuts)];
+  }
+  let best = -1;
+  let bestD = Infinity;
+  let bestMoney = false;
+  for (let i = 1; i < p.str.length; i++) {
+    const money = /^(?:tk\.|৳)/i.test(p.str.slice(i));
+    const wordStart = /\s/.test(p.str[i - 1]) && !/\s/.test(p.str[i]);
+    if (!money && !wordStart) continue;
+    const d = Math.abs(p.x + i * per - cut);
+    if (d > size * 2) continue;
+    if ((money && !bestMoney) || (money === bestMoney && d < bestD)) {
+      best = i;
+      bestD = d;
+      bestMoney = money;
+    }
+  }
+  if (best < 0) return [p];
+  const left: PdfText = { ...p, str: p.str.slice(0, best), w: best * per };
+  const right: PdfText = { ...p, str: p.str.slice(best), x: p.x + best * per, w: p.w - best * per };
+  return [left, ...splitAtCuts(right, cuts)];
+}
+
+/** Pieces of one line → segments (pieces close together, like the words
+ *  of one cell). With `cuts` (the left edges of the table's columns) a
+ *  segment never runs over a column edge: a long name that ends right
+ *  before the Total column stays a name, and the price stays the Total. */
+function segmentsOf(parts: readonly PdfText[], cuts: readonly number[] = []): Segment[] {
+  const pieces = cuts.length === 0 ? parts : parts.flatMap((p) => splitAtCuts(p, cuts));
+  const segs: Segment[] = [];
+  for (const p of pieces) {
+    const last = segs[segs.length - 1];
+    const size = p.h > 0 ? p.h : 8;
+    const gap = last ? p.x - last.right : Infinity;
+    const edgeBetween = last ? cuts.some((c) => last.left < c - 0.5 && p.x >= c - 1.5) : false;
+    if (last && gap <= size * 0.8 && !edgeBetween) {
+      last.text = `${last.text}${gap > size * 0.1 && !last.text.endsWith(' ') && !p.str.startsWith(' ') ? ' ' : ''}${p.str}`;
+      last.right = Math.max(last.right, p.x + p.w);
+    } else {
+      segs.push({ text: p.str, left: p.x, right: p.x + p.w });
+    }
+  }
+  for (const s of segs) s.text = s.text.replace(/\s+/g, ' ').trim();
+  return segs.filter((s) => s.text !== '');
+}
+
+/** The same line, its segments cut at a table's column edges. */
+function cutLine(line: Line, cuts: readonly number[]): Line {
+  const segs = segmentsOf(line.parts, cuts);
+  return { ...line, segs, text: segs.map((s) => s.text).join(' ') };
 }
 
 /** Text pieces → lines (same y on a page) → segments (pieces close
@@ -481,21 +573,8 @@ export function textLines(items: readonly PdfText[]): Line[] {
   const flush = () => {
     if (bucket.length === 0) return;
     const parts = bucket.slice().sort((a, b) => a.x - b.x);
-    const segs: Segment[] = [];
-    for (const p of parts) {
-      const last = segs[segs.length - 1];
-      const size = p.h > 0 ? p.h : 8;
-      const gap = last ? p.x - last.right : Infinity;
-      if (last && gap <= size * 0.8) {
-        last.text = `${last.text}${gap > size * 0.1 && !last.text.endsWith(' ') && !p.str.startsWith(' ') ? ' ' : ''}${p.str}`;
-        last.right = Math.max(last.right, p.x + p.w);
-      } else {
-        segs.push({ text: p.str, left: p.x, right: p.x + p.w });
-      }
-    }
-    for (const s of segs) s.text = s.text.replace(/\s+/g, ' ').trim();
-    const clean = segs.filter((s) => s.text !== '');
-    lines.push({ page: bucket[0].page, y: bucket[0].y, segs: clean, text: clean.map((s) => s.text).join(' ') });
+    const clean = segmentsOf(parts);
+    lines.push({ page: bucket[0].page, y: bucket[0].y, parts, segs: clean, text: clean.map((s) => s.text).join(' ') });
     bucket = [];
   };
   for (const t of sorted) {
@@ -601,8 +680,32 @@ interface RawTx {
   dateText: string;
   particulars: string;
   totalText: string;
+  paidText: string;
+  dueText: string;
+  note: string;
   items: RawItemLine[];
   sawItemHeader: boolean;
+}
+
+const PHONE_TEXT = /^\+?\d[\d\s-]{8,}\d$/;
+
+/** The party's phone: "Phone No: 017…" on one line, or the number placed
+ *  between "Phone" and "No:" on two lines (the newer layout) — the number
+ *  nearest to the label, to its right. */
+function partyPhone(items: readonly PdfText[], all: string): string {
+  const inline = /phone(?:\s*no)?\.?\s*:\s*([+\d][\d\s-]{5,}\d)/i.exec(all)?.[1];
+  if (inline) return inline.trim();
+  const label = items.find((t) => /^phone\b/i.test(t.str.trim()));
+  if (!label) return '';
+  const near = items
+    .filter((t) => t.page === label.page && t.x > label.x && PHONE_TEXT.test(t.str.trim()) && Math.abs(t.y - label.y) <= Math.max(label.h, 8) * 2)
+    .sort((a, b) => Math.abs(a.y - label.y) - Math.abs(b.y - label.y) || a.x - b.x);
+  return near[0]?.str.trim() ?? '';
+}
+
+/** The text of a "Remarks:" line after the word: the bill's note. */
+function remarksText(line: Line): string {
+  return line.text.replace(/^remarks?\s*:\s*/i, '').trim().slice(0, 200);
 }
 
 /** Reads one party statement. Bills come back in the order of the file. */
@@ -620,12 +723,22 @@ export function readStatement(items: readonly PdfText[]): { statement: Statement
   const txCols = headerColumns(header, TX_TESTS);
   if (!txCols.some((c) => c.key === 'total') || !txCols.some((c) => c.key === 'paid')) return { statement: null, error: OLD_LAYOUT };
 
-  const partyName = (/party statement of\s+(.+?)(?=\s+total\s+sales\b|$)/i.exec(lines.find((l) => /party statement of/i.test(l.text))?.text ?? '')?.[1] ?? '').trim();
-  const phoneText = (/phone(?:\s*no)?\.?\s*:\s*([+\d][\d\s-]{5,}\d)/i.exec(all)?.[1] ?? '').trim();
+  // The name is the text after "Party Statement of" in its own cell (an
+  // amount of the header can share its line).
+  const nameSeg = lines.flatMap((l) => l.segs).find((s) => /party statement of/i.test(s.text))?.text ?? '';
+  const partyName = (/party statement of\s+(.+?)(?=\s+total\s+sales\b|\s+(?:tk\.?|৳)\s*[\d,.]*$|$)/i.exec(nameSeg)?.[1] ?? '').trim();
+  const phoneText = partyPhone(items, all);
   const totalMatch = /total\s+sales[^:\n]*:\s*(?:tk\.?|৳)?\s*(-?\d[\d,]*(?:\.\d+)?)/i.exec(all);
   const headerTotal = totalMatch ? Number(totalMatch[1].replace(/,/g, '')) : null;
+  const receivablesMatch = /total\s+receivables?\s*:?\s*(?:tk\.?|৳)?\s*(-?\d[\d,]*(?:\.\d+)?)/i.exec(all);
+  const totalReceivables = receivablesMatch ? Number(receivablesMatch[1].replace(/,/g, '')) : null;
+  const generated = /report\s+generated\s+on\s*:?\s*(\d{1,2}\s+[A-Za-z]{3,9}\.?,?\s+\d{4})/i.exec(all)?.[1];
+  const reportDate = generated ? parseDateCell(generated) : null;
 
+  // Batch 54: every cell is read inside its own column (see segmentsOf).
+  const txCuts = txCols.filter((c) => c.key !== 'date').map((c) => c.left);
   let itemCols: Column<ItemCol>[] | null = null;
+  let itemCuts: number[] = [];
   const txs: RawTx[] = [];
   let tx: RawTx | null = null;
   let mode: 'head' | 'items' | 'remarks' = 'head';
@@ -635,30 +748,43 @@ export function readStatement(items: readonly PdfText[]): { statement: Statement
     if (isTableHeader(line) || isNoise(line)) continue;
     if (isItemHeader(line)) {
       itemCols = headerColumns(line, ITEM_TESTS);
+      itemCuts = itemCols.filter((c) => c.key !== 'name').map((c) => c.left);
       if (tx) tx.sawItemHeader = true;
       mode = 'items';
       continue;
     }
-    const tc = cells(line, txCols);
+    const tc = cells(cutLine(line, txCuts), txCols);
     if (tc.date && DATE_START.test(tc.date)) {
-      tx = { dateText: tc.date, particulars: tc.particulars ?? '', totalText: tc.total ?? '', items: [], sawItemHeader: false };
+      tx = {
+        dateText: tc.date,
+        particulars: tc.particulars ?? '',
+        totalText: tc.total ?? '',
+        paidText: tc.paid ?? '',
+        dueText: tc.due ?? '',
+        note: '',
+        items: [],
+        sawItemHeader: false,
+      };
       txs.push(tx);
       mode = 'head';
       continue;
     }
     if (/^remarks?\s*:/i.test(line.segs[0]?.text ?? '')) {
+      if (tx && mode !== 'remarks' && tx.note === '') tx.note = remarksText(line);
       mode = 'remarks';
       continue;
     }
     if (!tx || mode === 'remarks') continue;
     if (mode === 'head') {
-      // A date, bill number or total that wrapped onto the next line.
+      // A date, bill number or amount that wrapped onto the next line.
       if (tc.date) tx.dateText += ` ${tc.date}`;
       if (tc.particulars) tx.particulars += ` ${tc.particulars}`;
       if (tc.total && !tx.totalText) tx.totalText = tc.total;
+      if (tc.paid && !tx.paidText) tx.paidText = tc.paid;
+      if (tc.due && !tx.dueText) tx.dueText = tc.due;
       continue;
     }
-    if (itemCols) tx.items.push({ y: line.y, page: line.page, c: cells(line, itemCols) });
+    if (itemCols) tx.items.push({ y: line.y, page: line.page, c: cells(cutLine(line, itemCuts), itemCols) });
   }
 
   // Item rows: the row with a Total is the item; the lines with only a
@@ -672,12 +798,17 @@ export function readStatement(items: readonly PdfText[]): { statement: Statement
 
   let otherRows = 0;
   const bills: StatementBill[] = [];
+  const payments: StatementPayment[] = [];
   for (const t of txs) {
     const p = t.particulars.replace(/\s+/g, ' ').trim();
     const kind: 'sale' | 'return' | null = /^sales?\s*return/i.test(p) ? 'return' : /^sale\b/i.test(p) ? 'sale' : null;
     const billNo = /#\s*([A-Za-z0-9][A-Za-z0-9/-]*)/.exec(p)?.[1] ?? '';
     if (!kind) {
       otherRows++;
+      if (/^payment\s*in\b/i.test(p)) {
+        const amount = tkAmount(t.paidText) || tkAmount(t.totalText) || 0;
+        payments.push({ date: parseDateCell(t.dateText.replace(/\s+/g, ' ').trim()) ?? '', amount: Math.abs(amount) });
+      }
       continue;
     }
     const date = parseDateCell(t.dateText.replace(/\s+/g, ' ').trim());
@@ -695,9 +826,71 @@ export function readStatement(items: readonly PdfText[]): { statement: Statement
       itemsTotal,
       delivery,
       billDiscount: round2(itemsTotal + delivery - (total ?? 0)),
+      paid: tkAmount(t.paidText),
+      due: tkAmount(t.dueText),
+      note: t.note,
     });
   }
-  return { statement: { partyName, phone: phoneText, phoneKey: cleanPhone(phoneText), headerTotal, bills, otherRows }, error: null };
+  return {
+    statement: {
+      partyName,
+      phone: phoneText,
+      phoneKey: cleanPhone(phoneText),
+      headerTotal,
+      bills,
+      otherRows,
+      totalReceivables,
+      reportDate,
+      payments,
+    },
+    error: null,
+  };
+}
+
+/* ---------------------------------------------- Batch 54: bill checks */
+
+export type BillProblem =
+  | { kind: 'short'; amount: number }
+  | { kind: 'over'; amount: number }
+  | { kind: 'maths'; name: string }
+  | { kind: 'price-in-name'; name: string };
+
+const PRICE_IN_NAME = /(?:\btk\.?|৳)\s*\d/i;
+
+/**
+ * What is wrong with a bill as read (the review page, the receipt page and
+ * the old Step 2 card use the same checks):
+ *  - the lines + delivery come to less than Kaarbar's total by more than
+ *    ৳1 (a line was lost or misread). A positive whole-bill discount is
+ *    normal in Kaarbar and never a problem;
+ *  - a line where quantity × rate − its discount is not its total (±৳1);
+ *  - a line name with a price inside ("… Tk. 499").
+ */
+export function billProblems(b: { total: number; lines: readonly Pick<StatementLine, 'name' | 'quantity' | 'rate' | 'discount' | 'total'>[] }): BillProblem[] {
+  const out: BillProblem[] = [];
+  const sum = round2(b.lines.reduce((s, l) => s + l.total, 0));
+  if (sum - b.total < -1) out.push({ kind: 'short', amount: round2(b.total - sum) });
+  for (const l of b.lines) {
+    if (Math.abs(l.quantity * l.rate - l.discount - l.total) > 1) out.push({ kind: 'maths', name: l.name });
+    if (PRICE_IN_NAME.test(l.name)) out.push({ kind: 'price-in-name', name: l.name });
+  }
+  return out;
+}
+
+/** The words for a problem; `tap` adds "Tap to check." (the lists). */
+export function billProblemText(p: BillProblem, tap: boolean): string {
+  const more = tap ? ' Tap to check.' : '';
+  const money = (n: number) => moneyText(Math.round(n));
+  switch (p.kind) {
+    case 'short':
+      return `Doesn't add up: ${money(p.amount)} less than Kaarbar's total.${more}`;
+    case 'over':
+      return `Doesn't add up: ${money(p.amount)} more than Kaarbar's total.${more}`;
+    case 'maths':
+      return `Line maths wrong: ${p.name}.${more}`;
+    case 'price-in-name':
+      return `Name holds a price: ${p.name}.${more}`;
+  }
 }
 
 function round2(n: number): number {
@@ -798,6 +991,9 @@ export function previewStatements(files: readonly { fileName: string; statement:
       if (seen.has(key)) return out('already', 'in another file too');
       if (b.lines.length === 0) return out('bad', 'no items read');
       if (b.lines.some((l) => l.quantity <= 0)) return out('bad', 'a quantity is not readable');
+      // Batch 54: a bill that doesn't add up (a line lost or misread) is never imported.
+      const problem = billProblems(b)[0];
+      if (problem) return out('bad', billProblemText(problem, false));
       seen.add(key);
       const unknown = [...new Set(b.lines.filter((l) => !l.isDelivery && !ctx.items.has(l.key)).map((l) => l.name))];
       if (unknown.length > 0) return out('unknown', 'unknown item', unknown);
