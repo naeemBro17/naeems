@@ -608,3 +608,95 @@
   outline: 2px solid var(--adm-text);
   outline-offset: -2px;
 }
+
+/* Batch 53.1 — Import from Kaarbar → Products: one card per item */
+.kb-list--items {
+  gap: 10px;
+  border-top: 0;
+}
+
+.kb-list--items .kb-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r-lg);
+  background: var(--adm-card);
+}
+
+.kb-item__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-item__name {
+  font-weight: 600;
+  color: var(--adm-text);
+  overflow-wrap: anywhere;
+}
+
+.kb-list--items .kb-pick {
+  margin-top: 0;
+}
+
+.kb-item__price {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-item__price-label {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-text-2);
+}
+
+.kb-item__price-input {
+  width: 100%;
+  min-height: var(--adm-hit);
+  text-align: right;
+  font-size: 16px; /* 16px stops phones from zooming in on focus */
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-item__price-input--missing {
+  border-color: var(--adm-red);
+  box-shadow: 0 0 0 1px var(--adm-red);
+}
+
+.kb-item__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.kb-item__done,
+.kb-item__note {
+  font-size: var(--adm-fs-small);
+  color: var(--adm-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Computer and tablet: name | site product | price on one line */
+@media (min-width: 768px) {
+  .kb-list--items {
+    max-width: 1040px;
+  }
+
+  .kb-list--items .kb-item {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 150px;
+    align-items: end;
+    gap: 10px 16px;
+  }
+
+  .kb-item__head {
+    align-self: center;
+  }
+
+  .kb-item__notes {
+    grid-column: 1 / -1;
+  }
+}

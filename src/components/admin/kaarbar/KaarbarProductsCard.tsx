@@ -6,6 +6,8 @@ import {
   choiceId,
   choiceLabel,
   itemCounts,
+  itemKeysInView,
+  itemsKeptInView,
   itemSaveRows,
   needsMatch,
   needsPrice,
@@ -14,6 +16,7 @@ import {
   readItemList,
   searchChoices,
   type ItemDraft,
+  type ItemFilter,
   type ItemRow,
   type SiteChoice,
 } from '../../../lib/kaarbar/oldSales';
@@ -22,8 +25,6 @@ import { moneyText } from '../../../lib/money/format';
 import { BottomSheet } from '../../shared/BottomSheet';
 import { AdminSearch, ChipRow } from '../ui/AdminUi';
 import { importWhen, PasswordSheet } from './KaarbarImportTab';
-
-type Filter = 'all' | 'needs' | 'matched' | 'hidden';
 
 const PAGE = 60;
 
@@ -41,18 +42,23 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
   const [twice, setTwice] = useState<string[]>([]);
   const rows = useRef<readonly ItemRow[]>([]);
   const [drafts, setDrafts] = useState<ItemDraft[]>(() => buildDrafts([], status.items, status.choices));
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<ItemFilter>('all');
   const [search, setSearch] = useState('');
   const [shown, setShown] = useState(PAGE);
   const [picking, setPicking] = useState<string | null>(null);
   const [sheet, setSheet] = useState<'save' | 'remove' | null>(null);
   const [kept, setKept] = useState<KeptProduct[] | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Batch 53.1: bumped when the filter, the search or the whole list
+  // changes; only then is the set of rows on screen taken again.
+  const [viewNo, setViewNo] = useState(0);
+  const [view, setView] = useState<{ no: number; keys: ReadonlySet<string> }>({ no: -1, keys: new Set() });
 
   // A fresh status (after saving) is the new starting point.
   useEffect(() => {
     setDrafts(buildDrafts(rows.current, status.items, status.choices));
     setDirty(false);
+    setViewNo((n) => n + 1);
   }, [status]);
 
   const pick = async (file: File | null) => {
@@ -74,6 +80,7 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
           setFilter(next.some((d) => needsMatch(d) || needsPrice(d)) ? 'needs' : 'all');
           setSearch('');
           setShown(PAGE);
+          setViewNo((n) => n + 1);
           return;
         }
         firstError ??= read.error;
@@ -93,16 +100,9 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
   const needs = useMemo(() => drafts.filter((d) => needsMatch(d) || needsPrice(d)).length, [drafts]);
   const saveRows = useMemo(() => itemSaveRows(drafts), [drafts]);
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return drafts.filter((d) => {
-      if (filter === 'needs' && !(needsMatch(d) || needsPrice(d))) return false;
-      if (filter === 'matched' && !(d.how === 'auto' || d.how === 'hand')) return false;
-      if (filter === 'hidden' && d.how !== 'hidden') return false;
-      if (q === '') return true;
-      return d.name.toLowerCase().includes(q) || (d.choice ? choiceLabel(d.choice).toLowerCase().includes(q) : false);
-    });
-  }, [drafts, filter, search]);
+  const inView = view.no === viewNo ? view.keys : itemKeysInView(drafts, filter, search);
+  if (view.no !== viewNo) setView({ no: viewNo, keys: inView });
+  const visible = useMemo(() => itemsKeptInView(drafts, inView), [drafts, inView]);
 
   const picked = drafts.find((d) => d.key === picking) ?? null;
 
@@ -177,13 +177,22 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
             </li>
           </ul>
 
-          <AdminSearch value={search} onChange={setSearch} placeholder="Search an item" label="Search the items" />
+          <AdminSearch
+            value={search}
+            onChange={(q) => {
+              setSearch(q);
+              setViewNo((n) => n + 1);
+            }}
+            placeholder="Search an item"
+            label="Search the items"
+          />
           <ChipRow
             label="Show"
             active={filter}
             onSelect={(id) => {
-              setFilter(id as Filter);
+              setFilter(id as ItemFilter);
               setShown(PAGE);
+              setViewNo((n) => n + 1);
             }}
             chips={[
               { id: 'all', label: 'All', count: drafts.length },
@@ -193,7 +202,7 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
             ]}
           />
 
-          <ul className="kb-list" data-testid="kb-items">
+          <ul className="kb-list kb-list--items" data-testid="kb-items">
             {visible.slice(0, shown).map((d) => (
               <ItemRowView key={d.key} draft={d} onPick={() => setPicking(d.key)} onPrice={(price) => update(d.key, (x) => ({ ...x, price, priceFrom: 'typed' }))} />
             ))}
@@ -298,19 +307,27 @@ export function KaarbarProductsCard({ status, onChanged }: { status: OldSalesSta
 
 function ItemRowView({ draft: d, onPick, onPrice }: { draft: ItemDraft; onPick: () => void; onPrice: (price: string) => void }) {
   const missingPrice = needsPrice(d);
+  const done = !needsMatch(d) && !missingPrice;
   const choiceText = d.how === 'hidden' ? (d.saved?.madeProductId ? `${d.name} (hidden product)` : 'New hidden product') : d.choice ? choiceLabel(d.choice) : null;
+  const priceNote =
+    d.priceFrom === 'site' ? 'From the site. Change it if you paid differently then.'
+    : d.priceFrom === 'kaarbar' ? "Kaarbar's purchase price."
+    : null;
+  const billNote = d.saved && d.saved.billLines > 0 ? `Used by ${d.saved.billLines} old bill lines: a new price corrects their profit too.` : null;
   return (
-    <li className="kb-row kb-row--stack kb-item" data-testid="kb-item-row" data-how={d.how}>
-      <span className="kb-item__label">KAARBAR</span>
-      <span className="kb-row__name">{d.name}</span>
+    <li className="kb-item" data-testid="kb-item-row" data-how={d.how} data-done={done ? 'true' : 'false'}>
+      <div className="kb-item__head">
+        <span className="kb-item__label">KAARBAR</span>
+        <span className="kb-item__name">{d.name}</span>
+      </div>
       <button type="button" className={`kb-pick${choiceText ? '' : ' kb-pick--empty'}`} onClick={onPick} data-testid="kb-item-pick">
         <span className="kb-pick__text">{choiceText ?? 'Pick a site product'}</span>
         {d.how !== 'none' && <span className={`kb-tag kb-tag--${d.how}`}>{TAGS[d.how]}</span>}
       </button>
-      <label className="kb-price">
-        <span className="kb-price__label">Buying price (per pack)</span>
+      <label className="kb-item__price">
+        <span className="kb-item__price-label">Buying price (per pack)</span>
         <input
-          className={`form-input kb-price__input${missingPrice ? ' kb-price__input--missing' : ''}`}
+          className={`form-input kb-item__price-input${missingPrice ? ' kb-item__price-input--missing' : ''}`}
           inputMode="decimal"
           value={d.price}
           placeholder="৳"
@@ -320,9 +337,13 @@ function ItemRowView({ draft: d, onPick, onPrice }: { draft: ItemDraft; onPick: 
           data-testid="kb-item-price"
         />
       </label>
-      {d.priceFrom === 'site' && <span className="kb-row__sub">From the site. Change it if you paid differently then.</span>}
-      {d.priceFrom === 'kaarbar' && <span className="kb-row__sub">Kaarbar&apos;s purchase price.</span>}
-      {d.saved && d.saved.billLines > 0 && <span className="kb-row__sub">Used by {d.saved.billLines} old bill lines: a new price corrects their profit too.</span>}
+      {(done || priceNote || billNote) && (
+        <div className="kb-item__notes">
+          {done && <span className="kb-item__done" data-testid="kb-item-done">Done</span>}
+          {priceNote && <span className="kb-item__note">{priceNote}</span>}
+          {billNote && <span className="kb-item__note">{billNote}</span>}
+        </div>
+      )}
     </li>
   );
 }

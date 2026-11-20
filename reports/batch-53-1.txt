@@ -1,0 +1,71 @@
+BATCH 53.1 — Old products: price box no longer disappears while typing; each item in its own card
+Branch: fix/batch-53-1-price-typing   Version: 1.53.1
+
+1. WHAT I DID
+
+The disappearing row. On "Needs you", the list was worked out again on every
+key press. After the first digit the item no longer "needed" a price, so it
+was dropped from the list while you were still typing (and the half-typed
+"1" was kept, so Save would have stored ৳1). Now the screen remembers which
+items were in the list when you last chose a filter or typed in the search
+box. Those items stay on screen while you type or pick a product. They only
+drop out when you change the filter, change the search, pick a new file or
+save. The "Needs you" number on the chip still counts down live. A finished
+item that is still on screen shows a small grey "Done".
+
+Each item in its own card. Every Kaarbar item is now a bordered card. On a
+computer the Kaarbar name, the site product and the buying price sit side
+by side on one line inside the card, so it is clear which price box belongs
+to which product. On a phone the same card stacks top to bottom. The design
+code was used exactly as given. Nothing else on the screen changed: saving,
+matching, counts, the picker and the Save button work as before.
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+
+None needed.
+
+3. WHAT I COULD NOT FINISH
+
+Nothing left over.
+
+4. WHAT I FOUND ALONG THE WAY
+
+- Why the old tests missed it: the Batch 50 test typed the whole price at
+  once with fill('120'), and it did that on the "All" filter, not on
+  "Needs you". A whole number typed in one go never passes through the
+  "one digit" moment, and "All" never hides a row. The new test types
+  1100 one key at a time on "Needs you".
+- Quick check of other admin lists with typed values: Inventory → Set buying
+  prices and Kaarbar Step 2 (unit prices) do NOT have this bug. They only
+  filter when saving, not the list on screen.
+- The old .kb-price styles are still used by the Step 2 Old sales card, so
+  I kept them.
+
+5. DESIGN DECISIONS
+
+- Every CSS variable in the given code already exists in admin.css, so
+  nothing was swapped. No new colours, no new orange. The soft orange ring
+  in the "typing 11" capture is the site's normal focus ring on any input
+  you are typing in. It was already there before this batch.
+- The list is worked out again only when you choose a filter, type in the
+  search box, pick a file or save. Typing a price or picking a product never
+  makes the list jump.
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+
+- (small) Pressing Enter in a price box could move to the next item's
+  price box, so 150 prices can be typed without the mouse.
+
+TEST RESULTS
+- During the work, verify:quick: build OK, unit tests 719/719, browser tests
+  13 passed (the new batch-53-1 file and batch-50).
+- Full npm run verify at the end (once, 26 min): build OK, unit tests
+  719/719, browser tests 288 passed, 21 failed, 268 skipped. None of the 21
+  are in this batch's files (batch-53-1 and batch-50 passed). They are the
+  known old failures in batches 23-26, 30, 32, 33, 35-37, 39-42, 45-49, 51
+  and fix-order-actions (mostly "no product with enough stock for the
+  test" / order limit on the live data). One is on a Kaarbar-related page
+  (batch-41, Money -> Opening balances), a screen this batch did not touch.
+- Frame captures (light): reports/batch-53-1-screens/products-1280-light.png
+  and products-390-light.png. At 360 px nothing is cut off and there is no
+  sideways scroll (checked by the test).

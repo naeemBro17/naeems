@@ -301,6 +301,32 @@ export function needsPrice(d: ItemDraft): boolean {
   return draftPrice(d) === null;
 }
 
+export type ItemFilter = 'all' | 'needs' | 'matched' | 'hidden';
+
+/** Batch 53.1: the keys of the items the filter and the search show right
+ *  now. Taken only when the filter, the search or the list itself changes,
+ *  so a row never leaves the list while Naeem is still typing its price
+ *  or has just picked its product. */
+export function itemKeysInView(drafts: readonly ItemDraft[], filter: ItemFilter, search: string): ReadonlySet<string> {
+  const q = search.trim().toLowerCase();
+  return new Set(
+    drafts
+      .filter((d) => {
+        if (filter === 'needs' && !(needsMatch(d) || needsPrice(d))) return false;
+        if (filter === 'matched' && !(d.how === 'auto' || d.how === 'hand')) return false;
+        if (filter === 'hidden' && d.how !== 'hidden') return false;
+        if (q === '') return true;
+        return d.name.toLowerCase().includes(q) || (d.choice ? choiceLabel(d.choice).toLowerCase().includes(q) : false);
+      })
+      .map((d) => d.key)
+  );
+}
+
+/** The rows on screen: those kept in view, in list order, with their latest values. */
+export function itemsKeptInView(drafts: readonly ItemDraft[], keys: ReadonlySet<string>): ItemDraft[] {
+  return drafts.filter((d) => keys.has(d.key));
+}
+
 export interface ItemCounts {
   matched: number;
   byHand: number;
