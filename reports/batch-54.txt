@@ -790,3 +790,11 @@ differs, and why:
    later question ("what did Kaarbar say?") could then be answered
    without going back to Kaarbar. Needs private storage and a retention
    rule, as it holds phone numbers and addresses.
+
+
+OPEN THE PULL REQUEST YOURSELF
+==============================
+The branch feature/batch-54-merge-old-data is pushed. Open the pull
+request here (I did not open it, and nothing was pushed to main):
+https://github.com/naeemBro17/naeems/pull/new/feature/batch-54-merge-old-data
+After merging it, run supabase/migration-055-batch54.sql (section 2).
