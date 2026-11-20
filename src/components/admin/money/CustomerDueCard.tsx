@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
-import { correctionView } from '../../../lib/kaarbar/oldSales';
-import { confirmPassword } from '../../../lib/reports/api';
 import { useProducts } from '../../../contexts/ProductContext';
 import { copyToClipboard } from '../../../lib/clipboard';
 import { openExternal } from '../../../lib/expertLinks';
 import { dhakaToday } from '../../../lib/inventory/api';
-import { addDuePayment, correctPreviousBalance, deleteDuePayment, fetchCustomerDues, fetchCustomerHistory, recordReminder } from '../../../lib/money/api';
+import { addDuePayment, deleteDuePayment, fetchCustomerDues, fetchCustomerHistory, recordReminder } from '../../../lib/money/api';
 import { customerOrderLink, dayText, moneyText, parseAmount, reminderMessage, reminderWhatsAppUrl } from '../../../lib/money/format';
 import type { CustomerDue, CustomerMoneyHistory } from '../../../lib/money/types';
 import { usePayAccounts } from './LotPayments';
 import { ConfirmSheet } from '../OrderActionCards';
+import { CorrectBalanceSheet } from './CorrectBalanceSheet';
 
 function dhakaDayOf(iso: string): string {
   return dayText(dhakaToday(new Date(iso)));
@@ -48,12 +47,8 @@ export function CustomerDueCard({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<{ id: string; amount: number } | null>(null);
-  const { isAdmin, session } = useAuth();
+  const { isAdmin } = useAuth();
   const [correcting, setCorrecting] = useState(false);
-  const [newAmount, setNewAmount] = useState('');
-  const [why, setWhy] = useState('');
-  const [password, setPassword] = useState('');
-  const [correctError, setCorrectError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [dues, hist] = await Promise.all([fetchCustomerDues(), fetchCustomerHistory(customerKey, phone)]);
@@ -117,36 +112,7 @@ export function CustomerDueCard({
     await load();
   };
 
-  const openCorrect = () => {
-    setNewAmount('');
-    setWhy('');
-    setPassword('');
-    setCorrectError(null);
-    setCorrecting(true);
-  };
-
-  const correction = correctionView(previous, newAmount, sitesDue);
-
-  const saveCorrection = async () => {
-    setCorrectError(null);
-    if (correction.value === null) {
-      setCorrectError(correction.error ?? 'Type the correct amount.');
-      return;
-    }
-    const wrong = await confirmPassword(session?.user.email, password);
-    if (wrong) {
-      setCorrectError(wrong);
-      return;
-    }
-    const answer = await correctPreviousBalance(phone, correction.value, why);
-    if (!answer.ok) {
-      setCorrectError(answer.error ?? 'Could not save');
-      return;
-    }
-    setCorrecting(false);
-    showToast(`Previous balance corrected to ${moneyText(correction.value)}`);
-    await load();
-  };
+  const openCorrect = () => setCorrecting(true);
 
   const remove = async () => {
     if (!deleting) return;
@@ -297,57 +263,18 @@ export function CustomerDueCard({
         </form>
       )}
 
-      <ConfirmSheet
+      <CorrectBalanceSheet
         isOpen={correcting}
-        title="Correct previous balance"
-        keepLabel="Cancel"
-        confirmLabel="Save"
-        onConfirm={saveCorrection}
+        phone={phone}
+        previous={previous}
+        sitesDue={sitesDue}
         onClose={() => setCorrecting(false)}
-      >
-        <p className="adm-csheet__text">
-          For a balance that was wrong when it was brought in. Money received is not this — use &quot;Record a payment&quot; for that.
-        </p>
-        <p className="money-correct__now">
-          <span>Now</span>
-          <b data-testid="correct-now">{moneyText(previous)}</b>
-        </p>
-        <label className="form-field">
-          <span className="form-label">Correct amount</span>
-          <input
-            className="form-input"
-            inputMode="decimal"
-            value={newAmount}
-            onChange={(e) => setNewAmount(e.target.value)}
-            placeholder="৳"
-            aria-label="Correct amount"
-            data-testid="correct-amount"
-          />
-        </label>
-        <label className="form-field">
-          <span className="form-label">Why (optional)</span>
-          <input className="form-input" value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} aria-label="Why" data-testid="correct-why" />
-        </label>
-        <label className="adm-csheet__type">
-          <span>Type your password to confirm</span>
-          <input
-            className="form-input"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            data-testid="correct-password"
-          />
-        </label>
-        <p className="money-correct__after" data-testid="correct-after">
-          Total due becomes {moneyText(correction.totalDue)}. Cash and bKash do not change.
-        </p>
-        {(correctError ?? (newAmount.trim() !== '' ? correction.error : null)) && (
-          <p className="inv-error" role="alert" data-testid="correct-error">
-            {correctError ?? correction.error}
-          </p>
-        )}
-      </ConfirmSheet>
+        onSaved={async (value) => {
+          setCorrecting(false);
+          showToast(`Previous balance corrected to ${moneyText(value)}`);
+          await load();
+        }}
+      />
 
       <ConfirmSheet
         isOpen={deleting !== null}

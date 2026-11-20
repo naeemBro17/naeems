@@ -283,8 +283,10 @@ BEGIN
 
   v_json := kaarbar_remove_hidden_products();
   PERFORM pg_temp.ck('Remove hidden products: kept while old bills use it',
-    (v_json ->> 'removed')::int = 0 AND (v_json -> 'kept' -> 0 ->> 'reason') = 'old bills use it'
-    AND EXISTS (SELECT 1 FROM products WHERE id = v_hidden), v_json::text);
+    -- (Batch 54: other hidden products may exist on the live shop since the
+    -- real Step 1; only this test's own product is checked.)
+    EXISTS (SELECT 1 FROM jsonb_array_elements(v_json -> 'kept') k WHERE k ->> 'name' = 'E2E B50 Hidden Thing' AND k ->> 'reason' = 'old bills use it')
+    AND EXISTS (SELECT 1 FROM products WHERE id = v_hidden), left(v_json::text, 300));
 
   PERFORM set_config('request.jwt.claims', c_admin_np, true);
   v_err := NULL;

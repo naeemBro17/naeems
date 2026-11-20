@@ -348,14 +348,17 @@ function ItemRowView({ draft: d, onPick, onPrice }: { draft: ItemDraft; onPick: 
   );
 }
 
-function ChoicePicker({
+/** Batch 54: also used by Merge old data (with a grey note under the item). */
+export function ChoicePicker({
   draft,
   choices,
+  note,
   onClose,
   onChoose,
 }: {
-  draft: ItemDraft | null;
+  draft: Pick<ItemDraft, 'name' | 'choice'> | null;
   choices: readonly SiteChoice[];
+  note?: string | null;
   onClose: () => void;
   onChoose: (choice: SiteChoice | 'hidden') => void;
 }) {
@@ -384,6 +387,11 @@ function ChoicePicker({
           <p className="kb-picker__for">
             <span className="kb-item__label">KAARBAR</span>
             <b>{draft.name}</b>
+          </p>
+        )}
+        {note && (
+          <p className="inv-muted" data-testid="kb-picker-note">
+            {note}
           </p>
         )}
         <div onKeyDown={moveFocus}>

@@ -50,6 +50,8 @@ import { ProductEditPage } from '../components/admin/pages/ProductEditPage';
 import { CustomerPage } from '../components/admin/pages/CustomerPage';
 import { NewCustomerPage } from '../components/admin/pages/NewCustomerPage';
 import { PayoutPage } from '../components/admin/pages/PayoutPage';
+import { MergeReviewPage } from '../components/admin/kaarbar/merge/MergeReviewPage';
+import { MergeReceiptPage, OldReceiptPage } from '../components/admin/kaarbar/merge/MergeReceiptPage';
 import { goBackFromSubPage } from '../components/admin/pages/subPageBack';
 import {
   adminPath,
@@ -242,6 +244,23 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
             onDeleted={() => leave(() => navigate('/admin?tab=customers', { replace: true }))}
           />
+        )}
+        {/* Batch 54: Merge old data. Opening a receipt keeps the statement in
+            memory, so it leaves without asking; Merge goes back to the customer. */}
+        {sub?.kind === 'merge-old' && (
+          <MergeReviewPage
+            key={sub.customerKey}
+            customerKey={sub.customerKey}
+            onBack={back}
+            onOpenReceipt={(bill) => leave(() => navigate(adminPath.mergeReceipt(sub.customerKey, bill), { state: { fromList: true } }))}
+            onMerged={() => leave(onBack)}
+          />
+        )}
+        {sub?.kind === 'merge-receipt' && (
+          <MergeReceiptPage key={sub.bill} customerKey={sub.customerKey} bill={sub.bill} onBack={back} />
+        )}
+        {sub?.kind === 'old-receipt' && (
+          <OldReceiptPage key={sub.billId} customerKey={sub.customerKey} billId={sub.billId} onBack={back} />
         )}
         {sub?.kind === 'payout' && (
           <PayoutPage

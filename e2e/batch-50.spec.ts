@@ -467,6 +467,9 @@ for (const theme of ['light', 'dark'] as const) {
       },
       { id: 'b2', kind: 'sale', bill_no: 'SS0858', date: '2025-11-12', items_total: 2100, bill_discount: 0, delivery: 130, bill_total: 2230, lines: [{ name: 'Test Cleanser', quantity: 1, unit: null, rate: 2750, line_discount: 650, line_total: 2100 }] },
     ]);
+    await mockRpc(page, 'kaarbar_old_sales_status', {
+      cutoff: '2026-09-30', items: [], choices: [], bill_keys: [], bills: 0, locked_months: [], last_products: null, last_sales: null,
+    });
     await mockRpc(page, 'money_correct_previous_balance', (args) => {
       corrected.push(args);
       return { old: 1200, new: Number(args.p_new) };
@@ -479,16 +482,18 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto(`/admin/customers/${encodeURIComponent(FAKE_KEY)}`);
     await expect(page.getByTestId('customer-due-card')).toBeVisible({ timeout: 30_000 });
 
-    // Old purchases: one line per bill, tap to open.
+    // Old purchases (Batch 54: receipt cards; a tap opens the receipt page).
     const old = page.getByTestId('customer-old-purchases');
-    await expect(old.getByTestId('customer-old-bill')).toHaveCount(2);
-    await expect(old.getByTestId('customer-old-bill').first()).toContainText('SS0877');
-    await expect(old.getByTestId('customer-old-bill').first()).toContainText('৳6,099');
-    await old.getByTestId('customer-old-bill').first().click();
-    await expect(old.getByTestId('customer-old-bill-lines')).toContainText('100 ML × ৳8.50');
-    await expect(old.getByTestId('customer-old-bill-lines')).toContainText('Bill discount');
+    await expect(old.getByTestId('merge-receipt')).toHaveCount(2);
+    await expect(old.getByTestId('merge-receipt').first()).toContainText('SS0877');
+    await expect(old.getByTestId('merge-receipt').first()).toContainText('৳6,099');
     await old.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${SHOTS}/${theme}-05-customer-old-purchases.png` });
+    await old.getByTestId('merge-receipt').first().click();
+    await expect(page.getByTestId('old-receipt-page')).toContainText('100 ML × ৳8.50', { timeout: 30_000 });
+    await expect(page.getByTestId('merge-totals')).toContainText('Bill discount');
+    await page.getByTestId('merge-done').click();
+    await expect(page.getByTestId('customer-due-card')).toBeVisible({ timeout: 30_000 });
 
     // Corrections list, then Edit → the sheet.
     await expect(page.getByTestId('customer-corrections')).toContainText('৳1,500 → ৳1,200');

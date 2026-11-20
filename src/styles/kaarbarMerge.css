@@ -1,0 +1,111 @@
+/* Batch 54 — Merge old data (mockup screens 1–7) */
+.km-page { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 132px; }
+.km-sub { color: var(--adm-muted); font-size: 13px; margin-top: -4px; }
+.km-title { font-size: var(--adm-fs-micro); font-weight: 700; letter-spacing: 0.06em; color: var(--adm-muted); margin: 4px 2px -6px; }
+
+.km-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--adm-card); border: 1px solid var(--adm-line); border-radius: var(--adm-r-lg); }
+.km-card__head { font-weight: 700; color: var(--adm-text); }
+.km-card__text { font-size: 13px; line-height: 1.45; color: var(--adm-text-2); }
+.km-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+
+.km-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border-radius: var(--adm-r-pill); border: 1px solid var(--adm-line); background: var(--adm-card); color: var(--adm-text); font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.km-btn--dark { background: var(--adm-text); color: var(--adm-card); border-color: transparent; }
+.km-btn--orange { background: var(--adm-or); color: #fff; border-color: transparent; }
+.km-btn:disabled { background: var(--adm-card-2); color: var(--adm-muted); border-color: transparent; cursor: default; }
+.km-btn--mini { min-height: 38px; font-size: 13px; }
+.km-link { background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 700; color: var(--adm-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.km-link--small { font-size: 13px; }
+.km-danger-row { color: var(--adm-red-text); font-weight: 700; font-size: 13px; }
+
+.km-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: var(--adm-r-pill); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.km-chip--ok, .km-chip--paid { background: var(--adm-green-bg); color: var(--adm-green-text); }
+.km-chip--bad, .km-chip--unpaid { background: var(--adm-red-bg); color: var(--adm-red-text); }
+.km-chip--warn, .km-chip--part { background: var(--adm-amber-bg); color: var(--adm-amber-text); }
+.km-chip--neutral { background: var(--adm-tag-bg); color: var(--adm-tag-text); }
+.km-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.km-note { font-size: 12px; color: var(--adm-muted); line-height: 1.45; }
+
+.km-dues { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.km-due { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--adm-card-2); border-radius: 12px; min-width: 0; }
+.km-due__label { font-size: 13px; color: var(--adm-muted); }
+.km-due__amount { font-size: 20px; font-weight: 800; color: var(--adm-text); font-variant-numeric: tabular-nums; }
+
+.km-receipt { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 13px 15px; text-align: left; font: inherit; color: var(--adm-text); background: var(--adm-card); border: 1px solid var(--adm-line); border-radius: var(--adm-r-lg); cursor: pointer; }
+.km-receipt--flag { border-color: var(--adm-red); box-shadow: inset 0 0 0 1px var(--adm-red); }
+.km-receipt__no, .km-receipt__amount { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.km-receipt__muted { font-size: 13px; color: var(--adm-muted); }
+.km-bal { display: inline-block; padding: 4px 9px; border-radius: 8px; background: var(--adm-card-2); color: var(--adm-text-2); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.km-status { display: flex; align-items: center; gap: 6px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--adm-row-line); font-size: 13px; font-weight: 600; }
+.km-status--ok { color: var(--adm-green-text); }
+.km-status--warn { color: var(--adm-amber-text); }
+.km-status--bad { color: var(--adm-red-text); }
+.km-status--muted { color: var(--adm-muted); }
+
+.km-lines { padding-top: 2px; padding-bottom: 2px; gap: 0; }
+.km-line { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--adm-row-line); }
+.km-line:last-child { border-bottom: 0; }
+.km-line__name { font-size: 13px; font-weight: 700; color: var(--adm-text); overflow-wrap: anywhere; }
+.km-line__amount { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.km-line__maths { font-size: 13px; color: var(--adm-muted); font-variant-numeric: tabular-nums; }
+.km-match { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 10px; text-align: left; font: inherit; font-size: 13px; color: var(--adm-text); background: var(--adm-input-bg); border: 1px solid var(--adm-line); border-radius: var(--adm-r-sm); cursor: pointer; }
+.km-match--none { border: 1.5px dashed var(--adm-red); color: var(--adm-red-text); cursor: default; }
+.km-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.km-total { display: flex; justify-content: space-between; padding: 3px 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.km-total--big { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--adm-row-line); font-size: 16px; font-weight: 800; }
+.km-total--muted { color: var(--adm-muted); }
+.km-check { padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.km-check--ok { background: var(--adm-green-bg); color: var(--adm-green-text); }
+.km-check--bad { background: var(--adm-red-bg); color: var(--adm-red-text); }
+
+.km-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; flex-direction: column; gap: 6px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); background: var(--adm-nav-bg); border-top: 1px solid var(--adm-row-line); }
+.km-bar .km-note { text-align: center; }
+
+.km-card--tight { gap: 0; }
+.km-price-input { text-align: right; font-size: 16px; font-variant-numeric: tabular-nums; }
+
+.km-hint-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--adm-card-2); font-size: 13px; }
+
+/* What the markup above needs to work (not a different look):
+   a number that can be tapped to correct it, the × on a line added by
+   hand, the small icons, and the "Add as a new product" sheet. */
+.km-tap { background: none; border: 0; padding: 0; font-family: inherit; font-size: inherit; line-height: inherit; color: inherit; text-align: left; cursor: pointer; }
+.km-tap.km-line__amount { font-weight: 800; }
+.km-tap.km-line__maths { font-size: 13px; color: var(--adm-muted); }
+.km-line > .km-link { align-self: flex-start; }
+.km-check .km-icon, .km-status .km-icon, .km-chip .km-icon { flex: none; }
+.km-check .km-icon { vertical-align: -2px; }
+.km-x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; margin: -6px -6px -6px 0; padding: 0; border: 0; border-radius: var(--adm-r-pill); background: none; color: var(--adm-muted); cursor: pointer; }
+.km-row__end { display: inline-flex; align-items: center; gap: 4px; }
+.km-icon { width: 14px; height: 14px; }
+.km-btn .adm-icon { width: 16px; height: 16px; stroke-width: 2; }
+.km-sheet .sheet-close { display: none; }
+.km-sheet__body { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+.km-sheet__error { color: var(--adm-red-text); font-size: 13px; font-weight: 600; }
+.km-picked { font-size: 13px; color: var(--adm-text-2); }
+/* Inside the admin page, which already has 16px sides (.adm-content). */
+.adm-content .km-page { padding-left: 0; padding-right: 0; }
+/* The Edit link sits on the left under the amount, not stretched. */
+.km-due .km-link { align-self: flex-start; }
+/* As the site's other docked bar: what scrolls under it is blurred. */
+.km-bar { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+/* .km-card is a column; a card that is also a .km-row is a row (screen 7). */
+.km-card.km-row { flex-direction: row; }
+button.km-card .adm-icon { color: var(--adm-muted); }
+button.km-card { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+/* The section on the customer page (screens 1 and 7). */
+.km-section { display: flex; flex-direction: column; gap: 14px; margin-top: var(--adm-s5); }
+.km-file { display: none; }
+
+@media (min-width: 768px) {
+  .km-page { max-width: 640px; margin: 0 auto; }
+}
+/* The admin sidebar appears at 1024 px (admin.css); the bar steps aside
+   for it there, as the bulk bar does. */
+@media (min-width: 1024px) {
+  .km-bar { left: var(--adm-sidebar-w); }
+  .km-bar > * { width: 100%; max-width: 608px; margin: 0 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .km-receipt, .km-btn { transition: none; }
+}

@@ -12,6 +12,12 @@ export interface OldPurchaseLine {
   rate: number;
   line_discount: number;
   line_total: number;
+  /** Batch 54 (migration-055): the Kaarbar item and the site product it counts as. */
+  item_id: string | null;
+  name_key: string | null;
+  match_how: 'auto' | 'hand' | 'hidden' | null;
+  product_name: string | null;
+  option: string | null;
 }
 
 export interface OldPurchase {
@@ -23,6 +29,13 @@ export interface OldPurchase {
   bill_discount: number;
   delivery: number;
   bill_total: number;
+  /** Batch 54: as the Kaarbar app showed it (null = bulk Step 2 bills). */
+  paid_amount: number | null;
+  due_amount: number | null;
+  note: string | null;
+  /** When the bill was merged / imported, and whether from a customer merge. */
+  merged_at: string | null;
+  from_merge: boolean;
   lines: OldPurchaseLine[];
 }
 
@@ -30,6 +43,9 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+const numOrNull = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : num(v));
+const textOrNull = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 
 export async function fetchOldPurchases(customerKey: string, phone: string): Promise<OldPurchase[]> {
   const { data, error } = await supabase.rpc('kaarbar_customer_old_bills', { p_customer_key: customerKey, p_phone: phone });
@@ -43,6 +59,11 @@ export async function fetchOldPurchases(customerKey: string, phone: string): Pro
     bill_discount: num(b.bill_discount),
     delivery: num(b.delivery),
     bill_total: num(b.bill_total),
+    paid_amount: numOrNull(b.paid_amount),
+    due_amount: numOrNull(b.due_amount),
+    note: textOrNull(b.note),
+    merged_at: textOrNull(b.merged_at),
+    from_merge: b.from_merge === true,
     lines: ((b.lines ?? []) as Record<string, unknown>[]).map((l) => ({
       name: String(l.name ?? ''),
       quantity: num(l.quantity),
@@ -50,6 +71,11 @@ export async function fetchOldPurchases(customerKey: string, phone: string): Pro
       rate: num(l.rate),
       line_discount: num(l.line_discount),
       line_total: num(l.line_total),
+      item_id: textOrNull(l.item_id),
+      name_key: textOrNull(l.name_key),
+      match_how: l.match_how === 'auto' || l.match_how === 'hand' || l.match_how === 'hidden' ? l.match_how : null,
+      product_name: textOrNull(l.product_name),
+      option: textOrNull(l.option),
     })),
   }));
 }
