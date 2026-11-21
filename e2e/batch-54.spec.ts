@@ -151,6 +151,10 @@ async function answer(page: Page, w: World, ordersDue = 0): Promise<void> {
     },
   ]);
   await rpc('admin_customer_orders_v2', () => []);
+  // Batch 55: the customer's numbers (only the main one here).
+  await rpc('admin_customer_numbers', () => [
+    { phone: FAKE_PHONE, phone_key: FAKE_PHONE, is_main: true, source: null, orders: 0, bills: 0, money_rows: 0, can_remove: false },
+  ]);
   await rpc('money_customer_dues', () => [
     { customer_key: FAKE_KEY, phone_key: FAKE_PHONE, order_due: ordersDue, previous_left: w.previous, latest_unpaid_order_id: null, latest_unpaid_order_number: null, last_reminder_at: null, last_reminder_amount: null, reminders: 0 },
   ]);
@@ -429,14 +433,16 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
-test('the statement of another customer: a red notice and Merge stays off', async ({ page }) => {
+// Batch 55 replaced the red notice with "The numbers are different" (e2e/batch-55.spec.ts).
+test('the statement of another customer: "The numbers are different" and Merge stays off', async ({ page }) => {
   test.setTimeout(90_000);
   const w: World = { previous: 3000, merged: null, items: null, undone: false, savedRows: null, corrected: [] };
   await answer(page, w);
   await open(page, 'light');
   await upload(page, await statementPdf({ name: 'Someone Else', phone: '01799954999', receivables: '3,000' }));
-  await expect(page.getByTestId('merge-wrong-customer')).toHaveText('This statement is for Someone Else (01799954999), not this customer.');
+  await expect(page.getByTestId('merge-number-question')).toContainText('Someone Else · 01799 954999');
   await expect(page.getByTestId('merge-go')).toBeDisabled();
+  await expect(page.getByTestId('merge-go-note')).toHaveText('Answer the question above first');
 });
 
 for (const theme of ['light', 'dark'] as const) {

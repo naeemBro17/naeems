@@ -51,6 +51,7 @@ import { CustomerPage } from '../components/admin/pages/CustomerPage';
 import { NewCustomerPage } from '../components/admin/pages/NewCustomerPage';
 import { PayoutPage } from '../components/admin/pages/PayoutPage';
 import { MergeReviewPage } from '../components/admin/kaarbar/merge/MergeReviewPage';
+import { JoinCustomerPage } from '../components/admin/pages/JoinCustomerPage';
 import { MergeReceiptPage, OldReceiptPage } from '../components/admin/kaarbar/merge/MergeReceiptPage';
 import { goBackFromSubPage } from '../components/admin/pages/subPageBack';
 import {
@@ -243,6 +244,17 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onBack={back}
             onOpenOrder={(orderNumber) => navigate(adminPath.order(orderNumber), { state: { fromList: true } })}
             onDeleted={() => leave(() => navigate('/admin?tab=customers', { replace: true }))}
+            onOpenJoin={(pickKey) => navigate(adminPath.customerJoin(sub.customerKey, pickKey), { state: { fromList: true } })}
+          />
+        )}
+        {/* Batch 55: Merge with another customer. Merge goes back where it was opened from. */}
+        {sub?.kind === 'join-customer' && (
+          <JoinCustomerPage
+            key={`${sub.customerKey}|${location.search}`}
+            customerKey={sub.customerKey}
+            pickKey={new URLSearchParams(location.search).get('pick')}
+            onBack={back}
+            onMerged={() => leave(onBack)}
           />
         )}
         {/* Batch 54: Merge old data. Opening a receipt keeps the statement in
@@ -254,6 +266,8 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             onBack={back}
             onOpenReceipt={(bill) => leave(() => navigate(adminPath.mergeReceipt(sub.customerKey, bill), { state: { fromList: true } }))}
             onMerged={() => leave(onBack)}
+            onWrongCustomer={() => leave(onBack)}
+            onOpenJoin={(pickKey) => leave(() => navigate(adminPath.customerJoin(sub.customerKey, pickKey), { state: { fromList: true } }))}
           />
         )}
         {sub?.kind === 'merge-receipt' && (

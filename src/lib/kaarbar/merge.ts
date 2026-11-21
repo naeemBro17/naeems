@@ -121,10 +121,18 @@ function nameKey(name: string): string {
   return itemKey(name);
 }
 
-/** The red notice when the PDF is another party's statement (null = fine). */
-export function wrongCustomer(s: Pick<Statement, 'partyName' | 'phone' | 'phoneKey'>, customer: { name: string; phone: string }): string | null {
-  const own = cleanPhone(customer.phone ?? '');
-  const same = own !== null ? s.phoneKey === own : nameKey(s.partyName) !== '' && nameKey(s.partyName) === nameKey(customer.name);
+/**
+ * The notice when the PDF looks like another party's statement (null =
+ * fine). Batch 55: the PDF's number may be any of the customer's numbers
+ * (main or extra); a PDF with no number is matched by the name.
+ */
+export function wrongCustomer(
+  s: Pick<Statement, 'partyName' | 'phone' | 'phoneKey'>,
+  customer: { name: string; phone: string; numbers?: readonly string[] }
+): string | null {
+  const own = [customer.phone ?? '', ...(customer.numbers ?? [])].map(cleanPhone).filter((k): k is string => k !== null);
+  const sameName = nameKey(s.partyName) !== '' && nameKey(s.partyName) === nameKey(customer.name);
+  const same = own.length > 0 && s.phoneKey ? own.includes(s.phoneKey) : sameName;
   if (same) return null;
   const who = s.partyName || 'another party';
   return `This statement is for ${who}${s.phone ? ` (${s.phone})` : ''}, not this customer.`;

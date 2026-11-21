@@ -1,0 +1,59 @@
+/* Batch 55 — customer numbers, same person?, merge two customers (mockup screens 1–3) */
+.ct-section { display: flex; flex-direction: column; gap: 10px; margin-top: var(--adm-s5); }
+.ct-pad { padding: 0 2px; }
+
+.ct-numbers { gap: 0; padding-top: 2px; padding-bottom: 6px; }
+.ct-num { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--adm-row-line); }
+.ct-num__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ct-num__value { font-size: 15px; font-weight: 700; color: var(--adm-text); font-variant-numeric: tabular-nums; }
+.ct-num__sub { font-size: 13px; color: var(--adm-muted); }
+.ct-num__add { padding: 10px 0 4px; }
+.ct-dots { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px; background: none; color: var(--adm-muted); cursor: pointer; }
+.ct-dots .adm-icon { width: 18px; height: 18px; }
+
+.ct-more { gap: 0; padding-top: 4px; padding-bottom: 4px; }
+.ct-more__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: var(--adm-hit); padding: 12px 0; border: 0; border-bottom: 1px solid var(--adm-row-line); background: none; font: inherit; font-weight: 600; color: var(--adm-text); text-align: left; text-decoration: none; cursor: pointer; }
+.ct-more__row:last-child { border-bottom: 0; }
+.ct-more__row .adm-icon { width: 16px; height: 16px; color: var(--adm-muted); }
+
+.ct-warn { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--adm-amber-bg); color: var(--adm-text); }
+.ct-warn__title { font-size: 15px; font-weight: 700; }
+.ct-vs { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+.ct-vs dt { font-size: 13px; color: var(--adm-text-2); }
+.ct-vs dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.ct-warn__text { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.ct-warn .km-btn { min-height: 42px; }
+.ct-warn__ghost { background: transparent; border-color: rgba(90, 53, 0, 0.25); }
+:root[data-theme='dark'] .ct-warn__ghost { border-color: rgba(255, 179, 64, 0.35); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ct-warn__ghost { border-color: rgba(255, 179, 64, 0.35); }
+}
+.ct-dim { opacity: 0.55; }
+
+.ct-search { display: flex; align-items: center; gap: 8px; min-height: var(--adm-hit); padding: 0 12px; border: 1px solid var(--adm-line); border-radius: 12px; background: var(--adm-input-bg); }
+.ct-search .adm-icon { width: 16px; height: 16px; color: var(--adm-muted); flex: none; }
+.ct-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 16px; color: var(--adm-text); }
+
+.ct-who { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--adm-line); border-radius: 12px; background: var(--adm-card); font: inherit; color: var(--adm-text); text-align: left; cursor: pointer; }
+.ct-who--on { border: 1.5px solid var(--adm-text); }
+.ct-who:disabled { opacity: 0.55; cursor: default; }
+.ct-who__av { display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--adm-card-2); color: var(--adm-text-2); font-weight: 800; }
+.ct-who__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 14px; }
+.ct-who__sub { font-size: 13px; color: var(--adm-muted); overflow-wrap: anywhere; }
+.ct-list { display: flex; flex-direction: column; gap: 8px; }
+
+.ct-cmp { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 14px; font-size: 14px; }
+.ct-cmp__h { font-size: 12px; font-weight: 700; color: var(--adm-muted); }
+.ct-cmp__r { text-align: right; font-variant-numeric: tabular-nums; }
+.ct-cmp__total { padding-top: 8px; border-top: 1px solid var(--adm-row-line); font-weight: 800; }
+
+/* What the markup above needs to work (not a different look): the
+   receipts on Merge old data sit in one holder (so they can be dimmed)
+   with the page's own 14px spacing. */
+.ct-receipts { display: flex; flex-direction: column; gap: 14px; }
+/* The mockup's ••• lies flat (the site's dots icon stands up). */
+.ct-dots .adm-icon { transform: rotate(90deg); }
+/* TO RECEIVE keeps the page's section gap after PHONE NUMBERS. */
+.ct-section + .money-due { margin-top: var(--adm-s5); }
+/* The kept customer's name in the first line reads dark, as in the mockup. */
+[data-testid='join-customer'] .km-page > .km-note b { color: var(--adm-text); }
