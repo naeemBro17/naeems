@@ -18,6 +18,9 @@ import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../../lib/b
 import type { OrderStatus } from '../../../types';
 import { CustomerDueCard } from '../money/CustomerDueCard';
 import { MergeOldSection } from '../kaarbar/merge/MergeOldSection';
+import { CustomerNumbersCard } from '../customers/CustomerNumbersCard';
+import '../../../styles/kaarbarMerge.css';
+import '../../../styles/customerTools.css';
 
 function shortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -34,6 +37,8 @@ interface CustomerPageProps {
   onOpenOrder: (orderNumber: string) => void;
   /** After a delete: back to the list (nothing left to show). */
   onDeleted: () => void;
+  /** Batch 55: Merge with another customer (optionally with one picked). */
+  onOpenJoin: (pickKey?: string) => void;
 }
 
 /**
@@ -41,7 +46,7 @@ interface CustomerPageProps {
  * (it used to be a pop-up on the Customers list): contact, totals, private
  * notes and tags, and every order.
  */
-export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: CustomerPageProps) {
+export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted, onOpenJoin }: CustomerPageProps) {
   const { can, isAdmin } = useAuth();
   const { showToast } = useToast();
   const [canManage, setCanManage] = useState(false);
@@ -52,6 +57,9 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing'>('loading');
   const [orders, setOrders] = useState<CustomerOrderRow[] | null>(null);
   const [notes, setNotes] = useState<Map<string, CustomerNote>>(() => new Map());
+  // Batch 55: the Super Admin sees the numbers in PHONE NUMBERS instead
+  // of the phone line (kept while they can't be loaded).
+  const [numbersShown, setNumbersShown] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -125,10 +133,12 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
                 <span>{customer.email || '—'}</span>
               </li>
             )}
-            <li>
-              <AdminIcon name="phone" />
-              <span>{customer.phone || '—'}</span>
-            </li>
+            {!(isAdmin === true && numbersShown) && (
+              <li>
+                <AdminIcon name="phone" />
+                <span>{customer.phone || '—'}</span>
+              </li>
+            )}
             {customer.alt_phone && (
               <li>
                 <AdminIcon name="phone" />
@@ -172,6 +182,11 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
             )}
           </div>
 
+          {/* Batch 55: the customer's numbers (Super Admin). */}
+          {isAdmin === true && (
+            <CustomerNumbersCard customerKey={customer.key} name={title} onJoin={onOpenJoin} onReady={setNumbersShown} />
+          )}
+
           {/* Batch 41 Part 4: dues, previous balance and the WhatsApp reminder. */}
           {can('view_profit_costs') && (
             <CustomerDueCard
@@ -184,6 +199,19 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted }: Cu
 
           {/* Batch 54: Merge old data (Super Admin) / old Kaarbar purchases — history only. */}
           {can('view_profit_costs') && <MergeOldSection customerKey={customer.key} name={customer.full_name || customer.phone} phone={customer.phone} />}
+
+          {/* Batch 55: MORE — Merge with another customer (Super Admin). */}
+          {isAdmin === true && (
+            <section className="ct-section" data-testid="customer-more">
+              <h3 className="km-title">MORE</h3>
+              <div className="km-card ct-more">
+                <ActionLink to={adminPath.customerJoin(customer.key)} className="ct-more__row" onOpen={() => onOpenJoin()} data-testid="customer-join">
+                  <span>Merge with another customer</span>
+                  <AdminIcon name="chevron-right" />
+                </ActionLink>
+              </div>
+            </section>
+          )}
 
           {customer.id && (
             <CustomerNotesEditor

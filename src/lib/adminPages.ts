@@ -14,6 +14,8 @@ import type { AdminSection, NavAccess } from './adminNav';
  *   /admin/customers/:key/merge       Merge old data (Batch 54)
  *   /admin/customers/:key/merge/:bill One receipt before the merge
  *   /admin/customers/:key/old/:id     One merged old receipt
+ *   /admin/customers/:key/join        Merge with another customer (Batch 55;
+ *                                     ?pick=<key> picks one first)
  * Everything else under /admin is the section list (?tab=...), as before.
  */
 export type AdminSubPage =
@@ -27,7 +29,8 @@ export type AdminSubPage =
   | { kind: 'payout'; payoutId: string }
   | { kind: 'merge-old'; customerKey: string }
   | { kind: 'merge-receipt'; customerKey: string; bill: string }
-  | { kind: 'old-receipt'; customerKey: string; billId: string };
+  | { kind: 'old-receipt'; customerKey: string; billId: string }
+  | { kind: 'join-customer'; customerKey: string };
 
 function decode(part: string): string | null {
   try {
@@ -67,6 +70,7 @@ export function parseAdminSubPage(pathname: string): AdminSubPage | null | 'unkn
     const customerKey = decode(second);
     const fourth = parts.length === 4 ? decode(parts[3]) : null;
     if (customerKey && third === 'merge' && parts.length === 3) return { kind: 'merge-old', customerKey };
+    if (customerKey && third === 'join' && parts.length === 3) return { kind: 'join-customer', customerKey };
     if (customerKey && third === 'merge' && fourth) return { kind: 'merge-receipt', customerKey, bill: fourth };
     if (customerKey && third === 'old' && fourth) return { kind: 'old-receipt', customerKey, billId: fourth };
   }
@@ -116,6 +120,7 @@ export function canOpenSubPage(page: AdminSubPage, access: NavAccess): boolean {
       return can('view_profit_costs');
     case 'merge-old':
     case 'merge-receipt':
+    case 'join-customer':
       return isAdmin;
     case 'old-receipt':
       return can('view_profit_costs');
@@ -131,7 +136,7 @@ export function isFormSubPage(page: AdminSubPage): boolean {
 /** Where each page's Back goes when there is no list to return to (a link
  *  opened directly, or after a refresh). */
 export function subPageFallback(page: AdminSubPage): string {
-  if (page.kind === 'merge-old' || page.kind === 'old-receipt') return adminPath.customer(page.customerKey);
+  if (page.kind === 'merge-old' || page.kind === 'old-receipt' || page.kind === 'join-customer') return adminPath.customer(page.customerKey);
   if (page.kind === 'merge-receipt') return adminPath.mergeOld(page.customerKey);
   return `/admin?tab=${subPageSection(page)}`;
 }
@@ -145,6 +150,8 @@ export const adminPath = {
   newCustomer: () => '/admin/customers/new',
   customer: (key: string) => `/admin/customers/${encodeURIComponent(key)}`,
   payout: (id: string) => `/admin/payouts/${encodeURIComponent(id)}`,
+  customerJoin: (key: string, pickKey?: string) =>
+    `/admin/customers/${encodeURIComponent(key)}/join${pickKey ? `?pick=${encodeURIComponent(pickKey)}` : ''}`,
   mergeOld: (key: string) => `/admin/customers/${encodeURIComponent(key)}/merge`,
   mergeReceipt: (key: string, bill: string) => `/admin/customers/${encodeURIComponent(key)}/merge/${encodeURIComponent(bill)}`,
   oldReceipt: (key: string, billId: string) => `/admin/customers/${encodeURIComponent(key)}/old/${encodeURIComponent(billId)}`,
