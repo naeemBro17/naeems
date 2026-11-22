@@ -21,3 +21,8 @@ reports/*/mockups/*
 # Batch 54: real customer statements (personal data) - never commit
 tamanna-statement.pdf
 *-statement.pdf
+
+# Batch prompts and Naeem's Kaarbar spreadsheets (kept local, never committed)
+batch-*.md
+*.xlsx
+batch-44.patch
