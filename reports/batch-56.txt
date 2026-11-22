@@ -422,7 +422,17 @@ add them yourself afterwards:
 4. WHAT I FOUND ALONG THE WAY
 ======================================================================
 - Full test run (once, for Batch 55.1 and Batch 56 together, on this branch):
-  {{VERIFY_SUMMARY}}
+  Full "npm run verify" (once, 30.9 min): build OK · unit tests 766 of 766 ·
+    browser/database tests 297 passed, 22 FAILED, 274 skipped. Batch 55.1's
+    database test (e2e/batch-55-1.spec.ts, 26 checks) passed; Batch 56 adds
+    no browser test (its 6 unit tests passed). The 22 are the same old
+    failures Batch 55 listed, one per old file (batch-23, 24, 26, 30, 32, 33,
+    35, 36, 37, 39, 40, 41, 42, 45, 46, 47, 48, 49, 50, 51, 52,
+    fix-order-actions): mostly "No active product with enough tracked stock
+    for the test" (the live shop's stock), or old database tests that replay
+    an old migration over newer functions (e.g. batch-45: "cannot change
+    return type of existing function place_order"). None is in these
+    batches' files, and none touches what these batches changed.
 - The Money check was already off before this batch: difference −৳3,518.25
   today ("doesn't balance"). This import does not change it, but it is worth
   a look on its own.
