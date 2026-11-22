@@ -457,14 +457,24 @@ COMMIT;
 ======================================================================
 3. WHAT I COULD NOT FINISH
 ======================================================================
-Nothing. (The full `npm run verify` runs once at the end of Batch 56, for both
-batches together — summary below in section 4.)
+Nothing. (The full `npm run verify` ran once at the end of Batch 56, for both
+batches together — summary in section 4.)
 
 ======================================================================
 4. WHAT I FOUND ALONG THE WAY
 ======================================================================
 - Full test run (once, on the Batch 56 branch, which holds 55.1 too):
-  (written here after the one full run at the end of Batch 56)
+  Full "npm run verify" (once, 30.9 min): build OK · unit tests 766 of 766 ·
+    browser/database tests 297 passed, 22 FAILED, 274 skipped. Batch 55.1's
+    database test (e2e/batch-55-1.spec.ts, 26 checks) passed; Batch 56 adds
+    no browser test (its 6 unit tests passed). The 22 are the same old
+    failures Batch 55 listed, one per old file (batch-23, 24, 26, 30, 32, 33,
+    35, 36, 37, 39, 40, 41, 42, 45, 46, 47, 48, 49, 50, 51, 52,
+    fix-order-actions): mostly "No active product with enough tracked stock
+    for the test" (the live shop's stock), or old database tests that replay
+    an old migration over newer functions (e.g. batch-45: "cannot change
+    return type of existing function place_order"). None is in these
+    batches' files, and none touches what these batches changed.
 - Product "CeraVe Foaming Cleanser 473ml": its one bottle was sold "without
   stock" on NM-5008 (20 Nov) and filled the next day from lot L-014. Its
   taken-units row has cost ৳0 per unit plus a ৳3,000 adjustment, which is how
