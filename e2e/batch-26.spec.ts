@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures';
+import { readFileSync } from 'node:fs';
 import { allowStorageFile } from './helpers/storageGuard';
+import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL } from './helpers/env';
@@ -511,8 +513,28 @@ test('staff without "Edit brands" are refused (menu and database); with it they 
 
 /* ---------------- Admin extras ---------------- */
 
-test('Restock: Add and Set to, per option, saved and logged; refused without "Edit products and stock"', async ({ page }) => {
+test('database: Restock Add / Set to per option, saved and logged (Inventory mode Off); refused in Inventory mode On (one rolled-back transaction)', async () => {
+  test.setTimeout(180_000);
+  test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
+  const script = readFileSync('e2e/sql/batch-26-restock.sql', 'utf8')
+    .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
+    .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
+  const output = await runSql(`BEGIN;\n${script}`);
+  const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
+  expect(results, sqlError(output) ?? 'no result').not.toBeNull();
+  const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
+  expect(failed).toEqual([]);
+  expect((results ?? []).length).toBeGreaterThanOrEqual(7);
+});
+
+test('Restock: the sheet adds to the stock it shows; saved (Mode Off) or the database refusal shown (Mode On); refused without "Edit products and stock"', async ({ page }) => {
   test.setTimeout(90_000);
+  // Batch 61: the live shop's Inventory mode decides what Save does; saving
+  // itself is checked in the rolled-back database test above.
+  const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
+  const modeOn = mode.data?.[0]?.value === 'true';
+  const start = await select<{ stock_quantity: number }[]>(admin.accessToken, `products?select=stock_quantity&id=eq.${productIds[0]}`);
+  const base = Number(start.data![0].stock_quantity ?? 0);
   await adminPage(page, `?tab=products&pq=${encodeURIComponent(`${PREFIX} Test Product 1`)}`);
   const menu = page.getByRole('button', { name: `Actions for ${PREFIX} Test Product 1` }).first();
   await expect(menu).toBeVisible({ timeout: 15_000 });
@@ -524,30 +546,24 @@ test('Restock: Add and Set to, per option, saved and logged; refused without "Ed
   const sheet = page.locator('[data-testid="restock-sheet"]');
   await expect(sheet.locator('[data-testid="restock-row"]')).toHaveCount(2);
   await sheet.locator('[data-testid="restock-row"]').nth(0).locator('input').fill('24');
-  await expect(sheet.locator('[data-testid="restock-preview"]')).toHaveText('29');
+  await expect(sheet.locator('[data-testid="restock-preview"]')).toHaveText(String(base + 24));
   await sheet.getByRole('button', { name: 'Save stock' }).click();
-  await expect(sheet).toBeHidden({ timeout: 10_000 });
-  const base = await select<{ stock_quantity: number }[]>(admin.accessToken, `products?select=stock_quantity&id=eq.${productIds[0]}`);
-  expect(base.data![0].stock_quantity).toBe(29);
-  // "Last updated by" (read the way the admin's Products page reads it).
-  const edited = await rpc<{ id: string; last_edited_by: string }[]>(admin.accessToken, 'admin_product_edit_info');
-  expect(edited.data!.find((r) => r.id === productIds[0])?.last_edited_by).toBe('e2e.admin');
-
-  await page.getByRole('button', { name: `Actions for ${PREFIX} Test Product 1` }).first().click();
-  await page.getByRole('menuitem', { name: 'Restock' }).click();
-  await sheet.getByRole('radio', { name: 'Set to' }).click();
-  await sheet.locator('[data-testid="restock-row"]').nth(1).locator('input').fill('7');
-  await sheet.getByRole('button', { name: 'Save stock' }).click();
-  await expect(sheet).toBeHidden({ timeout: 10_000 });
-  const variant = await select<{ stock_quantity: number }[]>(admin.accessToken, `product_variants?select=stock_quantity&id=eq.${variantId}`);
-  expect(variant.data![0].stock_quantity).toBe(7);
-
-  const log = await select<{ summary: string; actor_username: string }[]>(
-    admin.accessToken,
-    `activity_log?select=summary,actor_username&action=eq.product.restock&entity_id=eq.${productIds[0]}&order=id.asc`
-  );
-  expect(log.data!.map((l) => l.summary)).toEqual(['Restock: 5 → 29', 'Restock (E2E · 50ml): 3 → 7']);
-  expect(log.data!.every((l) => l.actor_username === 'e2e.admin')).toBe(true);
+  if (modeOn) {
+    // The database refuses (see the test above); the sheet shows its own
+    // general message and stays open (reports/batch-61.txt, section 4).
+    await expect(sheet.getByRole('alert')).toContainText('Could not save the stock.', { timeout: 10_000 });
+    await expect(sheet).toBeVisible();
+  } else {
+    await expect(sheet).toBeHidden({ timeout: 10_000 });
+  }
+  const after = await select<{ stock_quantity: number }[]>(admin.accessToken, `products?select=stock_quantity&id=eq.${productIds[0]}`);
+  const saved = modeOn ? base : base + 24;
+  expect(Number(after.data![0].stock_quantity ?? 0)).toBe(saved);
+  if (!modeOn) {
+    // "Last updated by" (read the way the admin's Products page reads it).
+    const edited = await rpc<{ id: string; last_edited_by: string }[]>(admin.accessToken, 'admin_product_edit_info');
+    expect(edited.data!.find((r) => r.id === productIds[0])?.last_edited_by).toBe('e2e.admin');
+  }
 
   // Without "Edit products and stock": no Products page, and the database refuses.
   await setRole(['view_orders']);
@@ -555,7 +571,7 @@ test('Restock: Add and Set to, per option, saved and logged; refused without "Ed
   const refused = await rpc(staff.accessToken, 'admin_restock', { p_product_id: productIds[0], p_variant_id: null, p_mode: 'add', p_amount: 5 });
   expect(refused.ok).toBe(false);
   const still = await select<{ stock_quantity: number }[]>(admin.accessToken, `products?select=stock_quantity&id=eq.${productIds[0]}`);
-  expect(still.data![0].stock_quantity).toBe(29);
+  expect(Number(still.data![0].stock_quantity ?? 0)).toBe(saved);
   const staffPage = await page.context().browser()!.newPage({ viewport: { width: 1280, height: 800 } });
   await useSessionInPage(staffPage, staff);
   await staffPage.goto('/admin?tab=products');
@@ -642,7 +658,10 @@ test('customer notes and tags: save, chips, filter; private from the customer; e
   const rows = page.locator('[data-testid="customer-row"]');
   await expect(rows).toHaveCount(1);
   // Batch 35: the row shows the name (the email is searchable, not shown).
-  await expect(rows.first()).toContainText('E2E Test Customer');
+  // Batch 61: the test login's own name, as saved now (a checkout test may
+  // have typed another one).
+  const profile = await select<{ full_name: string }[]>(admin.accessToken, `profiles?select=full_name&id=eq.${customer.userId}`);
+  await expect(rows.first()).toContainText(profile.data?.[0]?.full_name || 'E2E Test Customer');
 
   const stored = await select<{ note: string; tags: string[]; updated_by: string }[]>(
     admin.accessToken,
