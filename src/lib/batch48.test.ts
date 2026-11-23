@@ -82,7 +82,7 @@ describe('Batch 48 — the advance-payment discount maths', () => {
     expect(advanceLineLabel('percent', 0.5)).toBe('Advance payment 0.5%');
     expect(advanceLineLabel('fixed', 50)).toBe('Advance payment discount');
     expect(advancePreview({ type: 'percent', value: 0.5 })).toBe('On a ৳1,000 order the customer saves ৳5.');
-    expect(advancePreview({ type: 'fixed', value: 50 })).toBe('The customer saves ৳50 on every bKash or Nagad order.');
+    expect(advancePreview({ type: 'fixed', value: 50 })).toBe('The customer saves ৳50 when ৳1,000 or more is paid by bKash or Nagad.'); // Batch 60: the ৳1,000 rule
   });
 
   it('the admin value check', () => {

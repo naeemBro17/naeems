@@ -1,6 +1,9 @@
 import { sectionPath } from '../../lib/adminNav';
 import { ActionLink } from '../shared/ActionLink';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { adminPath } from '../../lib/adminPages';
+import { fetchWaitingStoreWalletRequests, type WaitingStoreWalletRequest } from '../../lib/storeWallet';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchCustomersV3, fetchDashboard, type DashboardData } from '../../lib/adminData';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
@@ -50,6 +53,9 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
   // "View profit & costs"; the database answers nobody else).
   const canSeeCosts = can('view_profit_costs');
   const [unpaidCount, setUnpaidCount] = useState(0);
+  // Batch 60: "I sent money" wallet requests waiting for a Confirm.
+  const [walletWaiting, setWalletWaiting] = useState<WaitingStoreWalletRequest[]>([]);
+  const navigate = useNavigate();
 
   // Batch 42 Part 1: for "View profit & costs" Home is the Dashboard — the
   // Money page's own numbers (money_summary) for Today / This month / This
@@ -74,12 +80,14 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
   }, [canSeeCosts, period]);
 
   const load = useCallback(async () => {
-    const [result, customers, unpaid] = await Promise.all([
+    const [result, customers, unpaid, waiting] = await Promise.all([
       fetchDashboard(),
       canSeeCustomers ? fetchCustomersV3() : Promise.resolve(null),
       canSeeCosts ? fetchUnpaidOrders() : Promise.resolve([]),
+      canSeeCosts ? fetchWaitingStoreWalletRequests() : Promise.resolve([]),
     ]);
     setUnpaidCount(overdueOrders(unpaid).length);
+    setWalletWaiting(waiting);
     setData(result.data);
     setError(result.error);
     setDue(
@@ -106,6 +114,16 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
     to: string;
     open: () => void;
   }[] = [];
+  for (const w of walletWaiting) {
+    const path = adminPath.customer(w.customerKey);
+    attention.push({
+      key: `wallet-${w.id}`,
+      icon: 'payouts',
+      text: `${formatTakaBd(w.amount)} wallet money from ${w.name || 'a customer'} to confirm`,
+      to: path,
+      open: () => navigate(path, { state: { fromList: true } }),
+    });
+  }
   if (data?.to_confirm !== undefined && data.to_confirm > 0) {
     attention.push({
       key: 'orders',
@@ -240,6 +258,8 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
                   <span data-testid="home-due-row">{row.text}</span>
                 ) : row.key === 'payouts' ? (
                   <span data-testid="home-unpaid-row">{row.text}</span>
+                ) : row.key.startsWith('wallet-') ? (
+                  <span data-testid="home-wallet-row">{row.text}</span>
                 ) : (
                   row.text
                 )

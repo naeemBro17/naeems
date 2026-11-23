@@ -200,6 +200,11 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
                 <Line label="Goods on orders not delivered yet" value={pos.goods_on_open_orders} sign="=" />
                 <p className="inv-muted">What it owes</p>
                 <Line label="To give" value={pos.to_give} sign="=" />
+                {(pos.to_give_wallets ?? 0) !== 0 && (
+                  <p className="inv-muted" data-testid="money-sums-wallets">
+                    of it Customer wallets: {moneyText(pos.to_give_wallets ?? 0)}
+                  </p>
+                )}
                 <Line label="Customers paid in advance" value={pos.customer_advances} sign="=" />
                 <Line label="Price of orders not delivered yet (counted when delivered)" value={pos.open_orders_value} sign="=" />
                 <Line label="Sold without stock (cost still to come)" value={pos.sold_without_stock} sign="=" />

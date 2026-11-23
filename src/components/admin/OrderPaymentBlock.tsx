@@ -225,9 +225,20 @@ export function OrderPaymentBlock({
             <li key={p.id} className="order-pay__row" data-testid="payment-row">
               <span className="order-pay__row-main">
                 <span className="order-pay__row-title">
-                  {p.kind === 'refund' ? 'Refund · ' : ''}
-                  {PAYMENT_METHOD_NAMES[p.method]}
-                  {p.trx_id ? ` · TrxID ${p.trx_id}` : ''}
+                  {/* Batch 60: money from (or back to) the customer's wallet. */}
+                  {p.method === 'store_wallet' ? (
+                    p.kind === 'refund' ? (
+                      'Back to the customer’s wallet'
+                    ) : (
+                      'Paid from wallet'
+                    )
+                  ) : (
+                    <>
+                      {p.kind === 'refund' ? 'Refund · ' : ''}
+                      {PAYMENT_METHOD_NAMES[p.method]}
+                      {p.trx_id ? ` · TrxID ${p.trx_id}` : ''}
+                    </>
+                  )}
                 </span>
                 <span className="order-pay__row-sub">
                   {paidTime(p.paid_at)}
@@ -239,11 +250,21 @@ export function OrderPaymentBlock({
                 {p.kind === 'refund' ? '−' : ''}
                 {formatTaka(p.amount)}
               </span>
-              {isAdmin && (
+              {isAdmin && p.method !== 'store_wallet' && (
                 <span className="order-pay__row-actions">
                   <button type="button" className="account-card__edit" onClick={() => openEdit(p)} aria-label={`Edit payment ${formatTaka(p.amount)}`}>
                     Edit
                   </button>
+                  <button type="button" className="account-card__edit" onClick={() => setDeleting(p)} aria-label={`Delete payment ${formatTaka(p.amount)}`}>
+                    Delete
+                  </button>
+                </span>
+              )}
+              {/* Batch 60: a wallet payment can't be edited; deleting it puts
+                  the money back in the wallet. Money back to the wallet
+                  follows the order itself (edit or cancel it). */}
+              {isAdmin && p.method === 'store_wallet' && p.kind === 'payment' && (
+                <span className="order-pay__row-actions">
                   <button type="button" className="account-card__edit" onClick={() => setDeleting(p)} aria-label={`Delete payment ${formatTaka(p.amount)}`}>
                     Delete
                   </button>
@@ -354,7 +375,13 @@ export function OrderPaymentBlock({
       <ConfirmDialog
         isOpen={deleting !== null}
         title="Delete this payment?"
-        message={deleting ? `${PAYMENT_METHOD_NAMES[deleting.method]} ${formatTaka(deleting.amount)} will be removed. This is logged in History.` : ''}
+        message={
+          deleting
+            ? deleting.method === 'store_wallet'
+              ? `${formatTaka(deleting.amount)} goes back to the customer's wallet. This is logged in History.`
+              : `${PAYMENT_METHOD_NAMES[deleting.method]} ${formatTaka(deleting.amount)} will be removed. This is logged in History.`
+            : ''
+        }
         confirmLabel="Delete payment"
         cancelLabel="Keep"
         danger

@@ -36,6 +36,7 @@ import {
   ComboPage,
   OrdersListPage,
   OrderDetailPage,
+  WalletPage,
   NotFoundPage,
   ReturnPolicyPage,
   DeliveryPolicyPage,
@@ -168,6 +169,8 @@ export default function App() {
                           {/* Batch 52: a combo Naeem shared (only people with the link). */}
                           <Route path="/c/:code" element={<ComboPage />} />
                           <Route path="/orders" element={<OrdersListPage />} />
+                          {/* Batch 60: My Wallet (signed-in customers; others go to /account). */}
+                          <Route path="/wallet" element={<WalletPage />} />
                           <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                           {/* Cart & checkout flow — see src/features/checkout. */}
                           <Route path="/cart" element={<CartPage />} />

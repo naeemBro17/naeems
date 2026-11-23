@@ -39,6 +39,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { belowCostText, type BelowCostInput } from '../../lib/smart/belowCost';
 import { useBelowCost } from '../../lib/smart/useBelowCost';
 import '../../styles/adminSmart.css';
+import { Toggle } from './edit-sheets/SheetChrome';
+import { applyStoreWalletToOrder, fetchOrderStoreWallet, type OrderStoreWallet } from '../../lib/storeWallet';
 
 /** The sources Edit order offers: the manual ones, plus the order's own
  *  when it is not one of them (a web order). */
@@ -148,6 +150,21 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
   const methodMissing = plan !== null && plan.paidNow > 0 && paidMethod === null;
   const paymentReady = payments !== null;
 
+  // Batch 60: "Use wallet balance" — wallet money taken when Save is
+  // pressed, up to what the order still owes after the money paid now.
+  const [storeWallet, setStoreWallet] = useState<OrderStoreWallet | null>(null);
+  const [useStore, setUseStore] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setUseStore(false);
+    void fetchOrderStoreWallet(order.id).then((w) => {
+      if (alive) setStoreWallet(w);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [order.id]);
+
   const update = (patch: Partial<EditDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const updateItem = (key: string, patch: Partial<EditDraft['items'][number]>) =>
     setDraft((d) => (d ? { ...d, items: d.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) } : d));
@@ -231,6 +248,13 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     (plan === null || plan.error === null) &&
     !methodMissing;
 
+  /** What "Use wallet balance" takes (0 when off). */
+  const storeToUse = (paidNow: number): number => {
+    if (!useStore || !storeWallet || !totals || order.status === 'cancelled' || order.status === 'returned') return 0;
+    const owed = Math.round((totals.total - alreadyPaid - paidNow) * 100) / 100;
+    return Math.max(0, Math.min(storeWallet.balance, owed));
+  };
+
   const save = async (allowShort = false) => {
     if (!draft || !canSave) return;
     const changes = buildOrderChanges(order, draft);
@@ -239,7 +263,8 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
     const sourceChanged = draft.source !== order.source;
     const methodChanged = draft.paymentMethod !== order.payment_method;
     const paidNow = plan?.paidNow ?? 0;
-    if (Object.keys(changes).length === 0 && !modeChanged && !sourceChanged && !methodChanged && paidNow <= 0) {
+    const fromStore = storeToUse(paidNow);
+    if (Object.keys(changes).length === 0 && !modeChanged && !sourceChanged && !methodChanged && paidNow <= 0 && fromStore <= 0) {
       showToast('Nothing changed');
       onUnchanged();
       return;
@@ -283,6 +308,10 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
         kind: 'payment',
       });
       if (result.error) return fail(result.error);
+    }
+    if (fromStore > 0) {
+      const used = await applyStoreWalletToOrder(order.id, fromStore);
+      if (!used.ok) return fail(used.error ?? 'The wallet was not used.');
     }
     setIsSaving(false);
     showToast('Order updated');
@@ -587,6 +616,26 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                 payLaterAvailable={payLaterReady}
                 methodMissing={methodMissing}
               />
+              {storeWallet && (storeWallet.onOrder > 0 || storeWallet.balance > 0) && (
+                <div className="form-field" data-testid="edit-order-use-wallet">
+                  {storeWallet.onOrder > 0 && <p className="form-hint">Paid from wallet {formatTaka(storeWallet.onOrder)}</p>}
+                  {storeWallet.balance > 0 && order.status !== 'cancelled' && order.status !== 'returned' && (
+                    <>
+                      <div className="order-admin-detail__field-row">
+                        <span className="form-label" style={{ margin: 0 }}>
+                          Use wallet balance ({formatTaka(storeWallet.balance)})
+                        </span>
+                        <Toggle checked={useStore} onChange={setUseStore} label="Use wallet balance" />
+                      </div>
+                      {useStore && (
+                        <p className="form-hint">
+                          From wallet {formatTaka(storeToUse(plan.paidNow))} when you save
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
 

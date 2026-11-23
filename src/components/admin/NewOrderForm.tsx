@@ -44,6 +44,7 @@ import { PaymentSection } from './PaymentSection';
 import { legacyPaymentMethod, planPayment, type CollectMode } from '../../lib/paymentPlan';
 import { isCollectModeReady } from '../../lib/orders';
 import type { PaymentMethodId } from '../../lib/payments';
+import { applyStoreWalletToOrder, fetchCustomerStoreWalletBalance } from '../../lib/storeWallet';
 import type { DiscountReason, OrderSource } from '../../types';
 
 interface NewOrderFormProps {
@@ -494,6 +495,31 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // "Mark as delivered right away" only for a hand-delivered order paid in full.
   const isPaidNow = totals.total > 0 && plan.paidNow >= totals.total;
 
+  // Batch 60: the customer's wallet (by their login, else their phone).
+  // "Use wallet balance" takes it right after the order is saved, up to
+  // what is still owed after the money paid now.
+  const walletProfileId = pickedCustomer && pickedCustomer !== 'new' ? pickedCustomer.profileId : null;
+  const walletPhone = address.phone.trim();
+  const [storeBalance, setStoreBalance] = useState(0);
+  const [useStore, setUseStore] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (!walletProfileId && !looksLikePhone(walletPhone)) {
+      setStoreBalance(0);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetchCustomerStoreWalletBalance(walletProfileId, walletPhone).then((balance) => {
+        if (alive) setStoreBalance(balance);
+      });
+    }, 400);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [walletProfileId, walletPhone]);
+  const fromStore = useStore ? Math.max(0, Math.min(storeBalance, Math.round((totals.total - plan.paidNow) * 100) / 100)) : 0;
+
   const canSave =
     plan.error === null &&
     !methodMissing &&
@@ -569,6 +595,10 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     if (pickedCustomer && pickedCustomer !== 'new' && pickedCustomer.profileId) {
       const link = await linkOrderCustomer(result.orderId, pickedCustomer.profileId);
       if (link.error) showToast(`Saved, but not linked to the customer: ${link.error}`, 'error');
+    }
+    if (fromStore > 0) {
+      const used = await applyStoreWalletToOrder(result.orderId, fromStore);
+      if (!used.ok) showToast(`Saved, but the wallet was not used: ${used.error ?? 'try again from Edit order'}`, 'error');
     }
     showToast(`Order ${result.orderNumber} saved`, 'success');
     await onCreated(result.orderId);
@@ -1011,6 +1041,22 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
             methodMissing={methodMissing}
           />
         </div>
+
+        {storeBalance > 0 && (
+          <div className="form-field" data-testid="new-order-use-wallet">
+            <div className="order-admin-detail__field-row">
+              <span className="form-label" style={{ margin: 0 }}>
+                Use wallet balance ({formatTaka(storeBalance)})
+              </span>
+              <Toggle checked={useStore} onChange={setUseStore} label="Use wallet balance" />
+            </div>
+            {useStore && (
+              <p className="form-hint">
+                From wallet {formatTaka(fromStore)} · still to collect {formatTaka(Math.max(0, totals.total - plan.paidNow - fromStore))}
+              </p>
+            )}
+          </div>
+        )}
 
         {zone === 'hand_delivered' && isPaidNow && (
           <div className="form-field">

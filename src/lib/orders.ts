@@ -157,6 +157,8 @@ export interface PlaceOrderInput {
   bkashSender?: string;
   promoCode?: string | null;
   customerNote?: string;
+  /** Batch 60: taken from the customer's wallet (0 / undefined = off). */
+  storeWallet?: number;
 }
 
 export interface PlaceOrderResult {
@@ -165,7 +167,7 @@ export interface PlaceOrderResult {
   error: string | null;
   /** Batch 48: what the database saved (null before migration-049, whose
    *  place_order returns only the id and number). */
-  saved: { total: number; discount: number; advanceDiscount: number } | null;
+  saved: { total: number; discount: number; advanceDiscount: number; storeWallet: number } | null;
   /** Batch 51: the order has something bought after the order (false
    *  before migration-052). */
   buysLater: boolean;
@@ -184,7 +186,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     quantity: item.quantity,
   }));
 
-  const { data, error } = await supabase.rpc('place_order', {
+  // Batch 60: place_order_wallet only when the wallet is switched on, so
+  // checkout keeps working before migration-060 is run.
+  const storeWallet = Math.max(0, input.storeWallet ?? 0);
+  const { data, error } = await supabase.rpc(storeWallet > 0 ? 'place_order_wallet' : 'place_order', {
     p_items: items,
     p_full_name: input.address.fullName,
     p_phone: input.address.phone,
@@ -200,13 +205,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     p_bkash_sender: isWalletMethod(input.paymentMethod) ? (input.bkashSender ?? null) : null,
     p_promo_code: input.promoCode ?? null,
     p_customer_note: input.customerNote ?? null,
+    ...(storeWallet > 0 ? { p_store_wallet: storeWallet } : {}),
   });
 
   if (error) {
     // place_order's RAISE EXCEPTION messages are written to be shown to the
     // customer as-is (stock/price/promo problems) — anything else falls
     // back to a generic message rather than leaking a raw Postgres error.
-    const friendly = /already|sign|stock|available|invalid|required|promo|no longer|limit/i.test(
+    const friendly = /already|sign|stock|available|invalid|required|promo|no longer|limit|wallet/i.test(
       error.message
     )
       ? error.message
@@ -216,7 +222,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   const row = (
     data as
-      | { order_id: string; order_number: string; total?: number | string; discount?: number | string; advance_discount?: number | string }[]
+      | {
+          order_id: string;
+          order_number: string;
+          total?: number | string;
+          discount?: number | string;
+          advance_discount?: number | string;
+          store_wallet?: number | string;
+        }[]
       | null
   )?.[0];
   if (!row) {
@@ -225,7 +238,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const saved =
     row.total === undefined || row.total === null
       ? null
-      : { total: Number(row.total), discount: Number(row.discount ?? 0), advanceDiscount: Number(row.advance_discount ?? 0) };
+      : {
+          total: Number(row.total),
+          discount: Number(row.discount ?? 0),
+          advanceDiscount: Number(row.advance_discount ?? 0),
+          storeWallet: Number(row.store_wallet ?? 0),
+        };
   // Batch 51: the customer may read their own order; before migration-052
   // the column is missing and the answer is simply "no".
   const extra = await supabase.from('orders').select('buys_later').eq('id', row.order_id).maybeSingle();

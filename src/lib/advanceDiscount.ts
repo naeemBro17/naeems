@@ -94,7 +94,8 @@ export function advancePreview(rule: Pick<AdvanceDiscountRule, 'type' | 'value'>
     const saves = Math.min(Math.round((1000 * Math.max(rule.value, 0)) / 100), 1000);
     return `On a ${takaTight(1000)} order the customer saves ${takaTight(saves)}.`;
   }
-  return `The customer saves ${takaTight(Math.max(rule.value, 0))} on every bKash or Nagad order.`;
+  // Batch 60: only when ৳1,000 or more is paid in advance.
+  return `The customer saves ${takaTight(Math.max(rule.value, 0))} when ৳1,000 or more is paid by bKash or Nagad.`;
 }
 
 /** An order's whole discount split into the promo / hand-typed part and the

@@ -15,6 +15,8 @@ import { loginReturnPath } from '../lib/loginReturn';
 import { BottomSheet } from '../components/shared/BottomSheet';
 import { HeartIcon } from '../components/viewer/Wishlist';
 import { useWishlist } from '../contexts/WishlistContext';
+import { useMyStoreWallet } from '../hooks/useMyStoreWallet';
+import { formatTaka } from '../lib/format';
 
 function Chevron() {
   return (
@@ -144,6 +146,25 @@ function areaSummary(division: string | null, district: string | null, thana: st
   return [thana, district, division].filter((v): v is string => Boolean(v)).join(', ');
 }
 
+/** Batch 60: the My Wallet card, right under the header (signed-in
+ *  customers; hidden until migration-060 has been run). */
+function WalletCard() {
+  const { wallet } = useMyStoreWallet();
+  if (!wallet.available) return null;
+  const waiting = wallet.waiting[0];
+  return (
+    <Link to="/wallet" className="mw-card" data-testid="account-wallet">
+      <span className="mw-card__label">MY WALLET</span>
+      <p className="mw-card__balance">{formatTaka(wallet.balance)}</p>
+      <span className="mw-card__hint">Your skincare fund</span>
+      {waiting && <span className="mw-card__wait">{formatTaka(waiting.amount)} waiting for confirmation</span>}
+      <svg className="mw-card__chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </Link>
+  );
+}
+
 function CustomerAccountView() {
   const { session, profile, signOut } = useAuth();
   const { settings } = useProducts();
@@ -200,6 +221,8 @@ function CustomerAccountView() {
           {email !== '' && <p className="account-header__email">{email}</p>}
         </div>
       </div>
+
+      <WalletCard />
 
       <section className="account-card">
         <div className="account-card__head">

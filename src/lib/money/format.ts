@@ -125,6 +125,7 @@ const TYPE_LABELS: Record<LedgerType, string> = {
   customer_payment: 'Customer payment',
   customer_refund: 'Refund to customer',
   previous_balance_payment: 'Previous balance paid',
+  store_wallet_in: 'Added to a customer wallet',
   steadfast_payout_out: 'Paid out by Steadfast',
   courier_fees: 'Courier & COD fees (in order profit)',
   steadfast_unmatched: 'Parcel not matched to an order',

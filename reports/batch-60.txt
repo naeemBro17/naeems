@@ -1,0 +1,214 @@
+BATCH 60 — My Wallet (customers keep money with the shop and spend it on orders)
+Version 1.60.0 · Branch feature/batch-60-wallet (from main) · 23 Nov 2026
+
+======================================================================
+WHAT NAEEM DOES, IN ORDER
+======================================================================
+ 1. Supabase → SQL Editor → paste ALL of supabase/migration-060-batch60.sql
+    → Run. One transaction, safe to run again, needs no sign-in.
+ 2. Open the Money page once. The line under "Money now" should still be
+    green: "All figures match".
+ 3. Merge the pull request (link at the end). Vercel puts it live.
+ You can do 1 and 3 in either order. Before step 1 the shop works exactly
+ as today: the wallet card, the wallet page's money and "Use wallet
+ balance" simply do not show, and checkout uses the old place_order.
+
+======================================================================
+1. WHAT I DID
+======================================================================
+WHAT CUSTOMERS SEE
+ • Account page: a dark "MY WALLET" card right under their name, with the
+   balance ("Your skincare fund") and, while a request waits, "৳2,000
+   waiting for confirmation". Tap → My Wallet.
+ • My Wallet (/wallet). First visit: "Save a little now. Glow a lot
+   later." with three short promises, each line fading in after the other
+   (at once for people who turn animations off), and an orange "Add
+   money" button. Once there is money or history: the balance, "Due ৳X"
+   (only if they owe), any waiting request, "Add money", and the history
+   newest first ("Added", "Added by NAEEM'S", "Used on order NM-5120" with
+   a link to the order, "Returned from order …", "Extra paid on order …",
+   "Correction"). Signed-out visitors are sent to sign in, then back.
+ • Add money: amount (chips ৳1,000 / ৳2,000 / ৳5,000, minimum ৳500),
+   bKash or Nagad (Nagad only when the shop offers Nagad, same rule as
+   checkout), your shop number, transaction ID, their own number, the
+   "can't be refunded as cash" line, Submit. Then "Almost there!" with a
+   green "Let us know on WhatsApp" button that opens WhatsApp to your shop
+   number with:
+       হাই, আমি আমার Wallet-এ ৳3,000 পাঠিয়েছি।
+       bKash, Transaction ID: 9AK2XYZ1AB
+       নাম: <their name>
+       প্লিজ কনফার্ম করবেন। ধন্যবাদ!
+   (No shop WhatsApp number set → the button is hidden.)
+ • When you confirm, the next time they open Account or My Wallet (or at
+   once if it is open) a toast says "৳3,000 added to your wallet", once.
+   If you reject: "We couldn't confirm ৳3,000. Please message us on
+   WhatsApp." with a WhatsApp link, until they tap Dismiss.
+ • Checkout → Payment: when they have money in the wallet, a "Use wallet
+   balance" card (off every time). On: "From wallet ৳X" and "On delivery
+   ৳Y" (or "Pay now ৳Y" with bKash / Nagad). If it covers everything, the
+   payment methods disappear and a green "Fully paid from your wallet"
+   shows. The summary has "Paid from wallet −৳X". The server checks the
+   balance again; if it changed: "Your wallet balance changed. Please
+   check and try again."
+ • Order placed page, My Orders, the order page and the invoice PDF all
+   say "Paid from wallet ৳X" where it applies.
+
+THE ADVANCE-PAYMENT DISCOUNT (৳1,000 RULE)
+ • The bKash / Nagad discount is given only when ৳1,000 or more is paid
+   in advance for that order. Below that, no "Pay in advance" badge and
+   no discount (bKash / Nagad still work). Wallet money never earns it:
+   the wallet part comes off first, then the rule looks at what is left.
+   The server decides; the screen only shows a preview. Old orders keep
+   exactly the discount they were placed with (nothing recalculated).
+ • Settings preview now says "The customer saves ৳50 when ৳1,000 or more
+   is paid by bKash or Nagad."
+
+WHAT YOU DO WHEN "I SENT MONEY" COMES ON WHATSAPP
+ • Home → Needs attention shows "৳3,000 wallet money from Ayesha to
+   confirm". Tap it (or open the customer) → WALLET card (above TO
+   RECEIVE) → check the money really arrived → Confirm. A small sheet asks
+   which account it came into (bKash for bKash; Nagad for Nagad, or bKash
+   if you have no Nagad account) → Confirm. The money goes into that
+   account AND into the customer's wallet. Reject (reason optional) moves
+   no money.
+
+ADDING MONEY FOR A CUSTOMER YOURSELF
+ • Customer page → WALLET → "Add to wallet": Amount, Received in (your
+   accounts, never "With Steadfast"), Date (today), Note → "Add ৳5,000".
+   Works for customers with no login too.
+ • Super Admin only: "Correct" (new balance, a reason, your password) for
+   mistakes. No money moves; written to the Activity Log.
+ • New order and Edit order: if the customer has a balance, a "Use wallet
+   balance" switch. It takes up to what the order still owes.
+
+HOW IT SHOWS ON THE MONEY PAGE
+ • A wallet balance is money the business OWES the customer. It is never a
+   sale and never profit (profit still counts only when an order is
+   delivered; Batch 58's profit engine is untouched).
+ • Money added: the account goes up AND "Customer wallets" (inside To
+   give) goes up by the same amount, so the balance check stays green.
+ • Wallet used on an order: no account moves; the order's due goes down
+   and "Customer wallets" goes down by the same amount.
+ • "Investors and what I owe → Other people" lists "Customer wallets", and
+   "Show the sums" says "of it Customer wallets: ৳X" (only when not ৳0).
+   Home's "To give" includes it.
+ • Steadfast COD = what is still owed after the wallet. An order fully
+   paid from the wallet is booked with COD ৳0 (also after an edit or a
+   re-book: COD always reads the order's current due).
+
+THE AUTOMATIC PART
+ • Order cancelled / returned / edited down below what was paid: the
+   wallet part goes back to the wallet; anything paid above the total by
+   real money also goes into the wallet ("Extra paid on order"). Batch
+   58's "Credit — paid more than owed" line is gone: that money is the
+   wallet now. Today there are 0 such orders, so the migration moves ৳0.
+ • Order edited up again / reopened: taken back from the wallet as far as
+   the balance allows (the rest is due).
+ • Order deleted (Super Admin + Safety Lock): its wallet money goes back.
+ • Merging two customers (Batch 55): the wallet moves with them; the total
+   does not change.
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+ The whole file supabase/migration-060-batch60.sql (BEGIN … COMMIT).
+ Tested exactly as you will run it: as "postgres", with no sign-in, twice
+ in a row, inside a transaction that was then thrown away, on the live
+ database. Result: no errors, balance check difference ৳0.00, nothing
+ left behind afterwards. I did NOT run it for real.
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • Nothing in the brief is left out.
+ • Taking wallet money back OFF an order from Edit order is not a button:
+   the Super Admin deletes the "Paid from wallet" row on the order page
+   (it goes back to the wallet), or edits / cancels the order.
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+ • Tests (database, rolled back on live, with the migration in front):
+   e2e/sql/batch-60.sql 98 of 98 · e2e/sql/audit/batch-57-month.sql 113
+   of 113. Two audit checks were updated on purpose (X3: the ৳200 paid
+   too much is now in the wallet, not "customer advances" / "credit").
+ • Older replay tests already fail on main, with or without this batch
+   (I ran each both ways, same result): Batch 48 SQL 18 of 26 (it expects
+   the 0.5% setting; the live shop uses fixed ৳50), Batch 49 39 of 43,
+   Batch 51 52 of 53, Batch 54 29 of 30, Batch 50 and Batch 55 stop with
+   an error (a later batch changed functions they re-create). Worth a
+   small clean-up batch.
+ • place_order keeps its exact arguments; the wallet goes through a new
+   place_order_wallet. A second place_order with more arguments would have
+   broken every replay test that re-creates the old one.
+ • A first version of the Add money sheet showed inside the page instead
+   of over it (the approved CSS rule ".mw-page > *" caught it). Seen on
+   the screenshots and fixed.
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • Who may Confirm / Reject / Add: "View profit & costs", the same
+   permission that records a customer's payments on the customer page.
+   Correct: Super Admin + password. Using the wallet on an admin order:
+   "Create orders" or "Edit orders".
+ • ৳1,000 is compared with what is left BEFORE the discount (so a ৳1,000
+   advance gets it; the test "৳1,000 gets it" needs this).
+ • With wallet + bKash, the percent discount is worked out on the
+   products' part of what is left (never delivery, never the wallet).
+ • Fully paid from the wallet: saved as Cash on Delivery with nothing to
+   pay (no bKash payment to check). Screens say "Wallet".
+ • A transaction ID is "used" forever once in any request (also a
+   rejected one) or any order payment, as the brief says.
+ • Phone-number wallets follow the number: if a no-login customer later
+   signs up with that number, their wallet comes with them.
+ • A customer with a wallet can't be deleted (hide instead).
+ • Toggle on checkout: the site's existing green switch style.
+ • Tab title "My Wallet | NAEEM'S" (no long dash in customer text).
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+======================================================================
+ 1. Medium: a "Wallet" list in Admin (all customers with a balance,
+    sorted) so you can see who holds how much at a glance.
+ 2. Small: send the customer a WhatsApp template when you confirm
+    ("৳3,000 added, balance ৳5,000") from the Confirm sheet.
+ 3. Small: a printable wallet statement (PDF) per customer, for trust.
+ 4. Medium: bKash payment API to confirm automatically instead of by eye.
+ 5. Small: fix the old replay tests listed in section 4.
+
+======================================================================
+TESTS
+======================================================================
+ • Unit (vitest): 20 new (split, ৳1,000 rule, WhatsApp text, labels,
+   invoice, no long dashes). Batch 48's preview text test updated.
+ • Browser: e2e/batch-60.spec.ts 13 of 13 (everything mocked; nothing
+   saved). Batch 48 checkout tests 7 of 7 with the ৳1,000 rule (their
+   product now makes a cart of ৳1,000 or more). Batch 58 spec: the credit
+   test now checks the line is gone.
+ • Screens (390 px): reports/batch-60-screens/ — story light + dark (and
+   fade-in frames), add money, almost there, account card with waiting,
+   wallet with balance, checkout split, checkout fully paid, admin wallet
+   card, admin add sheet.
+ • Full run (npm run verify, once): build OK · vitest 797/797 · e2e 292
+   passed, 293 skipped, 26 FAILED (27.6 min). None of the 26 is in a file
+   this batch changed, and none is about the wallet:
+     - 9 old database replay tests (Batch 39, 45, 46, 47, 48, 49, 50, 51,
+       54, 55): they re-create older versions of functions on top of
+       today's database (see section 4; same result without this batch).
+     - 10 need a product with stock: the live shop has none left that the
+       tests can use ("No active product with enough tracked stock",
+       "Only 0 of … left in stock"), incl. Batch 52.1's keep-selling test.
+     - 4 read live states that are different today (Batch 40 image /
+       update checks, Batch 41 opening balances, Batch 42 end-of-day
+       count).
+     - 2 timeouts (Batch 23 video row, Batch 27 cart stepper): re-run
+       alone, both passed twice each. The third re-run pair was stopped by
+       the tool's time limit; I did not run more to save Supabase
+       bandwidth (each re-run also ran the rest of its group).
+   The skipped ones are the tests after a failure in the same serial file.
+ • During the batch: verify:quick build OK, vitest 797/797, Batch 58 and
+   Batch 60 browser files all passed; Batch 48's 7 checkout tests passed
+   (only its old database replay failed, as above).
+
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-60-wallet

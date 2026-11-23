@@ -439,13 +439,16 @@ BEGIN
   PERFORM admin_set_order_status(v_id, 'delivered', 'audit57');
   x1 := money_position();
   SELECT row_to_json(d)::jsonb INTO v_j FROM money_customer_dues() d WHERE d.customer_key = 'ph:01799957011';
-  PERFORM pg_temp.ck('X3 overpaid order', 'Money position: customer advances +200', 200,
-    pg_temp.num(x1, 'customer_advances') - pg_temp.num(x0, 'customer_advances'));
-  -- Batch 58 (I11): the extra is shown as the customer's credit (its own
-  -- column), not as a negative due.
-  PERFORM pg_temp.ck('X3 overpaid order', 'Customer dues list: credit ৳200 (paid more than owed)', 200,
-    CASE WHEN v_j IS NULL THEN 0 ELSE pg_temp.num(v_j, 'credit') END,
-    CASE WHEN v_j IS NULL THEN 'customer not in the dues list at all' ELSE v_j::text END);
+  -- Batch 60 (rule changed on purpose): money paid above an order's total
+  -- goes into the customer's wallet ('overpaid'), owed under To give as
+  -- "Customer wallets". Batch 58's separate credit is the wallet now, so
+  -- customer advances and the dues list's credit stay ৳0.
+  PERFORM pg_temp.ck('X3 overpaid order', 'Money position: Customer wallets +200 (was customer advances)', 200,
+    COALESCE(pg_temp.num(x1, 'to_give_wallets') - pg_temp.num(x0, 'to_give_wallets'), 0)
+    + pg_temp.num(x1, 'customer_advances') - pg_temp.num(x0, 'customer_advances'));
+  PERFORM pg_temp.ck('X3 overpaid order', 'The ৳200 is in the customer''s wallet (no credit left in the dues list)', 200,
+    store_wallet_balance('ph:01799957011') - CASE WHEN v_j IS NULL THEN 0 ELSE pg_temp.num(v_j, 'credit') END,
+    CASE WHEN v_j IS NULL THEN 'customer not in the dues list' ELSE v_j::text END);
 
   -- X4. Investor profit share paid BEFORE the money start date (direct, like
   -- the Batch 56 import): "this year" vs "all time".
