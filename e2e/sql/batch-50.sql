@@ -1,10 +1,13 @@
 -- Batch 50 database tests (run by e2e/batch-50.spec.ts through the Supabase
--- command line). The runner puts the whole Batch 50 migration
--- (supabase/migration-051-batch50.sql, without its own BEGIN / COMMIT) in
--- front of this script, so everything — the migration, the made-up items,
--- hidden products, old bills and previous-balance corrections — runs
--- inside ONE transaction that always ends with ROLLBACK. Nothing real is
--- changed.
+-- command line) against today's functions on the live database (Batch 61:
+-- no old migration is replayed any more). Everything — the made-up items,
+-- hidden products, old bills, previous-balance corrections and the money
+-- start date this test needs — runs inside ONE transaction that always
+-- ends with ROLLBACK. Nothing real is changed.
+-- Today's rules (Batch 58, one profit engine): old Kaarbar bills count in
+-- profit only on or after the money start date, and money_profit_parts
+-- (Money page, Dashboard, Reports) holds them. So the start date is moved
+-- to 1 Aug 2026 here, before the made-up August / September bills.
 --
 -- Result: the rows (name, ok, detail) of the SELECT before the ROLLBACK.
 DO $test$
@@ -31,6 +34,8 @@ DECLARE
   v_parts0   jsonb;
   v_parts1   jsonb;
   v_pnl      jsonb;
+  v_pnl0     jsonb;
+  v_old0     jsonb;
   v_snap0    text;
   v_snap1    text;
   v_dues0    numeric;
@@ -40,6 +45,13 @@ BEGIN
   EXECUTE 'CREATE TEMP TABLE t_res (n serial, name text, ok boolean, detail text)';
   EXECUTE $f$CREATE FUNCTION pg_temp.ck(p_name text, p_ok boolean, p_detail text DEFAULT '') RETURNS void
     LANGUAGE sql AS 'INSERT INTO t_res (name, ok, detail) VALUES (p_name, COALESCE(p_ok, false), COALESCE(p_detail, ''''))'$f$;
+  -- One product's old line in Reports → Products (zeros when it has none).
+  EXECUTE $f$CREATE FUNCTION pg_temp.old_line(p_lines jsonb, p_product uuid, p_unit text) RETURNS jsonb LANGUAGE sql AS $s$
+    SELECT jsonb_build_object('sales', COALESCE(sum((o ->> 'sales')::numeric), 0), 'cost', COALESCE(sum((o ->> 'cost')::numeric), 0),
+                              'units', COALESCE(sum((o ->> 'units')::numeric), 0))
+    FROM jsonb_array_elements(COALESCE(p_lines, '[]'::jsonb)) o
+    WHERE o ->> 'product_id' = p_product::text AND o ->> 'stock_unit' = p_unit
+  $s$$f$;
   -- Everything the old sales must never change, as one text.
   EXECUTE $f$CREATE FUNCTION pg_temp.snap() RETURNS text LANGUAGE sql AS $s$
     SELECT concat_ws(' | ',
@@ -65,7 +77,7 @@ BEGIN
   SELECT bd_phone_key(phone) INTO v_cust_pk FROM profiles WHERE id = v_cust;
 
   -- ================================================ the migration itself
-  PERFORM pg_temp.ck('Migration: the item, bill, bill line and correction tables exist',
+  PERFORM pg_temp.ck('The item, bill, bill line and correction tables exist',
     to_regclass('kaarbar_items') IS NOT NULL AND to_regclass('kaarbar_bills') IS NOT NULL
     AND to_regclass('kaarbar_bill_lines') IS NOT NULL AND to_regclass('customer_previous_corrections') IS NOT NULL);
   PERFORM pg_temp.ck('Anonymous visitors cannot call any new function',
@@ -155,10 +167,14 @@ BEGIN
   PERFORM pg_temp.ck('A product with price 0 cannot be shown in the shop', v_err LIKE 'Set a price before showing%', COALESCE(v_err, 'no error'));
 
   -- ================================================ Step 2
+  UPDATE money_books SET start_date = DATE '2026-08-01' WHERE id = 1;
   v_snap0 := pg_temp.snap();
   v_pos0 := money_position();
   v_parts0 := money_profit_parts(DATE '2026-08-01', DATE '2026-09-30');
   SELECT COALESCE(sum(order_due + previous_left), 0) INTO v_dues0 FROM money_customer_dues();
+  -- The shop's own old bills in August / September (start date moved above).
+  v_pnl0 := report_profit_loss(DATE '2026-08-01', DATE '2026-09-30');
+  v_old0 := report_products(DATE '2026-08-01', DATE '2026-09-30') -> 'old_sold';
 
   -- S1: A 2 × 1500 + H 100 ml × 5, delivery 100, bill discount 600 → 3,000.
   -- S2: H 1 pack × 400 → 400.   R1 (return): A 1 × 1500 → 1,500.
@@ -221,44 +237,58 @@ BEGIN
   PERFORM pg_temp.ck('Old sales change nothing: orders, items, lots, stock, money movements, payments, dues', v_snap0 = v_snap1,
     format('before %s / after %s', v_snap0, v_snap1));
   v_pos1 := money_position();
-  PERFORM pg_temp.ck('The Money position is exactly the same (accounts, to receive, previous balances, stock, net worth, check)',
+  -- Batch 58: old bills on / after the start date count in net profit and
+  -- so in the balance check, with no money side: the check moves by their
+  -- profit (৳500) and nothing else does.
+  PERFORM pg_temp.ck('The Money position is the same (accounts, to receive, previous balances, stock, net worth); the check moves by the old profit only',
     (v_pos0 ->> 'accounts_total') = (v_pos1 ->> 'accounts_total') AND (v_pos0 ->> 'to_receive') = (v_pos1 ->> 'to_receive')
     AND (v_pos0 ->> 'previous_balances') = (v_pos1 ->> 'previous_balances') AND (v_pos0 ->> 'stock_value') = (v_pos1 ->> 'stock_value')
-    AND (v_pos0 ->> 'net_worth') = (v_pos1 ->> 'net_worth') AND (v_pos0 ->> 'difference') IS NOT DISTINCT FROM (v_pos1 ->> 'difference'),
+    AND (v_pos0 ->> 'net_worth') = (v_pos1 ->> 'net_worth')
+    AND (v_pos1 ->> 'difference')::numeric = (v_pos0 ->> 'difference')::numeric - 500,
     format('net worth %s → %s, difference %s → %s', v_pos0 ->> 'net_worth', v_pos1 ->> 'net_worth', v_pos0 ->> 'difference', v_pos1 ->> 'difference'));
   v_parts1 := money_profit_parts(DATE '2026-08-01', DATE '2026-09-30');
-  PERFORM pg_temp.ck('money_profit_parts (Money page, Dashboard) does not count old sales', v_parts0 = v_parts1);
+  PERFORM pg_temp.ck('money_profit_parts (Money page, Dashboard) counts the old bills: 3 bills, profit + 500 (Batch 58: one profit engine)',
+    (v_parts1 ->> 'old_bills')::int = (v_parts0 ->> 'old_bills')::int + 3
+    AND (v_parts1 ->> 'net_profit')::numeric = (v_parts0 ->> 'net_profit')::numeric + 500,
+    format('bills %s → %s, net %s → %s', v_parts0 ->> 'old_bills', v_parts1 ->> 'old_bills', v_parts0 ->> 'net_profit', v_parts1 ->> 'net_profit'));
   SELECT COALESCE(sum(order_due + previous_left), 0) INTO v_dues1 FROM money_customer_dues();
   PERFORM pg_temp.ck('Customer dues do not change', v_dues0 = v_dues1, format('%s → %s', v_dues0, v_dues1));
 
   v_pnl := report_profit_loss(DATE '2026-08-01', DATE '2026-09-30');
-  PERFORM pg_temp.ck('Profit & loss: old sales 2,400, bill discounts 600, cost 2,200 + 200 + 200 − 1,000, delivery 100',
-    (v_pnl -> 'parts' ->> 'old_bills')::int = 3 AND (v_pnl -> 'parts' ->> 'old_sales_gross')::numeric = 2400
-    AND (v_pnl -> 'parts' ->> 'old_bill_discounts')::numeric = 600 AND (v_pnl -> 'parts' ->> 'old_sales')::numeric = 1800
-    AND (v_pnl -> 'parts' ->> 'old_cost')::numeric = 1400 AND (v_pnl -> 'parts' ->> 'old_delivery')::numeric = 100,
+  PERFORM pg_temp.ck('Profit & loss: old sales 2,400, bill discounts 600, cost 2,200 + 200 + 200 − 1,000, delivery 100 (on top of the shop''s own old bills)',
+    (v_pnl -> 'parts' ->> 'old_bills')::int = (v_pnl0 -> 'parts' ->> 'old_bills')::int + 3
+    AND (v_pnl -> 'parts' ->> 'old_sales_gross')::numeric = (v_pnl0 -> 'parts' ->> 'old_sales_gross')::numeric + 2400
+    AND (v_pnl -> 'parts' ->> 'old_bill_discounts')::numeric = (v_pnl0 -> 'parts' ->> 'old_bill_discounts')::numeric + 600
+    AND (v_pnl -> 'parts' ->> 'old_sales')::numeric = (v_pnl0 -> 'parts' ->> 'old_sales')::numeric + 1800
+    AND (v_pnl -> 'parts' ->> 'old_cost')::numeric = (v_pnl0 -> 'parts' ->> 'old_cost')::numeric + 1400
+    AND (v_pnl -> 'parts' ->> 'old_delivery')::numeric = (v_pnl0 -> 'parts' ->> 'old_delivery')::numeric + 100,
     (v_pnl -> 'parts')::text);
   PERFORM pg_temp.ck('Profit & loss: the profit lines include the old profit (500)',
-    (v_pnl -> 'parts' ->> 'net_profit')::numeric = (v_parts1 ->> 'net_profit')::numeric + 500
-    AND (v_pnl -> 'parts' ->> 'your_profit')::numeric = (v_parts1 ->> 'your_profit')::numeric + 500
-    AND (v_pnl -> 'parts' ->> 'left_in_business')::numeric = (v_parts1 ->> 'left_in_business')::numeric + 500
-    AND (v_pnl -> 'parts' ->> 'gross_profit')::numeric = (v_parts1 ->> 'sales')::numeric - (v_parts1 ->> 'cost')::numeric + 400);
+    (v_pnl -> 'parts' ->> 'net_profit')::numeric = (v_parts0 ->> 'net_profit')::numeric + 500
+    AND (v_pnl -> 'parts' ->> 'your_profit')::numeric = (v_parts0 ->> 'your_profit')::numeric + 500
+    AND (v_pnl -> 'parts' ->> 'left_in_business')::numeric = (v_parts0 ->> 'left_in_business')::numeric + 500
+    AND (v_pnl -> 'parts' ->> 'gross_profit')::numeric = (v_parts0 ->> 'gross_profit')::numeric + 400,
+    (v_pnl -> 'parts')::text);
   PERFORM pg_temp.ck('Profit & loss month by month: August and September',
     jsonb_array_length(v_pnl -> 'months') = 2
-    AND (v_pnl -> 'months' -> 0 ->> 'old_sales')::numeric = 2900 AND (v_pnl -> 'months' -> 1 ->> 'old_sales')::numeric = -1100
-    AND (v_pnl -> 'months' -> 0 ->> 'old_cost')::numeric = 2200 AND (v_pnl -> 'months' -> 1 ->> 'old_cost')::numeric = -800,
+    AND (v_pnl -> 'months' -> 0 ->> 'old_sales')::numeric = (v_pnl0 -> 'months' -> 0 ->> 'old_sales')::numeric + 2900
+    AND (v_pnl -> 'months' -> 1 ->> 'old_sales')::numeric = (v_pnl0 -> 'months' -> 1 ->> 'old_sales')::numeric - 1100
+    AND (v_pnl -> 'months' -> 0 ->> 'old_cost')::numeric = (v_pnl0 -> 'months' -> 0 ->> 'old_cost')::numeric + 2200
+    AND (v_pnl -> 'months' -> 1 ->> 'old_cost')::numeric = (v_pnl0 -> 'months' -> 1 ->> 'old_cost')::numeric - 800,
     (v_pnl -> 'months')::text);
   v_pnl := report_profit_loss(DATE '2026-10-01', DATE '2026-10-31');
   PERFORM pg_temp.ck('A range without old months has no old lines', (v_pnl -> 'parts' ->> 'old_bills')::int = 0);
 
   v_json := report_products(DATE '2026-08-01', DATE '2026-09-30');
   PERFORM pg_temp.ck('Products report: old lines per product and unit; the bill discount spread by line totals',
-    jsonb_array_length(v_json -> 'old_sold') = 3
-    AND EXISTS (SELECT 1 FROM jsonb_array_elements(v_json -> 'old_sold') o
-                WHERE o ->> 'product_id' = v_prod::text AND (o ->> 'sales')::numeric = 985.71 AND (o ->> 'cost')::numeric = 1000 AND (o ->> 'units')::numeric = 1)
-    AND EXISTS (SELECT 1 FROM jsonb_array_elements(v_json -> 'old_sold') o
-                WHERE o ->> 'stock_unit' = 'ml' AND (o ->> 'sales')::numeric = 414.29 AND (o ->> 'cost')::numeric = 200)
-    AND (SELECT sum((o ->> 'sales')::numeric) FROM jsonb_array_elements(v_json -> 'old_sold') o) = 1800,
-    (v_json -> 'old_sold')::text);
+    (pg_temp.old_line(v_json -> 'old_sold', v_prod, 'pcs') ->> 'sales')::numeric = (pg_temp.old_line(v_old0, v_prod, 'pcs') ->> 'sales')::numeric + 985.71
+    AND (pg_temp.old_line(v_json -> 'old_sold', v_prod, 'pcs') ->> 'cost')::numeric = (pg_temp.old_line(v_old0, v_prod, 'pcs') ->> 'cost')::numeric + 1000
+    AND (pg_temp.old_line(v_json -> 'old_sold', v_prod, 'pcs') ->> 'units')::numeric = (pg_temp.old_line(v_old0, v_prod, 'pcs') ->> 'units')::numeric + 1
+    AND (pg_temp.old_line(v_json -> 'old_sold', v_hidden, 'ml') ->> 'sales')::numeric = 414.29
+    AND (pg_temp.old_line(v_json -> 'old_sold', v_hidden, 'ml') ->> 'cost')::numeric = 200
+    AND (SELECT sum((o ->> 'sales')::numeric) FROM jsonb_array_elements(v_json -> 'old_sold') o)
+        = COALESCE((SELECT sum((o ->> 'sales')::numeric) FROM jsonb_array_elements(v_old0) o), 0) + 1800,
+    format('%s / %s', pg_temp.old_line(v_json -> 'old_sold', v_prod, 'pcs'), pg_temp.old_line(v_json -> 'old_sold', v_hidden, 'ml')));
 
   PERFORM pg_temp.ck('The hidden product gets the latest Kaarbar sale price, and stays hidden',
     EXISTS (SELECT 1 FROM products WHERE id = v_hidden AND retail_price = 400 AND NOT is_active));
@@ -268,7 +298,7 @@ BEGIN
                        'product_id', v_prod, 'variant_id', NULL, 'cost_per_pack', 1100)));
   v_pnl := report_profit_loss(DATE '2026-08-01', DATE '2026-09-30');
   PERFORM pg_temp.ck('Correcting a buying price in Step 1 corrects the old profit (cost 1,400 → 1,500)',
-    (v_pnl -> 'parts' ->> 'old_cost')::numeric = 1500, v_pnl -> 'parts' ->> 'old_cost');
+    (v_pnl -> 'parts' ->> 'old_cost')::numeric = (v_pnl0 -> 'parts' ->> 'old_cost')::numeric + 1500, v_pnl -> 'parts' ->> 'old_cost');
   PERFORM pg_temp.ck('… and the price per ml typed in Step 2 is kept', (SELECT (unit_costs ->> 'ml')::numeric FROM kaarbar_items WHERE id = v_item_h) = 2);
 
   v_json := kaarbar_import_sales(v_rows);

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, shopProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { DAY, mockPayouts, restAnswer, withRichProduct } from './helpers/batch36';
 
 // Batch 36: screenshots for reports/batch-36-screens/ — 390 px and
@@ -22,7 +22,8 @@ const THEMES = ['light', 'dark'] as const;
 const MESSAGE = 'Rume\nYousuf traders dhan dokaner pisone basha,uttar bazar,poroshuram, Feni\n01638820872';
 
 let admin: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
+let shown: { id: string; slug: string };
 let order: { id: string; orderNumber: string } | null = null;
 let slug = '';
 let photoSlug = '';
@@ -31,8 +32,10 @@ test.beforeAll(async () => {
   test.setTimeout(90_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   const customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
-  slug = (await select<{ slug: string }[]>(null, `products_view?select=slug&id=eq.${product.id}`)).data?.[0]?.slug ?? product.id;
+  product = await makeTestProduct();
+  // Batch 61: the customer page is a real product's (only looked at).
+  shown = await shopProduct();
+  slug = shown.slug;
   const rows = await select<{ slug: string; image_urls: string[] | null }[]>(null, 'products_view?select=slug,image_urls&is_active=eq.true&limit=300');
   photoSlug = (rows.data ?? []).find((r) => (r.image_urls ?? []).length >= 2)?.slug ?? slug;
   order = await placeTestOrder(customer.accessToken, product.id, 1);
@@ -84,7 +87,7 @@ for (const size of SIZES) {
       await expect(page.getByTestId('payouts-list')).toBeVisible();
       await page.screenshot({ path: `${DIR}/payouts-${tag}.png`, fullPage: true });
 
-      await page.getByTestId('payouts-list').getByRole('button').first().click();
+      await page.getByTestId('payouts-list').getByRole('link').first().click();
       await expect(page.getByTestId('payout-table')).toBeVisible();
       await page.screenshot({ path: `${DIR}/payout-detail-${tag}.png`, fullPage: true });
 
@@ -102,7 +105,7 @@ for (const size of SIZES) {
     test(`rich text screens ${tag}`, async ({ page }) => {
       test.setTimeout(90_000);
       await setup(page, size.width, size.height, theme);
-      await withRichProduct(page, product.id);
+      await withRichProduct(page, shown.id);
       await page.goto(`/product/${slug}`);
       const about = page.getByTestId('pdp-about');
       await expect(about).toBeVisible({ timeout: 15_000 });

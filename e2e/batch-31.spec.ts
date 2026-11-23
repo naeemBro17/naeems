@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_PASSWORD, SUPABASE_ANON_KEY } from './helpers/env';
-import { callFunction, passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { callFunction, passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { mockSteadfast, type MockFraudResult } from './helpers/steadfastMock';
 
 // Batch 31 (reports/batch-31.txt). Steadfast is always mocked (e2e/
@@ -23,7 +23,7 @@ const MANUAL_PHONE_TYPED = '+880 1799-990031';
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 let staffId = '';
 const createdOrderIds: string[] = [];
 
@@ -65,7 +65,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(6);
+  product = await makeTestProduct();
   await deleteStaffAndRole();
 });
 

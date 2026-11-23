@@ -186,7 +186,14 @@ test.describe('Part 3 — if Supabase is blocked or down', () => {
     await expect(page.getByTestId('shop-down')).toBeVisible({ timeout: 10_000 });
     const before = asked.length;
     // Two minutes of waiting: about four light checks, no tight loop.
-    await page.clock.runFor(120_000);
+    // Batch 61: in 30-second steps, each waiting for its check to arrive (a
+    // check is a real, blocked request, so one jump of two minutes could
+    // end before the next check had even been sent).
+    for (let step = 0; step < 4; step += 1) {
+      const seen = asked.length;
+      await page.clock.runFor(30_000);
+      await expect.poll(() => asked.length, { timeout: 10_000 }).toBeGreaterThan(seen);
+    }
     const checks = asked.slice(before);
     expect(checks.length).toBeGreaterThanOrEqual(3);
     expect(checks.length).toBeLessThanOrEqual(5);

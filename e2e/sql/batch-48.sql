@@ -1,9 +1,11 @@
 -- Batch 48 database tests (run by e2e/batch-48.spec.ts through the Supabase
--- command line). The runner puts the whole Batch 48 migration
--- (supabase/migration-049-batch48.sql, without its own BEGIN / COMMIT) in
--- front of this script, so everything — the migration, the throwaway
--- product, promo code and orders — runs inside ONE transaction that always
--- ends with ROLLBACK. No real order, setting or promo code is ever changed.
+-- command line) against today's functions on the live database (Batch 61:
+-- no old migration is replayed any more). Everything — the advance discount
+-- setting this test needs, the throwaway product, promo code and orders —
+-- runs inside ONE transaction that always ends with ROLLBACK. No real
+-- order, setting or promo code is ever changed. Today's rules: Batch 60's
+-- ৳1,000 rule (the discount only when ৳1,000 or more is paid in advance;
+-- e2e/sql/batch-60.sql tests ৳999 / ৳1,000 and the wallet part).
 --
 -- Result: the rows (name, ok, detail) of the SELECT before the ROLLBACK.
 DO $test$
@@ -26,6 +28,7 @@ DECLARE
   v_int     integer;
   v_json    jsonb;
   v_items   jsonb;
+  v_items2  jsonb;
 BEGIN
   EXECUTE 'CREATE TEMP TABLE t_res (n serial, name text, ok boolean, detail text)';
   EXECUTE $f$CREATE FUNCTION pg_temp.ck(p_name text, p_ok boolean, p_detail text DEFAULT '') RETURNS void
@@ -40,21 +43,15 @@ BEGIN
     'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint)))::text;
   c_cust := json_build_object('sub', v_cust, 'role', 'authenticated')::text;
 
-  -- ================================================ the migration itself
-  PERFORM pg_temp.ck('Migration: the advance discount columns are on orders',
+  -- ================================================ what Batch 48 added
+  PERFORM pg_temp.ck('The advance discount columns are on orders',
     (SELECT count(*) FROM information_schema.columns WHERE table_name = 'orders'
        AND column_name IN ('advance_discount', 'advance_discount_type', 'advance_discount_value')) = 3);
-  PERFORM pg_temp.ck('Migration: every existing order has advance discount 0 (nothing old changed)',
-    NOT EXISTS (SELECT 1 FROM orders WHERE advance_discount <> 0 OR advance_discount_type IS NOT NULL));
-  PERFORM pg_temp.ck('Migration: the setting starts On, Percent, 0.5',
-    (SELECT value FROM app_settings WHERE key = 'advance_discount_enabled') = 'true'
-    AND (SELECT value FROM app_settings WHERE key = 'advance_discount_type') = 'percent'
-    AND (SELECT value FROM app_settings WHERE key = 'advance_discount_value') = '0.5');
-  PERFORM pg_temp.ck('Migration: a Nagad money account, and Nagad payments land in it (not Cash)',
+  PERFORM pg_temp.ck('A Nagad money account, and Nagad payments land in it (not Cash)',
     money_account_for_method('nagad') = (SELECT id FROM money_accounts WHERE payment_method = 'nagad' AND kind = 'nagad')
     AND money_account_for_method('nagad') <> money_account_for_method('cash')
     AND money_account_for_method('bkash') = (SELECT id FROM money_accounts WHERE payment_method = 'bkash'));
-  PERFORM pg_temp.ck('Migration: nobody signed out can call the new functions',
+  PERFORM pg_temp.ck('Nobody signed out can call the new functions',
     NOT has_function_privilege('anon', 'admin_set_order_payment_method(uuid,text)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'advance_discount_amount(text,numeric)', 'EXECUTE'));
 
@@ -63,9 +60,15 @@ BEGIN
   UPDATE app_settings SET value = 'false' WHERE key = 'inventory_mode';
   PERFORM set_config('inventory.mode_change', '', true);
   PERFORM set_config('inventory.test_mode', '', true);
+  -- The rule this test is written for (the live shop may use another).
+  PERFORM set_config('request.jwt.claims', c_admin, true);
+  INSERT INTO app_settings (key, value) VALUES ('advance_discount_enabled', 'true'), ('advance_discount_type', 'percent'),
+    ('advance_discount_value', '0.5')
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
   INSERT INTO products (sku, slug, name, retail_price, stock_status, stock_quantity, is_active)
   VALUES ('E2E-B48-' || v_tag, 'e2e-b48-' || v_tag, 'E2E B48 Serum', 1000, 'in_stock', 50, true) RETURNING id INTO v_prod;
   v_items := jsonb_build_array(jsonb_build_object('product_id', v_prod, 'quantity', 1));
+  v_items2 := jsonb_build_array(jsonb_build_object('product_id', v_prod, 'quantity', 2));
   SELECT COALESCE((SELECT value::numeric FROM app_settings WHERE key = 'delivery_fee_inside_dhaka'), 80) INTO v_fee;
 
   -- ================================================ placing orders
@@ -107,14 +110,15 @@ BEGIN
   PERFORM pg_temp.ck('Nagad without a Transaction ID is refused', v_err = 'A Nagad Transaction ID is required for Nagad payment.', COALESCE(v_err, 'it ran'));
 
   -- Promo code first, then the advance discount; times_used counts the code once.
+  -- Two items, so ৳1,900 + delivery is left to pay in advance (৳1,000 rule).
   INSERT INTO promo_codes (code, discount_type, discount_amount, active, max_uses, times_used)
   VALUES ('E2EB48' || v_tag, 'fixed', 100, true, NULL, 0) RETURNING id INTO v_promo;
-  SELECT order_id INTO v_o FROM place_order(v_items, 'E2E B48', '01700000048', 'Dhaka', 'Dhaka', 'Gulshan', 'Test road',
+  SELECT order_id INTO v_o FROM place_order(v_items2, 'E2E B48', '01700000048', 'Dhaka', 'Dhaka', 'Gulshan', 'Test road',
     'inside_dhaka', 'bkash', 'TRXP48', '01800000048', 'E2EB48' || v_tag);
   SELECT * INTO v_row FROM orders WHERE id = v_o;
   SELECT times_used INTO v_used FROM promo_codes WHERE id = v_promo;
-  PERFORM pg_temp.ck('Promo + advance: ৳100 code, then 0.5% of ৳900 = ৳4.50 -> ৳5; both stack',
-    v_row.discount = 105 AND v_row.advance_discount = 5 AND v_row.total = 1000 + v_fee - 105,
+  PERFORM pg_temp.ck('Promo + advance: ৳100 code, then 0.5% of ৳1,900 = ৳9.50 -> ৳10; both stack',
+    v_row.discount = 110 AND v_row.advance_discount = 10 AND v_row.total = 2000 + v_fee - 110,
     format('discount %s, advance %s', v_row.discount, v_row.advance_discount));
   PERFORM pg_temp.ck('The advance discount never touches promo counting (times_used +1 for the code only)', v_used = 1, v_used::text);
 

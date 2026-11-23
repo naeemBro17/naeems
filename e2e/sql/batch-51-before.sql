@@ -1,6 +1,6 @@
--- Batch 51: runs first, before the migration, in the same transaction
--- (e2e/batch-51.spec.ts). Saves the Money position as the Super Admin so
--- e2e/sql/batch-51.sql can check the migration changed nothing in money.
+-- Batch 51: runs first, in the same transaction (e2e/batch-51.spec.ts).
+-- Saves the Money position as the Super Admin so e2e/sql/batch-51.sql can
+-- check its made-up products, orders and wishlist changed nothing in money.
 DO $before$
 BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object(

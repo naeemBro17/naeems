@@ -589,5 +589,8 @@ test('live: the Dashboard and every report open with the real database (nothing 
   await expect(page.getByTestId('lock-checklist')).toBeVisible({ timeout: 30_000 });
   await page.goto('/admin?tab=money&m=stock-count');
   await expect(page.getByTestId('count-progress')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('count-mode-off')).toBeVisible();
+  // Batch 61: the "Inventory mode is Off" note shows only while it is Off
+  // (the live shop switched it On after Batch 42).
+  const mode = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.inventory_mode');
+  await expect(page.getByTestId('count-mode-off')).toHaveCount(mode.data?.[0]?.value === 'true' ? 0 : 1);
 });

@@ -98,6 +98,10 @@ BEGIN
   UPDATE app_settings SET value = 'false' WHERE key = 'inventory_mode';
   PERFORM set_config('inventory.mode_change', '', true);
   PERFORM set_config('inventory.test_mode', '', true);
+  -- Batch 61: Batch 51's "most of one item per order" (live: 4) would stop
+  -- the 5-unit orders below; lifted for this transaction only.
+  INSERT INTO app_settings (key, value) VALUES ('order_limit_per_item', '99')
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
   PERFORM set_config('request.jwt.claims', c_cust, true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   SELECT order_id, order_number INTO v_oid, v_onum FROM place_order(

@@ -1,9 +1,9 @@
 -- Batch 51 database tests (run by e2e/batch-51.spec.ts through the Supabase
--- command line). The runner first saves money_position() in t_pos0, then
--- puts the whole Batch 51 migration (supabase/migration-052-batch51.sql,
--- without its own BEGIN / COMMIT) in front of this script, so everything —
--- the migration, the made-up products, lots, orders and wishlist rows —
--- runs inside ONE transaction that always ends with ROLLBACK. Inventory
+-- command line) against today's functions on the live database (Batch 61:
+-- no old migration is replayed any more). The runner first saves
+-- money_position() in t_pos0 (e2e/sql/batch-51-before.sql), so everything —
+-- the made-up products, lots, orders and wishlist rows — runs inside ONE
+-- transaction that always ends with ROLLBACK. Inventory
 -- mode is switched only inside it (inventory.test_mode / mode_change).
 -- Nothing real is changed.
 --
@@ -59,9 +59,9 @@ BEGIN
     AND (SELECT value FROM app_settings WHERE key = 'delivery_time_dhaka') IS NOT NULL
     AND (SELECT value FROM app_settings WHERE key = 'delivery_time_outside') IS NOT NULL
     AND (SELECT value FROM app_settings WHERE key = 'delivery_time_buy_after') IS NOT NULL);
-  PERFORM pg_temp.ck('Every existing product keeps selling (default On)',
-    NOT EXISTS (SELECT 1 FROM products WHERE keep_selling IS DISTINCT FROM true),
-    (SELECT count(*)::text FROM products WHERE NOT keep_selling));
+  PERFORM pg_temp.ck('A new product keeps selling (default On)',
+    (SELECT column_default = 'true' AND is_nullable = 'NO' FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'products' AND column_name = 'keep_selling'));
   PERFORM pg_temp.ck('Visitors can call cart_cover only; not the shopping list or the helpers',
     has_function_privilege('anon', 'cart_cover(jsonb)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'admin_shopping_list()', 'EXECUTE')

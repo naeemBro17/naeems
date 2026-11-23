@@ -13,7 +13,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 //
 // The live shop is never changed:
 //   - the database rules run in e2e/sql/batch-45-inventory.sql together with
-//     the whole Batch 45 migration, inside ONE transaction that is always
+//     today's live functions (Batch 61: no old migration replayed), inside ONE transaction that is always
 //     rolled back (Inventory mode is switched there only);
 //   - the screens are checked at 390 px; nothing is saved (no lot, no
 //     order). Functions the migration adds are answered in the browser
@@ -76,12 +76,10 @@ function unitName(u: Unit): string {
 test('database: stock comes back (mode On and Off, lots, packs, options, own size, edits, oversell, deleted lot), no weight in cost, stored cost of every sale, free lot edit / delete incl. L-000 (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-046-batch45-inventory.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const tests = readFileSync('e2e/sql/batch-45-inventory.sql', 'utf8')
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

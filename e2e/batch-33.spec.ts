@@ -1,12 +1,11 @@
 import { mkdirSync } from 'node:fs';
 import { PNG } from 'pngjs';
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL } from './helpers/env';
 import {
   insert,
   passwordSession,
-  placeTestOrder,
   remove,
   rpc,
   select,
@@ -320,10 +319,12 @@ test('Part 1 on a phone (touch): long-press and drag reorders; a quick swipe doe
 test('Part 1: a photo that cannot load shows a placeholder with Retry, never a broken image', async ({ page }) => {
   test.setTimeout(60_000);
   test.skip(savedUrls.length !== 3, 'Needs the photos saved by the first Part 1 test.');
-  const missing = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/products/e2e-b33-missing-${Date.now()}.webp`;
+  const name = `e2e-b33-missing-${Date.now()}`;
+  const missing = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/products/${name}.webp`;
   // Batch 40: Storage files are placeholders in tests; this one answers the
-  // way Storage does for a file that isn't there.
-  await page.route((url) => url.href.startsWith(missing), (route) =>
+  // way Storage does for a file that isn't there. Batch 61: its small card
+  // copy too (products/card/…), which the editor tries first.
+  await page.route((url) => url.href.includes(`/${BUCKET}/products/`) && url.href.includes(name), (route) =>
     route.fulfill({ status: 400, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"statusCode":"404","error":"not_found","message":"Object not found"}' })
   );
   const res = await setImages({
@@ -426,6 +427,63 @@ test.describe('Part 2 with a mouse', () => {
 
 /* ---------------------------------------------------------------- Part 3 */
 
+/* Batch 61: the live shop runs Inventory mode, so a made-up product's
+ * stock is always 0 (it has no lots) and these tests can no longer give it
+ * a real stock. Stock is answered in the browser instead: the rows the
+ * shop reads (products_view, and products for the admin) carry the stock
+ * set here, and an order of more than that is refused the way the database
+ * refuses it. "Someone else buys the last one" lowers the number here.
+ * No order is placed and nothing is saved. */
+type StockTable = Map<string, { name: string; stock: number }>;
+
+function stockRow(row: Record<string, unknown>, table: StockTable): Record<string, unknown> {
+  const line = table.get(String(row.id));
+  if (!line) return row;
+  return {
+    ...row,
+    keep_selling: false,
+    ...('in_hand' in row ? { in_hand: line.stock > 0 } : {}),
+    ...('stock_quantity' in row ? { stock_quantity: line.stock } : {}),
+    ...('stock_status' in row ? { stock_status: line.stock > 0 ? 'in_stock' : 'out_of_stock' } : {}),
+  };
+}
+
+async function mockStock(context: BrowserContext, table: StockTable): Promise<void> {
+  const dress = async (route: Route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const res = await route.fetch();
+    const body = (await res.json()) as Record<string, unknown>[] | Record<string, unknown>;
+    const json = Array.isArray(body) ? body.map((r) => stockRow(r, table)) : body && 'id' in body ? stockRow(body, table) : body;
+    await route.fulfill({ response: res, json });
+  };
+  await context.route(/\/rest\/v1\/products_view\?/, dress);
+  await context.route(/\/rest\/v1\/products\?/, dress);
+  const refuse = (route: Route, message: string) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ code: 'P0001', message, details: null, hint: null }),
+    });
+  const short = (items: { product_id?: string; quantity?: number }[]) =>
+    items
+      .map((i) => ({ item: i, line: table.get(String(i.product_id)) }))
+      .filter((x) => x.line && (x.item.quantity ?? 0) > x.line.stock);
+  await context.route(/\/rest\/v1\/rpc\/place_order(_wallet)?$/, (route) => {
+    const body = route.request().postDataJSON() as { p_items?: { product_id?: string; quantity?: number }[] };
+    const over = short(body.p_items ?? []);
+    if (over.length === 0) return route.fallback();
+    return refuse(route, `Only ${over[0].line!.stock} of "${over[0].line!.name}" left in stock.`);
+  });
+  await context.route(/\/rest\/v1\/rpc\/admin_create_order(_v2)?$/, (route) => {
+    const body = route.request().postDataJSON() as { p_items?: { product_id?: string; quantity?: number }[]; p_allow_negative_stock?: boolean };
+    const over = short(body.p_items ?? []);
+    if (over.length === 0 || body.p_allow_negative_stock) return route.fallback();
+    const warning = over.map((x) => ({ unit: 'pcs', available: x.line!.stock, requested: x.item.quantity, product_name: x.line!.name, variant_label: null }));
+    return refuse(route, `STOCK_WARNING:${JSON.stringify(warning)}`);
+  });
+}
+
 async function seedCart(page: Page, lines: { id: string; quantity: number; price: number }[]): Promise<void> {
   const cart = lines.map((l) => ({ productId: l.id, variantId: null, variantLabel: null, quantity: l.quantity, priceAtAdd: l.price }));
   await page.addInitScript(
@@ -448,6 +506,11 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
   test.setTimeout(90_000);
   const last = await makeProduct(31, 1, true, 1500);
   const other = await makeProduct(32, 5, true, 700);
+  const table: StockTable = new Map([
+    [last.id, { name: last.name, stock: 1 }],
+    [other.id, { name: other.name, stock: 5 }],
+  ]);
+  await mockStock(page.context(), table);
   await signInAsTestCustomer(page);
   await seedCart(page, [
     { id: last.id, quantity: 1, price: 1500 },
@@ -456,11 +519,13 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
   await page.goto('/checkout/summary');
   await expect(page.getByRole('button', { name: /Place order/i })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('stock-notice')).toHaveCount(0);
+  // Both lines (and their prices) are in before the total is read.
+  await expect(page.locator('.checkout-summary-card__item')).toHaveCount(2);
+  await expect.poll(() => totalShown(page)).toBeGreaterThan(1500 + 700);
   const before = await totalShown(page);
 
   // Someone else buys the last unit first.
-  const first = await placeTestOrder(customer.accessToken, last.id, 1);
-  createdOrderIds.push(first.id);
+  table.set(last.id, { name: last.name, stock: 0 });
 
   await page.getByRole('button', { name: /Place order/i }).click();
   const notice = page.getByTestId('stock-notice');
@@ -478,10 +543,10 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
 test('Part 3: fewer left than in the cart — "Only 1 left", quantity lowered (cart page check on open)', async ({ page }) => {
   test.setTimeout(60_000);
   const few = await makeProduct(33, 3, true, 900);
+  // Someone else bought 2 of the 3 before the cart opens.
+  await mockStock(page.context(), new Map([[few.id, { name: few.name, stock: 1 }]]));
   await signInAsTestCustomer(page);
   await seedCart(page, [{ id: few.id, quantity: 3, price: 900 }]);
-  const order = await placeTestOrder(customer.accessToken, few.id, 2);
-  createdOrderIds.push(order.id);
 
   await page.goto('/cart');
   const notice = page.getByTestId('stock-notice');
@@ -495,6 +560,8 @@ test('Part 3: fewer left than in the cart — "Only 1 left", quantity lowered (c
 test('Part 3: admin New order — the line itself says it sold out', async ({ page }) => {
   test.setTimeout(90_000);
   const one = await makeProduct(34, 1, true, 1200);
+  const table: StockTable = new Map([[one.id, { name: one.name, stock: 1 }]]);
+  await mockStock(page.context(), table);
   await useSessionInPage(page, admin);
   await page.goto('/admin/orders/new');
   const form = page.getByTestId('new-order-page');
@@ -514,12 +581,13 @@ test('Part 3: admin New order — the line itself says it sold out', async ({ pa
   await expect(page.getByTestId('line-stock-error')).toHaveCount(0);
 
   // A website customer buys the last one while the form is open.
-  const order = await placeTestOrder(customer.accessToken, one.id, 1);
-  createdOrderIds.push(order.id);
+  table.set(one.id, { name: one.name, stock: 0 });
 
   await form.getByRole('button', { name: 'Create order' }).click();
-  await expect(page.getByText('Low stock')).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Go back' }).click();
+  // Batch 39: the question is "Not in stock — sell anyway?" now.
+  const ask = page.getByRole('dialog', { name: 'Not in stock — sell anyway?' });
+  await expect(ask).toBeVisible({ timeout: 15_000 });
+  await ask.getByRole('button', { name: 'Go back' }).click();
   await expect(page.getByTestId('line-stock-error')).toHaveText('Sold out — none left in stock');
 });
 
@@ -544,8 +612,11 @@ test('Screenshots: photos row (Main, dragging), search focus (keyboard, tap), "j
   test.skip(savedUrls.length !== 3, 'Needs the photos saved by the first Part 1 test.');
   const sold = await makeProduct(35, 1, true, 1100);
   const keep = await makeProduct(36, 5, true, 600);
-  const order = await placeTestOrder(customer.accessToken, sold.id, 1);
-  createdOrderIds.push(order.id);
+  // The last one is already sold (answered in the browser, see mockStock).
+  const soldOut: StockTable = new Map([
+    [sold.id, { name: sold.name, stock: 0 }],
+    [keep.id, { name: keep.name, stock: 5 }],
+  ]);
 
   for (const width of [390, 1280]) {
     for (const theme of ['light', 'dark'] as const) {
@@ -583,6 +654,7 @@ test('Screenshots: photos row (Main, dragging), search focus (keyboard, tap), "j
       await context.close();
 
       const shop = await shotContext(browser, width, theme);
+      await mockStock(shop.context, soldOut);
       await signInAsTestCustomer(shop.page);
       await seedCart(shop.page, [
         { id: sold.id, quantity: 1, price: 1100 },
@@ -592,6 +664,7 @@ test('Screenshots: photos row (Main, dragging), search focus (keyboard, tap), "j
       await expect(shop.page.getByTestId('stock-notice')).toBeVisible({ timeout: 20_000 });
       await shop.page.waitForTimeout(300);
       await shop.page.screenshot({ path: `${SHOTS}/just-sold-out-${tag}.png` });
+      await shop.context.unrouteAll({ behavior: 'ignoreErrors' });
       await shop.context.close();
     }
   }

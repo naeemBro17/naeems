@@ -61,9 +61,10 @@ BEGIN
                 WHERE o.customer_id IS NULL));
   PERFORM pg_temp.ck('Migration: the lines Batch 46 settled (NM-3315, NM-1721) carry their reason',
     NOT EXISTS (SELECT 1 FROM steadfast_payout_items WHERE line_kind <> 'order' AND settle_reason IS NULL));
-  PERFORM pg_temp.ck('Migration: every real payout still adds up exactly to what Steadfast paid',
+  PERFORM pg_temp.ck('Every real payout with its parcel lines adds up exactly to what Steadfast paid (as the Batch 57 health audit counts it)',
     NOT EXISTS (SELECT 1 FROM steadfast_payouts p
-                WHERE p.items_synced AND p.total_amount <> (SELECT COALESCE(sum(i.net_paid), 0) FROM steadfast_payout_items i WHERE i.payout_id = p.id)));
+                WHERE p.items_synced AND EXISTS (SELECT 1 FROM steadfast_payout_items i WHERE i.payout_id = p.id)
+                  AND p.total_amount <> (SELECT COALESCE(sum(i.net_paid), 0) FROM steadfast_payout_items i WHERE i.payout_id = p.id)));
   PERFORM pg_temp.ck('Migration: nobody outside the admin can call the new functions',
     NOT has_function_privilege('anon', 'admin_move_order_customer(uuid,uuid)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'admin_settle_payout_line(uuid,text,text)', 'EXECUTE')

@@ -1,9 +1,10 @@
 -- Batch 54 database tests (run by e2e/batch-54.spec.ts through the Supabase
--- command line). The runner puts the whole Batch 54 migration
--- (supabase/migration-055-batch54.sql, without its own BEGIN / COMMIT) in
--- front of this script, so everything — the migration, the made-up items,
--- the hidden product, the merged bills — runs inside ONE transaction that
--- always ends with ROLLBACK. Nothing real is changed.
+-- command line) against today's functions on the live database (Batch 61:
+-- no old migration is replayed any more). Everything — the made-up items,
+-- the hidden product, the merged bills and the money start dates this test
+-- sets — runs inside ONE transaction that always ends with ROLLBACK.
+-- Nothing real is changed. Today's rule (Batch 58): old bills count in
+-- profit only on or after the money start date.
 --
 -- Result: the rows (name, ok, detail) of the SELECT before the ROLLBACK.
 DO $test$
@@ -138,6 +139,8 @@ BEGIN
   PERFORM pg_temp.ck('An item not on the site is refused', v_err LIKE '%is not on the site%', COALESCE(v_err, 'no error'));
 
   -- ===================================================== the merge
+  -- Start date after the merged bills: they must count nowhere.
+  UPDATE money_books SET start_date = DATE '2026-10-01' WHERE id = 1;
   v_snap0 := pg_temp.snap();
   SELECT string_agg(customer_key || '=' || order_due || '/' || previous_left, ',' ORDER BY customer_key) INTO v_dues0 FROM money_customer_dues();
   v_parts0 := money_profit_parts('2026-05-01', '2026-09-30');
@@ -161,8 +164,13 @@ BEGIN
   PERFORM pg_temp.ck('… every customer''s due is the same (the merged due is NOT added)',
     (SELECT string_agg(customer_key || '=' || order_due || '/' || previous_left, ',' ORDER BY customer_key) FROM money_customer_dues()) IS NOT DISTINCT FROM v_dues0);
   v_parts1 := money_profit_parts('2026-05-01', '2026-09-30');
-  PERFORM pg_temp.ck('… money_profit_parts (Money page, Dashboard) is unchanged', v_parts1 = v_parts0);
-  PERFORM pg_temp.ck('… Profit & loss counts them as old sales', ((kaarbar_old_parts('2026-05-01', '2026-09-30')) ->> 'old_bills')::int >= 2);
+  PERFORM pg_temp.ck('… before the money start date: money_profit_parts (Money page, Dashboard, Profit & loss) is unchanged', v_parts1 = v_parts0);
+  UPDATE money_books SET start_date = DATE '2026-05-01' WHERE id = 1;
+  PERFORM pg_temp.ck('… with the start date on / before them, Profit & loss counts both as old sales',
+    (SELECT count(DISTINCT l.bill_id) FROM kaarbar_old_lines('2026-05-01', '2026-09-30') l
+     JOIN kaarbar_bills b ON b.id = l.bill_id WHERE b.bill_no LIKE 'E2E54-%') = 2
+    AND (money_profit_parts('2026-05-01', '2026-09-30') ->> 'old_bills')::int >= 2);
+  UPDATE money_books SET start_date = DATE '2026-10-01' WHERE id = 1;
 
   v_json := kaarbar_customer_old_bills(v_key, v_pk);
   PERFORM pg_temp.ck('The customer page reads paid, due, note, the merge date and each line''s site product',

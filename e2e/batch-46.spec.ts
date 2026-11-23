@@ -8,7 +8,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 // orders.
 //
 // The live shop is never changed: e2e/sql/batch-46-payouts-promo.sql runs
-// together with the whole Batch 46 migration inside ONE transaction that is
+// against today's live functions (Batch 61: no old migration is replayed) inside ONE transaction that is
 // always rolled back — the throwaway product, promo code, orders and payout
 // never exist outside it, and no real promo code count or payout changes.
 // The payout screen test reads only made-up payouts (answered in the
@@ -25,12 +25,10 @@ test.skip(!E2E_ADMIN_EMAIL || !E2E_ADMIN_PASSWORD || !E2E_EMAIL || !E2E_PASSWORD
 test('database: payouts add up (delivered, prepaid, returned, courier only, deleted order), COD payment follows the payout, promo counted only by a real order and given back on cancel / delete (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-047-batch46-payouts-promo.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const tests = readFileSync('e2e/sql/batch-46-payouts-promo.sql', 'utf8')
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

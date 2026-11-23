@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, useSessionInPage, type TestSession } from './helpers/api';
 import { mockSteadfast, type MockFraudResult } from './helpers/steadfastMock';
 
 // Batch 31: screenshots for reports/batch-31-screens/ — admin at 390 px and
@@ -37,7 +37,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  const product = await pickStockedProduct(5);
+  const product = await makeTestProduct();
   orderId = (await placeTestOrder(customer.accessToken, product.id, 1)).id;
 });
 

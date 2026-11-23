@@ -52,9 +52,10 @@ BEGIN
   -- ================================================ the migration itself
   PERFORM pg_temp.ck('Migration: payout lines have a kind (order / courier_only / returned)',
     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'steadfast_payout_items' AND column_name = 'line_kind'));
-  PERFORM pg_temp.ck('Migration: every real payout adds up exactly to what Steadfast paid',
+  PERFORM pg_temp.ck('Every real payout with its parcel lines adds up exactly to what Steadfast paid (as the Batch 57 health audit counts it)',
     NOT EXISTS (SELECT 1 FROM steadfast_payouts p
-                WHERE p.items_synced AND p.total_amount <> (SELECT COALESCE(sum(i.net_paid), 0) FROM steadfast_payout_items i WHERE i.payout_id = p.id)));
+                WHERE p.items_synced AND EXISTS (SELECT 1 FROM steadfast_payout_items i WHERE i.payout_id = p.id)
+                  AND p.total_amount <> (SELECT COALESCE(sum(i.net_paid), 0) FROM steadfast_payout_items i WHERE i.payout_id = p.id)));
   PERFORM pg_temp.ck('Migration: no payout line counts COD on a parcel Steadfast returned',
     NOT EXISTS (SELECT 1 FROM steadfast_payout_items WHERE raw ->> 'status' ILIKE '%cancel%' AND cod_collected <> 0));
   PERFORM pg_temp.ck('Migration: NM-3315 is courier only, NM-1721 a returned parcel, neither "to check"',

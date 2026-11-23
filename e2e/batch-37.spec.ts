@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import type { Download, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { BARCODE_REGION, QR_REGION, decodeRegion, pdfPageCount, pdfPageText, renderPdfPage } from './helpers/invoicePdf';
 import { invoiceShop } from '../src/lib/invoice/invoiceShop';
 import type { AppSettings } from '../src/types';
@@ -19,7 +19,7 @@ test.use({ serviceWorkers: 'block' });
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const createdOrderIds: string[] = [];
 let printsReady = false;
 
@@ -91,7 +91,7 @@ test.beforeAll(async () => {
   test.setTimeout(90_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
   printsReady = (await select(admin.accessToken, 'order_invoice_prints?select=id&limit=1')).ok;
 });
 

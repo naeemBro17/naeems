@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { insert, passwordSession, remove, select, useSessionInPage, type TestSession } from './helpers/api';
+import { insert, passwordSession, remove, select, update, useSessionInPage, type TestSession } from './helpers/api';
 import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 
 // Batch 52.1: "Keep selling when out of stock" must work in the cart.
@@ -41,6 +41,10 @@ interface OptionPick extends Pick {
 let admin: TestSession;
 let customer: TestSession;
 let picks: { plain: Pick; withOption: OptionPick; off: Pick };
+/** Batch 61: the checkout's "Save and continue" saves the typed name and
+ *  address on the test login's own profile; put back in afterAll. */
+const PROFILE_FIELDS = 'full_name,phone,division,district,thana,address_line';
+let profileBefore: Record<string, string | null> | null = null;
 
 /** Rows of a read-only query run with the Supabase command line. */
 async function cliRows<T>(sql: string): Promise<T[]> {
@@ -57,6 +61,8 @@ test.beforeAll(async () => {
   test.setTimeout(120_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
+  const saved = await select<Record<string, string | null>[]>(customer.accessToken, `profiles?select=${PROFILE_FIELDS}&id=eq.${customer.userId}`);
+  profileBefore = saved.data?.[0] ?? null;
   // Live products with nothing in lots (stock 0 while Inventory mode is On).
   const empty = `p.is_active AND p.slug IS NOT NULL AND p.image_url IS NOT NULL AND p.retail_price > 0
                  AND COALESCE(inventory_units_left(p.id, NULL), 0) <= 0`;
@@ -126,6 +132,10 @@ async function dressViews(page: Page, staff: boolean): Promise<void> {
   await page.route(/\/rest\/v1\/product_variants_view\?/, (route) => dress(route, (r) => dressOption(r, staff)));
 }
 
+test.afterAll(async () => {
+  if (profileBefore) await update(customer.accessToken, `profiles?id=eq.${customer.userId}`, profileBefore);
+});
+
 /* ---------------------------------------- place_order, in a rolled-back transaction */
 
 interface PlacedResult {
@@ -139,7 +149,7 @@ interface PlacedResult {
   short_units?: number;
   expected_units?: number;
   shopping?: { product_id: string; variant_id: string | null; qty: number }[];
-  stock_after?: number[];
+  stock_after?: (number | null)[];
 }
 
 function sqlText(value: string): string {
@@ -150,7 +160,6 @@ function sqlText(value: string): string {
  *  user, with Inventory mode on, then rolls everything back. */
 async function placeOrderRolledBack(args: Record<string, unknown>, email: string): Promise<PlacedResult> {
   const keepIds = [picks.plain.id, picks.withOption.id].map(sqlText).join(', ');
-  const ids = [picks.plain.id, picks.withOption.id, picks.off.id].map(sqlText).join(', ');
   const sql = `
 BEGIN;
 CREATE TEMP TABLE t_seq AS SELECT last_value FROM order_number_seq;
@@ -182,7 +191,12 @@ BEGIN
                        FROM order_items i WHERE i.order_id = r.order_id),
     'shopping', (SELECT COALESCE(jsonb_agg(jsonb_build_object('product_id', s.product_id, 'variant_id', s.variant_id, 'qty', s.qty)), '[]'::jsonb)
                  FROM admin_shopping_list() s WHERE s.orders::text LIKE '%' || r.order_number || '%'),
-    'stock_after', (SELECT jsonb_agg(stock_quantity) FROM products WHERE id IN (${ids})));
+    -- Batch 61: the option pick's stock is the option's own (a product with
+    -- options keeps no meaningful number of its own).
+    'stock_after', jsonb_build_array(
+      (SELECT stock_quantity FROM products WHERE id = ${sqlText(picks.plain.id)}),
+      (SELECT stock_quantity FROM product_variants WHERE id = ${sqlText(picks.withOption.variant_id)}),
+      (SELECT stock_quantity FROM products WHERE id = ${sqlText(picks.off.id)})));
 EXCEPTION WHEN OTHERS THEN
   INSERT INTO t_res SELECT jsonb_build_object('error', SQLERRM);
 END
@@ -347,7 +361,8 @@ test('customer: keep-selling items at stock 0 go in the cart, survive the re-che
   const onList = (result.shopping ?? []).map((s) => `${s.product_id}:${s.variant_id ?? ''}`);
   expect(onList).toContain(`${picks.plain.id}:`);
   expect(onList).toContain(`${picks.withOption.id}:${picks.withOption.variant_id}`);
-  expect(result.stock_after?.every((n) => n === 0), 'the shop stock never goes below 0').toBe(true);
+  // 0, or not counted (null) for an option that keeps no number.
+  expect(result.stock_after?.every((n) => n === null || n === 0), `the shop stock never goes below 0: ${JSON.stringify(result.stock_after)}`).toBe(true);
   await emptyCart(page);
 });
 

@@ -10,7 +10,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 // Steadfast clean-up.
 //
 // The live shop is never changed. The database rules run in
-// e2e/sql/batch-51.sql together with the whole Batch 51 migration inside
+// e2e/sql/batch-51.sql against today's live functions (Batch 61: no old migration is replayed) inside
 // ONE transaction that is always rolled back (Inventory mode is switched
 // only inside it). The screens run at 390 px (and the admin home at
 // 1440 px), light and dark; every new database call they make (the new
@@ -63,12 +63,10 @@ test.beforeAll(async () => {
 test('database: keep selling, order limit (not for wholesalers), Inventory mode On and Off, Shopping list, wishlist rules, Steadfast "not paid" rule, Money position unchanged (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-052-batch51.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const fill = (s: string) => s.replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL).replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
   const before = fill(readFileSync('e2e/sql/batch-51-before.sql', 'utf8'));
   const tests = fill(readFileSync('e2e/sql/batch-51.sql', 'utf8'));
-  const output = await runSql(`BEGIN;\n${before}\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${before}\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
