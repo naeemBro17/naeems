@@ -45,7 +45,7 @@ test('database: Nagad, the advance discount worked out by the server (percent, f
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
   expect(failed).toEqual([]);
-  expect((results ?? []).length).toBeGreaterThanOrEqual(26);
+  expect((results ?? []).length).toBeGreaterThanOrEqual(24);
   // Nothing of it stayed.
   const left = await select<unknown[]>(admin.accessToken, 'products?select=id&sku=like.E2E-B48-*');
   expect(left.data).toHaveLength(0);

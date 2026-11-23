@@ -319,10 +319,12 @@ test('Part 1 on a phone (touch): long-press and drag reorders; a quick swipe doe
 test('Part 1: a photo that cannot load shows a placeholder with Retry, never a broken image', async ({ page }) => {
   test.setTimeout(60_000);
   test.skip(savedUrls.length !== 3, 'Needs the photos saved by the first Part 1 test.');
-  const missing = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/products/e2e-b33-missing-${Date.now()}.webp`;
+  const name = `e2e-b33-missing-${Date.now()}`;
+  const missing = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/products/${name}.webp`;
   // Batch 40: Storage files are placeholders in tests; this one answers the
-  // way Storage does for a file that isn't there.
-  await page.route((url) => url.href.startsWith(missing), (route) =>
+  // way Storage does for a file that isn't there. Batch 61: its small card
+  // copy too (products/card/…), which the editor tries first.
+  await page.route((url) => url.href.includes(`/${BUCKET}/products/`) && url.href.includes(name), (route) =>
     route.fulfill({ status: 400, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"statusCode":"404","error":"not_found","message":"Object not found"}' })
   );
   const res = await setImages({

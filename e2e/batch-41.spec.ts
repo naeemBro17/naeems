@@ -382,6 +382,10 @@ test('Settings: the due reminder message can be changed (with a live example)', 
 test('Lot form: "Paid for this lot" rows (account + amount + date)', async ({ page }) => {
   test.setTimeout(60_000);
   await adminAt(page, '/admin?tab=inventory&inv=new');
+  // Batch 45: the form is compact; these rows are in the folded "More" part.
+  const more = page.getByTestId('inv-more');
+  await expect(more).toBeVisible({ timeout: 20_000 });
+  await more.locator('summary').click();
   const paid = page.getByTestId('inv-lot-paid');
   await expect(paid).toBeVisible({ timeout: 20_000 });
   await paid.getByTestId('lot-pay-add').click();
@@ -393,6 +397,13 @@ test('Lot form: "Paid for this lot" rows (account + amount + date)', async ({ pa
 test('Remove stock: while Inventory mode is Off it explains why', async ({ page }) => {
   test.setTimeout(60_000);
   const product = await select<{ id: string }[]>(admin.accessToken, 'products?select=id&is_active=eq.true&limit=1');
+  // Batch 61: the live switch is On now; only this browser is told Off.
+  await page.route(/\/rest\/v1\/app_settings\?/, async (route: Route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const rows = (await response.json()) as { key: string; value: string }[];
+    await route.fulfill({ response, json: rows.map((r) => (r.key === 'inventory_mode' ? { ...r, value: 'false' } : r)) });
+  });
   await adminAt(page, `/admin/products/${product.data?.[0]?.id}/edit`);
   await expect(page.getByTestId('remove-stock-panel')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('remove-stock-off')).toContainText('Works only while Inventory mode is On');
@@ -404,7 +415,7 @@ test('Mark returned: each item gets "Damaged — do not put back in stock" (Inve
   test.setTimeout(90_000);
   const order = await select<{ order_number: string }[]>(admin.accessToken, 'orders?select=order_number&status=eq.delivered&order=created_at.desc&limit=1');
   test.skip(!order.data?.length, 'No delivered order to open.');
-  // Only the browser is told Inventory mode is On; the live switch stays Off.
+  // Only the browser is told Inventory mode is On (whatever the live switch says).
   await page.route(/\/rest\/v1\/app_settings\?/, async (route: Route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     const response = await route.fetch();

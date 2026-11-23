@@ -53,8 +53,10 @@ BEGIN
     (SELECT status FROM orders WHERE id = v_o));
   PERFORM pg_temp.ck('Reopen takes the stock again (5 → 4)', (SELECT stock_quantity FROM products WHERE id = v_prod) = 4);
   PERFORM pg_temp.ck('Reopen is in the order history (cancelled → confirmed)',
-    (SELECT old_status = 'cancelled' AND new_status = 'confirmed' FROM order_status_history
-     WHERE order_id = v_o ORDER BY changed_at DESC, id DESC LIMIT 1));
+    -- (one transaction: every history row has the same time, so it is
+    -- looked for, not taken as "the newest")
+    EXISTS (SELECT 1 FROM order_status_history
+            WHERE order_id = v_o AND old_status = 'cancelled' AND new_status = 'confirmed'));
   PERFORM pg_temp.ck('Reopen is in the Activity Log',
     EXISTS (SELECT 1 FROM activity_log WHERE entity_id = v_o::text AND summary LIKE '%cancelled → confirmed%'));
 

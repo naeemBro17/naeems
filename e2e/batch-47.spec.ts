@@ -73,7 +73,9 @@ test('Task 1: the delete confirm field keeps focus and takes typed digits while 
   }
   await expect(input).toHaveValue(digits);
   await page.screenshot({ path: `${SHOTS}/01-delete-field-typed.png` });
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  // Batch 61: exact — the order's own "Cancel…" (careful action) shows
+  // too while the newest live order can still be cancelled.
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 });
 
 /* ------------------------------- Task 2: description keeps the keyboard */
