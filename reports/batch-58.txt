@@ -1,0 +1,327 @@
+BATCH 58 — The accounts tell one truth (fixes for the Batch 57 audit)
+Version 1.58.0 · Branch fix/batch-58-accounts (from main) · 23 Nov 2026
+
+======================================================================
+WHAT NAEEM DOES, IN ORDER
+======================================================================
+ 1. Supabase → SQL Editor → paste ALL of supabase/migration-058-batch58.sql
+    → Run. It is one transaction and safe to run again. (There is no second
+    "backfill" file this time: nothing in it needs you signed in.)
+ 2. Open the Money page once. The line under "Money now" should be green:
+    "All figures match".
+ 3. Merge the pull request (link at the end). Vercel puts the new screens
+    live.
+ You can do 1 and 3 in either order: the new screens work with the old
+ database too (the new lines simply stay hidden until step 1).
+
+======================================================================
+1. WHAT I DID
+======================================================================
+WHAT YOU WILL SEE DIFFERENTLY
+ • The balance check has a plain name. Green: "All figures match". Red on
+   Home: "Mismatch −৳X"; on the Money page: "Figures don't match: −৳X —
+   first seen 14 Nov". Under it, one grey sentence says what it checks.
+   After the SQL it is GREEN today (difference ৳0.00). It now has to match
+   to the paisa, not ±৳1.
+ • Home → Money now: "To give" no longer includes your investors' money.
+   It shows only what the business really owes (suppliers + courier not
+   paid yet: ৳28,999 today). Below Stock value, after a thin line:
+   "Investors' money ৳2,22,260 — Money your investors have put in. Shown
+   apart from what you owe." (The Money page and the balance check still
+   count investor money exactly as before; it is only shown apart.)
+ • Customer page → To receive: if a customer paid more than they owe, a
+   line "Credit — paid more than owed ৳200" and "Use it on their next
+   order, or refund it." A customer with only credit now appears in the
+   dues list too.
+ • Order page → "delivery bill ৳65 paid outside this payout": if no
+   account has paid that bill yet, it now says "Not taken from any account
+   yet" with a "Record payment" button. The sheet: Amount (read-only),
+   Paid from (your accounts, not Steadfast), Date (today), Save. After
+   Save the order says "· paid from bKash on 21 Nov", and the money leaves
+   that account. Deleting that entry on the Money page makes it owed again.
+   Today 2 orders need this: NM-3890 ৳65 and NM-3602 ৳65 (see section 4).
+ • "This year" and "All time" now start on 13 Nov 2026, the money start
+   date — the same as every other number. Until Batch 59 moves the start
+   date back to 10 Aug, "This year" = "This month" = "All time" = ৳4,507
+   net profit. Sales delivered 1–12 Nov are no longer counted (their
+   expenses never were); they come back in Batch 59 together with their
+   expenses.
+ • An order's Profit card: an item with no cost no longer hides the card.
+   The numbers show, with "Cost missing — set a buying price" (a link). A
+   cancelled order Steadfast charged for shows the charge (e.g. −৳60).
+ • Inventory → Sales profit, Money page and Reports: "N delivered items
+   have no cost (counted as ৳0). Set buying prices" when there are any
+   (none today). The old "orders left out" notes are gone: nothing is left
+   out any more.
+ • Reports → Profit & loss gets a line "Adjustments to locked months" —
+   only when it is not ৳0 (it is ৳0 today: no month is locked).
+ • Investors and what I owe → "Other people" lists "Courier (not billed
+   yet)" (৳133 today, NM-3893) and "Steadfast bills paid outside a payout"
+   (৳130 today) when they are not zero.
+
+PART 1 — ONE PROFIT ENGINE, ONE DATE RULE
+ One database function now says, for each order, its sale, cost,
+ delivery, courier and the moment it counts. Home, the Money page,
+ Reports (P&L, Charts, Products, Customers), the investor report / PDF,
+ Inventory → Sales profit and the order's Profit card all add up those
+ same rows. Every part — sales, expenses, write-offs, investor share,
+ your withdrawals, your money put in, old Kaarbar bills, cost adjustments
+ — counts only on or after money_start_date(). Moving that one date is
+ the only thing Batch 59 needs to do; I proved it in the test by moving
+ it to 1 Jan 2026 (14 checks: every screen followed it).
+
+ The 4 orders placed before 13 Nov and delivered after it (NM-3790,
+ NM-3789, NM-3884, NM-3602) now count in November, when they were
+ delivered (৳3,443 profit after courier). How the balance check stays
+ right, in two sentences: the opening balance used to count them at their
+ full price (৳8,850, as money customers owed you), as if they were sold
+ before 13 Nov. Now the opening counts only what their goods cost
+ (৳5,027), so the opening total goes from −৳32,802 to −৳36,625 and the
+ profit is counted once, in November.
+
+ SAME PERIOD, SAME ANSWER (live data, migration applied inside an undone
+ transaction, read-only; 23 Nov 2026)
+                     Home     Money    Reports   Charts   Investor
+                     net      net      P&L net   net      PDF net
+  Today              ৳0       ৳0       ৳0        —        ৳0
+  This month         ৳4,507   ৳4,507   ৳4,507    ৳4,507   ৳4,507
+  This year          ৳4,507   ৳4,507   ৳4,507    ৳4,507   ৳4,507
+  All time           ৳4,507   ৳4,507   ৳4,507    ৳4,507   ৳4,507
+  13–20 Nov (custom) ৳6,907   ৳6,907   ৳6,907    —        ৳6,907
+ (Charts show whole months, so they have no "Today" / custom bar.)
+
+  Sales / cost / delivery / courier / gross profit, every period above
+  except Today (all ৳0) and every screen alike:
+   Sales ৳31,860 · Cost ৳19,642 · Gross ৳12,218 · Delivery ৳907 ·
+   Courier ৳802 · Profit before expenses ৳12,323
+   = Money page = Reports P&L = Inventory → Sales profit (৳31,860 /
+   ৳19,642 / ৳12,323) = Reports → Products (totals and the sum of the
+   product rows: ৳31,860 / ৳19,642) = Reports → Customers (sum of
+   customers: bought ৳31,860, profit ৳12,323). 12 orders everywhere.
+  Net profit = ৳12,323 − expenses (৳7,816 for the month; ৳5,416 for
+  13–20 Nov) = ৳4,507 / ৳6,907. No investor share was paid since 13 Nov,
+  so Your profit = net profit.
+  Before this batch the same "This year" said ৳29,208 (Home), ৳61,517
+  (Reports) and ৳40,372 (Sales profit).
+
+PART 2 — THE BALANCE CHECK IS RIGHT (−৳3,549.25 → ৳0.00)
+ • Goods on open orders are valued at the lot row's real landed cost
+   (NM-5008 ৳3,000, NM-3788 ৳716.25 and NM-5164 no longer throw it off).
+ • "Sold without stock" uses exactly the cost profit uses.
+ • A missing cost counts ৳0 and is flagged; the "outside orders" trick is
+   gone for it. "Outside" now holds only sales from before the start date
+   that changed later, and Steadfast parcels matching no order (৳0 today).
+ • The expected courier fee is frozen once, when a booked parcel becomes
+   Delivered (last 10 bills average + 1% COD, the same rule). It never
+   moves; the real bill replaces it. The SQL froze the 3 parcels delivered
+   and still "expected" at today's value (NM-3893 ৳133; NM-3307 and
+   NM-3319 ৳171 together). NM-3893's ৳133 is owed as "Courier (not billed
+   yet)".
+   NM-3307 and NM-3319 were delivered before 13 Nov: inside the opening,
+   not owed.
+ • Steadfast bills paid outside a payout are owed until you record them
+   (own line "Steadfast bills paid outside a payout", ৳130 today). Bills
+   on orders delivered before 13 Nov (NM-2701, NM-1979, NM-1972, NM-1450,
+   NM-3325, NM-3313, NM-3305, NM-3321 — ৳740) are inside the opening
+   balances: not owed, no payment needed, no button shown.
+ • Live check, before → after (Money page "Show the sums"):
+     Has − owes        −৳35,602.25 → −৳32,118.00
+     Should be         −৳32,053.00 → −৳32,118.00
+     Difference        −৳3,549.25  → ৳0.00 (green)
+   Every taka of the −৳3,549.25 is traced. "Has − owes" went up ৳3,484.25:
+   goods at lot cost +৳3,747.25 (NM-5008, NM-3788, NM-5164) and courier
+   now owed −৳263 (NM-3893 ৳133, NM-3890 ৳65, NM-3602 ৳65). "Should be"
+   went down ৳65: opening −৳3,823 and the 4 orders' profit +৳3,443 (Part
+   1), and their ৳315 of Steadfast fees no longer kept "outside" +৳315.
+   ৳3,484.25 + ৳65 = ৳3,549.25.
+ • Money already in your accounts is unchanged by the SQL (checked before
+   vs after in the undone test): Cash ৳24,101 · bKash ৳27,600 · Bank
+   ৳13,300 · Nagad ৳0 · With Steadfast ৳164.
+
+PART 3 — SMALLER FIXES
+ • Cancelled order Steadfast charged: its Profit card shows the charge.
+ • Customer credit (money_customer_dues → credit).
+ • Locked months never change: when a month is locked, each order counted
+   in it is remembered. A late Steadfast bill, a lot filling a shortfall
+   at another cost, or a buying price typed in later posts only the
+   DIFFERENCE, on that day, in the open month, with a note like "Courier
+   bill for NM-1234 (delivered in a locked month): +৳5". Deleting,
+   editing or reopening such an order stays blocked until you unlock.
+ • Deleting a delivered / returned order: still only you (Super Admin)
+   with the Safety Lock "Allow deleting orders at any stage" on; staff
+   never. Each one now writes an Activity Log line "Deleted delivered
+   order NM-…: total ৳…, payments ৳…". Pending / confirmed / cancelled:
+   unchanged.
+ • Investor share "this month / this year / all time" and write-offs
+   follow the start date (I8, I9).
+
+PART 4 — WORDING: done everywhere it shows (Home badge, Money page,
+ month-lock checklist "All figures match"). The test ids are unchanged.
+
+TESTS
+ • Made-up month (e2e/sql/audit/batch-57-month.sql, rolled back, run
+   after the migration): 113 of 113 checks pass (was 61 of 73). 4 old
+   expectations changed on purpose, each with a note in the file:
+   X2 (typing a buying price now LOWERS profit by the cost, −৳400: the ৳900
+   sale was already counted), X3 (the ৳200 is "credit", its own column),
+   X5 ×2 (an expense / write-off before the start date counts ৳0 — one
+   rule). X1–X5 all pass. 40 new checks: frozen courier fee (6), bill paid
+   outside a payout + Record payment + delete (9), moving the start date
+   back (14), locked month (7), deleting a delivered order (5 incl. staff,
+   no Safety Lock, locked month, Activity Log line).
+ • Health check (e2e/sql/audit/batch-57-health.sql) — see section 4.
+ • Unit tests: src/lib/batch58.test.ts (11, no network).
+ • Screens: e2e/batch-58.spec.ts (new, 5 tests, all answers mocked in the
+   browser, nothing saved) + the wording in batch-39/41/42 specs.
+   Frame captures at 390 px in reports/batch-58-screens/:
+     01-home-money-now-390.png, 02-customer-credit-390.png,
+     03-order-bill-owed-390.png, 04-order-bill-sheet-390.png,
+     05-order-bill-paid-390.png
+ • npm run build: PASSED, zero errors. Unit tests 777 of 777 pass.
+   verify:quick (batch-39, 41, 42, 58 specs): all Batch 58 screen tests
+   pass; 3 failures, none from this batch (the live 4-per-order limit in
+   an old Batch 39 SQL test; the opening-balance preview test that needs an
+   unconfirmed opening; a database login error that passed on re-run).
+   Full npm run verify, run once: build OK · vitest 777/777 · e2e 298
+   passed, 279 skipped, 21 FAILED. The 21 are the old known ones (Batch 56
+   listed 22): 'no active product with enough tracked stock' (live stock),
+   Inventory mode On, the 4-per-order limit, the confirmed opening, and
+   old live-data checks. None is in a screen or rule this batch changed.
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+The complete file supabase/migration-058-batch58.sql (1,888 lines — too
+long to paste usefully here; copy the whole file into the SQL Editor and
+press Run). It starts with BEGIN; and ends with COMMIT;. Safe to run more
+than once. I tested it exactly as you will run it (postgres role, no
+sign-in claims), twice in a row, inside a transaction that was undone on
+the live database; afterwards nothing of it was left on the database.
+
+Nothing else. No backfill file is needed.
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • Nothing in the brief is left undone.
+ • I did not run the SQL on the live database (the brief says so). Until
+   you run it, the live site keeps the old numbers and the red check.
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+ HEALTH CHECK, LIVE, BEFORE → AFTER (after = migration inside an undone
+ transaction; only the rows that changed or matter):
+   Balance check difference ............ −৳3,549.25 → ৳0.00
+   Delivered orders left out of profit .. 4 (৳3,443) → 0
+   Investors with share "this year" >
+     "all time" ......................... 4 (৳11,470) → 0
+   Net profit This month ................ ৳7,966.72 → ৳4,507
+              This year ................. ৳29,208.39 (Reports ৳61,517.39)
+                                          → ৳4,507 everywhere
+              All time .................. ৳29,208.39 (Reports ৳62,327.39)
+                                          → ৳4,507 everywhere
+   Sales profit page, This month ........ ৳19,225.72 → ৳12,323 (= Money
+                                          before expenses)
+   Unchanged (raw data, now handled by the money functions): open
+   orders with goods taken at an old / provisional cost 3 (৳3,747.25);
+   "sold without stock" with ৳0 provisional 2 (NM-3788, NM-5219);
+   expected courier fees 3 (৳304); bills paid separately 10 (৳870);
+   expenses before 13 Nov 91 rows ৳2,15,553; profit shares before 13 Nov
+   4 rows ৳11,470. Everything else 0, as before. I updated the notes in
+   the script so they describe the new rules.
+ • NM-3602 (one of the 4 orders of Part 1) has a ৳65 bill paid outside a
+   payout. Now that it counts in November, that bill is owed too — so 2
+   orders need "Record payment", not only NM-3890.
+ • Live numbers moved since the audit: the check was −৳3,549.25 today
+   (audit: −৳3,518.25); Cash is ৳24,101 (brief: ৳13,084); a new open
+   order NM-5164 was also taken at an old cost.
+ • NM-3307 (delivered 19 Oct) and NM-3319 (4 Nov) still have no real
+   Steadfast bill after weeks. Worth checking those payouts matched.
+ • 143 Steadfast payout lines from before 13 Nov match no order (৳5,680
+   of bills paid separately on them, + ৳95 on one returned parcel). They
+   count nowhere today. When Batch 59 moves the start date back they will
+   need care: a bill on a parcel with no order can't be recorded from an
+   order page.
+ • In the test with the start date moved to 1 Jan 2026, "This year" Your
+   profit was −৳1,41,326: the year's expenses count but most Kaarbar sales
+   are not imported yet. Batch 59 must import the sales before (or with)
+   moving the date.
+ • Old Kaarbar bills dated on / after the start date now count in Net
+   profit on every screen (one rule), and therefore in the balance check.
+   Batch 59 must import their money side (payments) too, or the check
+   will (rightly) go red.
+ • On Inventory → Sales profit, an order counted in a LOCKED month shows
+   its live numbers in its own row; only the totals keep the locked
+   numbers (the difference is in "Adjustments to locked months"). Not
+   visible today (no locked month).
+ • The order "Edit" form for a recorded Steadfast bill: account, date and
+   note can change; the amount can't (the server refuses — it is the bill).
+ • e2e/batch-39 "Profit box" test is skipped while Inventory mode is On
+   (as before). package-lock.json still says 1.50.1 (left alone).
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • ONE engine: money_order_parts_for() gives each order's parts; the Sales
+   profit engine, money_profit_parts, Reports and order_profit use it. The
+   start date filter sits in that engine, so no screen has its own date.
+ • Old Kaarbar bills are inside money_profit_parts (old_* lines, counted
+   in net profit) so Home, Charts and P&L agree. They follow the start
+   date; none count today. Not deleted.
+ • The opening balance for orders placed before the start date and not
+   delivered then (not taken from lots) = cost of their goods − what was
+   paid before. An accountant would say: revenue is earned on delivery, so
+   at the start date those goods were stock in transit, not a sale.
+ • A missing cost counts ৳0 and is flagged (accountants call it
+   "recognise the revenue, flag the cost"). Typing the price later lowers
+   profit on the delivery day (or posts an adjustment if that month is
+   locked).
+ • Bills paid outside a payout are their OWN line, "Steadfast bills paid
+   outside a payout", not inside "Courier (not billed yet)": Steadfast did
+   bill them, they are just not paid from any of your accounts yet.
+ • Courier lines are shown in "Investors and what I owe" under Other
+   people (only when not zero), so that page still adds up to "To give".
+ • Customer credit = money paid above each order's total (cancelled /
+   returned orders ask nothing) + a previous balance paid beyond zero. Dues
+   are NOT netted against credit (one order may owe while another is in
+   credit) — the card shows both, and Batch "Deposit" can apply it.
+ • The frozen expected fee is kept even if the order is reopened and
+   delivered again ("never moves"); the real Steadfast bill always wins.
+ • Locked months: a snapshot per order at lock time + an adjustment row
+   for each later change. Unlocking clears the snapshot (the month then
+   follows live numbers); adjustments already posted stay where posted.
+ • "Balanced" = difference exactly ৳0.00 (to the paisa). The live data is
+   ৳0.00 today, so no rounding slack was needed.
+ • Deleting delivered orders: the existing rule already was "Super Admin +
+   Safety Lock"; I kept it, made the staff refusal explicit, and added the
+   Activity Log line. An order in a locked month stays refused by the lock.
+ • "Show the sums" line "Orders from before Inventory mode (outside
+   profit)" now reads "Old sales changed later, parcels with no order
+   (outside profit)" — the old words would be wrong.
+ • No new colour. The only orange on the order sheet is its Save button.
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done; highest impact first)
+======================================================================
+ 1. Batch 59 order of work (L): import Kaarbar sales, purchases, payments
+    and investor money FIRST, check the made-up-month script, THEN move
+    the start date. Moving it alone makes 2026 show a large loss (expenses
+    without sales).
+ 2. Month-end checklist report (M): one page per month — profit, cash,
+    balance check, unplaced payouts, expected fees older than 14 days,
+    bills not recorded, missing costs. Lock only when clean.
+ 3. Void instead of delete (S): a delivered order should be returned or
+    voided, never deleted, so sales history and payments can't vanish
+    (deleting is now logged, but still possible).
+ 4. Apply customer credit (S): use credit to pay the next order or record
+    a refund, so it does not sit forever (the planned "Deposit" batch).
+ 5. Investor share owed (S): record an agreed share as owed before it is
+    paid, so "Your profit" is right in the month it was earned.
+ 6. Courier cost for parcels not booked on Steadfast (S): 12 delivered
+    orders count ৳0 courier; if another rider was paid, record it.
+ 7. A monthly P&L PDF frozen at lock time (M), to send to investors with
+    the numbers that never change.
+
+Pull request link:
+https://github.com/naeemBro17/naeems/pull/new/fix/batch-58-accounts

@@ -333,7 +333,8 @@ test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back
   await adminAt(page, `/admin/orders/${order.orderNumber}`);
   const profit = page.getByTestId('order-profit');
   await expect(profit).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId('order-profit-no-cost')).toContainText('No cost (before inventory)');
+  // Batch 58: an item with no cost no longer hides the card — the rows show.
+  await expect(profit).toContainText('Items sold (after discounts)');
   await profit.scrollIntoViewIfNeeded();
   await shot(page, '08-order-profit-box.png');
 

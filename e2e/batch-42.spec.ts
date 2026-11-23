@@ -268,7 +268,7 @@ test('permissions: the public and a customer get nothing from the Dashboard, rep
 
 /* ------------------------------------------------------------ Dashboard */
 
-test('Dashboard (phone): Your profit with ▲ %, You took, Left in the business, return on money, Money now with "Books balance"', async ({ page }) => {
+test('Dashboard (phone): Your profit with ▲ %, You took, Left in the business, return on money, Money now with "All figures match"', async ({ page }) => {
   test.setTimeout(60_000);
   const calls = await mockRpc(page, 'money_dashboard', dashboardFixture(true));
   await adminAt(page, '/admin');
@@ -279,11 +279,13 @@ test('Dashboard (phone): Your profit with ▲ %, You took, Left in the business,
   await expect(page.getByTestId('dash-left')).toHaveText('Left in the business ৳7,800');
   await expect(page.getByTestId('dash-roi-value')).toHaveText('6.4%');
   await expect(page.getByTestId('dash-receive')).toHaveText('৳17,270');
-  await expect(page.getByTestId('dash-give')).toHaveText('৳60,000');
+  // Batch 58: To give without the investors' ৳50,000, which have their own line.
+  await expect(page.getByTestId('dash-give')).toHaveText('৳10,000');
+  await expect(page.getByTestId('dash-investors')).toHaveText('৳50,000');
   await expect(page.getByTestId('dash-stock')).toHaveText('৳2,10,000');
   await expect(page.getByTestId('dash-steadfast')).toHaveText('৳9,120');
   await expect(page.getByTestId('dash-money')).toContainText('bKash');
-  await expect(page.getByTestId('dash-balance-ok')).toHaveText('Books balance');
+  await expect(page.getByTestId('dash-balance-ok')).toHaveText('All figures match');
   // Needs attention: the new lines (each taps to its screen).
   await expect(page.getByText('products expiring before they sell')).toBeVisible();
   await expect(page.getByText('sold without stock (still open)')).toBeVisible();
@@ -310,7 +312,7 @@ test('Dashboard (computer, 1440 px): left menu, cards side by side; red badge wh
   await adminAt(page, '/admin', 1440);
   await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.adm-sidebar')).toBeVisible();
-  await expect(page.getByTestId('dash-balance-off')).toHaveText('Off by −৳120');
+  await expect(page.getByTestId('dash-balance-off')).toHaveText('Mismatch −৳120');
   const profit = await page.getByTestId('dash-profit').boundingBox();
   const roi = await page.getByTestId('dash-roi').boundingBox();
   const money = await page.getByTestId('dash-money').boundingBox();
@@ -523,7 +525,7 @@ const CHECK_NOT_READY = {
   month: '2026-10-01', label: 'October 2026', ready: false, locked: false, locked_at: null, locked_by: null, unlocked_at: null, unlocked_by: null, unlock_reason: null,
   items: [
     { key: 'over', ok: true, title: 'The month is over', detail: 'October 2026 has ended.' },
-    { key: 'balance', ok: true, title: 'Books balance', detail: 'The balance check is green.' },
+    { key: 'balance', ok: true, title: 'All figures match', detail: 'The balance check is green.' },
     { key: 'orders', ok: false, title: 'No orders still processing', detail: '2 orders are still To confirm, Confirmed or In transit.', orders: ['ORD-1094', 'NM-1095'] },
     { key: 'payouts', ok: true, title: 'Steadfast payouts recorded', detail: 'Every payout of that month is placed in an account.' },
     { key: 'count', ok: false, title: 'Stock count done', detail: '12 of 18 products counted (Money → Monthly stock count).' },

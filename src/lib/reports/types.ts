@@ -10,7 +10,8 @@ export interface CategoryAmount {
 
 /** Batch 50: old Kaarbar sales in the range (absent before migration-051).
  *  They are already inside gross_profit, net_profit, your_profit and
- *  left_in_business of Profit & loss — never in money_profit_parts. */
+ *  left_in_business. Batch 58: money_profit_parts holds them too (dated on
+ *  or after the money start date), so every screen counts them alike. */
 export interface OldSalesParts {
   old_bills?: number;
   /** Product lines before whole-bill discounts. */

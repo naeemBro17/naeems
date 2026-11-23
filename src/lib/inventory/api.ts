@@ -279,7 +279,10 @@ export async function fetchSalesProfit(from: string, to: string): Promise<LoadSt
     kind: 'ready',
     data: {
       ...raw,
-      totals: numbers({ ...raw.totals, items_missing_cost: raw.totals.items_missing_cost ?? 0 }, ['orders', 'uncosted_orders', 'items_missing_cost', 'sales', 'cost', 'provisional', 'delivery', 'courier', 'adjustments', 'profit', 'margin']),
+      totals: numbers(
+        { ...raw.totals, items_missing_cost: raw.totals.items_missing_cost ?? 0, locked_adjustments: raw.totals.locked_adjustments ?? 0 },
+        ['orders', 'uncosted_orders', 'items_missing_cost', 'sales', 'cost', 'provisional', 'delivery', 'courier', 'adjustments', 'locked_adjustments', 'profit', 'margin'],
+      ),
       orders: raw.orders.map((o) => numbers(o, ['sale', 'cost', 'provisional', 'delivery', 'courier', 'profit', 'margin'])),
       products: raw.products.map((p) => numbers(p, ['units', 'pack_size', 'sales', 'cost', 'profit', 'margin'])),
       adjustments: raw.adjustments.map((a) => numbers(a, ['amount'])),

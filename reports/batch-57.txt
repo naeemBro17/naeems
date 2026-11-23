@@ -1,0 +1,523 @@
+BATCH 57 — Deep audit of the shop's accounts (find and report only)
+Version 1.57.0 · Branch audit/batch-57-accounts (from main) · 23 Nov 2026
+Nothing in the app or the live database was changed. Every database check
+ran inside a transaction that was undone (ROLLBACK), or was read-only.
+
+======================================================================
+PART 5 — SUMMARY FOR NAEEM (read this first)
+======================================================================
+VERDICT
+The day-to-day sums are right: in a made-up month built with the site's own
+buttons, 61 of 73 numbers matched my hand-worked figures exactly: sales,
+cost, delivery, courier, expenses, net profit, Your profit, every account,
+to receive, to give, stock and net worth. You can trust profit for any
+period that starts on or after 13 Nov 2026, and the account balances.
+You can NOT trust "This year" or "All time" profit (on Home, Reports,
+Charts or the investor PDF). They count sales from before 13 Nov but none of
+the ৳2,15,553 expenses or ৳11,470 profit shares from before it. And the
+"Books balance" light is red (off by ৳3,518.25) because of site bugs, not
+because you missed an entry.
+
+FINDINGS, RANKED (size: S small, M medium, L large)
+CRITICAL — wrong money now
+ C1 Periods before 13 Nov count sales but not expenses. "This year": Home
+    says Your profit ৳29,208, Reports says ৳61,517. Neither subtracts
+    2026's ৳1,96,212 of expenses. For example, October's ৳28,144 profit
+    from site orders is counted, but October's ৳9,575 expenses are not.
+    Fix: one rule for everything (M). Explained under C1 below.
+ C2 Net worth is short by ৳3,716.25 and the balance light is red. Goods on
+    open orders are valued at the cost written down when they were taken
+    (৳0 provisional, or the old pre-Batch-45 cost), not the lot's real
+    cost. Biggest case: NM-5008, a ৳3,000 refill counted as ৳0. The other
+    +৳198 is courier cost that is in profit but has no "owed" line. Fix (S).
+IMPORTANT — two screens disagree, or will go wrong
+ I1 Home, Reports, Charts, the investor PDF and Products/Customers use 3
+    different profit sums for the same dates (table in Part 4). (M)
+ I2 Four orders placed before 13 Nov and delivered after it are left out of
+    November's profit: ৳3,443 (NM-3790, NM-3789, NM-3884, NM-3602). (M)
+ I3 A sale whose cost is unknown drops out of profit COMPLETELY (sale,
+    delivery, courier) and puts the balance light off by the whole sale
+    (test: ৳900). (S)
+ I4 "Sold without stock" can hold a different cost from the one profit
+    uses (NM-3788: ৳0 vs ৳1,290). This throws the balance off. (S)
+ I5 An "expected" courier fee is worked out again every time from the last
+    10 bills, so last month's profit moves on its own (my test moved real
+    orders by ৳3). NM-3307 (19 Oct) and NM-3319 (4 Nov) are still
+    "expected" weeks later. (S)
+ I6 Steadfast bills you pay separately (bKash), ৳870 on 10 orders, count
+    as courier cost, but there is no correct way to record the payment. (M)
+ I7 A cancelled order that Steadfast charged for shows ৳0 on its Profit
+    card, while the Money page counts the charge (test: ৳60). (S)
+ I8 Investor share "this year" includes the shares paid before 13 Nov, but
+    "all time" does not. Right now: this year ৳11,470, all time ৳0. (S)
+ I9 Write-offs dated before 13 Nov count in profit; expenses don't. (S)
+ I10 A locked month's profit can still change through buying prices, courier
+    fees, filled shortfalls or deleting a delivered order. (M)
+ I11 If a customer pays too much, the extra money is not shown anywhere on
+    the customer's dues (test: ৳200). (S)
+MINOR — wording / clarity
+ M1 "To give" ৳2,48,534 includes ৳2,22,260 of investor capital, so net worth
+    shows −৳33,211. Show investors' money on its own line. (S)
+ M2 12 delivered orders "not booked on Steadfast" count ৳0 courier cost
+    (৳551 delivery charged on them). Is that true? (S)
+ M3 4 Steadfast payouts (৳11,017) are not placed into an account yet.
+    That's for you to do, not a bug. (none)
+ M4 The balance check allows ±৳1, which hid the ৳1 courier drift. (S)
+
+Batch 56's expense import IS on the live database (97 + 3 rows, ৳2,34,839).
+
+======================================================================
+1. WHAT I DID
+======================================================================
+I read the live version of every money function straight from the live
+database (pg_get_functiondef), not from the migration files, so this audit
+describes what the shop really runs today. Then I did three things:
+ • Mapped every money number to the function, tables, date rule and gaps
+   behind it (Part 1) and judged each rule against normal accounting
+   (Part 2).
+ • Built a made-up month with made-up products, customers, a bank account,
+   supplier, investor and promo code, using the site's own functions (the
+   same ones the buttons call). I worked out every number by hand first,
+   then compared (Part 3). It ran inside a transaction that was undone.
+   Saved as e2e/sql/audit/batch-57-month.sql.
+ • Ran read-only health checks on the real data (Part 4). Saved as
+   e2e/sql/audit/batch-57-health.sql so you can run it again any time. It
+   runs in about 6 seconds and changes nothing.
+Version set to 1.57.0. No app code changed.
+
+======================================================================
+DETAILS OF THE CRITICAL FINDINGS
+======================================================================
+C1 — Before the start date, sales count but expenses don't
+  Where: money_profit_parts (used by Home, the Money page, Reports P&L,
+  Charts, the investor statement). Expenses, investor shares, withdrawals
+  and owner money in are all filtered "entry_date >= money_start_date()".
+  The sales part (inventory_sales_profit_core) has NO such filter.
+  Write-offs have no filter either.
+  Live numbers (start date 13 Nov 2026):
+    5 Oct – 12 Nov (site orders): profit counted ৳28,144.39; expenses ৳0
+                                  (October's own expenses were ৳9,575)
+    Expenses before 13 Nov ignored: 91 rows, ৳2,15,553 (2026: ৳1,96,212)
+    Profit shares before 13 Nov ignored: 4 rows, ৳11,470
+  Reports P&L also adds the old Kaarbar sales, but only for the 7 bills of
+  the one customer you merged (৳62,309 sales, ৳33,119 profit). Kaarbar's
+  other sales were never imported. So May 2026 on Reports shows 2 bills of
+  profit and no expenses, though May had ৳78,180 of expenses.
+  Why it matters: "This year" and "All time" are the numbers you would
+  show an investor or a bank. Today they say ৳29,208 or ৳61,517 profit,
+  but with the year's expenses counted the shop made a loss (and the sales
+  are incomplete as well).
+  How to fix (M). Pick ONE rule:
+    (a) Recommended: every profit number starts at the money start date.
+        For any period before 13 Nov, money_profit_parts, Reports, Charts
+        and the investor PDF say "Books start 13 Nov 2026". Then add a
+        separate "History (before the books)" report that puts the old
+        Kaarbar sales and the imported expenses side by side, clearly
+        marked as history.
+    (b) Or count everything before the start date too: sales, expenses,
+        shares and write-offs. This only works once ALL Kaarbar sales are
+        imported, otherwise the history is half there.
+
+C2 — The balance light is red because of site bugs
+  The check compares (what you have − what you owe) today with
+  (opening + net profit − shares − withdrawals + owner money in +
+  not-shop money + count differences + "outside" orders) since the start.
+  Today it is off by −৳3,518.25 (first wrong 14 Nov). I traced every taka:
+    −৳3,000.00  NM-5008 (shipped): 473 ml of the CeraVe 473ml refill was
+                filled from lot L-014 (৳3,000). "Goods on open orders" uses
+                the ৳0 provisional cost, so the ৳3,000 is owed to the
+                supplier with nothing on the other side.
+    −৳716.25    NM-3788 (confirmed): one line filled at ৳0 (real ৳930),
+                one line taken from L-000 at ৳688.75 (L-000 is ৳475 now)
+    +৳133.00    NM-3893: expected courier fee counted in profit; Steadfast
+                hasn't billed it, and no "courier owed" line holds it
+    +৳65.00     NM-3890: bill paid separately, counted in profit; no money
+                left any account for it
+    = −৳3,518.25
+  Fix (S): in money_position, value "Goods on open orders" at the lot's
+  landed cost (lot_items.landed_unit_cost_bdt; or unit_cost + adjust_bdt).
+  Add "Courier owed (expected)" and "Steadfast bills paid separately" to
+  what you owe. NM-5008's part (৳3,000) goes away by itself when it is
+  delivered; the rest stays until the code is fixed.
+
+======================================================================
+PART 1 — MAP OF EVERY MONEY NUMBER
+======================================================================
+Common building blocks (live versions):
+ • Sale date = when the order became Delivered (last history row to
+   "delivered"; if there is none, orders.updated_at). Returned orders
+   count on the day they were returned. A cancelled order that Steadfast
+   charged counts that charge on the payout day.
+ • Sale = items − discount (promo + advance discount are both inside
+   orders.discount). Delivery charged = orders.delivery_fee. Both only when
+   Delivered.
+ • Cost = order_item_costs.unit_cost_bdt × quantity (the stored cost per
+   line, from lots, or "Set buying prices" when no lot).
+ • Courier = order_courier_costs.total_kept (the real Steadfast bill). If
+   there is none: delivered + booked → EXPECTED fee (average of the last
+   10 inside/outside-Dhaka bills, or the Settings fee if there are fewer
+   than 3, + 1% COD fee); hand delivery → ৳0; never booked → ৳0.
+ • "Costed" order = every line has a stored cost. An order NOT costed is
+   left out of all totals (its sale, delivery and courier).
+ • Money only: an order placed before 13 Nov and not taken from lots is
+   treated as not costed (its sale was in the opening balance).
+
+Screen → function → what it includes / date / leaves out
+ Home "Your profit" (period today/month/year): money_dashboard →
+   money_summary → money_profit_parts. Sales profit (as above) − expenses −
+   write-offs − investor shares. Leaves out: old Kaarbar sales; expenses /
+   shares before 13 Nov (sales before 13 Nov are IN). "You took" =
+   withdrawals; "Left in the business" = Your profit − withdrawals (a
+   profit number, not cash).
+ Home "Return on money": net profit ÷ average net worth (opening + profit
+   since start). Shows "—" today because net worth is negative (M1).
+ Home "Money now": money_position. Accounts = money_ledger (movements +
+   order payments + previous-balance payments + Steadfast fees / payouts,
+   all from 13 Nov). With Steadfast = COD collected − fees − payouts placed.
+   To receive = order dues (Cancelled/Returned owe 0) + previous balances.
+   To give = investor capital (opening + in − back) + supplier lots unpaid
+   + other people. Stock value = units left × landed cost. The balance badge
+   = the books balance check (C2).
+ Money page: accounts / movements / expenses (money_ledger,
+   money_movements from 13 Nov), investors and suppliers
+   (money_to_give_rows; share this month/year have NO start-date filter,
+   share all time has one — I8), customer dues (money_customer_dues: order
+   dues per customer + previous balance left; an overpaid order counts as
+   ৳0 — I11), month lock (triggers on 13 tables — I10).
+ Reports → Profit & loss: report_profit_loss = money_profit_parts +
+   kaarbar_old_parts (old Kaarbar bills by bill date: items − bill discount
+   − cost from Kaarbar items + delivery; a line with no cost would count
+   ৳0 cost — there are none today). Expenses by category: only from 13 Nov.
+ Reports → Sales: report_sales. Orders PLACED in the dates (not
+   cancelled), totals include delivery; returned count 0. The screen says
+   so. It is not profit.
+ Reports → Products / Customers: inventory_sales_profit (the Inventory
+   rule: no start-date treatment, so the 4 orders of I2 are IN) + old
+   Kaarbar lines (Products).
+ Reports → Lots: report_lots (all time; units sold / on orders / left,
+   sales and cost of delivered units).
+ Reports → Charts: money_profit_parts per month (no old Kaarbar sales —
+   differs from P&L months that have old bills).
+ Reports → Investors / investor PDF: report_investors (capital and shares
+   from 13 Nov) and report_investor_statement (monthly sales / net profit
+   from money_profit_parts; footer says "Books kept since 13 Nov", but the
+   October row shows profit with no expenses — C1).
+ Inventory → Sales profit: inventory_sales_profit (no expenses; includes
+   orders placed before 13 Nov — I2; shows the expected/real courier label).
+ Inventory → lots / landed cost: landed per unit = (buy value + its share
+   of the lot's OTHER costs, shared by value) ÷ units. Weight is not in it
+   (Batch 45). Lot owed = landed + lot payments (lots dated before 13 Nov
+   with no payment owe ৳0).
+ Inventory → Set buying prices: product_buying_prices; fills only lines
+   that have NO cost yet.
+ Inventory → shortfalls: stock_shortfalls (provisional cost per unit,
+   then real cost when a lot fills it). The cost stored on the sale is
+   refreshed to the lot's cost; "goods on open orders" is not (C2).
+ Write-offs: stock_write_offs.cost_bdt, counted on write_date (no
+   start-date filter — I9).
+ Order Profit card: order_profit. Same rules as Sales profit, except a
+   CANCELLED order always shows courier ৳0 (I7).
+ Customer page dues: orders' dues + previous balance (opening dues +
+   corrections − lump-sum payments). Old Kaarbar bills are shown for
+   information only (their unpaid part is the previous balance — checked:
+   the merged customer's ৳5,950 is counted once, not twice).
+ Steadfast payouts: payout lines → order_courier_costs per order (exact =
+   1 parcel, share = split). Fees reduce "With Steadfast"; placing a payout
+   moves the net into an account. "Bill paid separately" counts in profit
+   but never moves money (I6).
+
+======================================================================
+PART 2 — THE RULES AGAINST STANDARD ACCOUNTING
+======================================================================
+Revenue
+ Sale counted on the delivered date ........................ CORRECT
+   (accrual: revenue when the goods reach the customer)
+ Promo and advance discounts taken off the sale ............ CORRECT
+ Delivery charged to the customer = income, courier = cost .. CORRECT
+ Returns: sale removed, stock given back, courier charge kept CORRECT
+ Cancelled with a Steadfast charge: charge on payout date .. CORRECT on
+   Money; WRONG on the order's Profit card (I7)
+ Deleted orders vanish with their payments ................. QUESTIONABLE
+   (standard: never delete a posted sale; void or return it — I10)
+ Edited after delivery: profit of the delivery day changes . ACCEPTABLE
+   while the month is open; month lock covers item edits
+Cost of goods
+ Landed cost = buy + share of other lot costs (by value) ... CORRECT
+   (weight shipping as an expense is a valid policy choice)
+ Earliest expiry first (FEFO) ............................... CORRECT
+ Sold without stock: provisional → real cost ............... CORRECT for
+   profit; WRONG in "goods on open orders" and when provisional ≠ stored
+   cost (C2, I4)
+ Order with an item with no cost: whole order left out ..... WRONG
+   (standard: count the sale, flag the cost as missing — I3)
+ Buying prices for old orders .............................. ACCEPTABLE
+   (72 delivered lines, ৳63,748 of cost, rest on typed-in prices)
+ Pack sizes / loose units (cost per ml) .................... CORRECT
+   (50 ml of a ৳1,680 / 200 ml pack = ৳420, exact)
+ Write-offs as a cost on the write-off date ................ CORRECT, but
+   the start date is applied differently from expenses (I9)
+Courier
+ Real Steadfast bill per order, shared payouts split ....... CORRECT
+ Expected fee for a delivered parcel not yet billed ........ CORRECT idea
+   (accrual), but it is recalculated live (history moves — I5) and is not
+   held as an amount owed (C2)
+ Hand delivery ৳0 .......................................... CORRECT
+ Never booked on Steadfast ৳0 .............................. QUESTIONABLE (M2)
+Expenses and the start date
+ Expenses before the start date ignored, sales counted ..... WRONG (C1)
+Old Kaarbar sales
+ In Reports P&L, not on Home .............................. WRONG (I1, C1)
+Investors
+ Capital in/back are not profit; share is not an expense ... CORRECT
+ Your profit = net profit − investor share ................. CORRECT
+ Left in the business = Your profit − withdrawals .......... CORRECT (it is
+   a profit figure, labelled near cash — see suggestions)
+ Share counted only when paid (cash basis) ................. QUESTIONABLE
+   (no "share owed" line if you agree a share but pay it later)
+ Investor capital counted as "to give" (a debt) ............ QUESTIONABLE
+   (fine for loans; for partners it is equity — M1)
+Customer dues
+ Order dues + previous balance − lump-sum payments ......... CORRECT
+ Merges (Batch 55): one customer, many numbers ............. CORRECT
+ Overpaid order shows ৳0, extra hidden ..................... WRONG (I11)
+Opening balances, locks, rounding
+ Opening = accounts + previous dues + opening stock + site orders owed −
+   payables .................................................. CORRECT
+   (recomputed live, so a later change to opening rows moves it)
+ Orders placed before the start but delivered after: profit put into the
+   opening, not November ...................................... QUESTIONABLE (I2)
+ Month lock blocks edits to 13 tables ...................... PARTLY: profit
+   still moves through costs / courier / buying prices (I10)
+ Rounding: discounts split to the paisa, totals to 2 decimals  CORRECT
+ Balance tolerance ±৳1 ..................................... MINOR (M4)
+ Refunds: reduce the paid amount and the account ........... CORRECT
+Cash vs profit
+ Home puts "Your profit" next to "Money now" in separate cards; the
+   balance badge sits on the cash card ....................... MOSTLY CLEAR
+ "Left in the business" sounds like cash but is profit ...... MINOR
+
+What the balance check compares, and is it right?
+ It compares net worth today with the opening + profit since the start,
+ plus owner money and corrections. That is the right accounting identity
+ (change in net worth = profit − withdrawals + owner money in). Two
+ weaknesses:
+ (1) it adds an "outside" term for orders not counted in profit. That makes
+     the check balance even though those sales are missing from profit, so
+     it can't catch I2 — by design;
+ (2) amounts in profit with no matching "owed" line (expected courier,
+     separately paid bills, provisional costs) turn it red when nothing is
+     wrong in your entries (C2).
+ Investor capital in/back moves cash and "to give" equally, so it doesn't
+ change net worth. That is correct the way the site counts capital (as a
+ debt).
+
+======================================================================
+PART 3 — THE MADE-UP MONTH: HAND-WORKED vs SITE
+======================================================================
+Script: e2e/sql/audit/batch-57-month.sql (the full month and the hand
+working are written at the top of the file). Checkout settings used:
+inside-Dhaka delivery ৳70, advance discount ৳50 fixed (the live settings).
+
+The month
+ Opening: made-up bank ৳50,000; customer Rahim previous balance ৳2,000.
+ Lot L1: Cream A 10 × ৳500, Toner B 2 packs (200 ml) × ৳1,600, other cost
+   ৳410 (shared by value: A ৳525/pc, B ৳8.40/ml). Paid ৳5,000, owes ৳3,610.
+ O1 promo 10%: 2 A = 2,000 − 200 + 70 = ৳1,870 COD.
+ O2 advance bKash: 1 A = 1,000 − 50 + 70 = ৳1,020.
+ O3 hand delivery 1 A ৳1,000, ৳500 paid. O4 Rahim 1 A + 80, nothing paid.
+ O5 returned (Steadfast 60 + 30). O6 cancelled (Steadfast 60).
+ O7 Serum C sold without stock (buying price ৳600) ৳1,500 + 80 paid; lot L2
+   (2 × ৳700) fills it. O8 loose 50 ml Toner B × ৳12 = ৳600 cash.
+ Payout ৳1,581 placed in the bank. Expense ৳1,000. Write-off 1 A (৳525).
+ Investor in ৳10,000, share ৳300. Withdrawal ৳700. Rahim pays ৳1,500.
+
+Hand-worked → site (change caused by the month)
+ Lot landed ৳8,610 · A ৳525 · B ৳8.40/ml · owed ৳3,610 ...... all match
+ O1 ৳1,870 · O2 ৳1,020 · O8 ৳600 order totals ............... all match
+ O7 cost ৳600 before, ৳700 after the lot; "sold without stock" ৳600 match
+ Profit cards: O1 ৳741 · O2 ৳435 · O3 ৳475 · O4 ৳555 · O5 −৳90 ·
+   O7 ৳880 · O8 ৳180 ........................................... match
+   O6 −৳60 ............................................ site ৳0  ✗ (I7)
+ Sales ৳6,850 · Cost ৳3,745 · Gross ৳3,105 · Delivery ৳300 ·
+ Courier ৳289 · Expenses ৳1,000 · Write-offs ৳525 ·
+ Net profit ৳1,591 · Share ৳300 · Your profit ৳1,291 ·
+ Withdrawals ৳700 · Left in business ৳591 ...................... all match
+ Home dashboard Your profit ৳1,291 · Reports P&L net ৳1,591 and
+ gross ৳3,105 · Sales profit page ৳6,850 / ৳3,116 ................ all match
+ Bank ৳56,081 · Cash +৳1,100 · bKash +৳2,600 · With Steadfast ৳0 . match
+ To receive ৳1,580 · previous balances ৳500 · stock ৳5,740 ·
+ goods on open orders ৳0 · to give ৳15,010 · advances ৳0 ......... match
+ Net worth +৳52,591 · opening +৳52,000 · net worth − opening = ৳591
+   (= Your profit 1,291 − withdrawal 700) ......................... match
+ Investor owed ৳10,000, share ৳300 · supplier owed ৳5,010 ....... match
+ Rahim: order dues ৳1,080, previous ৳500 · O3 customer ৳500 ..... match
+ Stock: A 4 · B 350 ml = 1 whole pack in the shop · C 1 .......... match
+ Expected courier fees of the REAL orders unchanged ৳304 → site ৳301 ✗
+   (our 2 new bills moved the "last 10" average — I5)
+ Balance-check change 0 → site −৳1 ✗ (the same ৳3 drift; ৳1 of it is
+   since 13 Nov)
+ Extra cases (each compared with the moment before it):
+ X1 open order filled by a ৳700 lot (provisional ৳600): goods on open
+    orders ৳700 → site ৳600 ✗; balance 0 → −৳100 ✗ (C2)
+ X2 product with no cost, ৳900 sale delivered and paid: Sales +৳900 →
+    site ৳0 ✗; balance 0 → +৳900 ✗. Buying price ৳400 typed in later:
+    profit +৳500 ✓, but "sold without stock" ৳400 → site ৳0 ✗,
+    balance stays +৳400 off ✗ (I3, I4)
+ X3 customer paid ৳200 too much: Money advances +৳200 ✓; dues list
+    −৳200 → customer not listed at all ✗ (I11)
+ X4 investor share ৳250 dated before 13 Nov: this year ৳550, all time ৳300 ✗ (I8)
+ X5 before 13 Nov: ৳400 expense → site ৳0 ✗; ৳300 write-off → ৳300 ✓ (I9)
+ Total: 61 of 73 checks match.
+
+======================================================================
+PART 4 — HEALTH CHECK OF THE REAL DATA (read-only, 22–23 Nov 2026)
+======================================================================
+Batch 56's expense import has been run (2 imports, 100 rows, ৳2,34,839), so
+the expense numbers are complete, but 95 of those rows are dated before 13
+Nov and are ignored by every profit number (C1).
+Script: e2e/sql/audit/batch-57-health.sql
+
+ Delivered orders with an item with no cost ............... 0
+ Delivered items costed at ৳0 ............................. 0
+ Delivered lines costed from "Set buying prices" .......... 72 lines, ৳63,748
+ Order total ≠ items − discount + delivery ................ 0 (all 51 orders)
+ Subtotal ≠ sum of lines .................................. 0
+ Paid more than owed / negative dues ...................... 0
+ Lot units left ≠ movements; ≠ in − taken + given back ..... 0 / 0
+ Negative stock ........................................... 0
+ Shop stock ≠ whole packs in lots (mode ON) ............... 0
+ Sold-without-stock warnings .............................. 5 lines (NM-5164
+   ×3, NM-3788 ×2) — normal while those orders wait for stock
+ Open orders valued at an old / provisional cost .......... 2: NM-5008,
+   NM-3788 — ৳3,716.25 (C2)
+ Open "sold without stock" with ৳0 provisional cost ....... 1: NM-3788 (I4)
+ Payouts that don't add up / lines COD − fees ≠ paid ...... 0 / 0
+ Delivered >14 days ago, still only an expected fee ....... 2: NM-3307
+   (19 Oct), NM-3319 (4 Nov) — ৳171. Check those payouts matched.
+ Delivered with only an expected fee (all) ................ 3, ৳304
+ Bills paid separately (no money movement) ................ 10 orders, ৳870
+   (NM-2701, NM-1979, NM-1972, NM-1450, NM-3325 …; since 13 Nov: NM-3890 ৳65)
+ Steadfast payouts not placed in an account ............... 4, ৳11,017
+ Locked months / movements changed after a lock ........... 0 / 0
+ Before 13 Nov, ignored: expenses 91 rows ৳2,15,553; investor profit share
+   4 rows ৳11,470
+ Write-offs before 13 Nov (these would count) ............. 0
+ Delivered orders left out of Money profit ................ 4: NM-3790,
+   NM-3789, NM-3884, NM-3602 — ৳3,443 profit (I2)
+ Books balance today ...................................... −৳3,518.25
+   (net worth −৳33,211.25 vs expected −৳29,693.00; first wrong 14 Nov).
+   History: 13 Nov 0 · 14–16 Nov +1,404 · 17–18 +709.50 · 19 +354.50 ·
+   20–21 −518.25 · 22 −3,518.25. Today's gap is fully traced in C2; earlier
+   days came from the same causes (provisional costs, expected fees).
+ Investors: share "this year" > "all time" ................ 4: WAHID ৳1,870,
+   Riya Silva ৳3,800, Mahmud Hassan ৳4,800, Raihan Taher ৳1,000 (I8)
+ Old Kaarbar bills on the site ............................ 7 (one merged
+   customer), ৳62,919; lines with no cost: 0
+ Delivered never booked on Steadfast, ৳0 courier .......... 12, ৳551
+   delivery charged (M2)
+
+Same period, three answers (net profit; Sales profit has no expenses)
+                Home/Money    Reports P&L          Sales profit page
+ Today          ৳0            ৳0                   ৳0
+ This month     ৳7,966.72     ৳7,966.72            ৳19,225.72
+ This year      ৳29,208.39    ৳61,517.39 (+৳32,309 old Kaarbar)  ৳40,372.39
+ All time       ৳29,208.39    ৳62,327.39 (+৳33,119 old Kaarbar)  ৳40,372.39
+ Expenses counted in all of them: ৳7,816 (only 13–21 Nov).
+ This month like for like (before expenses): Money ৳15,782.72 vs Sales
+ profit ৳19,225.72 — the ৳3,443 is I2.
+
+Money position today: Cash ৳13,084 · bKash ৳27,600 · Bank ৳13,300 ·
+Nagad ৳0 · With Steadfast ৳11,181 (Steadfast itself reports ৳0: those are
+the 4 unplaced payouts) · to receive ৳32,972 + previous balances ৳18,640 ·
+stock ৳1,14,928 · goods on open orders ৳5,732.75 · to give ৳2,48,534
+(investors ৳2,22,260, suppliers ৳26,274) · open orders value ৳22,115 ·
+net worth −৳33,211.25 (opening −৳30,442).
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+None needed. (The two audit scripts are optional checks. Both end in
+ROLLBACK, so running them in the SQL Editor changes nothing.)
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • I did not rebuild the balance history day by day (14–21 Nov). Today's
+   −৳3,518.25 is traced to the taka; for earlier days I show the causes
+   but not each day's sum.
+ • No screen was opened in a browser (the brief said no browser tests, to
+   spare Supabase). The screen-to-function map comes from the source code,
+   and the numbers come from the functions the screens call.
+ • The made-up month can't test "money before the start date" end to end,
+   because the real books are already confirmed. I tested that rule with
+   the live data and the X4 / X5 extra cases instead.
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+ • Reading the Money page writes a row (money_check_log) every time. It's
+   harmless, but it means a "read" isn't really read-only. My scripts wrap
+   it in a transaction that is undone.
+ • A shipped order can't be cancelled on the site (only pending /
+   confirmed). A parcel Steadfast cancels after pickup must be marked
+   Returned. That is fine, but worth knowing for courier charges.
+ • lot L-000's cost was lowered in Batch 45 (weight taken out). Open
+   orders taken before that still carry the old cost (NM-3788 ৳688.75 vs
+   ৳475) — part of C2.
+ • The admin order form's custom price key is "sold_price" (an item with
+   "unit_price" is silently priced at the list price). That is not a bug in
+   the app, only in how a script could call it.
+ • package-lock.json still says 1.50.1. Earlier batches left it too; I
+   didn't touch it.
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • I read the LIVE function bodies instead of trusting the migration files
+   (CLAUDE.md: never assume a migration ran). Batches 55.1 and 56 are on
+   the live database.
+ • The made-up month measures CHANGES (after − before) so it never needs
+   to touch or hide a real row. The made-up opening balance is written
+   directly (the real books are already confirmed). Everything else goes
+   through the site's own functions.
+ • The checkout orders use the e2e test customer login (no real
+   customer). Order alerts can't fire: the Telegram trigger only queues a
+   request, and the queue sends only after a COMMIT.
+ • Severity: "Critical" = a number on screen is wrong today. "Important" =
+   two screens disagree, or it goes wrong in a normal situation.
+   "Minor" = wording / clarity.
+ • Tests: no app code changed, so no browser tests and no full
+   `npm run verify` (the brief says so). `npm run build`: passed, zero
+   errors. The two SQL scripts were run on the live database inside undone
+   transactions; each takes a few seconds.
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done; highest impact first)
+======================================================================
+ 1. One profit engine (M). Today 3 different sums answer "profit". A
+    professional system has ONE function for profit by period. Every
+    screen (Home, P&L, Charts, investor PDF, Products, Customers) reads it,
+    with a clear "books start" date. This removes C1, I1 and I2 at once.
+ 2. A proper "owed" side for accrued costs (S–M). Expected courier fees,
+    bills paid separately and agreed-but-unpaid investor shares should
+    each be an amount owed, so the balance light only goes red for real
+    mistakes. An accountant calls these accruals.
+ 3. Freeze each month's numbers when you lock it (M). Store the month's
+    P&L as a snapshot at lock time and compare later recalculations with
+    it. A locked month must never change silently (I10).
+ 4. Never delete a delivered order (S). Allow void / return only, so cash
+    and sales history can't disappear.
+ 5. Separate investors' capital from debts (S). Show "Investors' money in
+    the business" apart from "To give", so net worth means what you own.
+ 6. Customer credit (S). Show overpayments as credit on the customer and
+    let it pay the next order.
+ 7. Courier payable for "not booked" deliveries (S). If you use another
+    rider or courier, record its cost on the order so profit isn't
+    overstated.
+ 8. A month-end checklist report (M). One page per month: profit, cash
+    moves, balance check, unplaced payouts, expected fees older than 14
+    days, open shortfalls. Lock only when it is clean. This is what an
+    accountant does every month.
+
+Pull request link:
+https://github.com/naeemBro17/naeems/pull/new/audit/batch-57-accounts
