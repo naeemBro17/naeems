@@ -1,0 +1,46 @@
+BATCH 61 - Make every old test green again   (STATUS: NOT FINISHED, usage limit reached)
+
+1. WHAT I DID
+- Database tests no longer re-create old functions. Batch 45-55.1 specs run
+  their SQL against today's live functions (always rolled back).
+- Updated to today's rules, each run once, all green:
+  Batch 39 SQL 58/58 (order limit lifted inside the transaction),
+  45 45/45, 46 + 47 (payout check now counts as the Batch 57 audit does),
+  48 24/24 (sets 0.5% inside the transaction; promo case uses 2 items for
+  the 1,000 taka rule), 49 42/42 (real Kaarbar imports set aside inside
+  the transaction), 50 54/54 and 54 30/30 (money start date set inside the
+  transaction, Batch 58 one profit engine), 51 53/53, 52 23/23, 53 21/21,
+  55 and 55.1 pass.
+- Test orders no longer use real products: new helper makeTestProduct()
+  (e2e/helpers/api.ts) makes a hidden "keep selling" product with no lots,
+  shown only while place_order runs, deleted in global teardown. All specs
+  that used pickStockedProduct now use it. Stock-number checks that need
+  real lots were removed in Batch 24, 30, 39 (covered by
+  e2e/sql/batch-45-inventory.sql and batch-39-inventory.sql).
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+None needed.
+
+3. WHAT I COULD NOT FINISH
+- Batch 24 browser run was started; result not read.
+- Not yet re-run: Batch 30, 32, 33, 35, 36, 37, fix-order-actions,
+  screens specs with the new helper.
+- Not started: Batch 26 restock (database refuses Restock while Inventory
+  mode is On; test still expects Mode Off), 52.1 keep-selling, Batch 33
+  two carts, 40, 41, 42, timing flakes (23, 27), the full npm run verify.
+
+4. WHAT I FOUND ALONG THE WAY
+- REAL BUG: Steadfast payout SFC-33372895 (6,836 taka, "processing") is
+  marked synced with no parcel lines. The sync sets items_synced = true
+  even when Steadfast sends no lines yet, and never asks again
+  (supabase/functions/_shared/steadfastPayouts.ts). Not fixed (tests only).
+- The old tests placed real orders that took units from real lots while
+  Inventory mode is On.
+
+5. DESIGN DECISIONS
+- Made-up products are hidden except for the moment of placing the order.
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+- Small: fix the payout sync above.
+
+https://github.com/naeemBro17/naeems/pull/new/chore/batch-61-tests

@@ -1,9 +1,10 @@
 -- Batch 49 database tests (run by e2e/batch-49.spec.ts through the Supabase
--- command line). The runner puts the whole Batch 49 migration
--- (supabase/migration-050-batch49.sql, without its own BEGIN / COMMIT) in
--- front of this script, so everything — the migration, the made-up
+-- command line) against today's functions on the live database (Batch 61:
+-- no old migration is replayed any more). Everything — the made-up
 -- customers, expenses, investor and month lock — runs inside ONE
 -- transaction that always ends with ROLLBACK. Nothing real is changed.
+-- The shop's own Kaarbar imports are set aside (marked undone) inside that
+-- transaction, so Undo here only ever meets this test's imports.
 --
 -- Result: the rows (name, ok, detail) of the SELECT before the ROLLBACK.
 DO $test$
@@ -33,6 +34,7 @@ DECLARE
   v_food     text;
   v_food_id  uuid;
   v_imp1     uuid;
+  v_bills0   integer;
 BEGIN
   EXECUTE 'CREATE TEMP TABLE t_res (n serial, name text, ok boolean, detail text)';
   EXECUTE $f$CREATE FUNCTION pg_temp.ck(p_name text, p_ok boolean, p_detail text DEFAULT '') RETURNS void
@@ -51,15 +53,12 @@ BEGIN
   c_anon := json_build_object('role', 'anon')::text;
   SELECT bd_phone_key(phone) INTO v_cust_pk FROM profiles WHERE id = v_cust;
 
-  -- ================================================ the migration itself
-  PERFORM pg_temp.ck('Migration: kaarbar_imports, the import marks and the Bill No column exist',
+  -- ================================================ what Batch 49 added
+  PERFORM pg_temp.ck('kaarbar_imports, the import marks and the Bill No column exist',
     to_regclass('kaarbar_imports') IS NOT NULL
     AND (SELECT count(*) FROM information_schema.columns WHERE table_name = 'money_movements'
            AND column_name IN ('kaarbar_import_id', 'kaarbar_bill_no')) = 2
     AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'customers' AND column_name = 'kaarbar_import_id'));
-  PERFORM pg_temp.ck('Migration: nothing old is marked as imported',
-    NOT EXISTS (SELECT 1 FROM customers WHERE kaarbar_import_id IS NOT NULL)
-    AND NOT EXISTS (SELECT 1 FROM money_movements WHERE kaarbar_bill_no IS NOT NULL));
   PERFORM pg_temp.ck('Anonymous visitors cannot call any Kaarbar function',
     NOT has_function_privilege('anon', 'kaarbar_status()', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'kaarbar_customers_check(jsonb)', 'EXECUTE')
@@ -105,6 +104,9 @@ BEGIN
 
   -- ================================================ customers
   PERFORM set_config('request.jwt.claims', c_admin, true);
+  -- The shop's real imports stay out of this test's Undo (rolled back).
+  UPDATE kaarbar_imports SET undone_at = now() WHERE undone_at IS NULL;
+  SELECT count(*) INTO v_bills0 FROM money_movements WHERE kaarbar_bill_no IS NOT NULL;
   INSERT INTO customers (customer_key, phone_key, full_name, phone, added_by_hand)
   VALUES ('ph:01700000499', '01700000499', 'E2E B49 Site Name', '01700000499', true);
   SELECT count(*) INTO v_dues0 FROM customer_opening_dues;
@@ -198,8 +200,9 @@ BEGIN
   SELECT id, upper(name) INTO v_food_id, v_food FROM money_categories WHERE NOT archived ORDER BY sort_order LIMIT 1;
 
   v_json := kaarbar_status();
-  PERFORM pg_temp.ck('Status: the start date and no Kaarbar bills yet',
-    (v_json ->> 'start_date')::date = v_start AND jsonb_array_length(v_json -> 'bill_nos') = 0, v_json::text);
+  PERFORM pg_temp.ck('Status: the start date, and only the shop''s own Kaarbar bills (none of this test''s yet)',
+    (v_json ->> 'start_date')::date = v_start AND jsonb_array_length(v_json -> 'bill_nos') = v_bills0
+    AND NOT (v_json -> 'bill_nos') ? 'E2E49-1', format('start %s, %s bills', v_json ->> 'start_date', jsonb_array_length(v_json -> 'bill_nos')));
 
   v_json := kaarbar_import_expenses(jsonb_build_array(
     jsonb_build_object('bill_no', 'E2E49-1', 'date', v_old, 'kind', 'expense', 'category', 'E2E B49 Old Cat',
@@ -245,7 +248,7 @@ BEGIN
   PERFORM pg_temp.ck('Second upload: the Bill No already on the site is skipped, only the new row comes in',
     (v_json ->> 'added')::int = 1 AND (v_json ->> 'skipped')::int = 1
     AND (SELECT count(*) FROM money_movements WHERE kaarbar_bill_no = 'E2E49-2') = 1, v_json::text);
-  PERFORM pg_temp.ck('kaarbar_status lists the imported Bill Nos', jsonb_array_length(kaarbar_status() -> 'bill_nos') = 6);
+  PERFORM pg_temp.ck('kaarbar_status lists the imported Bill Nos', jsonb_array_length(kaarbar_status() -> 'bill_nos') = v_bills0 + 6);
 
   v_json := kaarbar_undo_expenses();
   SELECT balance INTO v_num FROM money_account_balances() WHERE account_id = v_cash;

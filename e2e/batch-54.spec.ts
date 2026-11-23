@@ -9,7 +9,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 // Batch 54: "Merge old data" on a customer's page.
 //
 // The live shop is never changed. The database rules run in
-// e2e/sql/batch-54.sql together with the whole Batch 54 migration inside
+// e2e/sql/batch-54.sql against today's live functions (Batch 61: no old migration is replayed) inside
 // ONE transaction that is always rolled back. The screens are driven at
 // 390 px with a made-up party statement drawn here as a real PDF in
 // Kaarbar's newer layout; every kaarbar_* / money call they make is
@@ -35,12 +35,10 @@ test.beforeAll(async () => {
 test('database: Super Admin + password, items then bills in one call (all or nothing), linked to the customer, history only, undo keeps locked months and products (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-055-batch54.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const tests = readFileSync('e2e/sql/batch-54.sql', 'utf8')
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

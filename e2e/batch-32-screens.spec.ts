@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, useSessionInPage, type TestSession } from './helpers/api';
 
 // Batch 32: screenshots for reports/batch-32-screens/ — admin at 390 px and
 // 1280 px, light and dark. Not a pass/fail test; only runs when asked:
@@ -19,7 +19,7 @@ test.describe.configure({ mode: 'serial' });
 const DIR = 'reports/batch-32-screens';
 
 let admin: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 let orderId = '';
 let customerKey = '';
 
@@ -27,7 +27,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   const customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(5);
+  product = await makeTestProduct();
   orderId = (await placeTestOrder(customer.accessToken, product.id, 1)).id;
   await rpc(admin.accessToken, 'admin_set_order_status', { p_order_id: orderId, p_new_status: 'confirmed' });
   const rows = await rpc<{ customer_key: string; profile_id: string | null }[]>(admin.accessToken, 'admin_customers_v2');

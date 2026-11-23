@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { DAY, mockPayouts, restAnswer, withRichProduct } from './helpers/batch36';
 
 // Batch 36: screenshots for reports/batch-36-screens/ — 390 px and
@@ -22,7 +22,7 @@ const THEMES = ['light', 'dark'] as const;
 const MESSAGE = 'Rume\nYousuf traders dhan dokaner pisone basha,uttar bazar,poroshuram, Feni\n01638820872';
 
 let admin: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 let order: { id: string; orderNumber: string } | null = null;
 let slug = '';
 let photoSlug = '';
@@ -31,7 +31,7 @@ test.beforeAll(async () => {
   test.setTimeout(90_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   const customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
   slug = (await select<{ slug: string }[]>(null, `products_view?select=slug&id=eq.${product.id}`)).data?.[0]?.slug ?? product.id;
   const rows = await select<{ slug: string; image_urls: string[] | null }[]>(null, 'products_view?select=slug,image_urls&is_active=eq.true&limit=300');
   photoSlug = (rows.data ?? []).find((r) => (r.image_urls ?? []).length >= 2)?.slug ?? slug;

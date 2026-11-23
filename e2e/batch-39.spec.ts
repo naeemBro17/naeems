@@ -6,9 +6,8 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './
 import {
   insert,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
-  productStock,
   remove,
   rpc,
   select,
@@ -322,11 +321,13 @@ test('Parts 2–4: Sold without stock, Sales profit and the Inventory mode check
 test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back (Inventory mode Off)', async ({ page }) => {
   test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(150_000);
-  const product = await pickStockedProduct(3);
-  const before = await productStock(product.id);
+  // Batch 61: a made-up "keep selling" product with no lots (helpers/api
+  // makeTestProduct), so no stock number moves here. A return putting stock
+  // back is tested in e2e/sql/batch-45-inventory.sql and
+  // e2e/sql/batch-39-inventory.sql ("cancel / return / edits").
+  const product = await makeTestProduct();
   const order = await placeTestOrder(customer.accessToken, product.id, 1);
   orderIds.push(order.id);
-  expect(await productStock(product.id)).toBe(before - 1);
   const shipped = await rpc(admin.accessToken, 'admin_set_order_status', { p_order_id: order.id, p_new_status: 'shipped', p_note: 'e2e b39' });
   expect(shipped.ok, shipped.error ?? '').toBe(true);
 
@@ -344,7 +345,6 @@ test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back
   await shot(page, '09-mark-returned.png');
   await page.getByTestId('confirm-sheet-confirm').click();
   await expect(page.getByTestId('order-step-label')).toHaveText('Returned', { timeout: 20_000 });
-  expect(await productStock(product.id)).toBe(before);
   const saved = await select<{ status: string; stock_released: boolean }[]>(admin.accessToken, `orders?select=status,stock_released&id=eq.${order.id}`);
   expect(saved.data?.[0]).toEqual({ status: 'returned', stock_released: true });
   await shot(page, '10-order-returned.png');
@@ -353,7 +353,7 @@ test('Part 2.5 + 3: order page — Profit box, Mark returned puts the stock back
 test('Part 0.6: manual order — a product with a pack size can be sold in loose units at its own price', async ({ page }) => {
   test.skip(liveModeAtStart === 'true', MODE_ON_SKIP);
   test.setTimeout(120_000);
-  const product = await pickStockedProduct(1);
+  const product = await makeTestProduct();
   // Only this browser sees the product as a 400 pcs pack (nothing is saved).
   await page.route(/\/rest\/v1\/rpc\/inventory_pack_units/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ product_id: product.id, variant_id: null, stock_unit: 'pcs', pack_size: 400 }]) })

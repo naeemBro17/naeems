@@ -9,7 +9,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 // profit, and the glass Account page.
 //
 // The live shop is never changed. The database rules run in
-// e2e/sql/batch-53.sql together with the whole Batch 53 migration inside
+// e2e/sql/batch-53.sql against today's live functions (Batch 61: no old migration is replayed) inside
 // ONE transaction that is always rolled back. The screens answer the one
 // new database answer they need (order_profit's courier label) in the
 // browser, with the numbers the migration gives (checked in that
@@ -51,12 +51,10 @@ async function noSidewaysScroll(page: Page): Promise<void> {
 test('database: payout split, labels, expected fee, guard, Money unchanged (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-054-batch53.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const fill = (s: string) => s.replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL);
   const before = fill(readFileSync('e2e/sql/batch-53-before.sql', 'utf8'));
   const tests = fill(readFileSync('e2e/sql/batch-53.sql', 'utf8'));
-  const output = await runSql(`BEGIN;\n${before}\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${before}\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

@@ -4,7 +4,7 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_P
 import {
   callFunction,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
   productStock,
   rpc,
@@ -36,7 +36,7 @@ test.skip(
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 let product2: { id: string; name: string };
 let migrationReady = false;
 let staffId = '';
@@ -109,14 +109,8 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(8);
-  const withOptions = await select<{ product_id: string }[]>(null, 'product_variants?select=product_id');
-  const optionIds = new Set((withOptions.data ?? []).map((r) => r.product_id));
-  const others = await select<{ id: string; name: string }[]>(
-    null,
-    `products_view?select=id,name&is_active=eq.true&stock_quantity=gte.6&id=neq.${product.id}&order=stock_quantity.desc&limit=20`
-  );
-  product2 = (others.data ?? []).find((p) => !optionIds.has(p.id)) ?? (others.data ?? [])[0];
+  product = await makeTestProduct();
+  product2 = await makeTestProduct(800);
   // A function that answers 404 does not exist yet: migration-033 not run.
   const probe = await rpc(admin.accessToken, 'order_payment_summary', { p_order_id: '00000000-0000-0000-0000-000000000000' });
   migrationReady = probe.status !== 404;
@@ -366,8 +360,6 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
   test.setTimeout(120_000);
   const order = await bookedOrder();
   const before = await orderRow(order.id);
-  const stock1 = await productStock(product.id);
-  const stock2 = await productStock(product2.id);
   await rpc(admin.accessToken, 'admin_set_steadfast_cod', { p_order_id: order.id, p_amount: Number(before.total) });
 
   await openAdminOrder(page, order.id);
@@ -399,8 +391,11 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
   expect(Number(after.discount)).toBe(50);
   expect(Number(after.total)).toBe(Number(after.subtotal) - 50);
   expect(after.steadfast_outdated).toEqual(['Name', 'Phone', 'Alternative phone', 'Address', 'Note']);
-  expect(await productStock(product.id)).toBe(stock1 - 1);
-  expect(await productStock(product2.id)).toBe(stock2 - 1);
+  // Batch 61: made-up "keep selling" products with no lots (helpers/api
+  // makeTestProduct), so no stock moves in this test. Stock on edits
+  // (more, fewer, a removed line, never below 0) is tested in
+  // e2e/sql/batch-45-inventory.sql ("edits", "oversell") and
+  // e2e/sql/batch-39-inventory.sql ("cancel / return / edits").
 
   const notes = await historyNotes(order.id);
   expect(notes.some((n) => /^Delivery fee ৳\d+ → ৳0$/.test(n))).toBe(true);
@@ -428,19 +423,13 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
   await expect(dialog.getByTestId('steadfast-banner')).toHaveCount(0, { timeout: 15_000 });
   expect((await historyNotes(order.id)).some((n) => n.startsWith('Updated on Steadfast by hand'))).toBe(true);
 
-  // Removing a line puts its stock back.
+  // Removing a line.
   const items = await select<{ id: string; product_id: string }[]>(admin.accessToken, `order_items?select=id,product_id&order_id=eq.${order.id}`);
   const keep = items.data!.filter((i) => i.product_id === product.id).map((i) => ({ id: i.id, quantity: 2 }));
   const removed = await rpc(admin.accessToken, 'admin_edit_order', { p_order_id: order.id, p_changes: { items: keep } });
   expect(removed.ok, removed.error ?? '').toBe(true);
-  expect(await productStock(product2.id)).toBe(stock2);
-
-  // Never below 0.
-  const tooMany = await rpc(admin.accessToken, 'admin_edit_order', {
-    p_order_id: order.id,
-    p_changes: { items: [{ id: keep[0].id, quantity: 2 + (await productStock(product.id)) + 1 }] },
-  });
-  expect(tooMany.error).toMatch(/Only \d+ in stock/);
+  const left = await select<{ product_id: string }[]>(admin.accessToken, `order_items?select=product_id&order_id=eq.${order.id}`);
+  expect((left.data ?? []).map((i) => i.product_id)).toEqual([product.id]);
 });
 
 test('Part 2: a cancelled order can be edited, and no stock moves', async () => {

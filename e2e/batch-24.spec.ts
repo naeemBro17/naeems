@@ -5,9 +5,8 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_P
 import {
   callFunction,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
-  productStock,
   rpc,
   select,
   update,
@@ -38,7 +37,7 @@ test.skip(
 let admin: TestSession;
 let customer: TestSession;
 let moderatorId = '';
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const createdOrderIds: string[] = [];
 let originalFormat: { prefix: string; next_number: number; suffix: string } | null = null;
 let originalTexts: { key: string; value: string }[] = [];
@@ -95,7 +94,7 @@ async function deleteTestRole(): Promise<void> {
 test.beforeAll(async () => {
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(6);
+  product = await makeTestProduct();
 
   // A moderator left over from an interrupted run is removed first.
   const team = await rpc<{ id: string; username: string }[]>(admin.accessToken, 'admin_team_list');
@@ -222,10 +221,10 @@ test('Direct API calls outside the moderator\'s permissions are refused', async 
   expect(status.error).toContain('Not authorized');
 
   // Refused: editing a product (no row is changed).
-  const before = await productStock(product.id);
-  const edit = await update<unknown[]>(mod.accessToken, `products?id=eq.${product.id}`, { stock_quantity: 999 });
+  const edit = await update<unknown[]>(mod.accessToken, `products?id=eq.${product.id}`, { retail_price: 1 });
   expect(edit.ok === false || (Array.isArray(edit.data) && edit.data.length === 0)).toBe(true);
-  expect(await productStock(product.id)).toBe(before);
+  const unchanged = await select<{ retail_price: number }[]>(admin.accessToken, `products?select=retail_price&id=eq.${product.id}`);
+  expect(Number(unchanged.data?.[0]?.retail_price)).toBe(1000);
 
   // Refused: the Activity Log (nothing comes back), price edits, deleting,
   // the Team list, and the Safety Lock.
@@ -318,11 +317,13 @@ test('Order number preview, and the next order uses it', async ({ page }) => {
   expect(restore.ok, restore.error ?? '').toBe(true);
 });
 
-test('Deleting an order restores its stock', async ({ page }) => {
+test('Deleting an order: the typed number, the message, the Activity Log', async ({ page }) => {
   test.setTimeout(60_000);
-  const before = await productStock(product.id);
+  // Batch 61: the order is of a made-up "keep selling" product with no
+  // lots (helpers/api makeTestProduct), so no stock moves here. Stock
+  // coming back on delete is tested in e2e/sql/batch-45-inventory.sql
+  // ("deleting the order gives the 2 back", Inventory mode On and Off).
   const order = await newOrder(2);
-  expect(await productStock(product.id)).toBe(before - 2);
 
   await useSessionInPage(page, admin);
   await page.goto(`/admin?tab=orders&order=${order.id}`);
@@ -336,7 +337,6 @@ test('Deleting an order restores its stock', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Delete order', exact: true }).click();
   await expect(page.getByText(`Order ${order.orderNumber} deleted`)).toBeVisible({ timeout: 15_000 });
 
-  expect(await productStock(product.id)).toBe(before);
   const gone = await select<unknown[]>(admin.accessToken, `orders?select=id&id=eq.${order.id}`);
   expect(gone.data).toHaveLength(0);
   // Recorded with the order number, customer and total.
@@ -374,10 +374,8 @@ test('Safety Lock: a shipped order cannot be deleted until the lock is off, and 
   const opened = await rpc<string>(admin.accessToken, 'admin_open_delete_lock', { p_seconds: 6 });
   expect(opened.ok, opened.error ?? '').toBe(true);
 
-  const stockBefore = await productStock(product.id);
   result = await deleteAsAdmin([shipped.id]);
   expect(result[0].deleted).toBe(true);
-  expect(await productStock(product.id)).toBe(stockBefore + 1);
 
   // Another shipped order, after the window has passed: locked again.
   const later = await newOrder();

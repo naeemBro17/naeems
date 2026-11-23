@@ -9,7 +9,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 // Facebook's in-app browser, link previews.
 //
 // The live shop is never changed. The database rules run in
-// e2e/sql/batch-52.sql together with the whole Batch 52 migration inside
+// e2e/sql/batch-52.sql against today's live functions (Batch 61: no old migration is replayed) inside
 // ONE transaction that is always rolled back. In the browser every combo
 // call (get_combo, admin_create_combo, the combos list, delete, the
 // preview upload) is answered locally — no combo is ever saved, so there
@@ -68,11 +68,9 @@ test.afterEach(async ({ page }) => {
 test('database: combos — admin only to make / list / change / delete, anyone reads one by its code, nothing else touched (one rolled-back transaction)', async () => {
   test.setTimeout(180_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-053-batch52.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const fill = (s: string) => s.replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL).replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
   const tests = fill(readFileSync('e2e/sql/batch-52.sql', 'utf8'));
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

@@ -5,7 +5,7 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_P
 import {
   callFunction,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
   rpc,
   select,
@@ -30,7 +30,7 @@ const ROLE_NAME = 'E2E Batch36 role';
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const createdOrderIds: string[] = [];
 let staffId = '';
 let roleId = '';
@@ -95,7 +95,7 @@ test.beforeAll(async () => {
   test.setTimeout(90_000);
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
   await deleteStaffAndRole();
 });
 

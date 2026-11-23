@@ -14,8 +14,8 @@ import { signInAsTestCustomer } from './helpers/auth';
 // placed), and the three advance-discount settings are added to the
 // settings the page loads (so this works before migration-049 is run).
 // The real database rules — the discount worked out by the server, Nagad,
-// Edit order — run in e2e/sql/batch-48.sql together with the whole Batch 48
-// migration, inside ONE transaction that is always rolled back.
+// Edit order — run in e2e/sql/batch-48.sql against today's live functions (Batch 61: no old
+// migration is replayed), inside ONE transaction that is always rolled back.
 // No real Storage file is downloaded (./fixtures).
 
 test.describe.configure({ mode: 'serial' });
@@ -37,12 +37,10 @@ test.beforeAll(async () => {
 test('database: Nagad, the advance discount worked out by the server (percent, fixed, promo + discount, Off, 0, COD), Edit order payment method (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-049-batch48.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const tests = readFileSync('e2e/sql/batch-48.sql', 'utf8')
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

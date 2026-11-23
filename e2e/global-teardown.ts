@@ -1,11 +1,12 @@
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, rpc, select } from './helpers/api';
+import { passwordSession, removeTestProducts, rpc, select } from './helpers/api';
 
 /**
  * Runs once after the whole e2e suite (Batch 24): deletes every order the
  * test customer still has that may be deleted without the Safety Lock —
  * Pending, or Cancelled and never booked on Steadfast. That is every order
  * the suite leaves behind (checkout.spec.ts places one and cancels it).
+ * Batch 61: then the made-up test products (helpers/api makeTestProduct).
  * Uses the test Super Admin account; skipped if it isn't set up.
  */
 export default async function globalTeardown(): Promise<void> {
@@ -23,6 +24,7 @@ export default async function globalTeardown(): Promise<void> {
     if (early.length > 0) {
       await rpc(admin.accessToken, 'admin_delete_orders', { p_order_ids: early });
     }
+    await removeTestProducts(admin.accessToken);
   } catch (err) {
     console.warn('e2e cleanup of test orders skipped:', err instanceof Error ? err.message : err);
   }

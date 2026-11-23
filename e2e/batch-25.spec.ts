@@ -4,7 +4,7 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_P
 import {
   callFunction,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
   rpc,
   select,
@@ -293,7 +293,7 @@ test("changing the role's switches changes their access at once", async ({ page 
 
 test('Home numbers match the database; money only with "See sales figures"', async ({ page }) => {
   test.setTimeout(90_000);
-  const product = await pickStockedProduct(3);
+  const product = await makeTestProduct();
   const order = await placeTestOrder(customer.accessToken, product.id, 1);
   createdOrderIds.push(order.id);
 
@@ -431,7 +431,7 @@ test('no emoji anywhere in the rendered admin', async ({ page }) => {
 
 test('admin notes and internal history are private: the customer cannot read them', async ({ page }) => {
   test.setTimeout(60_000);
-  const product = await pickStockedProduct(3);
+  const product = await makeTestProduct();
   const order = await placeTestOrder(customer.accessToken, product.id, 1);
   createdOrderIds.push(order.id);
   const note = 'E2E private note: call before delivery';

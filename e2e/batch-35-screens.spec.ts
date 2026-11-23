@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { STEADFAST_FUNCTION, mockSteadfast, type MockTracking } from './helpers/steadfastMock';
 
 // Batch 35: screenshots for reports/batch-35-screens/ — 390 px and
@@ -23,7 +23,7 @@ const THEMES = ['light', 'dark'] as const;
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const ids: string[] = [];
 const orders: Record<string, { id: string; orderNumber: string }> = {};
 
@@ -49,7 +49,7 @@ test.beforeAll(async () => {
   test.setTimeout(90_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
   for (const state of Object.keys(TRACKING)) {
     const order = await placeTestOrder(customer.accessToken, product.id, 1);
     ids.push(order.id);

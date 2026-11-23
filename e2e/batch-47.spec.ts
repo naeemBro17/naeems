@@ -11,7 +11,7 @@ import { signInAsTestCustomer } from './helpers/auth';
 // The live shop is never changed: screens are checked at 390 px and nothing
 // is saved — no order is deleted, placed or moved. Database functions that
 // would change something are answered in the browser. The database rules
-// run in e2e/sql/batch-47.sql together with the whole Batch 47 migration,
+// run in e2e/sql/batch-47.sql against today's live functions (Batch 61: no old migration is replayed),
 // inside ONE transaction that is always rolled back.
 // Steadfast is mocked by ./fixtures; no real Storage file is downloaded.
 
@@ -248,12 +248,10 @@ test('Task 5: a product with sizes is one search row in New order and Edit order
 test('database: source change, admin orders in My Orders, move an order (money untouched), settle / undo a payout line (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-048-batch47.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const tests = readFileSync('e2e/sql/batch-47.sql', 'utf8')
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

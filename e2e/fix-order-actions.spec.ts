@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { Download, Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
-import { passwordSession, pickStockedProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
+import { passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { pdfPageCount } from './helpers/invoicePdf';
 
 /*
@@ -20,7 +20,7 @@ const SCREENS = 'reports/fix-order-actions-screens';
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const createdOrderIds: string[] = [];
 
 const hasAccounts = Boolean(E2E_ADMIN_EMAIL && E2E_ADMIN_PASSWORD && E2E_EMAIL && E2E_PASSWORD);
@@ -87,7 +87,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
   await rpc(admin.accessToken, 'admin_close_delete_lock');
 });
 

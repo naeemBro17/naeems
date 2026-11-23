@@ -12,7 +12,7 @@ import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 //
 // The live shop is never changed. The database rules (and the one-time
 // Nabila Nur fix, pointed at the test customer login) run in
-// e2e/sql/batch-55.sql together with the whole migration inside ONE
+// e2e/sql/batch-55.sql against today's live functions (Batch 61: no old migration is replayed) inside ONE
 // transaction that is always rolled back. The screens use made-up
 // customers: every customer / number / merge call they make is answered in
 // the browser, so nothing is saved and no real name appears in a picture.
@@ -37,8 +37,6 @@ test.beforeAll(async () => {
 test('database: extra numbers, grouping, Merge two customers (money identical), refusals, and the Nabila Nur fix on a made-up login (one rolled-back transaction)', async () => {
   test.setTimeout(300_000);
   test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
-  const migration = readFileSync('supabase/migration-056-batch55.sql', 'utf8').replace(/\r\n/g, '\n');
-  const body = migration.slice(migration.indexOf('\nBEGIN;\n') + 8, migration.lastIndexOf('\nCOMMIT;\n'));
   const fix = readFileSync('supabase/fix-batch55-nabila-nur.sql', 'utf8').replace(/\r\n/g, '\n');
   const fixDo = fix.slice(fix.indexOf('DO $fix$'), fix.indexOf('$fix$;') + '$fix$;'.length);
   // The same fix, pointed at the test customer login instead of the real one.
@@ -53,7 +51,7 @@ test('database: extra numbers, grouping, Merge two customers (money identical), 
     .replace('{{NABILA_FIX_INNER}}', () => `EXECUTE $nabila$\n${testFix.slice(0, -1)}\n$nabila$;`)
     .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
     .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
-  const output = await runSql(`BEGIN;\n${body}\n${tests}`);
+  const output = await runSql(`BEGIN;\n${tests}`);
   const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
   expect(results, sqlError(output) ?? 'no result').not.toBeNull();
   const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);

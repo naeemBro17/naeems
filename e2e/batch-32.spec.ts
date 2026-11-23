@@ -6,7 +6,7 @@ import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_MOD_PASSWORD, E2E_P
 import {
   callFunction,
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
   rpc,
   select,
@@ -37,7 +37,7 @@ const ADDED_NAME = 'E2E B32 Added Customer';
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 let ready = false;
 let staffId = '';
 let roleId = '';
@@ -119,7 +119,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(8);
+  product = await makeTestProduct();
   // collect_mode answers 400 (no such column) until migration-035 is run.
   const probe = await select<unknown[]>(admin.accessToken, 'orders?select=collect_mode&limit=1');
   ready = probe.ok;

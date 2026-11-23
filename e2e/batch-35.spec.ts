@@ -4,7 +4,7 @@ import { PNG } from 'pngjs';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 import {
   passwordSession,
-  pickStockedProduct,
+  makeTestProduct,
   placeTestOrder,
   rpc,
   select,
@@ -27,7 +27,7 @@ test.skip(!E2E_ADMIN_EMAIL || !E2E_ADMIN_PASSWORD || !E2E_EMAIL || !E2E_PASSWORD
 
 let admin: TestSession;
 let customer: TestSession;
-let product: { id: string; name: string; stock: number };
+let product: { id: string; name: string };
 const createdOrderIds: string[] = [];
 
 /** Steadfast's real wording (read from live answers, Batch 35). */
@@ -105,7 +105,7 @@ test.beforeAll(async () => {
   test.setTimeout(60_000);
   await freshAdmin();
   customer = await passwordSession(E2E_EMAIL, E2E_PASSWORD);
-  product = await pickStockedProduct(10);
+  product = await makeTestProduct();
 });
 
 test.afterAll(async () => {

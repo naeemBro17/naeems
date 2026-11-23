@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabaseProjectRef } from './env';
+import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL, supabaseProjectRef } from './env';
 
 /**
  * Direct calls to Supabase, as a given test account (Batch 24). Used to
@@ -132,53 +132,107 @@ export async function callFunction<T>(token: string, name: string, body: Record<
   return (await res.json()) as T;
 }
 
+/* Batch 61: test orders never use a real product any more. The live shop
+ * runs Inventory mode, so an order of a real product took units from its
+ * real lots, and the tests failed whenever the shop ran low. Instead each
+ * test file makes its own product: hidden, no lots, "keep selling" on (so
+ * an order of it is accepted as "buy after order" and takes nothing from
+ * any lot). It is shown in the shop only for the instant place_order
+ * needs it (see placeTestOrder), and deleted again by removeTestProducts()
+ * (global teardown). An order line keeps working once its product is gone
+ * (order_items.product_id is set to null). */
+export const TEST_PRODUCT_SKU = 'E2E-ORD-';
+const madeUpProducts = new Set<string>();
+let testAdmin: Promise<TestSession> | null = null;
+
+function testAdminSession(): Promise<TestSession> {
+  testAdmin ??= passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
+  return testAdmin;
+}
+
+/** Shows or hides a made-up product (no row back: admins cannot read the
+ *  wholesale price column). */
+async function setTestProductActive(productId: string, active: boolean): Promise<void> {
+  const admin = await testAdminSession();
+  const res = await call(admin.accessToken, `/rest/v1/products?id=eq.${productId}&sku=like.${TEST_PRODUCT_SKU}*`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_active: active }),
+    headers: { Prefer: 'return=minimal' },
+  });
+  if (!res.ok) throw new Error(`could not ${active ? 'show' : 'hide'} the test product: ${res.error}`);
+}
+
 /** Places a real website order as the test customer (the Telegram
- *  notifier skips this account — see checkout.spec.ts). */
+ *  notifier skips this account — see checkout.spec.ts). A made-up product
+ *  (makeTestProduct) is shown only while the order is placed. */
 export async function placeTestOrder(
   customerToken: string,
   productId: string,
   quantity = 1
 ): Promise<{ id: string; orderNumber: string }> {
-  const result = await rpc<{ order_id: string; order_number: string }[]>(customerToken, 'place_order', {
-    p_items: [{ product_id: productId, variant_id: null, quantity }],
-    p_full_name: 'E2E Test Customer',
-    p_phone: '01712345678',
-    p_division: 'Dhaka',
-    p_district: 'Dhaka',
-    p_thana: 'Gulshan',
-    p_address_line: '123 Test Road (e2e)',
-    p_delivery_zone: 'inside_dhaka',
-    p_payment_method: 'cod',
-  });
+  const madeUp = madeUpProducts.has(productId);
+  if (madeUp) await setTestProductActive(productId, true);
+  let result: ApiResult<{ order_id: string; order_number: string }[]>;
+  try {
+    result = await rpc<{ order_id: string; order_number: string }[]>(customerToken, 'place_order', {
+      p_items: [{ product_id: productId, variant_id: null, quantity }],
+      p_full_name: 'E2E Test Customer',
+      p_phone: '01712345678',
+      p_division: 'Dhaka',
+      p_district: 'Dhaka',
+      p_thana: 'Gulshan',
+      p_address_line: '123 Test Road (e2e)',
+      p_delivery_zone: 'inside_dhaka',
+      p_payment_method: 'cod',
+    });
+  } finally {
+    if (madeUp) await setTestProductActive(productId, false);
+  }
   if (!result.ok || !result.data?.[0]) {
     throw new Error(`place_order failed: ${result.error}`);
   }
   return { id: result.data[0].order_id, orderNumber: result.data[0].order_number };
 }
 
-/** An active product with tracked stock to spare — orders here change it.
- *  Batch 45: one without options (a product with options opens a size
- *  picker in New order instead of being added in one tap). */
-export async function pickStockedProduct(minStock = 5): Promise<{ id: string; name: string; stock: number }> {
-  const result = await select<{ id: string; name: string; stock_quantity: number }[]>(
-    null,
-    `products_view?select=id,name,stock_quantity&is_active=eq.true&stock_quantity=gte.${minStock}&order=stock_quantity.desc&limit=20`
-  );
-  const ids = (result.data ?? []).map((r) => r.id);
-  const withOptions = ids.length
-    ? await select<{ product_id: string }[]>(null, `product_variants_view?select=product_id&product_id=in.(${ids.join(',')})`)
-    : { data: [] as { product_id: string }[] };
-  const optioned = new Set((withOptions.data ?? []).map((v) => v.product_id));
-  const row = (result.data ?? []).find((r) => !optioned.has(r.id));
-  if (!row) throw new Error('No active product with enough tracked stock for the test.');
-  return { id: row.id, name: row.name, stock: row.stock_quantity };
+/** A made-up product for test orders (see the note above): hidden, no
+ *  options, no lots, keeps selling at stock 0. Nothing real is touched. */
+export async function makeTestProduct(price = 1000): Promise<{ id: string; name: string }> {
+  const admin = await testAdminSession();
+  const stamp = `${Date.now() % 100_000_000}-${Math.floor(Math.random() * 1000)}`;
+  const sku = `${TEST_PRODUCT_SKU}${stamp}`;
+  const name = `E2E Order Product ${stamp}`;
+  const res = await call(admin.accessToken, '/rest/v1/products', {
+    method: 'POST',
+    body: JSON.stringify({
+      sku,
+      slug: `e2e-order-product-${stamp}`,
+      name,
+      retail_price: price,
+      stock_status: 'in_stock',
+      stock_quantity: 0,
+      is_active: false,
+      keep_selling: true,
+    }),
+    headers: { Prefer: 'return=minimal' },
+  });
+  if (!res.ok) throw new Error(`could not make the test product: ${res.error}`);
+  const row = await select<{ id: string }[]>(admin.accessToken, `products?select=id&sku=eq.${sku}`);
+  const id = row.data?.[0]?.id;
+  if (!id) throw new Error('the test product was not found after it was made');
+  madeUpProducts.add(id);
+  return { id, name };
+}
+
+/** Deletes every made-up test product (global teardown; any run's). */
+export async function removeTestProducts(adminToken: string): Promise<void> {
+  await remove(adminToken, `products?sku=like.${TEST_PRODUCT_SKU}*`);
 }
 
 export async function productStock(productId: string): Promise<number> {
-  const result = await select<{ stock_quantity: number }[]>(
-    null,
-    `products_view?select=stock_quantity&id=eq.${productId}`
-  );
+  // A made-up product is hidden, so only staff can read it.
+  const result = madeUpProducts.has(productId)
+    ? await select<{ stock_quantity: number }[]>((await testAdminSession()).accessToken, `products?select=stock_quantity&id=eq.${productId}`)
+    : await select<{ stock_quantity: number }[]>(null, `products_view?select=stock_quantity&id=eq.${productId}`);
   return result.data?.[0]?.stock_quantity ?? Number.NaN;
 }
 
