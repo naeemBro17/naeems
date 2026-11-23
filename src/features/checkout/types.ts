@@ -106,6 +106,8 @@ export interface OrderSnapshot {
   /** Batch 51: something in it was not covered by stock when it was
    *  placed (the "Arriving …" line uses the slower time). */
   buysLater?: boolean;
+  /** Batch 60: paid from the customer's wallet (0 / undefined = none). */
+  storeWallet?: number;
   /** Why the order-level discount was given (Batch 22) — undefined/null for
    *  a real checkout order (its discount, if any, is always a promo code). */
   orderDiscountReason?: DiscountReason | null;

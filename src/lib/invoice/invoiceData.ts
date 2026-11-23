@@ -153,8 +153,12 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     const byMethod = new Map<string, number>();
     let courier = 0;
     let refunded = 0;
+    let fromStore = 0;
     for (const p of payments) {
-      if (p.kind === 'refund') refunded += Number(p.amount);
+      // Batch 60: the wallet's own row (its money back on a cancelled or
+      // edited order is not a refund).
+      if (p.method === 'store_wallet') fromStore += p.kind === 'refund' ? -Number(p.amount) : Number(p.amount);
+      else if (p.kind === 'refund') refunded += Number(p.amount);
       else if (p.method === 'cod_steadfast') courier += Number(p.amount);
       else {
         const name = PAYMENT_METHOD_NAMES[p.method] ?? 'Other';
@@ -165,7 +169,11 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
       advanceMethods.push(name);
       paidRows.push({ label: `Paid in advance (${name})`, amount: round2(amount), minus: true });
     }
-    if (byMethod.size === 0) paidRows.push({ label: 'Paid in advance', amount: 0, minus: false });
+    if (byMethod.size === 0 && fromStore <= 0) paidRows.push({ label: 'Paid in advance', amount: 0, minus: false });
+    if (fromStore > 0) {
+      advanceMethods.push('Wallet');
+      paidRows.push({ label: 'Paid from wallet', amount: round2(fromStore), minus: true });
+    }
     if (courier > 0) paidRows.push({ label: 'Collected by courier', amount: round2(courier), minus: true });
     if (refunded > 0) paidRows.push({ label: 'Refunded', amount: round2(refunded), minus: false });
   } else if (order.payment_status === 'paid') {
@@ -176,7 +184,7 @@ export function invoiceFromOrder(order: OrderWithDetails, payments: OrderPayment
     paidRows.push({ label: 'Paid in advance', amount: 0, minus: false });
   }
 
-  const hasAdvance = paidRows.some((r) => r.minus && r.label.startsWith('Paid in advance'));
+  const hasAdvance = paidRows.some((r) => r.minus && (r.label.startsWith('Paid in advance') || r.label === 'Paid from wallet'));
   let paymentLabel: string;
   if (due <= 0) paymentLabel = advanceMethods.length > 0 ? `Paid (${advanceMethods.join(', ')})` : 'Paid';
   else if (payLater) paymentLabel = hasAdvance ? 'Advance + pay later' : 'Pay later';
@@ -239,7 +247,24 @@ export function invoiceFromSnapshot(order: OrderSnapshot): InvoiceData {
   const total = Number(order.total);
   const wallet = isWalletMethod(order.paymentMethod) ? WALLET_NAMES[order.paymentMethod] : null;
   const paidByBkash = wallet !== null;
-  const due = paidByBkash ? 0 : total;
+  // Batch 60: the part paid from the customer's wallet.
+  const fromStore = Math.min(Math.max(0, Number(order.storeWallet ?? 0)), total);
+  const rest = round2(total - fromStore);
+  const due = paidByBkash ? 0 : rest;
+  const paidRows: InvoiceMoneyRow[] = [];
+  if (wallet && rest > 0) paidRows.push({ label: `Paid in advance (${wallet})`, amount: rest, minus: true });
+  if (fromStore > 0) paidRows.push({ label: 'Paid from wallet', amount: fromStore, minus: true });
+  if (paidRows.length === 0) paidRows.push({ label: 'Paid in advance', amount: 0, minus: false });
+  const paymentLabel =
+    fromStore > 0 && rest <= 0
+      ? 'Paid (Wallet)'
+      : fromStore > 0
+        ? wallet
+          ? `Paid (Wallet, ${wallet})`
+          : 'Wallet + cash on delivery'
+        : wallet
+          ? `Paid (${wallet})`
+          : 'Cash on delivery';
   return {
     audience: 'customer',
     orderNumber: order.orderNumber,
@@ -255,7 +280,7 @@ export function invoiceFromSnapshot(order: OrderSnapshot): InvoiceData {
       addressLine: order.address.fullAddress.trim(),
       area: areaOf(order.address.thana, order.address.district),
     },
-    paymentLabel: wallet ? `Paid (${wallet})` : 'Cash on delivery',
+    paymentLabel,
     lines: order.items.map((item) =>
       lineOf(item.product.name, item.variantLabel, item.listPrice, item.unitPrice, item.quantity, round2(item.unitPrice * item.quantity))
     ),
@@ -265,9 +290,7 @@ export function invoiceFromSnapshot(order: OrderSnapshot): InvoiceData {
     advanceDiscount: Number(order.advanceDiscount ?? 0),
     advanceLabel: advanceLineLabel(order.advanceRule?.type, order.advanceRule?.value),
     total,
-    paidRows: wallet
-      ? [{ label: `Paid in advance (${wallet})`, amount: total, minus: true }]
-      : [{ label: 'Paid in advance', amount: 0, minus: false }],
+    paidRows,
     cod: { amount: due, note: codNote(due, false) },
     finalRow: { label: 'Amount to collect', amount: due },
     amountInWords: amountInWords(total),

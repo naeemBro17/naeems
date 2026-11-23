@@ -13,6 +13,7 @@ import { formatTaka } from '../lib/format';
 import { TRACK_STATUS, fetchLatestSteps, savedTrack, type TrackStatus } from '../lib/orderTracking';
 import type { Order } from '../types';
 import { fetchMyPreviousBalance } from '../lib/money/api';
+import { fetchOrdersPaidFromWallet } from '../lib/storeWallet';
 
 function OrdersSkeleton() {
   return (
@@ -34,6 +35,8 @@ export function OrdersListPage() {
   // Batch 41 Part 6: an older due from before the site (one number only —
   // no invoices, items or prices behind it).
   const [previousBalance, setPreviousBalance] = useState(0);
+  // Batch 60: "Paid from wallet ৳X" per order.
+  const [fromWallet, setFromWallet] = useState<Map<string, number>>(() => new Map());
 
   useEffect(() => {
     if (authLoading) return;
@@ -48,6 +51,9 @@ export function OrdersListPage() {
       if (cancelled) return;
       setOrders(data);
       setIsLoading(false);
+      void fetchOrdersPaidFromWallet(data.map((o) => o.id)).then((map) => {
+        if (!cancelled) setFromWallet(map);
+      });
     });
     void fetchLatestSteps().then((map) => {
       if (!cancelled) setSteps(map);
@@ -106,6 +112,11 @@ export function OrdersListPage() {
                         year: 'numeric',
                       })}
                     </span>
+                    {(fromWallet.get(order.id) ?? 0) > 0 && (
+                      <span className="orders-list__date" data-testid="order-paid-from-wallet">
+                        Paid from wallet {formatTaka(fromWallet.get(order.id) ?? 0)}
+                      </span>
+                    )}
                   </div>
                   <div className="orders-list__row-end">
                     <span className="orders-list__total">{formatTaka(order.total)}</span>

@@ -12,6 +12,7 @@ import './styles/orderTracking.css';
 import './styles/batch51.css';
 import './styles/wishlist.css';
 import './styles/batch52.css';
+import './styles/batch60.css';
 
 // Batch 52 Part 4: opened inside Facebook / Messenger / Instagram on
 // Android → reopen this same address in Chrome, once, before anything is

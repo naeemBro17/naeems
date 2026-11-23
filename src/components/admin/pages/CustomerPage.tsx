@@ -17,6 +17,7 @@ import { CustomerNotesEditor } from '../CustomerNotes';
 import { fetchCustomerNotes, knownTags, type CustomerNote } from '../../../lib/brandAdmin';
 import type { OrderStatus } from '../../../types';
 import { CustomerDueCard } from '../money/CustomerDueCard';
+import { CustomerWalletCard } from '../money/CustomerWalletCard';
 import { MergeOldSection } from '../kaarbar/merge/MergeOldSection';
 import { CustomerNumbersCard } from '../customers/CustomerNumbersCard';
 import '../../../styles/kaarbarMerge.css';
@@ -186,6 +187,9 @@ export function CustomerPage({ customerKey, onBack, onOpenOrder, onDeleted, onOp
           {isAdmin === true && (
             <CustomerNumbersCard customerKey={customer.key} name={title} onJoin={onOpenJoin} onReady={setNumbersShown} />
           )}
+
+          {/* Batch 60: the customer's wallet (above TO RECEIVE). */}
+          {can('view_profit_costs') && <CustomerWalletCard customerKey={customer.key} />}
 
           {/* Batch 41 Part 4: dues, previous balance and the WhatsApp reminder. */}
           {can('view_profit_costs') && (

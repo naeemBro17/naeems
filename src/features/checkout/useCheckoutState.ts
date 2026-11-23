@@ -97,7 +97,7 @@ interface CheckoutStateValue {
     advanceDiscount: number;
     advanceRule: OrderSnapshot['advanceRule'];
     /** What the database saved (null before migration-049). */
-    saved: { total: number; advanceDiscount: number } | null;
+    saved: { total: number; advanceDiscount: number; storeWallet?: number } | null;
     /** Batch 51: something in it is bought after the order. */
     buysLater: boolean;
   }) => OrderSnapshot;
@@ -190,7 +190,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       bkashTrxId: string | null;
       advanceDiscount: number;
       advanceRule: OrderSnapshot['advanceRule'];
-      saved: { total: number; advanceDiscount: number } | null;
+      saved: { total: number; advanceDiscount: number; storeWallet?: number } | null;
       buysLater: boolean;
     }): OrderSnapshot => {
       // The saved amounts win: the database works the discount out itself.
@@ -211,6 +211,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
         advanceDiscount,
         advanceRule: advanceDiscount > 0 ? result.advanceRule : null,
         buysLater: result.buysLater,
+        storeWallet: result.saved?.storeWallet ?? 0,
         celebrated: false,
       };
       setLastOrder(snapshot);

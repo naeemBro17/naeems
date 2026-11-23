@@ -148,6 +148,9 @@ export function OrderSuccessPage() {
   const itemCount = lastOrder.items.reduce((sum, item) => sum + item.quantity, 0);
   const paidInAdvance = isWalletMethod(lastOrder.paymentMethod);
   const saved = lastOrder.advanceDiscount ?? 0;
+  // Batch 60: the part paid from the customer's wallet.
+  const fromStore = lastOrder.storeWallet ?? 0;
+  const leftToPay = Math.max(0, Math.round((lastOrder.total - fromStore) * 100) / 100);
   // Batch 51: "Arriving Fri, 20 – Sat, 21 Nov" from the order date, the
   // delivery zone and the slowest item.
   const arriving = arrivalText(lastOrder.placedAt, lastOrder.zone.id, lastOrder.buysLater === true, settings);
@@ -234,8 +237,14 @@ export function OrderSuccessPage() {
           </div>
           <div className="cf-sr">
             <span>Payment</span>
-            <b data-testid="placed-payment">{placedPaymentLabel(lastOrder.paymentMethod)}</b>
+            <b data-testid="placed-payment">{fromStore > 0 && leftToPay <= 0 ? 'Wallet' : placedPaymentLabel(lastOrder.paymentMethod)}</b>
           </div>
+          {fromStore > 0 && (
+            <div className="cf-sr" data-testid="placed-store-wallet">
+              <span>Paid from wallet</span>
+              <b>&minus;{formatTaka(fromStore)}</b>
+            </div>
+          )}
           {paidInAdvance && saved > 0 && (
             <div className="cf-sr cf-sr--saved" data-testid="placed-saved">
               <span>You saved</span>
@@ -243,8 +252,8 @@ export function OrderSuccessPage() {
             </div>
           )}
           <div className="cf-sr cf-sr--due" data-testid="placed-total">
-            <span>{placedTotalLabel(lastOrder.paymentMethod)}</span>
-            <b>{formatTaka(lastOrder.total)}</b>
+            <span>{fromStore > 0 && leftToPay <= 0 ? 'Left to pay' : placedTotalLabel(lastOrder.paymentMethod)}</span>
+            <b>{formatTaka(fromStore > 0 ? leftToPay : lastOrder.total)}</b>
           </div>
         </div>
 

@@ -150,21 +150,19 @@ async function mockCustomer(page: Page, credit: number): Promise<void> {
   });
 }
 
-test('Customer page → To receive: "Credit — paid more than owed" when the customer paid ৳200 too much', async ({ page }) => {
+// Batch 60 (changed on purpose): money paid above an order now goes into the
+// customer's wallet (the WALLET card above TO RECEIVE), so Batch 58's
+// separate "Credit" line is gone even when the database still sends credit.
+test('Customer page → To receive: no separate "Credit" line any more (Batch 60: it is the wallet)', async ({ page }) => {
   test.setTimeout(60_000);
   await mockCustomer(page, 200);
   await adminAt(page, `/admin/customers/${encodeURIComponent(FAKE_KEY)}`);
   const card = page.getByTestId('customer-due-card');
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('customer-total-due')).toHaveText('৳0');
-  const credit = page.getByTestId('customer-credit');
-  await expect(credit).toContainText('Credit');
-  await expect(credit).toContainText('paid more than owed');
-  await expect(credit.locator('b')).toHaveText('৳200');
-  await expect(card).toContainText('Use it on their next order, or refund it.');
+  await expect(page.getByTestId('customer-credit')).toHaveCount(0);
+  await expect(card).not.toContainText('paid more than owed');
   await noSideScroll(page);
-  await card.scrollIntoViewIfNeeded();
-  await card.screenshot({ path: `${SHOTS}/02-customer-credit-390.png` });
 });
 
 test('Customer page: no credit line when nothing was paid too much', async ({ page }) => {

@@ -6,7 +6,9 @@ import { supabase } from './supabase';
    is run every read here returns null and the screens keep their old
    payment display. */
 
-export type PaymentMethodId = 'bkash' | 'nagad' | 'cash' | 'bank' | 'cod_steadfast' | 'other';
+/** Batch 60: 'store_wallet' = paid from the customer's wallet (no money
+ *  moves; never offered as a choice when recording a payment). */
+export type PaymentMethodId = 'bkash' | 'nagad' | 'cash' | 'bank' | 'cod_steadfast' | 'other' | 'store_wallet';
 export type PaymentKind = 'payment' | 'refund';
 export type PaymentState = 'unpaid' | 'partly_paid' | 'paid' | 'refunded';
 
@@ -19,12 +21,12 @@ export interface OrderPayment {
   trx_id: string | null;
   paid_at: string;
   note: string | null;
-  source: 'manual' | 'mark_paid' | 'status_paid' | 'steadfast_cod';
+  source: 'manual' | 'mark_paid' | 'status_paid' | 'steadfast_cod' | 'store_wallet';
   created_by_username: string | null;
   updated_by_username: string | null;
 }
 
-export const PAYMENT_METHODS: { id: PaymentMethodId; label: string }[] = [
+export const PAYMENT_METHODS: { id: Exclude<PaymentMethodId, 'store_wallet'>; label: string }[] = [
   { id: 'bkash', label: 'bKash' },
   { id: 'nagad', label: 'Nagad' },
   { id: 'cash', label: 'Cash' },
@@ -37,9 +39,10 @@ export const PAYMENT_METHODS: { id: PaymentMethodId; label: string }[] = [
  *  one place this list lives (it can become a shop setting later). */
 export const PAID_NOW_METHODS: readonly PaymentMethodId[] = ['bkash', 'nagad', 'cash', 'bank'];
 
-export const PAYMENT_METHOD_NAMES: Record<PaymentMethodId, string> = Object.fromEntries(
-  PAYMENT_METHODS.map((m) => [m.id, m.label])
-) as Record<PaymentMethodId, string>;
+export const PAYMENT_METHOD_NAMES: Record<PaymentMethodId, string> = {
+  ...(Object.fromEntries(PAYMENT_METHODS.map((m) => [m.id, m.label])) as Record<Exclude<PaymentMethodId, 'store_wallet'>, string>),
+  store_wallet: 'Wallet',
+};
 
 export const PAYMENT_STATE_LABELS: Record<PaymentState, string> = {
   unpaid: 'Unpaid',

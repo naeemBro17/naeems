@@ -21,8 +21,8 @@ function dhakaDayOf(iso: string): string {
  * what they owe (site orders + previous balance), "Send due reminder"
  * (WhatsApp with the Settings text and a link to their own order page on
  * this site), "Copy message", the reminders already sent, and money
- * received against a previous balance. Batch 58: a credit line when they
- * paid more than they owe.
+ * received against a previous balance. (Batch 58's "Credit" line is gone:
+ * Batch 60 puts money paid above an order into the customer's wallet.)
  */
 export function CustomerDueCard({
   customerKey,
@@ -70,8 +70,6 @@ export function CustomerDueCard({
   const previous = history.previous_left;
   const sitesDue = due?.order_due ?? orderDue;
   const total = sitesDue + previous;
-  // Batch 58: money paid above what their orders and previous balance ask.
-  const credit = due?.credit ?? 0;
   const orderId = sitesDue > 0 ? (due?.latest_unpaid_order_id ?? null) : null;
   const link = orderId ? customerOrderLink(window.location.origin, orderId) : null;
   const text = reminderMessage(settings.due_reminder_template ?? '', { name, due: total, date: dhakaToday(), link });
@@ -154,17 +152,6 @@ export function CustomerDueCard({
         <span>Total due</span>
         <b data-testid="customer-total-due">{moneyText(total)}</b>
       </div>
-      {credit > 0 && (
-        <>
-          <div className="inv-line" data-testid="customer-credit">
-            <span>
-              Credit <span className="inv-muted">paid more than owed</span>
-            </span>
-            <b className="money-in">{moneyText(credit)}</b>
-          </div>
-          <p className="inv-muted">Use it on their next order, or refund it.</p>
-        </>
-      )}
 
       {total > 0 && (
         <>

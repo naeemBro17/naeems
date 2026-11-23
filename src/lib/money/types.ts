@@ -71,6 +71,7 @@ export type LedgerType =
   | 'customer_payment'
   | 'customer_refund'
   | 'previous_balance_payment'
+  | 'store_wallet_in'
   | 'steadfast_payout_out'
   | 'courier_fees'
   | 'steadfast_unmatched'
@@ -113,7 +114,7 @@ export interface MoneyMovement {
 }
 
 export interface LedgerRow {
-  source: 'movement' | 'payout_out' | 'payment' | 'due_payment' | 'payout_fees' | 'payout_unmatched';
+  source: 'movement' | 'payout_out' | 'payment' | 'due_payment' | 'store_wallet' | 'payout_fees' | 'payout_unmatched';
   source_id: string;
   entry_date: string;
   account_id: string;
@@ -207,6 +208,8 @@ export interface MoneyPosition {
   to_give_others: number;
   /** Batch 58: courier fees counted in profit and not paid from any account yet (inside to_give; absent before migration-058). */
   to_give_courier?: number;
+  /** Batch 60: money customers keep in their wallets (inside to_give; absent before migration-060). */
+  to_give_wallets?: number;
   have: number;
   owe: number;
   net_worth: number;
@@ -233,7 +236,8 @@ export interface MoneySummary {
 }
 
 export interface ToGiveRow {
-  kind: 'investor' | 'supplier' | 'other' | 'courier';
+  /** Batch 60: 'wallet' = money customers keep in their wallets. */
+  kind: 'investor' | 'supplier' | 'other' | 'courier' | 'wallet';
   id: string | null;
   name: string;
   owed: number;

@@ -97,7 +97,9 @@ async function shopProduct(): Promise<Product | null> {
     null,
     'products_view?select=id,name,retail_price,offer_price&is_active=eq.true&stock_quantity=gte.3&limit=50'
   );
-  const first = (list.data ?? []).find((p) => p.retail_price >= 300);
+  // Batch 60: the advance discount needs ৳1,000 or more paid in advance, so
+  // the cart (2 of it) must reach that: a product selling at ৳500 or more.
+  const first = (list.data ?? []).find((p) => (p.offer_price !== null && p.offer_price < p.retail_price ? p.offer_price : p.retail_price) >= 500);
   const fee = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.delivery_fee_inside_dhaka');
   const feeValue = Number(fee.data?.[0]?.value);
   if (Number.isFinite(feeValue) && feeValue >= 0) insideFee = feeValue;
@@ -490,7 +492,7 @@ test('Task 4: the admin card "Advance payment discount" — On, Percent, 0.5 and
   await expect(card.getByTestId('advance-discount-preview')).toHaveText('On a ৳1,000 order the customer saves ৳5.');
   await card.getByRole('button', { name: 'Fixed amount (৳)' }).click();
   await card.locator('#settings-advance-value').fill('50');
-  await expect(card.getByTestId('advance-discount-preview')).toHaveText('The customer saves ৳50 on every bKash or Nagad order.');
+  await expect(card.getByTestId('advance-discount-preview')).toHaveText('The customer saves ৳50 when ৳1,000 or more is paid by bKash or Nagad.'); // Batch 60: the ৳1,000 rule
   await card.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/14-admin-advance-discount-card.png` });
 });

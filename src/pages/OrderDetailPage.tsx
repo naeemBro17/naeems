@@ -251,7 +251,7 @@ export function OrderDetailPage() {
                   (methodRows.length > 0
                     ? methodRows.map((row) => (
                         <div key={row.method} className="ot-totals__row ot-totals__row--paid" data-testid="customer-payment-summary">
-                          <span>Paid with {PAYMENT_METHOD_NAMES[row.method]}</span>
+                          <span>{row.method === 'store_wallet' ? 'Paid from wallet' : `Paid with ${PAYMENT_METHOD_NAMES[row.method]}`}</span>
                           <span>&minus;{formatTakaBd(row.amount)}</span>
                         </div>
                       ))

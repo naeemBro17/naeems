@@ -13,6 +13,11 @@
 // advance takes the advance-payment discount off the products (after the
 // promo code; never off delivery). The amount shown here is only a
 // preview: place_order() works it out again from the setting.
+//
+// Batch 60: "Use wallet balance" (the customer's store wallet, shown when
+// it has money; off each time). The wallet pays first; the advance discount
+// works only on the part paid in advance, and only when that part is
+// ৳1,000 or more. place_order_wallet() checks the balance again.
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { PAY_ON_DELIVERY_LABEL } from '../../lib/checkoutCopy';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -34,12 +39,14 @@ import {
   advanceOfferActive,
   advanceOfferBadge,
   advanceRuleFromSettings,
-  computeAdvanceDiscount,
   isWalletMethod,
   promoDiscountRounded,
   type WalletMethod,
 } from '../../lib/advanceDiscount';
 import { useCountTo } from '../../hooks/useCountTo';
+import { useMyStoreWallet } from '../../hooks/useMyStoreWallet';
+import { Switch } from '../../components/shared/Switch';
+import { advanceDiscountFor, advanceQualifies, splitStoreWallet } from '../../lib/storeWallet';
 import '../../styles/checkoutFinish.css';
 
 type CheckoutPaymentMethod = 'cod' | WalletMethod;
@@ -139,10 +146,22 @@ export function OrderSummaryPage() {
   // The promo code first (to the paisa, as the database keeps it), then the
   // advance discount on what is left of the products.
   const promoPart = promoDiscountRounded(discount);
-  const advance = computeAdvanceDiscount(rule, subtotal - promoPart, paymentMethod);
+  // Batch 60: the store wallet pays first (only when switched on).
+  const { wallet: myStore, reload: reloadStore } = useMyStoreWallet({ toast: false });
+  const storeBalance = myStore.available ? myStore.balance : 0;
+  const [useStore, setUseStore] = useState(false);
+  const payTotalBeforeStore = Math.max(0, subtotal + zone.fee - promoPart);
+  const split = splitStoreWallet(payTotalBeforeStore, storeBalance, useStore && storeBalance > 0);
+  const fromStore = split.fromStore;
+  const fullyPaid = split.fullyPaid;
+  const method: CheckoutPaymentMethod = fullyPaid ? 'cod' : paymentMethod;
+  const advance = advanceDiscountFor({ rule, productsAfterPromo: subtotal - promoPart, leftAfterStore: split.rest, method });
+  const offerShown = offer && advanceQualifies(split.rest);
   const payTotal = Math.max(0, subtotal + zone.fee - promoPart - advance);
-  const shownTotal = useCountTo(payTotal);
-  const wallet = isWalletMethod(paymentMethod) ? paymentMethod : null;
+  // What is still to pay after the wallet (the total line).
+  const payLeft = Math.max(0, Math.round((payTotal - fromStore) * 100) / 100);
+  const shownTotal = useCountTo(payLeft);
+  const wallet = isWalletMethod(method) ? method : null;
 
   const choose = (method: CheckoutPaymentMethod) => {
     setPaymentMethod(method);
@@ -214,10 +233,11 @@ export function OrderSummaryPage() {
       items,
       address,
       deliveryZone: zone.id,
-      paymentMethod,
+      paymentMethod: method,
       bkashTrxId: wallet ? bkashTrxId.trim() : undefined,
       bkashSender: wallet ? bkashSender.trim() : undefined,
       promoCode: promo?.code ?? null,
+      storeWallet: fromStore,
     });
 
     if (result.error && isStockError(result.error)) {
@@ -235,17 +255,21 @@ export function OrderSummaryPage() {
 
     if (result.error || !result.orderId || !result.orderNumber) {
       setPlaceError(result.error ?? 'Could not place your order. Please try again.');
+      // Batch 60: the balance changed somewhere else; show the new one.
+      if (fromStore > 0) void reloadStore();
       return;
     }
 
     finalizeOrder({
       orderId: result.orderId,
       orderNumber: result.orderNumber,
-      paymentMethod,
+      paymentMethod: method,
       bkashTrxId: wallet ? bkashTrxId.trim() : null,
       advanceDiscount: advance,
       advanceRule: advance > 0 ? { type: rule.type, value: rule.value } : null,
-      saved: result.saved ? { total: result.saved.total, advanceDiscount: result.saved.advanceDiscount } : null,
+      saved: result.saved
+        ? { total: result.saved.total, advanceDiscount: result.saved.advanceDiscount, storeWallet: result.saved.storeWallet }
+        : null,
       buysLater: result.buysLater,
     });
     resetAfterOrder();
@@ -361,13 +385,53 @@ export function OrderSummaryPage() {
             <span>Delivery ({zone.label})</span>
             <span>{formatTaka(zone.fee)}</span>
           </div>
+          {fromStore > 0 && (
+            <div className="checkout-summary-card__row cf-row-in" data-testid="summary-store-wallet">
+              <span>Paid from wallet</span>
+              <span>&minus;{formatTaka(fromStore)}</span>
+            </div>
+          )}
           <div className="checkout-summary-card__row checkout-summary-card__row--total" data-testid="summary-total">
             {/* Batch 47: cash on delivery is paid to the rider, not now. */}
-            <span>{paymentMethod === 'cod' ? PAY_ON_DELIVERY_LABEL : 'Total payment'}</span>
-            <span data-total={payTotal}>{formatTaka(shownTotal)}</span>
+            <span>{fullyPaid ? 'Left to pay' : method === 'cod' ? PAY_ON_DELIVERY_LABEL : 'Total payment'}</span>
+            <span data-total={payLeft}>{formatTaka(shownTotal)}</span>
           </div>
         </div>
 
+        {storeBalance > 0 && (
+          <div className={`mw-use${useStore ? ' mw-use--on' : ''}`} data-testid="checkout-use-wallet">
+            <div className="mw-use__row">
+              <span>
+                <span className="mw-use__title">Use wallet balance</span>
+                <br />
+                <span className="mw-use__have">You have {formatTaka(storeBalance)}</span>
+              </span>
+              <Switch checked={useStore} onChange={setUseStore} label="Use wallet balance" />
+            </div>
+            {useStore && !fullyPaid && (
+              <div className="mw-use__split" data-testid="checkout-wallet-split">
+                <div>
+                  <span>From wallet</span>
+                  <b>{formatTaka(fromStore)}</b>
+                </div>
+                <div>
+                  <span>{method === 'cod' ? 'On delivery' : 'Pay now'}</span>
+                  <b>{formatTaka(payLeft)}</b>
+                </div>
+              </div>
+            )}
+            {useStore && fullyPaid && (
+              <div className="mw-paid" data-testid="checkout-wallet-full">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                Fully paid from your wallet
+              </div>
+            )}
+          </div>
+        )}
+
+        {!fullyPaid && (
         <section className="cf-pay" aria-label="Payment method">
           <h2 className="cf-pay__title">Payment method</h2>
 
@@ -386,10 +450,10 @@ export function OrderSummaryPage() {
 
             {bkashAvailable && (
               <div
-                className={`cf-adv${offer ? '' : ' cf-adv--plain'}${wallet ? ' cf-adv--picked' : ''}`}
+                className={`cf-adv${offerShown ? '' : ' cf-adv--plain'}${wallet ? ' cf-adv--picked' : ''}`}
                 data-testid="pay-advance-group"
               >
-                {offer && (
+                {offerShown && (
                   <div className="cf-adv__head">
                     <b>Pay in advance</b>
                     <span className="cf-adv__badge" data-testid="advance-badge">
@@ -429,7 +493,7 @@ export function OrderSummaryPage() {
                       Pay with {WALLET_NAMES[wallet]}
                     </p>
                     <p className="cf-wallet__text">
-                      Send Money <b data-testid="wallet-amount">{formatTaka(payTotal)}</b> to this number, then enter the
+                      Send Money <b data-testid="wallet-amount">{formatTaka(payLeft)}</b> to this number, then enter the
                       Transaction ID below.
                     </p>
                     <div className="cf-wallet__number">{settings.shop_bkash_number}</div>
@@ -477,6 +541,7 @@ export function OrderSummaryPage() {
             )}
           </div>
         </section>
+        )}
 
         {placeError && (
           <p className="checkout-summary-page__error" role="alert">

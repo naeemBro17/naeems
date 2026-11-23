@@ -54,7 +54,8 @@ export function PeopleView({ onBack, onOpen, onOpenLot }: { onBack: () => void; 
   const investors = rows.filter((r) => r.kind === 'investor');
   const suppliers = rows.filter((r) => r.kind === 'supplier' && r.owed !== 0);
   // Batch 58: courier fees counted in profit and not paid yet are owed too.
-  const others = rows.filter((r) => r.kind === 'other' || r.kind === 'courier');
+  // Batch 60: money customers keep in their wallets is owed to them.
+  const others = rows.filter((r) => r.kind === 'other' || r.kind === 'courier' || r.kind === 'wallet');
   const total = rows.reduce((s, r) => s + r.owed, 0);
 
   return (
@@ -79,7 +80,9 @@ export function PeopleView({ onBack, onOpen, onOpenLot }: { onBack: () => void; 
               <span>To give (all)</span>
               <b>{moneyText(total)}</b>
             </div>
-            <p className="inv-muted">Investor capital still owed + supplier balances + what was owed on the start date + courier fees not paid yet.</p>
+            <p className="inv-muted">
+              Investor capital still owed + supplier balances + what was owed on the start date + courier fees not paid yet + customer wallets.
+            </p>
           </div>
 
           <h2 className="inv-section">Investors</h2>
@@ -144,7 +147,7 @@ export function PeopleView({ onBack, onOpen, onOpenLot }: { onBack: () => void; 
             <p className="inv-muted">No one else.</p>
           ) : (
             others.map((r) => (
-              <div key={r.id ?? r.name} className="inv-line">
+              <div key={r.id ?? r.name} className="inv-line" data-testid={r.kind === 'wallet' ? 'money-customer-wallets' : undefined}>
                 <span>{r.name}</span>
                 <span>{moneyText(r.owed)}</span>
               </div>

@@ -116,11 +116,16 @@ export interface PaymentUpdate {
 export function paymentUpdates(payments: Pick<CustomerPayment, 'kind' | 'amount' | 'method' | 'paid_at'>[]): PaymentUpdate[] {
   return payments
     .filter((p) => p.kind === 'payment' && p.amount > 0)
-    .map((p) => ({
-      title: 'Payment received',
-      text: `${formatTakaBd(p.amount)} with ${PAYMENT_METHOD_NAMES[p.method] ?? 'Other'}. Thank you!`,
-      at: p.paid_at,
-    }));
+    .map((p) =>
+      // Batch 60: money used from the customer's own wallet.
+      p.method === 'store_wallet'
+        ? { title: 'Paid from wallet', text: `${formatTakaBd(p.amount)} from your wallet.`, at: p.paid_at }
+        : {
+            title: 'Payment received',
+            text: `${formatTakaBd(p.amount)} with ${PAYMENT_METHOD_NAMES[p.method] ?? 'Other'}. Thank you!`,
+            at: p.paid_at,
+          }
+    );
 }
 
 /** Money in per method (refunds taken off), for "Paid with bKash − ৳1,000". */
