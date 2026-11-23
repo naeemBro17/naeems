@@ -237,6 +237,17 @@ test('Money page (live): before the opening balances it says so, and opens', asy
 
 test('Opening balances: a 3-row Kaarbar file is previewed, nothing is saved', async ({ page }) => {
   test.setTimeout(90_000);
+  // Batch 61: the live books are confirmed now, which shows the saved
+  // summary instead of the upload. This browser sees them not confirmed
+  // yet (nothing is changed; the preview itself is the real database's).
+  await page.route(/\/rest\/v1\/money_books\?/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const body = (await response.json()) as Record<string, unknown> | Record<string, unknown>[] | null;
+    const open = (row: Record<string, unknown>) => ({ ...row, confirmed_at: null, confirmed_by_username: null });
+    const json = Array.isArray(body) ? body.map(open) : body ? open(body) : body;
+    await route.fulfill({ response, json });
+  });
   await adminAt(page, '/admin?tab=money&m=opening');
   await expect(page.getByTestId('opening-dues')).toBeVisible({ timeout: 20_000 });
   const before = await select<unknown[]>(admin.accessToken, 'customer_opening_dues?select=id');
