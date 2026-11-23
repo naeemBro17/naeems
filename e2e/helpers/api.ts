@@ -96,7 +96,31 @@ async function call<T>(token: string | null, path: string, init: RequestInit): P
 }
 
 export function rpc<T>(token: string | null, fn: string, args: Record<string, unknown> = {}): Promise<ApiResult<T>> {
-  return call<T>(token, `/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+  // Batch 61: an order call naming a made-up test product shows it only
+  // for this call (see makeTestProduct). It has no stock, so an admin order
+  // of it is made without the stock warning (no lot exists to take from).
+  const ids = ORDER_FUNCTIONS.has(fn) ? itemProductIds(args).filter((id) => madeUpProducts.has(id)) : [];
+  const body = ids.length > 0 && fn.startsWith('admin_create_order') && !('p_allow_negative_stock' in args)
+    ? { ...args, p_allow_negative_stock: true }
+    : args;
+  const send = () => call<T>(token, `/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(body) });
+  return ids.length > 0 ? withTestProductsShown(ids, send) : send();
+}
+
+const ORDER_FUNCTIONS = new Set(['place_order', 'place_order_wallet', 'admin_create_order', 'admin_create_order_v2', 'admin_edit_order']);
+
+/** The product ids an order call names (p_items, or p_changes.items). */
+function itemProductIds(args: Record<string, unknown>): string[] {
+  const changes = args.p_changes as { items?: unknown } | undefined;
+  const ids: string[] = [];
+  for (const list of [args.p_items, changes?.items]) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const id = (item as { product_id?: unknown }).product_id;
+      if (typeof id === 'string') ids.push(id);
+    }
+  }
+  return ids;
 }
 
 export function select<T>(token: string | null, pathAndQuery: string): Promise<ApiResult<T>> {
@@ -162,32 +186,39 @@ async function setTestProductActive(productId: string, active: boolean): Promise
   if (!res.ok) throw new Error(`could not ${active ? 'show' : 'hide'} the test product: ${res.error}`);
 }
 
+/** Runs fn with the given made-up products shown in the shop (place_order
+ *  and the admin's New order sell only shown products), hidden again
+ *  straight after. Real products in the list are left as they are. Also
+ *  for browser steps that sell one (New order, Edit order). */
+export async function withTestProductsShown<T>(productIds: string[], fn: () => Promise<T>): Promise<T> {
+  const ids = [...new Set(productIds.filter((id) => madeUpProducts.has(id)))];
+  for (const id of ids) await setTestProductActive(id, true);
+  try {
+    return await fn();
+  } finally {
+    for (const id of ids) await setTestProductActive(id, false);
+  }
+}
+
 /** Places a real website order as the test customer (the Telegram
  *  notifier skips this account — see checkout.spec.ts). A made-up product
- *  (makeTestProduct) is shown only while the order is placed. */
+ *  (makeTestProduct) is shown only while the order is placed (rpc). */
 export async function placeTestOrder(
   customerToken: string,
   productId: string,
   quantity = 1
 ): Promise<{ id: string; orderNumber: string }> {
-  const madeUp = madeUpProducts.has(productId);
-  if (madeUp) await setTestProductActive(productId, true);
-  let result: ApiResult<{ order_id: string; order_number: string }[]>;
-  try {
-    result = await rpc<{ order_id: string; order_number: string }[]>(customerToken, 'place_order', {
-      p_items: [{ product_id: productId, variant_id: null, quantity }],
-      p_full_name: 'E2E Test Customer',
-      p_phone: '01712345678',
-      p_division: 'Dhaka',
-      p_district: 'Dhaka',
-      p_thana: 'Gulshan',
-      p_address_line: '123 Test Road (e2e)',
-      p_delivery_zone: 'inside_dhaka',
-      p_payment_method: 'cod',
-    });
-  } finally {
-    if (madeUp) await setTestProductActive(productId, false);
-  }
+  const result = await rpc<{ order_id: string; order_number: string }[]>(customerToken, 'place_order', {
+    p_items: [{ product_id: productId, variant_id: null, quantity }],
+    p_full_name: 'E2E Test Customer',
+    p_phone: '01712345678',
+    p_division: 'Dhaka',
+    p_district: 'Dhaka',
+    p_thana: 'Gulshan',
+    p_address_line: '123 Test Road (e2e)',
+    p_delivery_zone: 'inside_dhaka',
+    p_payment_method: 'cod',
+  });
   if (!result.ok || !result.data?.[0]) {
     throw new Error(`place_order failed: ${result.error}`);
   }

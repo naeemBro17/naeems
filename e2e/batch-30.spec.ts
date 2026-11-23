@@ -10,6 +10,7 @@ import {
   rpc,
   select,
   useSessionInPage,
+  withTestProductsShown,
   type TestSession,
 } from './helpers/api';
 import { STEADFAST_FUNCTION, mockSteadfast } from './helpers/steadfastMock';
@@ -362,26 +363,31 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
   const before = await orderRow(order.id);
   await rpc(admin.accessToken, 'admin_set_steadfast_cod', { p_order_id: order.id, p_amount: Number(before.total) });
 
-  await openAdminOrder(page, order.id);
-  await page.getByTestId('edit-order').click();
-  // Batch 32 Part 3: Edit order is a page now.
-  const sheet = page.getByTestId('edit-order-page');
-  await sheet.getByLabel(/Full name/).fill('E2E Edited Name');
-  await sheet.getByLabel(/Phone number/).fill('01712345670');
-  await sheet.getByLabel('Alternative phone (optional)').fill('01812345678');
-  await sheet.getByLabel(/House \/ road \/ landmark/).fill('Road 9 (edited, e2e)');
-  await page.locator('#edit-order-thana').click();
-  await page.getByLabel('Search thana').fill('Banani');
-  await page.getByTestId('thana-list').getByRole('button', { name: 'Banani' }).first().click();
-  await sheet.getByRole('button', { name: `Increase quantity of ${product.name}` }).click();
-  await sheet.getByLabel('Add a product').fill(product2.name.slice(0, 18));
-  await sheet.locator('.edit-order__results .picker-sheet__row').filter({ hasText: product2.name }).first().click();
-  await sheet.getByLabel('Delivery fee (৳)').fill('0');
-  await sheet.getByLabel('Order discount (৳)').fill('50');
-  await sheet.getByLabel('Reason for the discount (optional)').fill('Late delivery');
-  await sheet.getByLabel('Note for the courier (optional)').fill('Call first');
-  await sheet.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Order updated')).toBeVisible({ timeout: 15_000 });
+  // Batch 61: the made-up product is shown only while it is sold here.
+  await withTestProductsShown([product.id, product2.id], async () => {
+    await openAdminOrder(page, order.id);
+    await page.getByTestId('edit-order').click();
+    // Batch 32 Part 3: Edit order is a page now.
+    const sheet = page.getByTestId('edit-order-page');
+    await sheet.getByLabel(/Full name/).fill('E2E Edited Name');
+    await sheet.getByLabel(/Phone number/).fill('01712345670');
+    await sheet.getByLabel('Alternative phone (optional)').fill('01812345678');
+    await sheet.getByLabel(/House \/ road \/ landmark/).fill('Road 9 (edited, e2e)');
+    await page.locator('#edit-order-thana').click();
+    await page.getByLabel('Search thana').fill('Banani');
+    await page.getByTestId('thana-list').getByRole('button', { name: 'Banani' }).first().click();
+    await sheet.getByRole('button', { name: `Increase quantity of ${product.name}` }).click();
+    await sheet.getByLabel('Add a product').fill(product2.name.slice(0, 18));
+    await sheet.locator('.edit-order__results .picker-sheet__row').filter({ hasText: product2.name }).first().click();
+    await sheet.getByLabel('Delivery fee (৳)').fill('0');
+    await sheet.getByLabel('Order discount (৳)').fill('50');
+    await sheet.getByLabel('Reason for the discount (optional)').fill('Late delivery');
+    await sheet.getByLabel('Note for the courier (optional)').fill('Call first');
+    await sheet.getByRole('button', { name: 'Save changes' }).click();
+    // The made-up products have no stock: the shop asks first (Batch 61).
+    await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
+    await expect(page.getByText('Order updated')).toBeVisible({ timeout: 15_000 });
+  });
 
   const after = await orderRow(order.id);
   expect(after.customer_name).toBe('E2E Edited Name');
@@ -541,12 +547,15 @@ test('Part 3: add a partial payment, the rest, mark fully paid, edit, delete, ov
   await page.getByRole('dialog', { name: 'Mark fully paid' }).getByRole('button', { name: 'Save' }).click();
   await expect(block.getByTestId('payment-state')).toHaveText('Paid', { timeout: 15_000 });
 
-  // Edit one up → over-paid shown.
+  // Edit one up → Batch 60: what is paid above the total goes to the
+  // customer's wallet (it is taken back when the test order is deleted).
   await block.getByRole('button', { name: `Edit payment ${taka(300)}` }).first().click();
   sheet = page.getByRole('dialog', { name: 'Edit payment' });
   await sheet.getByLabel('Amount (৳)').fill('800');
   await sheet.getByRole('button', { name: 'Save' }).click();
-  await expect(block.getByTestId('payment-overpaid')).toHaveText(`Over-paid ${taka(500)}`, { timeout: 15_000 });
+  await expect(page.getByText("৳500 paid above the total went to the customer's wallet")).toBeVisible({ timeout: 15_000 });
+  await expect(block.getByTestId('payment-state')).toHaveText('Paid');
+  await expect(block.getByTestId('payment-due')).toHaveText(taka(0));
 
   const notes = await historyNotes(order.id);
   expect(notes).toContain('Payment ৳300 (bKash, TrxID E2EB30A) added');
@@ -655,29 +664,34 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
   expect(manual.ok, manual.error ?? '').toBe(true);
   createdOrderIds.push(manual.data![0].order_id);
 
-  await useSessionInPage(page, admin);
-  await page.goto('/admin?tab=orders');
-  await page.getByRole('button', { name: 'New order' }).click();
-  const field = page.getByLabel('Customer', { exact: true });
-  await field.fill('+880 1799 990030');
-  const results = page.getByTestId('customer-results');
-  await expect(results).toContainText('E2E B30 Phone Customer', { timeout: 15_000 });
-  await results.getByRole('button', { name: /E2E B30 Phone Customer/ }).click();
-  await expect(page.getByTestId('customer-picked')).toContainText('E2E B30 Phone Customer');
-  await expect(page.locator('#manual-order-name')).toHaveValue('E2E B30 Phone Customer');
-  await expect(page.locator('#manual-order-phone')).toHaveValue(PHONE_CUSTOMER);
-  await expect(page.locator('#manual-order-thana')).toHaveText('Mirpur');
-  await expect(page.locator('#manual-order-address')).toHaveValue('House 30, Road 3 (e2e)');
+  // Batch 61: the made-up product is shown only while it is sold here.
+  await withTestProductsShown([product.id], async () => {
+    await useSessionInPage(page, admin);
+    await page.goto('/admin?tab=orders');
+    await page.getByRole('button', { name: 'New order' }).click();
+    const field = page.getByLabel('Customer', { exact: true });
+    await field.fill('+880 1799 990030');
+    const results = page.getByTestId('customer-results');
+    await expect(results).toContainText('E2E B30 Phone Customer', { timeout: 15_000 });
+    await results.getByRole('button', { name: /E2E B30 Phone Customer/ }).click();
+    await expect(page.getByTestId('customer-picked')).toContainText('E2E B30 Phone Customer');
+    await expect(page.locator('#manual-order-name')).toHaveValue('E2E B30 Phone Customer');
+    await expect(page.locator('#manual-order-phone')).toHaveValue(PHONE_CUSTOMER);
+    await expect(page.locator('#manual-order-thana')).toHaveText('Mirpur');
+    await expect(page.locator('#manual-order-address')).toHaveValue('House 30, Road 3 (e2e)');
 
-  // Save an order for them: it lands under the same customer.
-  // Batch 32 Part 3: New order is a page now; its button says Create order.
-  const form = page.getByTestId('new-order-page');
-  await form.getByRole('button', { name: 'Phone call', exact: true }).click();
-  await form.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
-  await form.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
-  await form.getByRole('button', { name: 'Create order', exact: true }).click();
-  const saved = page.getByText(/Order .* saved/);
-  await expect(saved).toBeVisible({ timeout: 15_000 });
+    // Save an order for them: it lands under the same customer.
+    // Batch 32 Part 3: New order is a page now; its button says Create order.
+    const form = page.getByTestId('new-order-page');
+    await form.getByRole('button', { name: 'Phone call', exact: true }).click();
+    await form.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
+    await form.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
+    await form.getByRole('button', { name: 'Create order', exact: true }).click();
+    // The made-up product has no stock: the shop asks first (Batch 61).
+    await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
+    const saved = page.getByText(/Order .* saved/);
+    await expect(saved).toBeVisible({ timeout: 15_000 });
+  });
   const theirs = await rpc<{ id: string }[]>(admin.accessToken, 'admin_customer_orders_v2', { p_customer_key: `ph:${PHONE_CUSTOMER}` });
   for (const o of theirs.data ?? []) if (!createdOrderIds.includes(o.id)) createdOrderIds.push(o.id);
   expect(theirs.data?.length).toBe(2);

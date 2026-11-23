@@ -11,6 +11,7 @@ import {
   rpc,
   select,
   useSessionInPage,
+  withTestProductsShown,
   type TestSession,
 } from './helpers/api';
 import { mockSteadfast } from './helpers/steadfastMock';
@@ -147,80 +148,88 @@ test.afterAll(async () => {
 
 test('Part 1: payment section — summary, Full amount, method chips, inline error when paid > total', async ({ page }) => {
   test.setTimeout(60_000);
-  await useSessionInPage(page, admin);
-  await page.goto('/admin/orders/new');
-  await expect(page.getByTestId('new-order-page')).toBeVisible({ timeout: 20_000 });
-  // The old four payment chips are gone.
-  for (const old of ['Cash on Delivery', 'Cash paid', 'Due (pay later)']) {
-    await expect(page.getByRole('button', { name: old, exact: true })).toHaveCount(0);
-  }
-  await addItem(page);
-  const section = page.getByTestId('payment-section');
-  const summary = page.getByTestId('payment-summary');
-  const totalText = await page.locator('.checkout-summary-card__row--total span').last().innerText();
-  const total = Number(totalText.replace(/[^0-9.]/g, ''));
-  expect(total).toBeGreaterThan(0);
+  // Batch 61: the made-up product is shown only while it is sold here.
+  await withTestProductsShown([product.id], async () => {
+    await useSessionInPage(page, admin);
+    await page.goto('/admin/orders/new');
+    await expect(page.getByTestId('new-order-page')).toBeVisible({ timeout: 20_000 });
+    // The old four payment chips are gone.
+    for (const old of ['Cash on Delivery', 'Cash paid', 'Due (pay later)']) {
+      await expect(page.getByRole('button', { name: old, exact: true })).toHaveCount(0);
+    }
+    await addItem(page);
+    const section = page.getByTestId('payment-section');
+    const summary = page.getByTestId('payment-summary');
+    const totalText = await page.locator('.checkout-summary-card__row--total span').last().innerText();
+    const total = Number(totalText.replace(/[^0-9.]/g, ''));
+    expect(total).toBeGreaterThan(0);
 
-  // Nothing paid: the courier collects everything.
-  await expect(summary.getByTestId('summary-paid-now')).toHaveText(taka(0));
-  await expect(summary.getByTestId('summary-courier')).toHaveText(taka(total));
-  await expect(summary.getByTestId('summary-due')).toHaveText(taka(0));
-  await expect(section.getByRole('button', { name: 'bKash' })).toHaveCount(0);
+    // Nothing paid: the courier collects everything.
+    await expect(summary.getByTestId('summary-paid-now')).toHaveText(taka(0));
+    await expect(summary.getByTestId('summary-courier')).toHaveText(taka(total));
+    await expect(summary.getByTestId('summary-due')).toHaveText(taka(0));
+    await expect(section.getByRole('button', { name: 'bKash' })).toHaveCount(0);
 
-  // More than the total: inline error, Create order stays off.
-  await page.getByTestId('paid-now-input').fill(String(total + 1));
-  await expect(page.getByTestId('paid-now-error')).toHaveText(`Paid now can be at most ${taka(total)}.`);
-  await expect(page.getByRole('button', { name: 'Create order' })).toBeDisabled();
+    // More than the total: inline error, Create order stays off.
+    await page.getByTestId('paid-now-input').fill(String(total + 1));
+    await expect(page.getByTestId('paid-now-error')).toHaveText(`Paid now can be at most ${taka(total)}.`);
+    await expect(page.getByRole('button', { name: 'Create order' })).toBeDisabled();
 
-  // An advance: method chips, summary follows, remaining with two choices.
-  await page.getByTestId('paid-now-input').fill('100');
-  await expect(page.getByTestId('paid-now-error')).toHaveCount(0);
-  await expect(section.getByRole('button', { name: 'bKash' })).toBeVisible();
-  await expect(section.getByRole('button', { name: 'Nagad' })).toBeVisible();
-  await expect(section.getByRole('button', { name: 'Cash', exact: true })).toBeVisible();
-  await expect(section.getByRole('button', { name: 'Bank' })).toBeVisible();
-  await expect(summary.getByTestId('summary-paid-now')).toHaveText(taka(100));
-  await expect(summary.getByTestId('summary-courier')).toHaveText(taka(total - 100));
-  await expect(section.getByText(`Remaining ${taka(total - 100)}`)).toBeVisible();
-  await expect(section.getByRole('radio', { name: 'Collect on delivery' })).toHaveAttribute('aria-checked', 'true');
+    // An advance: method chips, summary follows, remaining with two choices.
+    await page.getByTestId('paid-now-input').fill('100');
+    await expect(page.getByTestId('paid-now-error')).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'bKash' })).toBeVisible();
+    await expect(section.getByRole('button', { name: 'Nagad' })).toBeVisible();
+    await expect(section.getByRole('button', { name: 'Cash', exact: true })).toBeVisible();
+    await expect(section.getByRole('button', { name: 'Bank' })).toBeVisible();
+    await expect(summary.getByTestId('summary-paid-now')).toHaveText(taka(100));
+    await expect(summary.getByTestId('summary-courier')).toHaveText(taka(total - 100));
+    await expect(section.getByText(`Remaining ${taka(total - 100)}`)).toBeVisible();
+    await expect(section.getByRole('radio', { name: 'Collect on delivery' })).toHaveAttribute('aria-checked', 'true');
 
-  // Full amount: nothing remains, the courier collects ৳0.
-  await section.getByRole('button', { name: 'Full amount' }).click();
-  await expect(page.getByTestId('paid-now-input')).toHaveValue(String(total));
-  await expect(summary.getByTestId('summary-courier')).toHaveText(taka(0));
-  await expect(section.getByRole('radiogroup')).toHaveCount(0);
-
-  await page.getByTestId('paid-now-input').fill('100');
-  if (ready) {
-    await section.getByRole('radio', { name: 'Customer pays later' }).click();
+    // Full amount: nothing remains, the courier collects ৳0.
+    await section.getByRole('button', { name: 'Full amount' }).click();
+    await expect(page.getByTestId('paid-now-input')).toHaveValue(String(total));
     await expect(summary.getByTestId('summary-courier')).toHaveText(taka(0));
-    await expect(summary.getByTestId('summary-due')).toHaveText(taka(total - 100));
-  } else {
-    await expect(page.getByTestId('pay-later-unavailable')).toBeVisible();
-  }
+    await expect(section.getByRole('radiogroup')).toHaveCount(0);
+
+    await page.getByTestId('paid-now-input').fill('100');
+    if (ready) {
+      await section.getByRole('radio', { name: 'Customer pays later' }).click();
+      await expect(summary.getByTestId('summary-courier')).toHaveText(taka(0));
+      await expect(summary.getByTestId('summary-due')).toHaveText(taka(total - 100));
+    } else {
+      await expect(page.getByTestId('pay-later-unavailable')).toBeVisible();
+    }
+  });
 });
 
 test('Part 1: pay later + bKash advance — one step, a real payment row, ৳0 to the courier, list tag', async ({ page }) => {
   test.skip(!ready, NEEDS_035);
   test.setTimeout(120_000);
   await mockSteadfast(page, { policeStations: null });
-  await useSessionInPage(page, admin);
-  await page.goto('/admin?tab=orders');
-  await page.getByRole('button', { name: 'New order' }).click();
-  await expect(page).toHaveURL(/\/admin\/orders\/new$/);
-  const form = page.getByTestId('new-order-page');
-  await form.getByRole('button', { name: 'Phone call', exact: true }).click();
-  await page.locator('#manual-order-name').fill('E2E B32 Pay Later');
-  await page.locator('#manual-order-phone').fill(PAY_LATER_PHONE);
-  await pickDhakaDhaka(page, 'manual-order');
-  await page.locator('#manual-order-address').fill('House 32, Road 2 (e2e)');
-  await addItem(page);
-  await page.getByTestId('paid-now-input').fill('100');
-  await form.getByRole('button', { name: 'bKash' }).click();
-  await page.getByLabel('TrxID (optional)').fill('E2EB32TRX');
-  await form.getByRole('radio', { name: 'Customer pays later' }).click();
-  await form.getByRole('button', { name: 'Create order' }).click();
-  await expect(page.getByText(/Order .* saved/)).toBeVisible({ timeout: 15_000 });
+  // Batch 61: the made-up product is shown only while it is sold here.
+  await withTestProductsShown([product.id], async () => {
+    await useSessionInPage(page, admin);
+    await page.goto('/admin?tab=orders');
+    await page.getByRole('button', { name: 'New order' }).click();
+    await expect(page).toHaveURL(/\/admin\/orders\/new$/);
+    const form = page.getByTestId('new-order-page');
+    await form.getByRole('button', { name: 'Phone call', exact: true }).click();
+    await page.locator('#manual-order-name').fill('E2E B32 Pay Later');
+    await page.locator('#manual-order-phone').fill(PAY_LATER_PHONE);
+    await pickDhakaDhaka(page, 'manual-order');
+    await page.locator('#manual-order-address').fill('House 32, Road 2 (e2e)');
+    await addItem(page);
+    await page.getByTestId('paid-now-input').fill('100');
+    await form.getByRole('button', { name: 'bKash' }).click();
+    await page.getByLabel('TrxID (optional)').fill('E2EB32TRX');
+    await form.getByRole('radio', { name: 'Customer pays later' }).click();
+    await form.getByRole('button', { name: 'Create order' }).click();
+    // The made-up product has no stock: the shop asks first (Batch 61).
+    await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
+    await expect(page.getByText(/Order .* saved/)).toBeVisible({ timeout: 15_000 });
+  });
   // Lands on the new order's own page (Batch 35: /admin/orders/NM-…).
   await expect(page).toHaveURL(/\/admin\/orders\/[^/]+$/, { timeout: 15_000 });
   const newNumber = decodeURIComponent(new URL(page.url()).pathname.split('/admin/orders/')[1]);
@@ -310,7 +319,8 @@ test('Part 1: existing and website orders stay "collect on delivery"; Edit order
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Order updated')).toBeVisible({ timeout: 15_000 });
   // Back on the same order.
-  await expect(page).toHaveURL(new RegExp(`order=${web.id}`));
+  // Batch 35: the order is its own page, /admin/orders/NM-….
+  await expect(page).toHaveURL(new RegExp(`/admin/orders/${web.orderNumber}$`));
   expect((await orderRow(web.id)).collect_mode).toBe('pay_later');
   expect((await historyNotes(web.id)).some((n) => n.startsWith('Remaining money: Collect on delivery → Customer pays later'))).toBe(true);
   const log = await select<{ action: string }[]>(admin.accessToken, `activity_log?select=action&entity_id=eq.${web.id}&action=eq.order.collect_mode`);
@@ -604,7 +614,8 @@ for (const width of [390, 1280]) {
     await expect(page.getByTestId('kpi-today')).toContainText('Today');
     await expect(page.getByTestId('kpi-way')).toContainText('With courier');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^(Good (morning|afternoon|evening)|Hello), \S+/);
-    await expect(page.locator('.adm-page-header__subtitle')).toHaveText(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+$/);
+    // Batch 51: "Wednesday, 7 October" in the hero card (lib/homeStats homeDateLabel).
+    await expect(page.locator('.adm-hero__date')).toHaveText(/^[A-Z][a-z]+day, \d{1,2} [A-Z][a-z]+$/);
     await expect(page.locator('.adm-home__section-title').filter({ hasText: 'Needs attention' })).toBeVisible();
     await expect(page.locator('.adm-home__section-title').filter({ hasText: 'Sales · last 7 days' })).toBeVisible();
 
@@ -660,12 +671,37 @@ test('Part 5: rows at 0 are hidden; all at 0 → "Nothing needs attention"; To c
   await page.route(/\/rest\/v1\/rpc\/admin_customers_v[23]/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   );
+  // Batch 61: the rows later batches added to "Needs attention" are at 0 too
+  // (Batch 36 unpaid payouts, Batch 42 Dashboard lines, Batch 60 wallet).
+  await page.route(/\/rest\/v1\/rpc\/(steadfast_unpaid_orders|store_wallet_waiting)/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+  );
+  await page.route(/\/rest\/v1\/rpc\/money_dashboard/, async (route) => {
+    const response = await route.fetch();
+    const data = (await response.json()) as Record<string, unknown>;
+    data.attention = {
+      expiring: 0,
+      sold_without_stock: 0,
+      dues_over_30: 0,
+      dues_over_30_amount: 0,
+      no_buy_price: 0,
+      no_weight: 0,
+      count_planned: 0,
+      count_done: 0,
+      count_due: false,
+      last_month_locked: true,
+      last_month: '',
+    };
+    await route.fulfill({ response, json: data });
+  });
   await useSessionInPage(page, admin);
   await page.goto('/admin');
   await expect(page.getByTestId('home-nothing')).toHaveText('Nothing needs attention', { timeout: 15_000 });
   await expect(page.locator('.adm-home .adm-row')).toHaveCount(0);
   await expect(page.getByTestId('kpi-confirm-clear')).toHaveText('all clear');
   await expect(page.getByTestId('kpi-confirm')).not.toHaveClass(/adm-kpi--attn/);
+  // The Dashboard may still be asking (Today / This month reload).
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 /* ---------------------------------------------------------------- Part 6 */
