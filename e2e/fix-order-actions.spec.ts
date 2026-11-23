@@ -5,6 +5,7 @@ import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 import { passwordSession, makeTestProduct, placeTestOrder, rpc, select, useSessionInPage, type TestSession } from './helpers/api';
 import { pdfPageCount } from './helpers/invoicePdf';
+import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
 
 /*
  * Fix 1.38.1 — order page actions and the invoice fold line.
@@ -167,22 +168,24 @@ test.describe('order page actions', () => {
     expect(await orderStatus(booked.id)).toBe('shipped');
   });
 
-  test('Reopen puts the order back to its old status and takes the stock again; refused when stock is short', async ({ page }) => {
+  test('Reopen: the Reopen card after a cancel, and the database refusal is shown with nothing changed', async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 390, height: 844 });
     const order = await newOrder();
     await setStatus(order.id, 'confirmed');
-    const before = await stock();
+    // Batch 61: a made-up "keep selling" product with no lots (helpers/api
+    // makeTestProduct), so no stock number moves here. Cancel giving stock
+    // back: e2e/sql/batch-45-inventory.sql; reopen taking it again:
+    // e2e/sql/batch-51.sql ("reopening takes back only the 2").
 
     // Cancel through the page (number typed).
-    let el = await openOrder(page, order.orderNumber);
+    const el = await openOrder(page, order.orderNumber);
     await el.getByTestId('careful-cancel').click();
     await page.getByTestId('confirm-sheet-input').fill(order.orderNumber.replace(/\D/g, ''));
     await page.getByTestId('confirm-sheet-confirm').click();
     await expect(el.getByTestId('reopen-card')).toBeVisible({ timeout: 15_000 });
     await expect(el.getByTestId('reopen-card')).toContainText(/Cancelled .+ by /);
     expect(await orderStatus(order.id)).toBe('cancelled');
-    expect(await stock()).toBe(before + 1);
     await shot(page, 'reopen-card', el.getByTestId('reopen-card'));
 
     // Short stock: the database's answer is shown, nothing changes.
@@ -202,30 +205,25 @@ test.describe('order page actions', () => {
     await page.unroute('**/rest/v1/rpc/admin_reopen_order');
     await page.getByRole('button', { name: 'Keep cancelled' }).click();
 
-    // Real reopen.
-    el = await openOrder(page, order.orderNumber);
-    await el.getByTestId('reopen-order').click();
-    await page.getByTestId('confirm-sheet-confirm').click();
-    await expect(el.getByTestId('order-step-label')).toHaveText('Confirmed', { timeout: 15_000 });
-    expect(await orderStatus(order.id)).toBe('confirmed');
-    expect(await stock()).toBe(before);
+    // Batch 61: the real reopen (status back, stock taken again, history,
+    // Activity Log, a second reopen refused, short stock refused) runs in
+    // e2e/sql/fix-order-actions-reopen.sql below: the made-up product has
+    // no stock, which the database will not reopen.
+  });
 
-    // Logged in the order history and the Activity Log.
-    const history = await select<{ old_status: string; new_status: string; note: string | null }[]>(
-      admin.accessToken,
-      `order_status_history?select=old_status,new_status,note&order_id=eq.${order.id}&order=changed_at.desc&limit=1`
-    );
-    expect(history.data?.[0]).toMatchObject({ old_status: 'cancelled', new_status: 'confirmed' });
-    const log = await select<{ summary: string }[]>(
-      admin.accessToken,
-      `activity_log?select=summary&entity_id=eq.${order.id}&order=created_at.desc&limit=1`
-    );
-    expect(log.data?.[0]?.summary).toContain('cancelled → confirmed');
-
-    // A second reopen is refused: the order is no longer cancelled.
-    const res = await rpc(admin.accessToken, 'admin_reopen_order', { p_order_id: order.id });
-    expect(res.ok).toBe(false);
-    expect(res.error ?? '').toContain('Only a cancelled order can be reopened.');
+  test('database: reopen puts the order back and takes the stock again; history, Activity Log, refusals (one rolled-back transaction)', async () => {
+    test.setTimeout(180_000);
+    test.skip(supabaseCli() === null, 'The Supabase command line is not on this computer.');
+    const script = readFileSync('e2e/sql/fix-order-actions-reopen.sql', 'utf8')
+      .replaceAll('{{ADMIN_EMAIL}}', E2E_ADMIN_EMAIL)
+      .replaceAll('{{CUSTOMER_EMAIL}}', E2E_EMAIL);
+    const output = await runSql(`BEGIN;
+${script}`);
+    const results = rowResult<{ name: string; ok: boolean; detail: string }[]>(output);
+    expect(results, sqlError(output) ?? 'no result').not.toBeNull();
+    const failed = (results ?? []).filter((r) => !r.ok).map((r) => `${r.name} → ${r.detail}`);
+    expect(failed).toEqual([]);
+    expect((results ?? []).length).toBeGreaterThanOrEqual(9);
   });
 
   test('Delete: an unbooked order deletes from the page and from the list; a booked one needs the Safety Lock', async ({ page }) => {
@@ -235,7 +233,8 @@ test.describe('order page actions', () => {
     // Page: a Confirmed order, never booked.
     const one = await newOrder();
     await setStatus(one.id, 'confirmed');
-    const before = await stock();
+    // (No stock moves for the made-up product: deleting an order gives stock
+    // back in e2e/sql/batch-45-inventory.sql.)
     const el = await openOrder(page, one.orderNumber);
     await el.getByTestId('careful-delete').click();
     const digits = one.orderNumber.replace(/\D/g, '');
@@ -245,7 +244,6 @@ test.describe('order page actions', () => {
     await page.getByRole('button', { name: 'Delete order', exact: true }).click();
     await expect(page).toHaveURL(/\/admin(\?|$)/, { timeout: 15_000 });
     expect(await orderStatus(one.id)).toBeNull();
-    expect(await stock()).toBe(before + 1);
 
     // List: tick the row, type the number, delete.
     const two = await newOrder();

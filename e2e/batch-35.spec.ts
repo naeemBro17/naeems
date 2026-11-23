@@ -8,6 +8,8 @@ import {
   placeTestOrder,
   rpc,
   select,
+  shopProduct,
+  shopProductSlug,
   upsertSettings,
   useSessionInPage,
   type TestSession,
@@ -368,19 +370,33 @@ for (const [utc, expected] of [
 /* ---------------------------------------------------------------- Part 6 */
 
 test("Part 6: \"Show rider's phone\" is Off by default and only the Super Admin can change it", async ({ page }) => {
+  // Batch 61: Naeem may have switched it on since, so the screen must show
+  // the saved value; "Off by default" (no saved row) is checked with the
+  // row taken out of what this browser reads (nothing is changed).
   const stored = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.show_rider_phone');
-  expect(['false', undefined]).toContain(stored.data?.[0]?.value);
+  const live = stored.data?.[0]?.value === 'true' ? 'true' : 'false';
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=settings&sset=delivery');
   const sw = page.getByTestId('rider-phone-switch');
-  await expect(sw).toHaveAttribute('aria-checked', 'false', { timeout: 15_000 });
+  await expect(sw).toHaveAttribute('aria-checked', live, { timeout: 15_000 });
   await expect(page.getByText('Only while the order is Out for delivery.')).toBeVisible();
 
+  await page.route(/\/rest\/v1\/app_settings\?/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const rows = ((await response.json()) as { key: string }[]).filter((r) => r.key !== 'show_rider_phone');
+    await route.fulfill({ response, json: rows });
+  });
+  await page.reload();
+  await expect(page.getByTestId('rider-phone-switch')).toHaveAttribute('aria-checked', 'false', { timeout: 15_000 });
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
   // Anyone else (here the shop's test customer) is refused by the database.
-  const refused = await upsertSettings(customer.accessToken, [{ key: 'show_rider_phone', value: 'true' }]);
+  const flipped = live === 'true' ? 'false' : 'true';
+  const refused = await upsertSettings(customer.accessToken, [{ key: 'show_rider_phone', value: flipped }]);
   expect(refused.ok).toBe(false);
   const after = await select<{ value: string }[]>(null, 'app_settings?select=value&key=eq.show_rider_phone');
-  expect(after.data?.[0]?.value).not.toBe('true');
+  expect(after.data?.[0]?.value === 'true' ? 'true' : 'false').toBe(live);
 });
 
 /* ---------------------------------------------------------------- Part 7 */
@@ -435,8 +451,8 @@ test('Part 7: in every money field the number starts to the right of the ৳', a
 async function openProductPage(page: Page, width: number, theme: 'light' | 'dark'): Promise<void> {
   await page.setViewportSize({ width, height: width > 600 ? 900 : 860 });
   await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
-  const slug = (await select<{ slug: string }[]>(null, `products_view?select=slug&id=eq.${product.id}`)).data?.[0]?.slug ?? product.id;
-  await page.goto(`/product/${slug}`);
+  // Batch 61: a real product with a photo (only looked at).
+  await page.goto(`/product/${await shopProductSlug()}`);
   await expect(page.locator('.product-detail__image').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.product-detail__backdrop--on')).toHaveCount(1, { timeout: 15_000 });
   await page.waitForTimeout(900);
@@ -514,7 +530,8 @@ test('Part 9: shop photos cannot be dragged or long-press saved; admin photos st
   expect(prevented).toBe(true);
 
   await useSessionInPage(page, admin);
-  await page.goto(`/admin/products/${product.id}/edit`);
+  // Batch 61: a real product with a photo, only opened (never saved).
+  await page.goto(`/admin/products/${(await shopProduct()).id}/edit`);
   await expect(page.locator('#pf-retail')).toBeVisible({ timeout: 20_000 });
   // The admin keeps its own image behaviour: none of the shop protection
   // is applied there.

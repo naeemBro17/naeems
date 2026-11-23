@@ -9,6 +9,8 @@ import {
   placeTestOrder,
   rpc,
   select,
+  shopProduct,
+  shopProductSlug,
   useSessionInPage,
   type TestSession,
 } from './helpers/api';
@@ -148,7 +150,7 @@ test('Part 1: payouts page — balance, 7-day alert, this month, list; Refresh a
   await expect(page.getByTestId('payouts-month-received')).toHaveText('৳6,835');
   await expect(page.getByTestId('payouts-month-received')).toHaveAttribute('title', '৳6,835.02');
 
-  const row = page.getByTestId('payouts-list').getByRole('button').first();
+  const row = page.getByTestId('payouts-list').getByRole('link').first();
   await expect(row).toContainText('Payout #48213');
   await expect(row).toContainText('3 orders · fees ৳463');
   await expect(row).toContainText('1 to check');
@@ -163,7 +165,7 @@ test('Part 1: payout detail — orders, fees, what you get, total, "to check" re
   await mockPayouts(page);
   await useSessionInPage(page, admin);
   await page.goto('/admin?tab=payouts');
-  await page.getByTestId('payouts-list').getByRole('button').first().click();
+  await page.getByTestId('payouts-list').getByRole('link').first().click();
   await expect(page).toHaveURL(/\/admin\/payouts\/p-48213$/);
   await expect(page.getByTestId('payout-pill')).toHaveText('1 to check');
   const table = page.getByTestId('payout-table');
@@ -176,7 +178,7 @@ test('Part 1: payout detail — orders, fees, what you get, total, "to check" re
   await expect(page.getByTestId('payout-reason')).toContainText('Expected ৳3,799.00');
   await expect(page.getByText('Fees = delivery charge + 1% COD fee')).toBeVisible();
   await noSideScroll(page);
-  await table.getByRole('button', { name: 'NM-1722' }).click();
+  await table.getByRole('link', { name: 'NM-1722' }).click();
   await expect(page).toHaveURL(/\/admin\/orders\/NM-1722$/);
 });
 
@@ -254,14 +256,17 @@ test('Part 1: staff without "View profit & costs" never see payouts (menu, links
 
 /* ---------------------------------------------------------------- Part 2 */
 
+/** Batch 61: a real product page, only looked at (helpers/api). */
 async function productSlug(): Promise<string> {
-  return (await select<{ slug: string }[]>(null, `products_view?select=slug&id=eq.${product.id}`)).data?.[0]?.slug ?? product.id;
+  return shopProductSlug();
 }
 
 test('Part 2: customer page — boxes, steps, colours by name; links safe; scripts stripped; old text unchanged; plain meta', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await withRichProduct(page, product.id);
-  await page.goto(`/product/${await productSlug()}`);
+  // Batch 61: a real product page, its description answered here only.
+  const shown = await shopProduct();
+  await withRichProduct(page, shown.id);
+  await page.goto(`/product/${shown.slug}`);
   const about = page.getByTestId('pdp-about');
   await expect(about.locator('div[data-box="benefits"] li')).toHaveCount(2);
   await expect(about.locator('div[data-box="warning"]')).toBeVisible();
