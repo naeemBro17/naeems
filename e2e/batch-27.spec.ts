@@ -1,5 +1,6 @@
 import type { Locator, Page, Route } from '@playwright/test';
 import { test, expect } from './fixtures';
+import { fakeYouTube } from './helpers/youtube';
 import { select } from './helpers/api';
 import { signInAsTestCustomer } from './helpers/auth';
 import { E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
@@ -221,6 +222,8 @@ test.describe('Part 1 — product page', () => {
   });
 
   test('video: our own cover before play and after pause; taps never leave the site', async ({ page, context }) => {
+    // Batch 61: a stand-in player answers instead of YouTube (helpers/youtube).
+    await fakeYouTube(page);
     test.setTimeout(60_000);
     const opened: string[] = [];
     context.on('page', (p) => opened.push(p.url()));
@@ -487,6 +490,16 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await card.locator('.cart-button').click();
     const qty = card.getByTestId('card-stepper-qty');
     await expect(qty).toHaveText('1');
+    // Batch 61: the first add brings in the floating cart, which floats on
+    // the right at about the height of the card's own + (the cause of the
+    // timing flake: + was under it on a right-column card). Once it is
+    // there, the card's bottom goes just above it.
+    const glass = page.getByTestId('glass-cart');
+    await expect(glass).toBeVisible();
+    const glassTop = (await glass.boundingBox())!.y;
+    await card.evaluate((node, top) => {
+      window.scrollBy({ top: node.getBoundingClientRect().bottom - (top - 16), behavior: 'instant' });
+    }, glassTop);
     await card.getByRole('button', { name: `One more ${name}` }).click();
     await expect(qty).toHaveText('2');
     expect(await cartUnits(page)).toBe(2);

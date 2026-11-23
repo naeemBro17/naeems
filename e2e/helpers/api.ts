@@ -254,13 +254,14 @@ export async function makeTestProduct(price = 1000): Promise<{ id: string; name:
   return { id, name };
 }
 
-/** Batch 61: a real shop product with a photo, for tests that only LOOK at
+/** Batch 61: a real shop product with a photo that can be bought (in stock
+ *  or "keep selling"), for tests that only LOOK at
  *  a product page (nothing is ordered or changed; ./fixtures answers the
  *  photo with a placeholder). */
 export async function shopProduct(): Promise<{ id: string; slug: string }> {
   const rows = await select<{ id: string; slug: string }[]>(
     null,
-    'products_view?select=id,slug&is_active=eq.true&image_urls=not.eq.%7B%7D&order=created_at.asc&limit=1'
+    'products_view?select=id,slug&is_active=eq.true&image_urls=not.eq.%7B%7D&or=(keep_selling.eq.true,stock_quantity.gt.0)&order=created_at.asc&limit=1'
   );
   const row = rows.data?.[0];
   if (!row) throw new Error('no shop product with a photo to look at');

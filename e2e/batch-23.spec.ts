@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
-import { select } from './helpers/api';
+import { select, shopProductSlug } from './helpers/api';
 import { test, expect } from './fixtures';
+import { fakeYouTube } from './helpers/youtube';
 import {
   readViewTransitions,
   recordViewTransitions,
@@ -358,7 +359,10 @@ test.describe('Part 7 — video review plays inline and never leaves the page', 
     const opened: string[] = [];
     context.on('page', (p) => opened.push(p.url()));
 
-    await page.goto('/product/cerave-hydrating-cleanser');
+    // Batch 61: a stand-in player answers instead of YouTube (helpers/youtube).
+    await fakeYouTube(page);
+    // Batch 61: a real product (its old address is gone), with a video.
+    await page.goto(`/product/${await shopProductSlug()}`);
     const header = page.getByRole('button', { name: 'Video review', exact: true });
     await header.click();
     await expect(header).toHaveAttribute('aria-expanded', 'true');
