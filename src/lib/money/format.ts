@@ -121,6 +121,7 @@ const TYPE_LABELS: Record<LedgerType, string> = {
   steadfast_payout_in: 'Steadfast payout',
   adjustment: 'Count difference',
   lot_payment: 'Paid for a lot',
+  courier_bill_payment: 'Steadfast bill paid',
   customer_payment: 'Customer payment',
   customer_refund: 'Refund to customer',
   previous_balance_payment: 'Previous balance paid',

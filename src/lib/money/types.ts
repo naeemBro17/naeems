@@ -61,7 +61,9 @@ export type MovementType =
   | 'supplier_payment'
   | 'steadfast_payout_in'
   | 'adjustment'
-  | 'lot_payment';
+  | 'lot_payment'
+  /** Batch 58: a Steadfast bill paid outside a payout, recorded on the order. */
+  | 'courier_bill_payment';
 
 /** Ledger rows also hold customer payments and Steadfast's side. */
 export type LedgerType =
@@ -152,6 +154,8 @@ export interface ProfitParts {
   delivery: number;
   courier: number;
   cost_adjustments: number;
+  /** Batch 58: changes to orders counted in a locked month, posted on the day they happened (absent before migration-058). */
+  locked_adjustments?: number;
   expenses: number;
   write_offs: number;
   net_profit: number;
@@ -201,6 +205,8 @@ export interface MoneyPosition {
   to_give_investors: number;
   to_give_suppliers: number;
   to_give_others: number;
+  /** Batch 58: courier fees counted in profit and not paid from any account yet (inside to_give; absent before migration-058). */
+  to_give_courier?: number;
   have: number;
   owe: number;
   net_worth: number;
@@ -227,7 +233,7 @@ export interface MoneySummary {
 }
 
 export interface ToGiveRow {
-  kind: 'investor' | 'supplier' | 'other';
+  kind: 'investor' | 'supplier' | 'other' | 'courier';
   id: string | null;
   name: string;
   owed: number;
@@ -249,6 +255,8 @@ export interface CustomerDue {
   last_reminder_at: string | null;
   last_reminder_amount: number | null;
   reminders: number;
+  /** Batch 58: paid more than their orders and previous balance ask (0 before migration-058). */
+  credit: number;
 }
 
 export interface CustomerMoneyHistory {
@@ -323,4 +331,16 @@ export interface OpeningPayableInput {
   phone: string;
   amount: string;
   note: string;
+}
+
+/** Batch 58: a Steadfast bill paid outside a payout (money_courier_bill_status). */
+export interface CourierBillStatus {
+  /** The bill on the order (order_courier_costs.bill_paid_separately). */
+  bill: number;
+  /** The order counts on or after the money start date (before it, the bill is inside the opening balances). */
+  counts: boolean;
+  recorded: number;
+  /** Not taken from any account yet. */
+  owed: number;
+  payments: { id: string; account: string; date: string; amount: number }[];
 }

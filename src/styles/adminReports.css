@@ -56,6 +56,12 @@ button.dash-card {
   color: var(--adm-text-2);
 }
 
+/* Batch 58: a thin line above "Investors' money" on Home → Money now. */
+.dash-divider {
+  border-top: 1px solid var(--adm-line);
+  margin: 6px 0 2px;
+}
+
 .dash-card__head {
   display: flex;
   align-items: center;

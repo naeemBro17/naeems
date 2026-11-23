@@ -195,7 +195,7 @@ function summaryFixture(balanced: boolean) {
   };
 }
 
-test('Money page: every profit line, Money now, "Books balance" (numbers mocked)', async ({ page }) => {
+test('Money page: every profit line, Money now, "All figures match" (numbers mocked)', async ({ page }) => {
   test.setTimeout(60_000);
   await mockRpc(page, 'money_summary', summaryFixture(true));
   await adminAt(page, '/admin?tab=money');
@@ -206,7 +206,11 @@ test('Money page: every profit line, Money now, "Books balance" (numbers mocked)
   await expect(page.getByTestId('money-roi')).toContainText('6.4%');
   await expect(page.getByTestId('money-roi')).toContainText('stock at landed cost + Cash + bKash + Bank + With Steadfast + customer dues − To give');
   await expect(page.getByTestId('money-to-receive')).toContainText('৳17,270');
-  await expect(page.getByTestId('money-books-balance')).toHaveText('Books balance');
+  // Batch 58: the balance check's new name, and one sentence saying what it checks.
+  await expect(page.getByTestId('money-books-balance')).toHaveText('All figures match');
+  await expect(page.getByTestId('money-check-explain')).toHaveText(
+    'The site checks that what you have today equals your opening money plus every sale, cost and expense since. Green means nothing is missing.',
+  );
   // One orange button on the page: Add money.
   await expect(page.locator('.adm-btn--primary:visible')).toHaveCount(1);
   await shot(page, '04-money-page-books-balance.png');
@@ -216,7 +220,7 @@ test('Money page: a red line with the difference and the first day it went wrong
   test.setTimeout(60_000);
   await mockRpc(page, 'money_summary', summaryFixture(false));
   await adminAt(page, '/admin?tab=money');
-  await expect(page.getByTestId('money-books-off')).toHaveText('Books are off by −৳120 — first seen 9 Oct 2026', { timeout: 20_000 });
+  await expect(page.getByTestId('money-books-off')).toHaveText("Figures don't match: −৳120 — first seen 9 Oct 2026", { timeout: 20_000 });
   await page.getByRole('button', { name: 'Show the sums' }).click();
   await expect(page.getByTestId('money-check-sums')).toContainText('Opening net worth');
   await shot(page, '05-money-page-books-off.png');

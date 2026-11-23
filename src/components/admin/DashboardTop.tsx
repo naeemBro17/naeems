@@ -34,7 +34,8 @@ function Row({ label, value, testId }: { label: string; value: number; testId?: 
  * costs") — few numbers, big and clear; the details are one tap away in
  * Reports. Every number is the Money page's own (money_summary): Your
  * profit, the return on money in the business, the money now and the
- * balance check.
+ * balance check. Batch 58: investors' money is shown on its own line,
+ * apart from what the business owes (To give).
  */
 export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
   const s = data?.summary;
@@ -96,15 +97,15 @@ export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
               <span className="money-big-label">Money now</span>
               {pos.balanced === true ? (
                 <span className="dash-badge dash-badge--ok" data-testid="dash-balance-ok">
-                  Books balance
+                  All figures match
                 </span>
               ) : pos.balanced === false ? (
                 <span className="dash-badge dash-badge--bad" role="alert" data-testid="dash-balance-off">
-                  Off by {signedMoney(pos.difference ?? 0)}
+                  Mismatch {signedMoney(pos.difference ?? 0)}
                 </span>
               ) : (
                 <span className="dash-badge" data-testid="dash-balance-none">
-                  No check yet
+                  Not checked yet
                 </span>
               )}
             </div>
@@ -115,8 +116,15 @@ export function DashboardTop({ data, error, period, onPeriod, onOpen }: Props) {
               ))}
             <Row label="With Steadfast" value={pos.with_steadfast} testId="dash-steadfast" />
             <Row label="To receive" value={pos.to_receive + pos.previous_balances} testId="dash-receive" />
-            <Row label="To give" value={pos.to_give} testId="dash-give" />
+            <Row label="To give" value={pos.to_give - pos.to_give_investors} testId="dash-give" />
             <Row label="Stock value" value={pos.stock_value} testId="dash-stock" />
+            {pos.to_give_investors !== 0 && (
+              <>
+                <div className="dash-divider" />
+                <Row label="Investors' money" value={pos.to_give_investors} testId="dash-investors" />
+                <span className="dash-small">Money your investors have put in. Shown apart from what you owe.</span>
+              </>
+            )}
             <ActionLink className="adm-btn adm-btn--ghost adm-btn--sm" to={sectionPath('money')} onOpen={() => onOpen('money')}>
               Open Money
             </ActionLink>

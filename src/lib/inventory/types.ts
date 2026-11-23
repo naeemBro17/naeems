@@ -169,8 +169,10 @@ export interface Shortfall {
 /** Batch 39: one order's profit (order_profit). */
 export interface OrderProfit {
   status: string;
-  /** false = delivered before Inventory mode: no lot cost. */
+  /** false = an item has no cost yet (counted at ৳0 since Batch 58). */
   costed: boolean;
+  /** Batch 58: items with no cost (absent before migration-058). */
+  items_missing_cost?: number;
   sale: number;
   cost: number;
   /** Part of cost that is provisional (sold without stock, not filled). */
@@ -205,6 +207,8 @@ export interface SalesProfitOrder {
   /** Batch 53 (migration-054). */
   courier_kind?: CourierKind;
   costed: boolean;
+  /** Batch 58: items with no cost on this order (absent before migration-058). */
+  items_missing?: number;
   profit: number;
   margin: number | null;
 }
@@ -244,6 +248,8 @@ export interface SalesProfit {
     delivery: number;
     courier: number;
     adjustments: number;
+    /** Batch 58: changes to locked months posted in these dates (absent before migration-058). */
+    locked_adjustments?: number;
     profit: number;
     margin: number | null;
   };

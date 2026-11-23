@@ -22,8 +22,8 @@ function Line({ label, value, sign, strong, testId }: { label: string; value: nu
 /**
  * Batch 41 Part 7: the Money page — one plain page. Your profit for the
  * period (every line shown), the return on money in the business, the money
- * now, and the balance check ("Books balance" in green, or a red line with
- * the difference and the first day it went wrong).
+ * now, and the balance check ("All figures match" in green, or a red line
+ * with the difference and the first day it went wrong).
  */
 export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
   const today = dhakaToday();
@@ -125,11 +125,6 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
             <Line label="Your profit" value={p.your_profit} sign="=" strong />
             <Line label="Your withdrawals" value={p.withdrawals} sign="−" />
             <Line label="Left in the business" value={p.left_in_business} sign="=" strong testId="money-left" />
-            {p.uncosted_orders > 0 && (
-              <p className="inv-muted">
-                {p.uncosted_orders} order{p.uncosted_orders === 1 ? '' : 's'} left out: placed before Inventory mode (already in the opening balance) or with no cost yet.
-              </p>
-            )}
             <MissingCostNote count={p.items_missing_cost} />
           </div>
 
@@ -175,12 +170,18 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
               <p className="inv-muted">The balance check starts when the opening balances are confirmed.</p>
             ) : pos.balanced ? (
               <p className="inv-ok" data-testid="money-books-balance">
-                <b>Books balance</b>
+                <b>All figures match</b>
               </p>
             ) : (
               <p className="inv-bad" role="alert" data-testid="money-books-off">
-                <b>Books are off by {signedMoney(pos.difference ?? 0)}</b>
+                <b>Figures don&apos;t match: {signedMoney(pos.difference ?? 0)}</b>
                 {pos.first_wrong ? ` — first seen ${dayText(pos.first_wrong)}` : ''}
+              </p>
+            )}
+            {pos.balanced !== null && (
+              <p className="inv-muted" data-testid="money-check-explain">
+                The site checks that what you have today equals your opening money plus every sale, cost and expense since. Green means
+                nothing is missing.
               </p>
             )}
             {pos.balanced !== null && (
@@ -211,7 +212,7 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
                 <Line label="Your money put in" value={pos.since_start.owner_money_in} sign="+" />
                 <Line label="Not shop money (in − out)" value={pos.since_start.not_shop_money} sign="=" />
                 <Line label="Count differences" value={pos.since_start.count_differences} sign="=" />
-                <Line label="Orders from before Inventory mode (outside profit)" value={pos.outside} sign="=" />
+                <Line label="Old sales changed later, parcels with no order (outside profit)" value={pos.outside} sign="=" />
                 {(pos.previous_corrections ?? 0) !== 0 && <Line label="Previous balances corrected later" value={pos.previous_corrections ?? 0} sign="=" />}
                 <Line label="Should be" value={pos.expected ?? 0} sign="=" strong />
               </div>

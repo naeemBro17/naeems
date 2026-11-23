@@ -84,6 +84,14 @@ const PNL_OLD: readonly PnlLine[] = [
 
 const PNL_OLD_DELIVERY: PnlLine = { key: 'old_delivery', label: 'Old delivery income (Kaarbar)', value: (p) => p.old_delivery ?? 0 };
 
+/** Batch 58: a change to an order counted in a locked month, posted on the
+ *  day it happened. Shown only when not zero. */
+const PNL_LOCKED: PnlLine = { key: 'locked_adjustments', label: 'Adjustments to locked months', value: (p) => p.locked_adjustments ?? 0 };
+
+export function hasLockedAdjustments(report: ProfitLossReport): boolean {
+  return paisa(report.parts.locked_adjustments ?? 0) !== 0 || report.months.some((m) => paisa(m.locked_adjustments ?? 0) !== 0);
+}
+
 export function hasOldSales(report: ProfitLossReport): boolean {
   return (report.parts.old_bills ?? 0) > 0 || report.months.some((m) => (m.old_bills ?? 0) > 0);
 }
@@ -105,7 +113,7 @@ export function pnlLines(report: ProfitLossReport): PnlLine[] {
     ...head,
     { key: 'expenses', label: 'Expenses', value: (p) => -p.expenses },
     ...cats,
-    ...PNL_TAIL,
+    ...(hasLockedAdjustments(report) ? [PNL_TAIL[0], PNL_TAIL[1], PNL_LOCKED, ...PNL_TAIL.slice(2)] : PNL_TAIL),
   ];
 }
 

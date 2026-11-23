@@ -56,7 +56,10 @@ import '../../../styles/adminPayouts.css';
 import { fetchOrderPayout, shortDhakaDate, takaExact, takaWhole, type LoadState, type OrderPayoutInfo } from '../../../lib/payouts';
 import { adminPath } from '../../../lib/adminPages';
 import { useProducts } from '../../../contexts/ProductContext';
-import { markReturnedDamaged } from '../../../lib/money/api';
+import { fetchCourierBillStatus, markReturnedDamaged } from '../../../lib/money/api';
+import { courierBillLine } from '../../../lib/money/courierBill';
+import type { CourierBillStatus } from '../../../lib/money/types';
+import { CourierBillSheet } from '../money/CourierBillSheet';
 
 interface OrderPageProps {
   orderNumber: string;
@@ -181,6 +184,26 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const paidSeparately = payoutInfo?.kind === 'ready' && payoutInfo.data ? toPaisa(payoutInfo.data.bill_paid_separately) : 0;
   const inPayoutKept =
     payoutInfo?.kind === 'ready' && payoutInfo.data ? toPaisa(payoutInfo.data.total_kept) - paidSeparately : 0;
+  // Batch 58: is that bill still owed (not taken from any account yet), or
+  // where was it paid from?
+  const [billStatus, setBillStatus] = useState<CourierBillStatus | null>(null);
+  const [billTick, setBillTick] = useState(0);
+  const [recordingBill, setRecordingBill] = useState(false);
+  useEffect(() => {
+    if (!orderId || !canSeeCosts || paidSeparately <= 0) {
+      setBillStatus(null);
+      return;
+    }
+    let alive = true;
+    void fetchCourierBillStatus(orderId).then((answer) => {
+      if (alive) setBillStatus(answer);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [orderId, canSeeCosts, paidSeparately, billTick]);
+  const billLine = courierBillLine(billStatus);
+  const paidSeparatelyOwed = billLine?.kind === 'owed' ? billLine.amount : 0;
 
   const reload = useCallback(async () => {
     if (!orderId) return;
@@ -819,6 +842,16 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                               <span title={takaExact(paidSeparately)}>{takaWhole(paidSeparately)}</span> paid outside this payout
                             </>
                           )}
+                          {paidSeparatelyOwed > 0 && (
+                            <span className="adm-payout-owed" data-testid="order-bill-owed">
+                              {' · '}
+                              <span className="inv-bad">Not taken from any account yet</span>{' '}
+                              <button type="button" className="adm-btn adm-btn--ghost adm-btn--sm" onClick={() => setRecordingBill(true)} data-testid="order-bill-record">
+                                Record payment
+                              </button>
+                            </span>
+                          )}
+                          {billLine?.kind === 'paid' && <span data-testid="order-bill-paid">{` · ${billLine.text}`}</span>}
                           {payoutInfo.data.payout_id && (
                             <>
                               {' · '}
@@ -979,6 +1012,18 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
         <DeleteOrdersDialog isOpen={deleteOpen} orders={[order]} onConfirm={handleDelete} onClose={() => setDeleteOpen(false)} />
       )}
 
+      {orderId && (
+        <CourierBillSheet
+          isOpen={recordingBill}
+          orderId={orderId}
+          amount={paidSeparatelyOwed}
+          onClose={() => setRecordingBill(false)}
+          onSaved={() => {
+            setRecordingBill(false);
+            setBillTick((n) => n + 1);
+          }}
+        />
+      )}
       {order && isAdmin && (
         <MoveOrderSheet
           isOpen={moveOpen}

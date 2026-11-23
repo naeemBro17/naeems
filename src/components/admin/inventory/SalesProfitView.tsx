@@ -122,6 +122,12 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
               <span>Cost adjustments</span>
               <span>{t.adjustments > 0 ? '−' : t.adjustments < 0 ? '+' : ''}{formatTakaBd(Math.abs(t.adjustments))}</span>
             </div>
+            {(t.locked_adjustments ?? 0) !== 0 && (
+              <div className="inv-line" data-testid="inv-profit-locked-adj">
+                <span>Adjustments to locked months</span>
+                <span>{signed(t.locked_adjustments ?? 0)}</span>
+              </div>
+            )}
             <div className="inv-line inv-line--total" data-testid="inv-profit-total">
               <span>Profit</span>
               <span>{signed(t.profit)}</span>
@@ -130,12 +136,6 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
               <span>Margin</span>
               <span>{margin(t.margin)}</span>
             </div>
-            {t.uncosted_orders > 0 && (
-              <p className="inv-muted">
-                {t.uncosted_orders} order{t.uncosted_orders === 1 ? '' : 's'} with a line that has no cost {t.uncosted_orders === 1 ? 'is' : 'are'} listed below but
-                not counted.
-              </p>
-            )}
             <MissingCostNote count={t.items_missing_cost} />
           </div>
 
@@ -150,34 +150,29 @@ export function SalesProfitView({ onBack }: { onBack: () => void }) {
                     <span className="inv-item__name">{o.order_number}</span>
                     <span className="inv-badge inv-badge--grey">{o.status === 'returned' ? 'Returned' : o.status === 'cancelled' ? 'Cancelled' : 'Delivered'}</span>
                   </span>
-                  {!o.costed ? (
-                    <span className="inv-muted">No cost (before inventory)</span>
-                  ) : (
-                    <>
-                      <span className="inv-line">
-                        <span>Sale · cost</span>
-                        <span>
-                          {formatTakaBd(o.sale)} · {formatTakaBd(o.cost)}
-                          {o.provisional > 0 ? ' (provisional)' : ''}
-                        </span>
-                      </span>
-                      <span className="inv-line">
-                        <span>
-                          Delivery · courier
-                          {courierLabel(o.courier_kind, o.courier_known) && (
-                            <span className="adm-courier-tag">{courierLabel(o.courier_kind, o.courier_known)?.label}</span>
-                          )}
-                        </span>
-                        <span>
-                          +{formatTakaBd(o.delivery)} · −{formatTakaBd(o.courier)}
-                        </span>
-                      </span>
-                      <span className="inv-line inv-line--total">
-                        <span>Profit ({margin(o.margin)})</span>
-                        <span>{signed(o.profit)}</span>
-                      </span>
-                    </>
-                  )}
+                  <span className="inv-line">
+                    <span>Sale · cost</span>
+                    <span>
+                      {formatTakaBd(o.sale)} · {formatTakaBd(o.cost)}
+                      {o.provisional > 0 ? ' (provisional)' : ''}
+                      {!o.costed ? ' (cost missing)' : ''}
+                    </span>
+                  </span>
+                  <span className="inv-line">
+                    <span>
+                      Delivery · courier
+                      {courierLabel(o.courier_kind, o.courier_known) && (
+                        <span className="adm-courier-tag">{courierLabel(o.courier_kind, o.courier_known)?.label}</span>
+                      )}
+                    </span>
+                    <span>
+                      +{formatTakaBd(o.delivery)} · −{formatTakaBd(o.courier)}
+                    </span>
+                  </span>
+                  <span className="inv-line inv-line--total">
+                    <span>Profit ({margin(o.margin)})</span>
+                    <span>{signed(o.profit)}</span>
+                  </span>
                 </ActionLink>
               ))}
             </div>

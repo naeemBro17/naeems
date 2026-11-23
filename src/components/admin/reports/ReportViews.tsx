@@ -77,16 +77,11 @@ export function ProfitLossView({ onBack }: ViewProps) {
             <Big label="Your profit" value={signedMoney(data.parts.your_profit)} testId="pnl-your" tone={data.parts.your_profit < 0 ? 'bad' : undefined} />
             <Big label="Left in the business" value={signedMoney(data.parts.left_in_business)} testId="pnl-left" />
           </div>
-          {data.parts.uncosted_orders > 0 && (
-            <p className="inv-muted">
-              {data.parts.uncosted_orders} order{data.parts.uncosted_orders === 1 ? '' : 's'} left out (before Inventory mode, or no cost yet), as on the Money page.
-            </p>
-          )}
           <MissingCostNote count={data.parts.items_missing_cost} />
           {hasOldSales(data) && (
             <p className="inv-muted" data-testid="pnl-old-note">
-              Includes old Kaarbar sales ({data.parts.old_bills ?? 0} bill{data.parts.old_bills === 1 ? '' : 's'} in these dates). They are history
-              only, so the Money page does not count them.
+              Includes old Kaarbar sales ({data.parts.old_bills ?? 0} bill{data.parts.old_bills === 1 ? '' : 's'} in these dates), as on the Money
+              page.
             </p>
           )}
           <ReportTable sheet={sheet} testId="pnl-table" strongRows={strong} subRows={subs} />

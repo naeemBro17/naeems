@@ -53,7 +53,8 @@ export function PeopleView({ onBack, onOpen, onOpenLot }: { onBack: () => void; 
   const rows = state?.kind === 'ready' ? state.data : [];
   const investors = rows.filter((r) => r.kind === 'investor');
   const suppliers = rows.filter((r) => r.kind === 'supplier' && r.owed !== 0);
-  const others = rows.filter((r) => r.kind === 'other');
+  // Batch 58: courier fees counted in profit and not paid yet are owed too.
+  const others = rows.filter((r) => r.kind === 'other' || r.kind === 'courier');
   const total = rows.reduce((s, r) => s + r.owed, 0);
 
   return (
@@ -78,7 +79,7 @@ export function PeopleView({ onBack, onOpen, onOpenLot }: { onBack: () => void; 
               <span>To give (all)</span>
               <b>{moneyText(total)}</b>
             </div>
-            <p className="inv-muted">Investor capital still owed + supplier balances + what was owed on the start date.</p>
+            <p className="inv-muted">Investor capital still owed + supplier balances + what was owed on the start date + courier fees not paid yet.</p>
           </div>
 
           <h2 className="inv-section">Investors</h2>

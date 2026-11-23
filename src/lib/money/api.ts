@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import { isMissingSchema, type LoadState } from '../payouts';
 import type {
   AccountBalance,
+  CourierBillStatus,
   CustomerDue,
   CustomerMoneyHistory,
   DueChoice,
@@ -305,6 +306,7 @@ export async function fetchCustomerDues(): Promise<Map<string, CustomerDue>> {
       last_reminder_at: (r.last_reminder_at as string | null) ?? null,
       last_reminder_amount: numOrNull(r.last_reminder_amount),
       reminders: num(r.reminders),
+      credit: num(r.credit),
     };
     map.set(row.customer_key, row);
   }
@@ -551,4 +553,35 @@ export async function fetchOpeningRows(): Promise<{
 export async function billPhotoUrl(path: string): Promise<string | null> {
   const { data } = await supabase.storage.from('money-bills').createSignedUrl(path, 600);
   return data?.signedUrl ?? null;
+}
+
+/* ------------------------------------------- Batch 58: courier bills */
+
+/** A Steadfast bill paid outside a payout: owed, or where it was paid from. */
+export async function fetchCourierBillStatus(orderId: string): Promise<CourierBillStatus | null> {
+  const { data, error } = await supabase.rpc('money_courier_bill_status', { p_order_id: orderId });
+  if (error || !data) return null;
+  const raw = data as Record<string, unknown>;
+  return {
+    bill: num(raw.bill),
+    counts: raw.counts === true,
+    recorded: num(raw.recorded),
+    owed: num(raw.owed),
+    payments: ((raw.payments ?? []) as Record<string, unknown>[]).map((p) => ({
+      id: p.id as string,
+      account: (p.account as string) ?? '',
+      date: p.date as string,
+      amount: num(p.amount),
+    })),
+  };
+}
+
+/** Records the bill as paid from an account (a money movement out of it). */
+export async function recordCourierBill(input: { orderId: string; accountId: string; date: string }): Promise<Answer<string>> {
+  const { data, error } = await supabase.rpc('money_record_courier_bill', {
+    p_order_id: input.orderId,
+    p_account: input.accountId,
+    p_date: input.date,
+  });
+  return error ? { ok: false, error: message(error) } : { ok: true, data: data as string };
 }
