@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AddressFormFields, type AddressFieldErrors } from '../checkout/AddressFormFields';
+import { AddressFormFields, type AddressFieldErrors, type AddressPart } from '../checkout/AddressFormFields';
 import type { DeliveryAddress } from '../../features/checkout/types';
 
 interface CustomerDetailsFieldsProps {
@@ -15,6 +15,12 @@ interface CustomerDetailsFieldsProps {
   onNoteChange?: (value: string) => void;
   /** Batch 36: Smart paste's thana chips, under the thana picker. */
   thanaExtra?: ReactNode;
+  /** Batch 63: 'all' (default) is the whole form as today; New order shows
+   *  'contact' (name, phone, alternative phone) and 'address' on two cards. */
+  part?: AddressPart;
+  /** Batch 63, 'contact' only: shown between the phone and the alternative
+   *  phone (New order's fraud check and "Account found"). */
+  afterPhone?: ReactNode;
 }
 
 const noErrors: AddressFieldErrors = {};
@@ -36,7 +42,47 @@ export function CustomerDetailsFields({
   note,
   onNoteChange,
   thanaExtra,
+  part = 'all',
+  afterPhone,
 }: CustomerDetailsFieldsProps) {
+  if (part === 'address') {
+    return (
+      <AddressFormFields
+        form={address}
+        errors={errors}
+        onChange={onAddressChange}
+        onLocationChange={onLocationChange}
+        idPrefix={idPrefix}
+        thanaExtra={thanaExtra}
+        part="address"
+      />
+    );
+  }
+
+  if (part === 'contact') {
+    return (
+      <>
+        <AddressFormFields form={address} errors={errors} onChange={onAddressChange} idPrefix={idPrefix} part="contact" />
+        {afterPhone}
+        <div className="form-field">
+          <label className="form-label" htmlFor={`${idPrefix}-alt-phone`}>
+            Alternative phone (optional)
+          </label>
+          <input
+            id={`${idPrefix}-alt-phone`}
+            type="tel"
+            inputMode="tel"
+            className="form-input"
+            value={altPhone}
+            onChange={(e) => onAltPhoneChange(e.target.value)}
+            placeholder="Another number to call"
+            autoComplete="off"
+          />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <AddressFormFields

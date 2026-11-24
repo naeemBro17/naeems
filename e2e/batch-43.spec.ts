@@ -273,7 +273,7 @@ test('Below cost on New order: with View profit & costs the cost and the loss; w
   const search = page.getByPlaceholder('Search product name...');
   await expect(search).toBeVisible({ timeout: 20_000 });
   await search.fill(name);
-  await page.locator('.picker-sheet__list .picker-sheet__row').first().click();
+  await page.getByTestId('manual-product-result').first().click();
   const below = page.getByTestId('line-below-cost');
   await expect(below).toContainText('Below cost — cost ৳', { timeout: 10_000 });
   await expect(below).toContainText('loss ৳250');

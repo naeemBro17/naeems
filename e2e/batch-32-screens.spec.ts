@@ -74,7 +74,7 @@ async function fillNewOrder(page: Page): Promise<void> {
   await page.locator('#manual-order-phone').fill('01712345678');
   await page.locator('#manual-order-address').fill('House 12, Road 3, Mirpur');
   await page.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
-  await page.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
+  await page.getByTestId('manual-product-result').filter({ hasText: product.name }).first().click();
 }
 
 for (const theme of ['light', 'dark'] as const) {

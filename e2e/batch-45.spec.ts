@@ -190,7 +190,7 @@ test('New order: a product with options shows once; the picker adds the chosen s
   await page.screenshot({ path: `${SHOTS}/03-new-order-size-picker.png` });
   const chosen = (await options.nth(1).locator('.manual-pick__name').textContent())?.trim() ?? '';
   await picker.getByTestId('manual-pick-add').click();
-  const line = page.locator('.manual-order-lines .checkout-cart__row').filter({ hasText: product!.name });
+  const line = page.locator('.manual-order-lines .nord-line').filter({ hasText: product!.name });
   await expect(line).toHaveCount(1);
   await expect(line).toContainText(chosen);
   await shot(page, '04-new-order-size-added.png');

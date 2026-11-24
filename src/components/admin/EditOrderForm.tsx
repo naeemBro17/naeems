@@ -499,7 +499,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
               autoComplete="off"
             />
           </div>
-          <ProductResults results={results} onAdd={addItem} className="picker-sheet__list edit-order__results" />
+          <ProductResults results={results} onAdd={addItem} className="picker-sheet__list edit-order__results" photos />
 
           <h3 className="edit-order__heading">Delivery and money</h3>
           {/* Batch 47: Shop/in person is handed over by hand — picking it

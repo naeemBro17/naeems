@@ -1,4 +1,4 @@
-import { cardImage } from './productImages';
+import { cardImage, coverImage, isSmallCopy } from './productImages';
 import { normalizeText } from './format';
 import { variantOptionLabel, variantOptionsFor } from './variants';
 import type { Product, ProductVariant } from '../types';
@@ -22,7 +22,13 @@ export interface SellableOption {
   productName: string;
   variantLabel: string | null;
   imageUrl: string | null;
+  /** Batch 63: the small copy of the size's (else the product's) photo, or
+   *  null when there is no small copy yet. Never the full-size photo. */
+  thumbUrl: string | null;
   listPrice: number;
+  /** Batch 63: the option's own retail price (struck through when the
+   *  offer price is lower). */
+  retailPrice: number;
   stockQuantity: number | null;
 }
 
@@ -36,12 +42,18 @@ function currentPrice(retailPrice: number, offerPrice: number | null): number {
   return offerPrice !== null && offerPrice < retailPrice ? offerPrice : retailPrice;
 }
 
+/** Batch 63: a small copy only (thumb/ or card/ folder), else null. */
+function smallOnly(full: string | null | undefined, small: string | null | undefined): string | null {
+  return isSmallCopy(full, small) ? (small as string) : null;
+}
+
 export function productSearchGroups(products: readonly Product[], variantsFor: (productId: string) => ProductVariant[]): SellableProduct[] {
   const groups: SellableProduct[] = [];
   for (const p of products) {
     if (!p.is_active) continue;
     const all = variantOptionsFor(p, variantsFor(p.id));
     const hasChoice = all.length > 1;
+    const productThumb = smallOnly(coverImage(p), p.image_urls_thumb?.[0]);
     const options = all.map((o): SellableOption => {
       // A product with no options is just its name (no size label).
       const label = hasChoice ? variantOptionLabel(o, '') : '';
@@ -53,7 +65,9 @@ export function productSearchGroups(products: readonly Product[], variantsFor: (
         productName: p.name,
         variantLabel: label || null,
         imageUrl: o.image_url ?? cardImage(p),
+        thumbUrl: o.image_url ? (smallOnly(o.image_url, o.image_url_thumb) ?? productThumb) : productThumb,
         listPrice: currentPrice(o.retail_price, o.offer_price),
+        retailPrice: o.retail_price,
         stockQuantity: o.stock_quantity,
       };
     });

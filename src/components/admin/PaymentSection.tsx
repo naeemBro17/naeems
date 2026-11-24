@@ -1,7 +1,7 @@
 // Batch 32 Part 1 — the payment section of New order and Edit order:
 //   1. Paid now (৳, default 0) + "Full amount"; when more than 0, how it was
 //      paid (bKash · Nagad · Cash · Bank) and an optional TrxID;
-//   2. Remaining ৳X — Collect on delivery (the courier collects it) or
+//   2. The rest ৳X — Collect on delivery (the courier collects it) or
 //      Customer pays later (the courier collects ৳0, it stays due);
 //   3. a live summary: Paid now · Courier collects (COD) · Due after delivery.
 // The numbers come from lib/paymentPlan.ts; the COD rule itself is the one
@@ -35,6 +35,49 @@ interface PaymentSectionProps {
   payLaterAvailable: boolean;
   /** Shown under the method chips when an amount is typed but no method. */
   methodMissing?: boolean;
+  /** Batch 63: true = the Paid now / COD / Due summary is not drawn here
+   *  (New order draws the same rows under its Total, PaymentSummaryRows). */
+  summaryOutside?: boolean;
+}
+
+/**
+ * Batch 63: the Paid now · Courier collects (COD) · Due after delivery rows,
+ * drawn by PaymentSection (Edit order) and under New order's Total — one
+ * piece, so the numbers can never differ between the two places.
+ */
+export function PaymentSummaryRows({
+  plan,
+  alreadyPaid = 0,
+  rowClass,
+  strongClass,
+}: {
+  plan: PaymentPlan;
+  alreadyPaid?: number;
+  rowClass: string;
+  strongClass: string;
+}) {
+  return (
+    <>
+      {alreadyPaid > 0 && (
+        <div className={rowClass}>
+          <span>Paid before</span>
+          <span>{formatTaka(alreadyPaid)}</span>
+        </div>
+      )}
+      <div className={rowClass}>
+        <span>Paid now</span>
+        <span data-testid="summary-paid-now">{formatTaka(plan.paidNow)}</span>
+      </div>
+      <div className={rowClass}>
+        <span>Courier collects (COD)</span>
+        <span data-testid="summary-courier">{formatTaka(plan.courierCollects)}</span>
+      </div>
+      <div className={`${rowClass} ${strongClass}`}>
+        <span>Due after delivery</span>
+        <span data-testid="summary-due">{formatTaka(plan.dueAfterDelivery)}</span>
+      </div>
+    </>
+  );
 }
 
 export function PaymentSection({
@@ -53,6 +96,7 @@ export function PaymentSection({
   onMode,
   payLaterAvailable,
   methodMissing = false,
+  summaryOutside = false,
 }: PaymentSectionProps) {
   const room = Math.max(0, Math.round((total - alreadyPaid) * 100) / 100);
   const paidLabel = alreadyPaid > 0 ? 'Add a payment now' : 'Paid now';
@@ -136,7 +180,7 @@ export function PaymentSection({
       {plan.remaining > 0 && (
         <div className="form-field">
           <span className="form-label" id={`${idPrefix}-remaining`}>
-            Remaining {formatTaka(plan.remaining)}
+            The rest {formatTaka(plan.remaining)}
           </span>
           <div className="adm-segment pay-section__modes" role="radiogroup" aria-labelledby={`${idPrefix}-remaining`}>
             {MODES.map((m) => {
@@ -164,26 +208,11 @@ export function PaymentSection({
         </div>
       )}
 
-      <div className="pay-section__summary" aria-live="polite" data-testid="payment-summary">
-        {alreadyPaid > 0 && (
-          <div className="pay-section__row">
-            <span>Paid before</span>
-            <span>{formatTaka(alreadyPaid)}</span>
-          </div>
-        )}
-        <div className="pay-section__row">
-          <span>Paid now</span>
-          <span data-testid="summary-paid-now">{formatTaka(plan.paidNow)}</span>
+      {!summaryOutside && (
+        <div className="pay-section__summary" aria-live="polite" data-testid="payment-summary">
+          <PaymentSummaryRows plan={plan} alreadyPaid={alreadyPaid} rowClass="pay-section__row" strongClass="pay-section__row--strong" />
         </div>
-        <div className="pay-section__row">
-          <span>Courier collects (COD)</span>
-          <span data-testid="summary-courier">{formatTaka(plan.courierCollects)}</span>
-        </div>
-        <div className="pay-section__row pay-section__row--strong">
-          <span>Due after delivery</span>
-          <span data-testid="summary-due">{formatTaka(plan.dueAfterDelivery)}</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

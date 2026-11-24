@@ -174,7 +174,7 @@ test('Task 4: Shop/in person sets delivery to hand delivered at ৳0 (still edit
   const sources = page.getByRole('group', { name: 'Order source' });
   await expect(sources).toBeVisible({ timeout: 20_000 });
   const fee = page.getByLabel('Delivery fee');
-  const handDelivered = page.getByRole('button', { name: 'No delivery (hand delivered)' });
+  const handDelivered = page.getByRole('button', { name: 'Hand delivered' });
   await expect(fee).not.toHaveValue('0');
   await sources.getByRole('button', { name: 'Shop/in person' }).click();
   await expect(handDelivered).toHaveClass(/chip-select--on/);

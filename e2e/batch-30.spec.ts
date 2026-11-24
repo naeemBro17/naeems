@@ -378,7 +378,7 @@ test('Part 2: edit a booked order — name, phone, thana, address, items, delive
     await page.getByTestId('thana-list').getByRole('button', { name: 'Banani' }).first().click();
     await sheet.getByRole('button', { name: `Increase quantity of ${product.name}` }).click();
     await sheet.getByLabel('Add a product').fill(product2.name.slice(0, 18));
-    await sheet.locator('.edit-order__results .picker-sheet__row').filter({ hasText: product2.name }).first().click();
+    await sheet.locator('.edit-order__results').getByTestId('manual-product-result').filter({ hasText: product2.name }).first().click();
     await sheet.getByLabel('Delivery fee (৳)').fill('0');
     await sheet.getByLabel('Order discount (৳)').fill('50');
     await sheet.getByLabel('Reason for the discount (optional)').fill('Late delivery');
@@ -685,11 +685,13 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
     const form = page.getByTestId('new-order-page');
     await form.getByRole('button', { name: 'Phone call', exact: true }).click();
     await form.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
-    await form.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
+    await form.getByTestId('manual-product-result').filter({ hasText: product.name }).first().click();
     await form.getByRole('button', { name: 'Create order', exact: true }).click();
     // The made-up product has no stock: the shop asks first (Batch 61).
     await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
-    const saved = page.getByText(/Order .* saved/);
+    // Batch 63: the toast itself (the payment card's "Order discount …
+    // Nothing is saved" also matches a looser pattern).
+    const saved = page.locator('.toast__message', { hasText: /^Order \S+ saved$/ });
     await expect(saved).toBeVisible({ timeout: 15_000 });
   });
   const theirs = await rpc<{ id: string }[]>(admin.accessToken, 'admin_customer_orders_v2', { p_customer_key: `ph:${PHONE_CUSTOMER}` });

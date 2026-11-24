@@ -67,6 +67,9 @@ import {
 import type { WholesalerAccount, Order } from '../types';
 import '../styles/admin.css';
 import '../styles/adminOrders.css';
+// Batch 63: Admin → New order's new look (after the admin styles above,
+// which it adjusts on that page only).
+import '../styles/batch63.css';
 
 export function AdminPage() {
   const navigate = useNavigate();

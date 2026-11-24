@@ -362,7 +362,7 @@ test('Part 0.6: manual order — a product with a pack size can be sold in loose
   const search = page.getByPlaceholder('Search product name...');
   await expect(search).toBeVisible({ timeout: 20_000 });
   await search.fill(product.name);
-  await page.locator('.picker-sheet__list .picker-sheet__row').first().click();
+  await page.getByTestId('manual-product-result').first().click();
   const chooser = page.getByTestId('line-sold-unit');
   await expect(chooser).toBeVisible();
   await chooser.getByRole('button', { name: 'Loose pcs' }).click();

@@ -583,7 +583,7 @@ test('Part 3: admin New order — the line itself says it sold out', async ({ pa
   await page.locator('.picker-sheet__row', { hasText: /^Dhaka$/ }).first().click();
   await page.locator('#manual-order-address').fill('House 33, Road 3 (e2e)');
   await page.getByPlaceholder('Search product name...').fill(one.name);
-  await page.locator('.picker-sheet__row').filter({ hasText: one.name }).first().click();
+  await page.getByTestId('manual-product-result').filter({ hasText: one.name }).first().click();
   await expect(page.getByTestId('line-stock-error')).toHaveCount(0);
 
   // A website customer buys the last one while the form is open.

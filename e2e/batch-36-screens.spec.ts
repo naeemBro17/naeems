@@ -127,6 +127,7 @@ for (const size of SIZES) {
       await useSessionInPage(page, admin);
       await page.goto('/admin/orders/new');
       const card = page.getByTestId('smart-paste');
+      await page.getByTestId('smart-paste-open').click();
       await page.getByTestId('smart-paste-text').fill(MESSAGE);
       await card.screenshot({ path: `${DIR}/smart-paste-before-${tag}.png` });
       await page.getByTestId('smart-paste-fill').click();

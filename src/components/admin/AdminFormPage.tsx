@@ -54,6 +54,12 @@ interface AdminFormPageProps {
   guard?: boolean;
   /** Extra class on the page (layout). */
   className?: string;
+  /** Batch 63: false = the top bar shows no main action on a computer (the
+   *  page has its own); the phone dock is unchanged. */
+  headerPrimary?: boolean;
+  /** Batch 63: shown in the phone dock before the button (New order's
+   *  total). */
+  dockLead?: ReactNode;
   children: ReactNode;
 }
 
@@ -89,6 +95,8 @@ export function AdminFormPage({
   headerExtra,
   guard = true,
   className,
+  headerPrimary = true,
+  dockLead,
   children,
 }: AdminFormPageProps) {
   const { markDirty } = useLeaveGuard();
@@ -128,7 +136,7 @@ export function AdminFormPage({
               <SecondaryLink link={secondary} className="adm-fpage__secondary" />
             </span>
           )}
-          {primary && (
+          {primary && headerPrimary && (
             <span className="adm-only-desktop">
               <PrimaryButton action={primary} className="adm-fpage__primary" />
             </span>
@@ -140,7 +148,8 @@ export function AdminFormPage({
       </div>
       {primary && (
         <div className="adm-fpage__dock adm-only-mobile">
-          <div className="adm-fpage__dock-inner">
+          <div className={`adm-fpage__dock-inner${dockLead ? ' adm-fpage__dock-inner--lead' : ''}`}>
+            {dockLead}
             {secondary && <SecondaryLink link={secondary} className="adm-fpage__dock-secondary" />}
             <PrimaryButton action={primary} className="adm-fpage__dock-btn" />
           </div>
