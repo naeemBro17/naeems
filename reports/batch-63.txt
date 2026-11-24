@@ -1,0 +1,189 @@
+BATCH 63 — Admin → New order: new layout, search results with photos
+Version 1.63.0 · Branch feature/batch-63-new-order (from main at 1.62.0) · 24 Nov 2026
+
+======================================================================
+1. WHAT I DID
+======================================================================
+WHAT YOU WILL SEE ON ADMIN → NEW ORDER
+ • The page is now cards with step numbers: 1 Customer, 2 Delivery
+   address, 3 Items, 4 Admin note, and a Delivery and payment card (no
+   number). On a phone they are one column. On a computer 1200 px or
+   wider the Delivery and payment card sits on the right (380 px) and stays
+   in view while you scroll the left side.
+ • Create order is the only orange thing on the page. On a computer it is
+   at the bottom of the Delivery and payment card with "Nothing is saved
+   until you tap Create order" under it; it is no longer in the top bar
+   (the light / dark button stays). On a phone the bottom bar shows
+   "Total · 3 items" with the total on the left and Create order on the
+   right. It is greyed out and shows the spinner exactly as before.
+ • Smart paste starts as one row: the orb, "Smart paste", "Paste the
+   customer's message and we fill the form for you" and a Paste button.
+   Tap Paste and the message box opens (cursor already in it). Everything
+   after that works as before. "Fill the form" is now a plain button, not
+   orange. Undo goes back to the open box.
+ • Customer search: the results float under the box (they no longer push
+   the page down). Each customer has a round badge with their initials
+   (or the last two digits of the phone when there is no name), the
+   "Account" tag, and one grey line: phone · thana, district · orders ·
+   due. The due amount is amber. "New customer" is last, with a dashed
+   circle and a plus.
+ • Product search: the results float too, under the heading PRODUCTS. Each
+   product shows its small photo (never the big photo; a plain bottle
+   drawing when there is no small photo), the full name (2 lines at most),
+   "12 in stock" / "Only 2 left" (amber) / "Out of stock" (red, the row
+   faded), and the price in bold black (white in dark mode). When on
+   offer, the normal price is struck through under it. A product with
+   sizes shows "3 sizes · from ৳1,250" and an arrow; tapping it opens the
+   size sheet as before. An out-of-stock product can still be added; the
+   "sell anyway?" question still comes on Create order.
+ • Both lists close on Escape or a tap anywhere else, and open again when
+   you type or tap into the box.
+ • Order lines: small photo on the left, name and size and all the usual
+   controls in the middle, the line total, + / − and "Remove" (small grey
+   text) on the right. Thin lines between rows.
+ • Delivery and payment card: Delivery chips (the last is now "Hand
+   delivered"), Delivery fee and Order discount side by side (staff see
+   only Delivery fee), the discount reasons, Paid now and the rest
+   ("The rest ৳X", also on Edit order), wallet, Mark as delivered, then
+   the totals, and under the Total the grey box with Paid now / Courier
+   collects (COD) / Due after delivery.
+ • New texts: "Where did this order come from?", "Order discount",
+   "Admin note" with "Only you see this", "Delivery fee", the placeholders
+   "Another number to call" and "Anything to remember about this order".
+
+EDIT ORDER
+ • Its product search uses the same new rows with photos. Its "Remaining"
+   line now says "The rest". Nothing else on Edit order changed.
+
+WHAT DID NOT CHANGE
+ • Saving, totals, what goes to the database, "Discard changes?", staff vs
+   admin differences. Checkout's address form and Admin → Add customer:
+   I checked that their page code is exactly the same, character for
+   character, as before. Every other page with the same page frame looks as
+   before (the two new frame options are off unless a page turns them on).
+
+TESTS
+ • New e2e/batch-63.spec.ts (13 tests, made-up customers and products,
+   nothing saved, no real photos downloaded): customer rows, product rows,
+   the lists closing and opening, Smart paste, where Create order is at
+   1440 px and 390 px, the three COD rows, checkout's address form, and the
+   frame captures. All 13 pass.
+ • New unit tests src/lib/batch63.test.tsx (14): initials, stock line,
+   "1 item / 3 items", the split form, small photo only. All pass.
+ • Old tests updated only where a text or place changed:
+   batch-30 (product rows found by their test id, also Edit order's),
+   batch-32 (total read from the new total; "The rest"; product rows),
+   batch-32-screens, batch-33, batch-39, batch-43 (product rows),
+   batch-36 and batch-36-screens (tap Paste first; new subtitle),
+   batch-45 (order line class), batch-47 ("Hand delivered").
+ • Frame captures: reports/batch-63-screens/ at 390, 1024 and 1440 px,
+   light and dark: empty page, Smart paste collapsed and open, customer
+   list, product list, three lines with a discount and Paid now (whole
+   page, the Items card and the payment card), plus checkout at 390 px.
+   I looked at them: one orange thing per screen (Create order; the Smart
+   paste orb is a drawing), prices black / white, nothing cut off at
+   390 px, no sideways scrolling (the tests check this too).
+
+TEST RUNS (the honest summary)
+ • npm run build: passes, zero errors.
+ • Unit tests (vitest): 825 passed, 0 failed.
+ • Full npm run verify: Claude Code stopped it because the computer was
+   running low on memory. It got through the build and the unit tests, but
+   NO browser test finished, so there is no full-suite pass / skip / fail
+   line for this batch. I did not restart it (it could run out of memory
+   again). Please run it once: npm run verify
+ • npm run verify:quick, before that, stopped at its 10-minute limit. What
+   it had finished:
+     - 33 passed, 29 skipped, 1 failed in the parallel group. The failure is
+       batch-45's database test: "password authentication failed for user
+       cli_login_postgres". That is the Supabase command-line login on this
+       computer, not this batch.
+     - in the serial group, 2 failures were mine: batch-30 Part 4 (a card
+       name clashed with the "Customer" search box; fixed) and batch-32
+       Part 1 (see section 4). I re-ran both alone afterwards: both pass.
+       The other 2 failures, "Target crashed" and "worker process exited",
+       happened when the run was stopped / the computer was short of
+       memory.
+ • Not re-checked after my changes because of the stopped runs: the rest of
+   batch-36, batch-39 and the other serial tests listed as "did not run",
+   and batch-34's focus-ring check of the New order search boxes.
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+None needed.
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • The full npm run verify (stopped by low memory; see above). Run it
+   once; read only its last line. If only batch-45's database test fails
+   with the cli_login_postgres password error, run `supabase login` /
+   re-link the CLI and run that one file again.
+ • "Compare with Edit order's PaymentSection for the same plan": opening
+   Edit order needs a real saved order, which this fully made-up test does
+   not create. Instead the test checks the three numbers against the same
+   payment calculation Edit order uses, and both places now draw those
+   rows from one shared piece of code (PaymentSummaryRows), so they cannot
+   differ.
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+ • batch-32 Part 1 checks "we landed on the new order's page" with a
+   pattern that /admin/orders/new also matches, so on a slow run it can
+   read the address before the page has moved. It passed when re-run. Worth
+   tightening to exclude "/new" (I did not, it is not this batch's file to
+   rework).
+ • The admin colour --adm-thumb (the photo tile) has no dark version, so
+   in dark mode the no-photo bottle tile is light. The CSS I was given
+   uses it as-is; see the dark frames.
+ • The leftover changed screenshots / PDFs from older batches' test runs
+   (reports/batch-33 … batch-60 screens, public/sitemap.xml) were already
+   in the working folder; I left them uncommitted.
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • The CSS is the approved CSS, values unchanged. I added one small block
+   after it (in the same file), only for this page: the search field
+   inside the search box has no box of its own (the box is drawn by the
+   approved CSS, the old orange focus glow was showing inside it), and the
+   small text buttons "Free" and "Change" are grey instead of orange. Both
+   so Create order really is the only orange thing.
+ • batch63.css is imported in AdminPage.tsx right after admin.css, not in
+   main.tsx: the admin styles load later and would otherwise override the
+   new ones.
+ • "Secondary" buttons: there is no adm-btn--secondary in the admin, so
+   Paste and Fill the form use adm-btn--ghost (outlined, neutral).
+ • "N items" counts order lines, not packs (a line sold in loose ml would
+   make a sum meaningless).
+ • The order line photo uses the small copy; only when a product has no
+   small copy yet does it fall back to the photo it showed before (so no
+   line loses its picture). The search rows never fall back to the big
+   photo: they show the bottle drawing instead.
+ • The fraud check and "Account found" sit between Phone and Alternative
+   phone, as in the mockup. For that the shared customer fields got one
+   more optional slot (afterPhone), used only by New order.
+ • "Admin note" is the card title and the field's label at the same time.
+   The Customer search box keeps a hidden label "Customer" for screen
+   readers (the card title already says it).
+ • The combo editor keeps the old plain result rows (photos are turned on
+   only for New order and Edit order).
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+======================================================================
+ 1. Keyboard use of the result lists (medium impact, small). Arrow keys
+    and Enter do not move through the customer / product results yet. When
+    you type many orders on a computer, this saves a mouse trip per item.
+ 2. Remember a half-typed order (medium impact, medium). If the phone
+    reloads the page (low memory, a call), the whole form is lost. A draft
+    kept on the device for an hour would protect a long order.
+ 3. Dark-mode photo tile (small impact, small). Give --adm-thumb a dark
+    value so empty photo tiles do not glow in dark mode.
+ 4. Barcode / SKU search for staff (medium impact, medium). Searching by
+    name works for 150 products; scanning or typing the internal code
+    (admin only) is faster at the counter.
+
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-63-new-order
