@@ -228,7 +228,9 @@ test('Part 1: pay later + bKash advance — one step, a real payment row, ৳0 t
     await form.getByRole('button', { name: 'Create order' }).click();
     // The made-up product has no stock: the shop asks first (Batch 61).
     await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
-    await expect(page.getByText(/Order .* saved/)).toBeVisible({ timeout: 15_000 });
+    // Batch 63: the toast itself (the payment card's "Order discount …
+    // Nothing is saved" also matches a looser pattern).
+    await expect(page.locator('.toast__message', { hasText: /^Order \S+ saved$/ })).toBeVisible({ timeout: 15_000 });
   });
   // Lands on the new order's own page (Batch 35: /admin/orders/NM-…).
   await expect(page).toHaveURL(/\/admin\/orders\/[^/]+$/, { timeout: 15_000 });

@@ -689,7 +689,9 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
     await form.getByRole('button', { name: 'Create order', exact: true }).click();
     // The made-up product has no stock: the shop asks first (Batch 61).
     await page.getByRole('dialog', { name: 'Not in stock — sell anyway?' }).getByRole('button', { name: 'Sell anyway' }).click();
-    const saved = page.getByText(/Order .* saved/);
+    // Batch 63: the toast itself (the payment card's "Order discount …
+    // Nothing is saved" also matches a looser pattern).
+    const saved = page.locator('.toast__message', { hasText: /^Order \S+ saved$/ });
     await expect(saved).toBeVisible({ timeout: 15_000 });
   });
   const theirs = await rpc<{ id: string }[]>(admin.accessToken, 'admin_customer_orders_v2', { p_customer_key: `ph:${PHONE_CUSTOMER}` });
