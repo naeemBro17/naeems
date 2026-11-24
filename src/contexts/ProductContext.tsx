@@ -250,7 +250,7 @@ interface ShopCopy {
 }
 
 export function ProductProvider({ children }: { children: ReactNode }) {
-  const { session, can, isLoading: authLoading } = useAuth();
+  const { session, can, profile, isLoading: authLoading } = useAuth();
   // The Super Admin, and moderators with "Edit products and stock" (Batch
   // 24), manage inactive products too.
   const isAdmin = can('edit_products');
@@ -271,10 +271,20 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // Batch 62: whose copy this is (an admin's copy has hidden products and
   // wholesale prices, so it is never shown to anyone else).
   const copyKey = `${isAdmin ? 'admin' : 'shop'}:${session?.user.id ?? 'anon'}`;
+  // Staff never get the saved copy: admin forms (Settings, Edit product)
+  // take their starting values once, and an old copy must never be saved
+  // back. Customers and visitors only look at it.
+  const isStaff = profile?.role === 'admin' || profile?.role === 'moderator';
+  const useCopy = !isStaff;
+  const useCopyRef = useRef(useCopy);
+  useCopyRef.current = useCopy;
   const copyKeyRef = useRef(copyKey);
   copyKeyRef.current = copyKey;
   /** When the products / the variants were last read fresh (ms). */
   const fetchedAtRef = useRef(0);
+  /** What is on screen now (JSON), so an identical fresh copy is not drawn again. */
+  const shownShopRef = useRef('');
+  const shownVariantsRef = useRef('');
 
   const fetchData = useCallback(async () => {
     setLoadFailed(false);
@@ -311,19 +321,21 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       // Brands are non-critical too (no brands table before migration-032).
       const fetchedBrands = brandRes.error ? [] : ((brandRes.data ?? []) as Brand[]);
 
-      setProducts(fetchedProducts);
-      setCategories(fetchedCategories);
-      setSettings(fetchedSettings);
-      setBrands(fetchedBrands);
+      const fresh: ShopCopy = { products: fetchedProducts, categories: fetchedCategories, settings: fetchedSettings, brands: fetchedBrands };
+      const freshJson = JSON.stringify(fresh);
+      // Batch 62: the fresh copy is exactly what is already on screen (from
+      // the saved copy): nothing is drawn again, so nothing on the page moves.
+      if (freshJson !== shownShopRef.current) {
+        shownShopRef.current = freshJson;
+        setProducts(fetchedProducts);
+        setCategories(fetchedCategories);
+        setSettings(fetchedSettings);
+        setBrands(fetchedBrands);
+      }
       setIsOffline(false);
       markFirstLoadDone();
       fetchedAtRef.current = Date.now();
-      writeSwr<ShopCopy>(`shop:${copyKeyRef.current}`, {
-        products: fetchedProducts,
-        categories: fetchedCategories,
-        settings: fetchedSettings,
-        brands: fetchedBrands,
-      });
+      if (useCopyRef.current) writeSwr<ShopCopy>(`shop:${copyKeyRef.current}`, fresh);
     } catch {
       const cached = readSwr<ShopCopy>(`shop:${copyKeyRef.current}`)?.data;
       if (cached) {
@@ -353,8 +365,12 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       grouped.set(row.product_id, list);
     }
     for (const [id, list] of grouped) grouped.set(id, sortVariants(list));
-    setVariantsByProduct(grouped);
-    writeSwr<ProductVariant[]>(`variants:${copyKeyRef.current}`, rows);
+    const rowsJson = JSON.stringify(rows);
+    if (rowsJson !== shownVariantsRef.current) {
+      shownVariantsRef.current = rowsJson;
+      setVariantsByProduct(grouped);
+    }
+    if (useCopyRef.current) writeSwr<ProductVariant[]>(`variants:${copyKeyRef.current}`, rows);
   }, []);
 
   const refetch = useCallback(async () => {
@@ -370,9 +386,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
-    const copy = readSwr<ShopCopy>(`shop:${copyKey}`);
-    const variantsCopy = readSwr<ProductVariant[]>(`variants:${copyKey}`);
+    const copy = useCopy ? readSwr<ShopCopy>(`shop:${copyKey}`) : null;
+    const variantsCopy = useCopy ? readSwr<ProductVariant[]>(`variants:${copyKey}`) : null;
     if (copy) {
+      shownShopRef.current = JSON.stringify(copy.data);
+      shownVariantsRef.current = variantsCopy ? JSON.stringify(variantsCopy.data) : '';
       setProducts(copy.data.products);
       setCategories(copy.data.categories);
       setSettings({ ...DEFAULT_SETTINGS, ...copy.data.settings });
@@ -388,7 +406,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAdmin, session?.user.id, copyKey, fetchData, reloadVariants]);
+  }, [authLoading, isAdmin, session?.user.id, copyKey, useCopy, fetchData, reloadVariants]);
 
   // Batch 62: back in the app after a while (the copy is older than 60 s):
   // read the shop again, quietly. Sooner than that nothing is asked again
@@ -429,6 +447,8 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   }, [isOffline, fetchData]);
 
   const patchProductLocal = useCallback((id: string, patch: Partial<Product>) => {
+    // The screen no longer matches the last read: the next read always draws.
+    shownShopRef.current = '';
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }, []);
 

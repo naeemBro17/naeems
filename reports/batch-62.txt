@@ -141,6 +141,8 @@ FASTER WHEN YOU COME BACK
                             requests 21 / 673 KB both
      Back in the app within 60 s: 0 requests (the wallet used to read
                             again on every focus; now at most once a minute)
+   When the fresh copy is exactly what is already on screen, nothing is
+   drawn again (so nothing moves under your finger).
    Honest note: the win is speed you SEE (the screen no longer waits for
    the network; on a slow phone connection that is seconds, not half a
    second), not fewer bytes on a reopen. Bandwidth only drops for quick
@@ -170,7 +172,7 @@ TESTS
    allowed, pack change refused, unknown word refused), Keep selling
    reopen Mode On and Off, payout lines, balance check ৳0.00 at every step.
    Batch 60's own database test (98 checks) also passes with the migration.
- • Browser (e2e/batch-62.spec.ts, all mocked or read-only): 24 tests.
+ • Browser (e2e/batch-62.spec.ts, all mocked or read-only): 21 tests.
  • Unit: 14 new (vitest).
  • Frame captures: reports/batch-62-screens/.
  • Full run: see section 3 / the summary line below.
@@ -236,6 +238,11 @@ It is one BEGIN … COMMIT, safe to run more than once, needs no sign-in.
  • batch-62.spec.ts runs in the "serial" group (its database test changes
    settings inside a rolled-back transaction).
  • Tests changed for the new behaviour: batch-26 (no Restock in Mode On),
+   batch-33 (the photos are big tiles: the test now puts a photo in the
+   middle of the screen before touching it; at the bottom the phone's
+   Save bar covered it), batch-40 and batch-52-1 (their stand-in answers
+   now cope with the background refresh: a page that has moved on drops
+   it),
    batch-51 (Pre-orders text without the dash), batch-60 (the old story
    tests moved to batch-62; new rejected text), e2e/sql/batch-60.sql
    (opens the test customer's wallet inside its transaction).

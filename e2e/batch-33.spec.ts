@@ -181,8 +181,11 @@ async function expectAllLoaded(page: Page, count: number): Promise<void> {
     )
     .toBe(count);
   await expect(page.getByTestId('image-uploader-placeholder')).toHaveCount(0);
-  // Pointer and touch input only reach what is on screen.
-  await items(page).first().scrollIntoViewIfNeeded();
+  // Pointer and touch input only reach what is on screen. Batch 62: in the
+  // middle of it (the photos are big tiles now, and the phone's docked
+  // Save bar covers the bottom of the screen).
+  await items(page).first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(150);
 }
 
 async function saveAndRead(page: Page): Promise<{ urls: string[]; thumbs: string[] }> {
@@ -522,6 +525,9 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
   // Both lines (and their prices) are in before the total is read.
   await expect(page.locator('.checkout-summary-card__item')).toHaveCount(2);
   await expect.poll(() => totalShown(page)).toBeGreaterThan(1500 + 700);
+  // Batch 62: the page first shows the saved copy of the shop's settings;
+  // the total is read once the fresh ones (this test's) are in.
+  await page.waitForLoadState('networkidle');
   const before = await totalShown(page);
 
   // Someone else buys the last unit first.

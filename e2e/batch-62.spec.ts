@@ -643,5 +643,6 @@ test('Coming back: the shop shows the last copy at once while the fresh one is o
   await expect(page.locator('.product-card__name').first()).toBeVisible({ timeout: 4000 });
   expect(Date.now() - started).toBeLessThan(5000);
   await expect.poll(() => slow, { message: 'the fresh copy was still asked for' }).toBeGreaterThan(0);
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  // Let the slow answer finish before the test ends (no half-handled route).
+  await page.waitForTimeout(6500);
 });

@@ -123,10 +123,19 @@ function dressOption(row: Row, staff: boolean): Row {
 
 async function dressViews(page: Page, staff: boolean): Promise<void> {
   const dress = async (route: Route, fn: (row: Row) => Row) => {
-    const res = await route.fetch();
-    const body = (await res.json()) as Row[] | Row;
+    // Batch 62: the shop shows its saved copy at once and reads the fresh
+    // one in the background; a page that has already moved on drops that
+    // answer (nothing to change then).
+    let res: Awaited<ReturnType<Route['fetch']>>;
+    let body: Row[] | Row;
+    try {
+      res = await route.fetch();
+      body = (await res.json()) as Row[] | Row;
+    } catch {
+      return;
+    }
     const json = Array.isArray(body) ? body.map(fn) : body && typeof body === 'object' && 'id' in body ? fn(body) : body;
-    await route.fulfill({ response: res, json });
+    await route.fulfill({ response: res, json }).catch(() => undefined);
   };
   await page.route(/\/rest\/v1\/products_view\?/, (route) => dress(route, (r) => dressProduct(r, staff)));
   await page.route(/\/rest\/v1\/product_variants_view\?/, (route) => dress(route, (r) => dressOption(r, staff)));
