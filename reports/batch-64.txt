@@ -169,7 +169,24 @@ TESTS
  • The shared test sign-in now marks the wallet note as seen, so it never
    floats over buttons other tests tap; only the Part 4 tests turn it off.
 
-FULL RUN: (filled in at the end)
+FULL RUN (npm run verify, final): build OK · vitest 842/842 · e2e 507
+passed, 147 skipped, 3 failed. The 3, each re-run alone 3 times:
+ • batch-29 (a brand logo that cannot be read): 3/3 passed. Timing flake,
+   file not touched by this batch.
+ • batch-37 (invoice QR link setting): 3/3 passed. Timing flake, not
+   touched; the run read the live shop's saved link before the test's own
+   one arrived.
+ • batch-51 (Order Placed "Arriving ..."): 2/3 passed. I touched this file
+   (new wording only). The failure is "route.fetch: Test ended": a product
+   download the test intercepts was still in flight when the test finished,
+   after the "Arriving Sun, 22 to Tue, 24 Nov" check had already passed. A
+   race in the test's helper, not the new text; noted in section 4.
+Earlier full run (before the Part 2 fix): 522 passed, 132 skipped, 3
+failed: batch-27 (the real 4 px bug, now fixed, 3/3 since), batch-37 (3/3
+alone), batch-25 (2/3 alone). batch-25 fails the same way on untouched
+main code (I ran it 3 times on a clean copy of main: 1 failure), so it was
+already there before this batch: admin pages sometimes take longer than its
+15-second wait to load from the live database.
 
 ======================================================================
 2. SQL NAEEM MUST RUN IN SUPABASE
@@ -215,6 +232,10 @@ them.)
    status is refreshed. If Steadfast also adds a paid date later, that date
    is not refreshed for an already-synced payout (the money is right; the
    date may stay empty). Worth a small follow-up if you see it.
+ • batch-51's network helper (answerShop) has no guard for requests still
+   running when a test ends, so it fails now and then ("Test ended").
+   batch-25's admin page tour waits only 15 seconds per page. Both are
+   test problems, small to fix in a later batch.
  • The admin product search labels sizes with a long dash ("Cream — 50ml").
    Admin only, left as it is.
 
