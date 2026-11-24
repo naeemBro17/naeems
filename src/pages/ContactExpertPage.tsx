@@ -55,7 +55,7 @@ function PersonPlusIcon() {
 }
 
 export function ContactExpertPage() {
-  useDocumentTitle("Talk to an Expert — NAEEM'S");
+  useDocumentTitle("Talk to an Expert | NAEEM'S");
   const { settings } = useProducts();
   const { showToast } = useToast();
   const { isEditMode } = useAdminEdit();
@@ -281,7 +281,7 @@ export function ContactExpertPage() {
         </div>
 
         {reviews.length === 0 ? (
-          <p className="exp-reviews__empty">No reviews yet — be the first to share one.</p>
+          <p className="exp-reviews__empty">No reviews yet. Be the first to share one.</p>
         ) : (
           <div className="exp-reviews__list">
             {visibleReviews.map((review) => (

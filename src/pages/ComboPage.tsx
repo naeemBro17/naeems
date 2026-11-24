@@ -80,7 +80,7 @@ export function ComboPage() {
   const combo = load?.kind === 'ready' ? load.combo : null;
   const lines = useComboLines(combo?.items ?? []);
   const totals = useMemo(() => comboTotals(lines), [lines]);
-  useDocumentTitle(combo ? `${combo.name} — NAEEM'S` : "Combo — NAEEM'S");
+  useDocumentTitle(combo ? `${combo.name} | NAEEM'S` : "Combo | NAEEM'S");
 
   const chatHref = combo ? shopWhatsAppMessageUrl(settings, comboChatMessage(combo.name)) : null;
 

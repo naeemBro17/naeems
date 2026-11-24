@@ -349,7 +349,7 @@ test.describe('Part 2 — rounded info sheet', () => {
       const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(bg)?.[1] ?? '1');
       expect(alpha, bg).toBeLessThan(0.3);
     }
-    await expect(page.getByTestId('stock-chip')).toHaveText(/In stock|Sold out|left — order soon/);
+    await expect(page.getByTestId('stock-chip')).toHaveText(/In stock|Sold out|left, order soon/);
 
     // Trust plate: one element, three items, texts from Site texts.
     const plate = page.getByTestId('trust-plate');

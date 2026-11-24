@@ -45,10 +45,10 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
       if (paymentIds.length === 0) return out;
       const { data, error } = await db
         .from('steadfast_payouts')
-        .select('id, steadfast_payment_id, items_synced')
+        .select('id, steadfast_payment_id, items_synced, steadfast_status')
         .in('steadfast_payment_id', paymentIds);
       if (error) fail('Reading payouts', error.message);
-      const rows = (data ?? []) as { id: string; steadfast_payment_id: string; items_synced: boolean }[];
+      const rows = (data ?? []) as { id: string; steadfast_payment_id: string; items_synced: boolean; steadfast_status: string | null }[];
       const ids = rows.map((r) => r.id);
       const toCheck = new Set<string>();
       if (ids.length > 0) {
@@ -73,7 +73,12 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
         for (const r of (old ?? []) as { payout_id: string }[]) toCheck.add(r.payout_id);
       }
       for (const r of rows) {
-        out.set(r.steadfast_payment_id, { id: r.id, itemsSynced: r.items_synced, hasToCheck: toCheck.has(r.id) });
+        out.set(r.steadfast_payment_id, {
+          id: r.id,
+          itemsSynced: r.items_synced,
+          hasToCheck: toCheck.has(r.id),
+          steadfastStatus: r.steadfast_status,
+        });
       }
       return out;
     },
@@ -88,8 +93,9 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
       return (data as { id: string }).id;
     },
 
-    async touchPayout(paymentId: string, at: string): Promise<void> {
-      const { error } = await db.from('steadfast_payouts').update({ last_synced_at: at }).eq('steadfast_payment_id', paymentId);
+    async touchPayout(paymentId: string, at: string, steadfastStatus?: string): Promise<void> {
+      const change = steadfastStatus === undefined ? { last_synced_at: at } : { last_synced_at: at, steadfast_status: steadfastStatus };
+      const { error } = await db.from('steadfast_payouts').update(change).eq('steadfast_payment_id', paymentId);
       if (error) fail('Updating a payout', error.message);
     },
 

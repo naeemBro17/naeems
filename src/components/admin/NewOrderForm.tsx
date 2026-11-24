@@ -37,6 +37,19 @@ import { findCustomers, linkOrderCustomer, type CustomerSearchResult } from '../
 import { looksLikePhone } from '../../lib/phone';
 import { FraudCheckCard } from './FraudCheckCard';
 import { SmartPasteCard, placeFor, type SmartPastePatch } from './SmartPasteCard';
+import { useListKeyboard } from './useListKeyboard';
+import { useLeaveGuard } from './LeaveGuard';
+import {
+  clearDraft,
+  draftTimeLabel,
+  droppedItemsText,
+  loadDraft,
+  restorableLines,
+  saveDraft,
+  type DraftLine,
+  type NewOrderDraft,
+  type NewOrderDraftData,
+} from '../../lib/newOrderDraft';
 import type { ParsedOrderMessage, ThanaOption } from '../../lib/smartPaste';
 import { bdPhoneKey } from '../../lib/phone';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
@@ -149,7 +162,8 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // Batch 24: custom prices, "Free" and order discounts are money changes —
   // Super Admin only. A moderator's manual order is always at the real
   // price (admin_create_order() refuses anything else from them).
-  const { isAdmin, staff, can } = useAuth();
+  const { isAdmin, staff, can, session } = useAuth();
+  const { markDirty, setOnDiscard } = useLeaveGuard();
   const canSeeCost = can('view_profit_costs');
   const hideTestCustomers = !isTestViewer(staff);
   const { products, adminVariantsFor, settings } = useProducts();
@@ -656,6 +670,12 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
       if (!used.ok) showToast(`Saved, but the wallet was not used: ${used.error ?? 'try again from Edit order'}`, 'error');
     }
     showToast(`Order ${result.orderNumber} saved`, 'success');
+    // Batch 64: saved, so the draft on this device goes.
+    if (draftUser) {
+      draftDone.current = true;
+      window.clearTimeout(draftTimer.current);
+      clearDraft(draftUser);
+    }
     await onCreated(result.orderId);
   };
 
@@ -715,6 +735,143 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   };
 
   const shownCustomers = customerResults.filter((c) => !hideTestCustomers || !isTestCustomer({ name: c.fullName }));
+  // Batch 64: arrow keys and Enter in both result lists. The customer list
+  // is its rows plus "New customer" at the end.
+  const customerKeys = useListKeyboard(
+    shownCustomers.length + 1,
+    customerList.open && customerQuery.trim().length >= 2,
+    (index) => (index < shownCustomers.length ? handlePickCustomer(shownCustomers[index]) : handleNewCustomer())
+  );
+  const productKeys = useListKeyboard(searchResults.length, productList.open);
+
+  // Batch 64 Part 6b: the form is kept on this device while he types (at
+  // most once a second, and when the page is hidden), one draft per staff
+  // login. A draft found on opening is offered, never filled silently;
+  // nothing is saved while that offer is open.
+  const draftUser = session?.user.id ?? null;
+  const [draftOffer, setDraftOffer] = useState<NewOrderDraft | null>(() => (draftUser ? loadDraft(draftUser) : null));
+  const draftDone = useRef(false);
+  const draftJson = JSON.stringify({
+    source,
+    address,
+    altPhone,
+    pickedCustomer,
+    customerQuery,
+    lines: lines.map(
+      (l): DraftLine => ({
+        productId: l.productId,
+        variantId: l.variantId,
+        quantity: l.quantity,
+        soldUnit: l.soldUnit,
+        soldPriceInput: l.soldPriceInput,
+        reason: l.reason,
+        reasonNote: l.reasonNote,
+      })
+    ),
+    zone,
+    zoneTouched,
+    zoneFromSource,
+    feeInput,
+    orderDiscountInput,
+    discountReason,
+    discountNote,
+    paidNowInput,
+    paidMethod,
+    paidTrxId,
+    collectMode,
+    markDelivered,
+    adminNote,
+  } satisfies NewOrderDraftData);
+  const latestDraft = useRef(draftJson);
+  latestDraft.current = draftJson;
+  const draftTimer = useRef<number>();
+  const draftPaused = draftOffer !== null;
+  useEffect(() => {
+    if (!draftUser || draftPaused || draftDone.current) return;
+    const flush = () => {
+      window.clearTimeout(draftTimer.current);
+      draftTimer.current = undefined;
+      if (!draftDone.current) saveDraft(draftUser, JSON.parse(latestDraft.current) as NewOrderDraftData);
+    };
+    if (draftTimer.current === undefined) draftTimer.current = window.setTimeout(flush, 1000);
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [draftJson, draftUser, draftPaused]);
+  useEffect(() => () => window.clearTimeout(draftTimer.current), []);
+  useEffect(() => {
+    if (!draftUser) return;
+    setOnDiscard(() => {
+      draftDone.current = true;
+      clearDraft(draftUser);
+    });
+    return () => setOnDiscard(null);
+  }, [draftUser, setOnDiscard]);
+
+  const handleRestoreDraft = () => {
+    if (!draftOffer) return;
+    const d = draftOffer.data;
+    const options = sellableProducts.flatMap((g) => g.options);
+    const { kept, dropped } = restorableLines(
+      d.lines,
+      (dl) => options.find((o) => o.productId === dl.productId && o.variantId === dl.variantId) ?? null
+    );
+    setLines(
+      kept.map(({ line: dl, option }) => {
+        const pack = packs.get(packKey(option.productId, option.variantId));
+        const packSize = pack?.pack_size ?? 1;
+        const soldUnit = packSize > 1 ? dl.soldUnit : null;
+        // His typed price is kept; the list price is today's.
+        const listPrice = soldUnit ? Math.round((option.listPrice / packSize) * 100) / 100 : option.listPrice;
+        const typed = Number(dl.soldPriceInput);
+        return {
+          key: option.key,
+          productId: option.productId,
+          variantId: option.variantId,
+          productName: option.productName,
+          variantLabel: option.variantLabel,
+          imageUrl: option.imageUrl,
+          thumbUrl: option.thumbUrl ?? option.imageUrl,
+          listPrice,
+          soldPrice: Number.isFinite(typed) && typed >= 0 ? typed : listPrice,
+          soldPriceInput: dl.soldPriceInput,
+          quantity: Math.max(1, Math.floor(dl.quantity) || 1),
+          reason: dl.reason,
+          reasonNote: dl.reasonNote,
+          stockQuantity: option.stockQuantity,
+          packSize,
+          stockUnit: pack?.stock_unit ?? 'pcs',
+          packListPrice: option.listPrice,
+          soldUnit,
+        };
+      })
+    );
+    setSource(d.source);
+    setAddress(d.address);
+    setAltPhone(d.altPhone);
+    setPickedCustomer(d.pickedCustomer);
+    setCustomerQuery(d.customerQuery);
+    setZone(d.zone);
+    setZoneTouched(d.zoneTouched);
+    setZoneFromSource(d.zoneFromSource);
+    setFeeInput(d.feeInput);
+    setOrderDiscountInput(d.orderDiscountInput);
+    setDiscountReason(d.discountReason);
+    setDiscountNote(d.discountNote);
+    setPaidNowInput(d.paidNowInput);
+    setPaidMethod(d.paidMethod);
+    setPaidTrxId(d.paidTrxId);
+    setCollectMode(d.collectMode);
+    setMarkDelivered(d.markDelivered);
+    setAdminNote(d.adminNote);
+    setDraftOffer(null);
+    markDirty();
+    if (dropped > 0) showToast(droppedItemsText(dropped), 'error');
+  };
+
+  const handleDiscardDraft = () => {
+    if (draftUser) clearDraft(draftUser);
+    setDraftOffer(null);
+  };
 
   return (
     <>
@@ -727,6 +884,19 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           void handleSave(false);
         }}
       >
+        {draftOffer && products.length > 0 && (
+          <div className="nord-draft" role="status" data-testid="new-order-draft-bar">
+            <p className="nord-draft__text">You have an unsaved order from {draftTimeLabel(draftOffer.savedAt)}.</p>
+            <div className="nord-draft__actions">
+              <button type="button" className="adm-btn adm-btn--ghost nord-draft__restore" onClick={handleRestoreDraft} data-own-save>
+                Restore
+              </button>
+              <button type="button" className="nord-draft__discard" onClick={handleDiscardDraft} data-own-save>
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
         <div className="nord-grid">
           <div
             className="nord-col smart-guess"
@@ -805,22 +975,33 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                         onChange={(e) => {
                           setCustomerQuery(e.target.value);
                           customerList.show();
+                          customerKeys.reset();
                         }}
                         onFocus={customerList.show}
                         onClick={customerList.show}
                         autoComplete="off"
+                        {...customerKeys.inputProps}
                       />
                     </div>
                     {customerList.open && customerQuery.trim().length >= 2 && (
-                      <ul className="nord-drop" data-testid="customer-results">
+                      <ul className="nord-drop" data-testid="customer-results" id={customerKeys.listId} role="listbox" aria-label="Customers">
                         {shownCustomers.length > 0 && (
-                          <li className="nord-drop__label" aria-hidden="true">
+                          <li className="nord-drop__label" aria-hidden="true" role="presentation">
                             Customers
                           </li>
                         )}
-                        {shownCustomers.map((c) => (
-                          <li key={c.key}>
-                            <button type="button" className="nord-res" onClick={() => handlePickCustomer(c)} data-testid="customer-result">
+                        {shownCustomers.map((c, index) => (
+                          <li key={c.key} role="presentation">
+                            <button
+                              type="button"
+                              className={`nord-res${customerKeys.active === index ? ' is-active' : ''}`}
+                              onClick={() => handlePickCustomer(c)}
+                              data-testid="customer-result"
+                              id={customerKeys.optionId(index)}
+                              role="option"
+                              aria-selected={customerKeys.active === index}
+                              tabIndex={-1}
+                            >
                               <span className="nord-av" aria-hidden="true">
                                 {customerInitials(c.fullName, c.phone)}
                               </span>
@@ -846,8 +1027,17 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                             </button>
                           </li>
                         ))}
-                        <li>
-                          <button type="button" className="nord-res customer-pick__new" onClick={handleNewCustomer} data-testid="customer-new">
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            className={`nord-res customer-pick__new${customerKeys.active === shownCustomers.length ? ' is-active' : ''}`}
+                            onClick={handleNewCustomer}
+                            data-testid="customer-new"
+                            id={customerKeys.optionId(shownCustomers.length)}
+                            role="option"
+                            aria-selected={customerKeys.active === shownCustomers.length}
+                            tabIndex={-1}
+                          >
                             <span className="nord-av nord-av--new">
                               <PlusIcon />
                             </span>
@@ -952,13 +1142,22 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                     onChange={(e) => {
                       setQuery(e.target.value);
                       productList.show();
+                      productKeys.reset();
                     }}
                     onFocus={productList.show}
                     onClick={productList.show}
                     autoComplete="off"
+                    {...productKeys.inputProps}
                   />
                 </div>
-                <ProductResults results={productList.open ? searchResults : []} onAdd={addLine} className="nord-drop" photos label="Products" />
+                <ProductResults
+                  results={productList.open ? searchResults : []}
+                  onAdd={addLine}
+                  className="nord-drop"
+                  photos
+                  label="Products"
+                  keyboard={productKeys}
+                />
               </div>
 
               {lines.length > 0 && (

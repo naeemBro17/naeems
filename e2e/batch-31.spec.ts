@@ -387,7 +387,7 @@ test('Part 6: "Price Hub" is gone — title, link previews, manifest, menu', asy
   await expect(page).toHaveTitle("NAEEM'S");
   const head = await page.evaluate(() => document.head.innerHTML);
   expect(head).not.toMatch(/price[ -]?hub/i);
-  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', "NAEEM'S — 100% Authentic Skincare"); // Batch 52 wording
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', "NAEEM'S | 100% Authentic Skincare"); // Batch 52 wording
   const manifest = await (await page.request.get('/manifest.webmanifest')).text();
   expect(manifest).not.toMatch(/price[ -]?hub/i);
   await page.getByRole('button', { name: 'Open menu' }).click();

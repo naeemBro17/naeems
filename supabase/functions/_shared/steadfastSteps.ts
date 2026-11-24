@@ -37,7 +37,7 @@ export const CUSTOMER_SIDE_STATE_LABELS: Record<OrderSideState, string> = {
   cancelled: 'Cancelled',
   returning: 'Cancelled / Returning',
   on_hold: 'On hold',
-  needs_attention: "Delayed — we're checking",
+  needs_attention: "Delayed, we're checking",
 };
 
 export interface TrackingEvent {
@@ -186,7 +186,7 @@ export function customerSafeText(text: string): string {
   if (RIDER_WORDS.test(text)) {
     return stepFromTrackingText(text) === 'in_transit'
       ? 'Your parcel is back at the courier hub.'
-      : 'Assigned to a rider — your parcel is out for delivery.';
+      : 'Assigned to a rider. Your parcel is out for delivery.';
   }
   return text.replace(PHONE_NUMBER, '').replace(/\s{2,}/g, ' ').replace(/\s+([.,])/g, '$1').trim();
 }

@@ -22,6 +22,8 @@ interface LeaveGuardApi {
   leave: (go: () => void) => void;
   /** Everything typed so far was saved (the page stays open). */
   markClean: () => void;
+  /** Batch 64: runs when "Discard" is chosen (New order deletes its draft). */
+  setOnDiscard: (fn: (() => void) | null) => void;
 }
 
 const LeaveGuardContext = createContext<LeaveGuardApi>({
@@ -29,6 +31,7 @@ const LeaveGuardContext = createContext<LeaveGuardApi>({
   requestLeave: (go) => go(),
   leave: (go) => go(),
   markClean: () => undefined,
+  setOnDiscard: () => undefined,
 });
 
 export function useLeaveGuard(): LeaveGuardApi {
@@ -58,6 +61,10 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
   const removingRef = useRef(false);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
+  const onDiscardRef = useRef<(() => void) | null>(null);
+  const setOnDiscard = useCallback((fn: (() => void) | null) => {
+    onDiscardRef.current = fn;
+  }, []);
 
   const pushGuard = useCallback(() => {
     if (guardIdRef.current || !dirtyRef.current) return;
@@ -151,7 +158,10 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
     leave(asked ? asked.go : () => undefined);
   }, [leave]);
 
-  const api = useMemo(() => ({ markDirty, requestLeave, leave, markClean }), [markDirty, requestLeave, leave, markClean]);
+  const api = useMemo(
+    () => ({ markDirty, requestLeave, leave, markClean, setOnDiscard }),
+    [markDirty, requestLeave, leave, markClean, setOnDiscard]
+  );
 
   return (
     <LeaveGuardContext.Provider value={api}>
@@ -165,6 +175,7 @@ export function LeaveGuardProvider({ onBack, children }: ProviderProps) {
         backCloses={false}
         onConfirm={() => {
           const go = pending?.go;
+          onDiscardRef.current?.();
           if (go) leave(go);
         }}
         onClose={() => {

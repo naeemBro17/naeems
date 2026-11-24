@@ -20,7 +20,7 @@ class Store implements PayoutStore {
     const out = new Map<string, StoredPayout>();
     for (const id of ids) {
       const p = this.payouts.get(id);
-      if (p) out.set(id, { id: p.id, itemsSynced: p.items_synced, hasToCheck: false });
+      if (p) out.set(id, { id: p.id, itemsSynced: p.items_synced, hasToCheck: false, steadfastStatus: p.steadfast_status });
     }
     return out;
   }

@@ -11,7 +11,7 @@ import { E2E_EMAIL, E2E_PASSWORD, SUPABASE_ANON_KEY, SUPABASE_URL, supabaseProje
  * app never knows the difference between this and a real interactive sign-in
  * — same session shape, same supabase-js client picking it up via getSession().
  */
-export async function signInAsTestCustomer(page: Page): Promise<void> {
+export async function signInAsTestCustomer(page: Page, options: { walletNoteSeen?: boolean } = {}): Promise<void> {
   if (!E2E_EMAIL || !E2E_PASSWORD) {
     throw new Error(
       'Missing .env.e2e — run the test-account setup first (see reports/batch-21.txt Part 3).'
@@ -50,4 +50,10 @@ export async function signInAsTestCustomer(page: Page): Promise<void> {
     },
     [storageKey, JSON.stringify(session)]
   );
+  // Batch 64: the one-time "Your wallet is open" note counts as seen, so it
+  // never floats over what other tests tap. Its own test passes false.
+  if (options.walletNoteSeen !== false) {
+    const userId = (token.user as { id?: string } | null)?.id ?? '';
+    await page.addInitScript((key) => window.localStorage.setItem(key, '1'), `naeems.walletOpenSeen.p:${userId}`);
+  }
 }

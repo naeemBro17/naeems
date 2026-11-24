@@ -42,7 +42,7 @@ export function CollapsingHeader({
       return;
     }
     await navigator.clipboard.writeText(url);
-    showToast('Link copied — share it anywhere');
+    showToast('Link copied. Share it anywhere');
   };
 
   return (

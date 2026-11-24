@@ -109,7 +109,7 @@ export function WholesalerAccessPage() {
               <p className="auth-status__line">
                 <span className="auth-status__label">Business</span>
                 <span className="auth-status__value">
-                  {profile?.business_name || '—'}
+                  {profile?.business_name || 'Not given'}
                 </span>
               </p>
               <p className="auth-status__line">
@@ -156,7 +156,7 @@ export function WholesalerAccessPage() {
               </svg>
             </div>
             <p className="auth-success__message">
-              Account created — pending approval.
+              Account created. Pending approval.
               {signupSuccessName !== ''
                 ? ` ${signupSuccessName} will be notified once approved.`
                 : ' You will be notified once approved.'}

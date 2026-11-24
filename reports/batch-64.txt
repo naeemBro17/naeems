@@ -1,0 +1,272 @@
+BATCH 64 - Small cleanup: dashes, Back scroll, dark photo tile, "wallet is open" note, stuck Steadfast payouts, New order keyboard + draft
+Version 1.64.0 · Branch fix/batch-64-cleanup (from main at 1.63.0) · 24 Nov 2026
+
+======================================================================
+1. WHAT I DID
+======================================================================
+PART 1: NO LONG DASHES IN WHAT CUSTOMERS READ
+I searched src/, index.html, public/ and api/ (the link previews) for the
+long dash and the short dash, and changed every one a customer can read.
+Admin screens, comments, tests and your database content are unchanged.
+Page titles in the browser tab now use a straight bar: "Your Cart |
+NAEEM'S" (the usual way shops write titles; a colon reads oddly there).
+
+  File                                   Old text                                   New text
+  ThanaPickerSheet.tsx (checkout)        Other — type your thana                    Other: type your thana
+  ComboShare.tsx                         Link copied — paste it in Messenger        Link copied. Paste it in Messenger
+  ComboShare.tsx (chat preview)          {combo} — picked for you by NAEEM'S        {combo}, picked for you by NAEEM'S
+  CollapsingHeader.tsx, share.ts         Link copied — share it anywhere            Link copied. Share it anywhere
+  InAppBrowserBar.tsx                    Link copied — paste it in Chrome           Link copied. Paste it in Chrome
+  share.ts (phone share text)            {name} — ৳1,200                            {name}: ৳1,200
+  clipboard.ts (card menu Copy)          {name} — ৳1,200                            {name}: ৳1,200
+  ShopDown.tsx                           You can still order — message us:          You can still order. Message us:
+  ViewerPage.tsx                         You're offline — showing saved data        You're offline. Showing saved data
+  AccountPage.tsx                        No delivery details saved yet — add them   No delivery details saved yet. Add them
+  ContactExpertPage.tsx                  No reviews yet — be the first ...          No reviews yet. Be the first ...
+  WholesalerAccessPage.tsx               Account created — pending approval.        Account created. Pending approval.
+  WholesalerAccessPage.tsx               Business: —  (no business name)            Business: Not given
+  OrderSummaryPage.tsx (promo)           SAVE10 applied — ৳100 off                  SAVE10 applied, ৳100 off
+  sellRules.ts (stock chip)              Only 2 left — order soon                   Only 2 left, order soon
+  sellRules.ts (Order Placed)            Arriving Fri, 20 – Sat, 21 Nov             Arriving Fri, 20 to Sat, 21 Nov
+  sellRules.ts + ProductContext.tsx      1–2 days / 2–3 days / 3–5 days (defaults)  1 to 2 days / 2 to 3 days / 3 to 5 days
+  sellRules.ts                           a dash range saved in Settings             shown as "to" (see below)
+  orderTracking.ts (shared, tracking)    Fri 10 – Sat 11 Oct                        Fri 10 to Sat 11 Oct
+  steadfastSteps.ts (shared, tracking)   Delayed — we're checking                   Delayed, we're checking
+  steadfastSteps.ts (shared, tracking)   Assigned to a rider — your parcel is ...   Assigned to a rider. Your parcel is ...
+  orderLines.ts (My Orders, invoice)     Fish Oil 1000mg — 150 pcs                  Fish Oil 1000mg, 150 pcs
+  invoiceData.ts (invoice PDF)           Paid — do not collect                      Paid, do not collect
+  money/format.ts (due reminder)         – Naeem's - SkinScience (sign-off line)    Naeem's - SkinScience
+  ProductDetailPage.tsx (photo alt)      {name} — image 2                           {name}, image 2
+  ProductDetailPage.tsx (link preview)   ৳1,200 — {note}                            ৳1,200. {note}
+  ProductDetailPage, BrandPage, api/     Premium Australian skincare — check ...    Premium Australian skincare. Check ...
+  BrandPage.tsx, api/brand-og.ts         Shop authentic X at NAEEM'S — 12 products  Shop authentic X at NAEEM'S, 12 products
+  index.html, api/_og.ts                 NAEEM'S — 100% Authentic Skincare          NAEEM'S | 100% Authentic Skincare
+  api/_og.ts (combo link preview)        {combo} — picked for you by NAEEM'S        {combo}, picked for you by NAEEM'S
+  public/offline.html                    NAEEM'S — Offline                          NAEEM'S | Offline
+  Every page title (17 pages)            Your Cart — NAEEM'S etc.                   Your Cart | NAEEM'S etc.
+
+Delivery times you typed in Settings (for example "1–2 days") stay as you
+typed them in Admin, but the shop now shows any dash between two numbers
+as "to" ("Get it in 1 to 2 days"). A new unit test reads every customer
+page and component and fails if a long dash comes back.
+The tests that checked the old wording were updated to the new wording.
+
+PART 2: BACK FROM A PRODUCT LANDS 4 PX SHORT
+Found and fixed. The cause was not the scroll code: it was the four
+section titles on the product page (Description, How to use and so on).
+Their text height followed the font's own measurements, so each title was
+1 px taller while the phone still showed the fallback font, and 1 px
+shorter once the shop's real font finished loading. Four titles, 4 px:
+the product page got 4 px shorter about a second after it opened. When
+you were scrolled near the bottom of a product page (for example at "You
+may also like"), the browser had to pull the page up by those 4 px, so
+the spot that Back remembered was 4 px off. On a real phone the font
+arrives later than on this computer, so it shows more often there.
+Measured: the page was 1645 px tall, then 1641 px; after the fix it is
+1641 px from the first frame and never changes. The titles now have a
+fixed line height of 19 px, exactly the height they already had with the
+real font, so nothing looks different. Only those titles changed; the
+scroll code and every other page are untouched (forward taps still open
+pages at the top).
+How it was found: the full test run failed an older test (Back from one
+product to another, "You may also like") by exactly 4 px, 802 instead
+of 806, twice in a row. Measuring every element before and after showed
+only the four titles changing. With the fix that test passes 3 out of 3
+runs alone.
+On the shop grid itself I could not make a gap appear: I measured phone
+Back, the in-app Back arrow, a 6 times slower processor and real finger
+scrolling, and the grid came back to the exact pixel every time. If you
+still see a gap on the grid after this update, tell me your phone model
+and browser and the next session can test exactly that.
+New test (e2e/batch-64.spec.ts): shop at 390 px, scroll to a known card,
+open it, phone Back and in-app Back: scroll position and the card's place
+on screen must be within 1 px (the older tests allowed 5 px, which is why
+4 px never failed before). It still respects reduced motion (the scroll
+code is unchanged).
+
+PART 3: DARK PHOTO TILE IN ADMIN
+The empty photo tile (product with no small photo: New order results and
+order lines, and the admin product list) now has a dark value in dark
+mode, a dark grey-blue gradient instead of glowing white. I added it in
+the same two dark-mode blocks every other admin colour uses. The bottle
+drawing already uses grey tones that stay clearly visible on the darker
+tile, so it needed no change. Light mode is exactly the same as before
+(the test checks the exact colour values in both).
+
+PART 4: "YOUR WALLET IS OPEN"
+When you open a customer's wallet, the next time she opens the Account
+page (or Home) she sees a floating card at the bottom: a small jar
+drawing, "Your wallet is open", "You can now save with us for the products
+you love. Add any amount and use it on your next order.", an orange "Open
+my wallet" button (goes to her wallet) and a grey "Later". It fades and
+slides up in, and fades out on Later (a plain fade for people who turn off
+animations). Either button means she never sees it again on that phone.
+ • It uses only what the app already knows: on Account, the wallet the
+   page already loads; on Home, the copy of her wallet the app already
+   keeps on her phone from the last Account / Wallet visit. Home never asks
+   the database for anything new. That means: if she goes straight to
+   Home after you open her wallet, she sees the note the first time she
+   opens Account (or Home after that).
+ • Never shown to visitors who are not signed in, to staff accounts, or to
+   customers whose wallet is closed. If her phone blocks storage, it is
+   never shown (better than showing it every time).
+ • It is on top of the page, not inside it, so the Account page's order
+   (header, wallet card, delivery details) is unchanged.
+ • No new table, column or SQL.
+
+PART 5: STEADFAST PAYOUTS STUCK ON "PROCESSING"
+Found exactly as described: once a payout's parcel lines were saved, later
+syncs only marked it "seen again" and never saved the new status. Now, when
+a payout is skipped (nothing to read again), the status from Steadfast's
+list is saved too if it changed. It is part of the same single update the
+sync already made, so no extra call to Steadfast and no extra cost.
+Nothing else in the sync changed (matching, money, courier costs).
+After you deploy the two functions (section 2), the next sync (the 3-hour
+refresh, or Refresh on the payouts screen) fixes the 4 stuck payouts by
+itself.
+
+PART 6: NEW ORDER, KEYBOARD AND A SAVED DRAFT
+6a. In the customer list and the product list (New order, and the product
+list on Edit order too): Arrow Down / Up move a highlight (stopping at the
+first and last row), Enter picks it (a product with sizes opens the size
+sheet, as a tap does), Escape closes the list as before, and typing puts
+the highlight back on the first row. The highlighted row looks like a
+hovered row plus a ring. The ring shows only when you use the keyboard,
+so on the phone, taps and clicks look exactly as they did. Screen readers
+hear the highlighted row. The combo editor is unchanged.
+6b. While you type a New order, the form is kept on your device about
+once a second (and the moment the page is hidden): customer, address,
+items (with any price you typed), source, delivery, fee, discount, paid
+now, admin note. Smart paste text is not kept. Each staff login has its
+own draft; it is deleted after 12 hours, when the order is created, and
+when you leave with "Discard changes? → Discard".
+When you open New order and a draft exists, nothing is filled by itself.
+A bar at the top says "You have an unsaved order from 10:42 PM." (with the
+date too when it is not from today) with Restore and Discard. Restore
+fills everything back exactly; prices and stock are still checked the
+normal way when you tap Create order, and any product that no longer
+exists or is hidden is left out with "1 item was left out because it is no
+longer available." If your browser blocks storage, New order works
+exactly as before, just without a draft.
+
+TESTS
+ • New unit tests (src/lib/batch64.test.ts, 15 tests): no long dashes in
+   customer files, the "to" ranges, the wallet note rule (open + customer +
+   not seen = show; anything else, or storage failing = hide), the draft
+   rules (save, empty form not kept, 12-hour expiry, clear, broken
+   storage, the bar's time text, left-out items).
+ • src/lib/batch64.payouts.test.ts: a payout stored as "processing" with
+   its lines saved comes back "paid" in the list → the store gets "paid"
+   and no detail call is made; the same status → no status write. The two
+   older fake stores were updated for the new status field.
+ • e2e/batch-64.spec.ts: Part 2 (phone and in-app Back within 1 px),
+   Part 3 (tile colours, dark and light, 390 and 1440 px), Part 4 (shows
+   once, Later, reload, Home from the kept copy with no new database call,
+   Open my wallet, closed wallet never), Part 6 (keys and roles at 390 and
+   1440 px, a tap shows no ring, draft Restore and Discard at 390 and
+   1440 px, "Discard changes?" deletes it, Create order deletes it, a gone
+   product is left out with the toast).
+ • The shared test sign-in now marks the wallet note as seen, so it never
+   floats over buttons other tests tap; only the Part 4 tests turn it off.
+
+FULL RUN (npm run verify, final): build OK · vitest 842/842 · e2e 507
+passed, 147 skipped, 3 failed. The 3, each re-run alone 3 times:
+ • batch-29 (a brand logo that cannot be read): 3/3 passed. Timing flake,
+   file not touched by this batch.
+ • batch-37 (invoice QR link setting): 3/3 passed. Timing flake, not
+   touched; the run read the live shop's saved link before the test's own
+   one arrived.
+ • batch-51 (Order Placed "Arriving ..."): 2/3 passed. I touched this file
+   (new wording only). The failure is "route.fetch: Test ended": a product
+   download the test intercepts was still in flight when the test finished,
+   after the "Arriving Sun, 22 to Tue, 24 Nov" check had already passed. A
+   race in the test's helper, not the new text; noted in section 4.
+Earlier full run (before the Part 2 fix): 522 passed, 132 skipped, 3
+failed: batch-27 (the real 4 px bug, now fixed, 3/3 since), batch-37 (3/3
+alone), batch-25 (2/3 alone). batch-25 fails the same way on untouched
+main code (I ran it 3 times on a clean copy of main: 1 failure), so it was
+already there before this batch: admin pages sometimes take longer than its
+15-second wait to load from the live database.
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+None needed.
+
+EDGE FUNCTIONS TO DEPLOY AFTER MERGING (Part 5 changed their shared code):
+  npx supabase functions deploy steadfast
+  npx supabase functions deploy steadfast-refresh-all
+Both use supabase/functions/_shared/steadfastPayouts.ts and
+payoutStoreSupabase.ts. Until they are deployed, the 4 payouts stay
+"processing" (nothing breaks). After deploying, tap Refresh on the
+payouts screen (or wait for the 3-hour refresh) and check they read
+"paid".
+(The customer tracking texts changed in Part 1 also live in _shared, but
+the website reads its own copy, so no other function needs deploying for
+them.)
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • Part 2: fixed for product pages (the real cause). On the shop grid I
+   could not reproduce any gap; if you still see one there, the strict
+   1 px test is in place and your phone model will help.
+ • Part 4's browser test uses the shared test customer with her wallet
+   answered inside the browser (exactly like the Batch 60 and 62 wallet
+   tests), not a made-up customer in a rolled-back database: the browser
+   cannot see inside a database transaction that is undone. The "show or
+   not" rule itself is covered by the unit tests.
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY
+======================================================================
+ • Your saved due-reminder template (Money → Settings) was created by an
+   old migration with "– Naeem's - SkinScience" as the sign-off. I changed
+   only the built-in default; the text saved in your Settings still has
+   the dash. Edit it there if you want it gone from reminders.
+ • The delivery times saved in Settings may still contain a dash in Admin
+   (the shop now shows "to"). You can retype them as "1 to 2 days".
+ • The courier label printed on the parcel says "Tracking —" when there is
+   no tracking code yet. It is an admin-printed label, so I left it.
+ • When a stuck payout changes from "processing" to "paid", only its
+   status is refreshed. If Steadfast also adds a paid date later, that date
+   is not refreshed for an already-synced payout (the money is right; the
+   date may stay empty). Worth a small follow-up if you see it.
+ • batch-51's network helper (answerShop) has no guard for requests still
+   running when a test ends, so it fails now and then ("Test ended").
+   batch-25's admin page tour waits only 15 seconds per page. Both are
+   test problems, small to fix in a later batch.
+ • The admin product search labels sizes with a long dash ("Cream — 50ml").
+   Admin only, left as it is.
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • Page titles: "Page | NAEEM'S" (straight bar) instead of a comma or
+   colon. It is how most shops write browser-tab and link-preview titles.
+ • Wallet note: the same floating glass card as the Pre-orders sheet (12 px
+   from the edges, rounded corners), above the bottom nav on Home. No dim
+   background: it is a note, not a question, so the page stays usable.
+ • New order highlight ring: shown only in keyboard mode, so a phone tap
+   never leaves a ring on the first row.
+ • Draft while the Restore / Discard bar is open: nothing new is saved
+   until you choose (so a fresh empty form can never overwrite the older
+   draft by accident).
+ • Restore keeps the prices you typed, but list prices, photos and stock
+   come from today's products.
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+======================================================================
+ 1. Fonts that change the page's size (small). The 4 px bug came from
+    text whose height depends on the font. Giving the shop's fonts
+    matching fallback sizes (a CSS size-adjust on the fallback) would stop
+    this whole class of small jumps everywhere, also on first load.
+ 2. Wallet note across devices (small to medium). "Seen" lives on her
+    phone, so on a second phone she sees the note once more. A
+    "wallet_note_seen_at" column would make it once per customer, if that
+    matters to you.
+ 3. Drafts for Edit order (small). Edit order has the same risk of losing
+    typing on a reload; the same draft code could cover it.
+ 4. Payout dates (small). See section 4: refresh paid_at together with the
+    status for already-synced payouts.

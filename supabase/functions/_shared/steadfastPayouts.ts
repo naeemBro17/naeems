@@ -607,6 +607,8 @@ export interface StoredPayout {
   id: string;
   itemsSynced: boolean;
   hasToCheck: boolean;
+  /** Batch 64: the status saved last time ("processing", "paid"...). */
+  steadfastStatus: string | null;
 }
 
 export interface PayoutRow {
@@ -667,8 +669,10 @@ export interface PayoutStore {
   storedPayouts(paymentIds: string[]): Promise<Map<string, StoredPayout>>;
   /** Insert or update by steadfast_payment_id; returns our row id. */
   upsertPayout(row: PayoutRow): Promise<string>;
-  /** Marks an already complete payout as seen again (nothing else changes). */
-  touchPayout(paymentId: string, at: string): Promise<void>;
+  /** Marks an already complete payout as seen again. Batch 64: given a
+   *  status, it also saves the status from Steadfast's list (a payout first
+   *  read as "processing" that is "paid" now); nothing else changes. */
+  touchPayout(paymentId: string, at: string, steadfastStatus?: string): Promise<void>;
   findOrders(invoices: string[], consignmentIds: string[]): Promise<OrderForMatch[]>;
   /** Batch 53: the zone delivery fees in Settings (split weights only). */
   zoneFees?(): Promise<ZoneFees>;
@@ -808,7 +812,8 @@ export async function syncSteadfastPayouts(
     if (!before) result.payoutsNew += 1;
     const needDetail = !before || !before.itemsSynced || before.hasToCheck;
     if (!needDetail) {
-      await store.touchPayout(summary.paymentId, stamp);
+      const status = summary.steadfastStatus;
+      await store.touchPayout(summary.paymentId, stamp, status !== null && status !== before.steadfastStatus ? status : undefined);
       continue;
     }
 

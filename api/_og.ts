@@ -11,7 +11,7 @@ export const SITE_NAME = "NAEEM'S";
 
 /** The shop's designed wide banner (public/og-shop.jpg, 1200 × 630). */
 export const SHOP_IMAGE = `${SITE_URL}/og-shop.jpg`;
-export const SHOP_TITLE = "NAEEM'S — 100% Authentic Skincare";
+export const SHOP_TITLE = "NAEEM'S | 100% Authentic Skincare";
 export const SHOP_DESCRIPTION =
   'Imported from Australia, USA, Canada, Korea, Japan, India & UK. Cash on delivery all over Bangladesh.';
 
@@ -61,9 +61,9 @@ export function shopPreview(url: string = `${SITE_URL}/`): PreviewFields {
 
 /** A product link: its own square main photo, shown in full. */
 export function productPreview(name: string, image: string | null, url: string): PreviewFields {
-  if (!image) return { ...shopPreview(url), title: `${name.trim()} — ${SITE_NAME}`, description: PRODUCT_DESCRIPTION, type: 'product' };
+  if (!image) return { ...shopPreview(url), title: `${name.trim()} | ${SITE_NAME}`, description: PRODUCT_DESCRIPTION, type: 'product' };
   return {
-    title: `${name.trim()} — ${SITE_NAME}`,
+    title: `${name.trim()} | ${SITE_NAME}`,
     description: PRODUCT_DESCRIPTION,
     image,
     imageWidth: 1200,
@@ -77,7 +77,7 @@ export function productPreview(name: string, image: string | null, url: string):
 export function comboPreview(name: string, productCount: number, image: string | null, url: string): PreviewFields {
   const n = Math.max(0, Math.floor(productCount));
   return {
-    title: `${name.trim()} — picked for you by ${SITE_NAME}`,
+    title: `${name.trim()}, picked for you by ${SITE_NAME}`,
     description: `${n} product${n === 1 ? '' : 's'}, hand-picked by Naeem. 100% authentic.`,
     image: image ?? SHOP_IMAGE,
     imageWidth: 1200,

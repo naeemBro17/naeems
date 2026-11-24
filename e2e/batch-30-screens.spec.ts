@@ -211,7 +211,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.waitForTimeout(200);
     await page.screenshot({ path: `${DIR}/checkout-thana-search-390-${theme}.png` });
     await page.getByLabel('Search thana').fill('');
-    await page.getByTestId('thana-list').getByRole('button', { name: 'Other — type your thana' }).click();
+    await page.getByTestId('thana-list').getByRole('button', { name: 'Other: type your thana' }).click();
     await page.getByLabel('Type your thana').fill('Uttar Badda, Block C');
     await page.waitForTimeout(200);
     await page.screenshot({ path: `${DIR}/checkout-thana-other-390-${theme}.png` });

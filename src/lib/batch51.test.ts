@@ -69,8 +69,8 @@ describe('Batch 51 Part 1: the order limit', () => {
   });
 
   it('"Only N left — order soon" only for switch OFF with 1 to the limit left', () => {
-    expect(lowStockText({ keepSelling: false, stock: 2 }, 4)).toBe('Only 2 left — order soon');
-    expect(lowStockText({ keepSelling: false, stock: 4 }, 4)).toBe('Only 4 left — order soon');
+    expect(lowStockText({ keepSelling: false, stock: 2 }, 4)).toBe('Only 2 left, order soon');
+    expect(lowStockText({ keepSelling: false, stock: 4 }, 4)).toBe('Only 4 left, order soon');
     expect(lowStockText({ keepSelling: false, stock: 5 }, 4)).toBeNull();
     expect(lowStockText({ keepSelling: false, stock: 0 }, 4)).toBeNull();
     expect(lowStockText({ keepSelling: true, stock: 2 }, 4)).toBeNull();
@@ -84,15 +84,15 @@ describe('Batch 51 Part 1: the order limit', () => {
 describe('Batch 51 Part 2: delivery times', () => {
   it('the product page line follows the selected option', () => {
     expect(deliveryLine(settings, { available: true, inHand: true })).toBe(
-      'Get it in 1–2 days in Dhaka · 2–3 days outside Dhaka'
+      'Get it in 1 to 2 days in Dhaka · 2 to 3 days outside Dhaka'
     );
-    expect(deliveryLine(settings, { available: true, inHand: false })).toBe('Get it in 3–5 days');
+    expect(deliveryLine(settings, { available: true, inHand: false })).toBe('Get it in 3 to 5 days');
     expect(deliveryLine(settings, { available: false, inHand: false })).toBeNull();
     expect(deliveryLine({ ...settings, delivery_time_buy_after: '4–6 days' }, { available: true, inHand: false })).toBe(
-      'Get it in 4–6 days'
+      'Get it in 4 to 6 days'
     );
-    expect(deliveryLine({}, { available: true, inHand: true })).toBe('Get it in 1–2 days in Dhaka · 2–3 days outside Dhaka');
-    expect(cartBuyAfterNote(settings)).toBe('Get it in 3–5 days');
+    expect(deliveryLine({}, { available: true, inHand: true })).toBe('Get it in 1 to 2 days in Dhaka · 2 to 3 days outside Dhaka');
+    expect(cartBuyAfterNote(settings)).toBe('Get it in 3 to 5 days');
   });
 
   it('reads the days from the setting', () => {
@@ -106,17 +106,17 @@ describe('Batch 51 Part 2: delivery times', () => {
   const placed = '2026-11-19T04:00:00Z';
 
   it('"Arriving …": Dhaka in stock, outside Dhaka, and bought after the order', () => {
-    expect(arrivalText(placed, 'inside_dhaka', false, settings)).toBe('Arriving Fri, 20 – Sat, 21 Nov');
-    expect(arrivalText(placed, 'outside_dhaka', false, settings)).toBe('Arriving Sat, 21 – Sun, 22 Nov');
-    expect(arrivalText(placed, 'inside_dhaka', true, settings)).toBe('Arriving Sun, 22 – Tue, 24 Nov');
-    expect(arrivalText(placed, 'outside_dhaka', true, settings)).toBe('Arriving Sun, 22 – Tue, 24 Nov');
+    expect(arrivalText(placed, 'inside_dhaka', false, settings)).toBe('Arriving Fri, 20 to Sat, 21 Nov');
+    expect(arrivalText(placed, 'outside_dhaka', false, settings)).toBe('Arriving Sat, 21 to Sun, 22 Nov');
+    expect(arrivalText(placed, 'inside_dhaka', true, settings)).toBe('Arriving Sun, 22 to Tue, 24 Nov');
+    expect(arrivalText(placed, 'outside_dhaka', true, settings)).toBe('Arriving Sun, 22 to Tue, 24 Nov');
   });
 
   it('"Arriving …" across a month, and in Dhaka time', () => {
     // Thursday 26 November 2026 + 3–5 days → Sun 29 Nov – Tue 1 Dec.
-    expect(arrivalText('2026-11-26T06:00:00Z', 'inside_dhaka', true, settings)).toBe('Arriving Sun, 29 Nov – Tue, 1 Dec');
+    expect(arrivalText('2026-11-26T06:00:00Z', 'inside_dhaka', true, settings)).toBe('Arriving Sun, 29 Nov to Tue, 1 Dec');
     // 01:30 on Friday 20 November in Dhaka (still the 19th in UTC).
-    expect(arrivalText('2026-11-19T19:30:00Z', 'inside_dhaka', false, settings)).toBe('Arriving Sat, 21 – Sun, 22 Nov');
+    expect(arrivalText('2026-11-19T19:30:00Z', 'inside_dhaka', false, settings)).toBe('Arriving Sat, 21 to Sun, 22 Nov');
     expect(arrivalText(placed, 'inside_dhaka', false, { ...settings, delivery_time_dhaka: '2 days' })).toBe(
       'Arriving Sat, 21 Nov'
     );

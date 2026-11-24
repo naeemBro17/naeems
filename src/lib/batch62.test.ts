@@ -76,8 +76,8 @@ describe('Batch 62: combo line status', () => {
   it('as the product page would say it', () => {
     expect(comboLineStatus({ available: false, facts: { keepSelling: false, stock: 0 }, lowText: null })).toBe('Out of stock');
     expect(comboLineStatus({ available: true, facts: { keepSelling: true, stock: 0 }, lowText: null })).toBe('Keep selling: bought after the order');
-    expect(comboLineStatus({ available: true, facts: { keepSelling: false, stock: 2 }, lowText: 'Only 2 left — order soon' })).toBe(
-      'Only 2 left — order soon'
+    expect(comboLineStatus({ available: true, facts: { keepSelling: false, stock: 2 }, lowText: 'Only 2 left, order soon' })).toBe(
+      'Only 2 left, order soon'
     );
     expect(comboLineStatus({ available: true, facts: { keepSelling: false, stock: 20 }, lowText: null })).toBe('In stock');
   });

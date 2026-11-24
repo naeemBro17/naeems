@@ -139,9 +139,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   invoice_show_community: 'true',
 
   order_limit_per_item: '4',
-  delivery_time_dhaka: '1–2 days',
-  delivery_time_outside: '2–3 days',
-  delivery_time_buy_after: '3–5 days',
+  delivery_time_dhaka: '1 to 2 days',
+  delivery_time_outside: '2 to 3 days',
+  delivery_time_buy_after: '3 to 5 days',
 };
 
 /**

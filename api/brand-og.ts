@@ -18,7 +18,7 @@ interface MinimalResponse {
 
 const SITE_URL = 'https://naeems-all.vercel.app';
 const FALLBACK_IMAGE = `${SITE_URL}/og-shop.jpg`;
-const FALLBACK_DESCRIPTION = 'Premium Australian skincare — check prices instantly';
+const FALLBACK_DESCRIPTION = 'Premium Australian skincare. Check prices instantly';
 
 /** A brand link part is lowercase letters, digits and single hyphens. */
 function isSafeSlug(value: string): boolean {
@@ -87,7 +87,7 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
   const fallback = () => {
     res.status(200).send(
       renderHtml({
-        title: "Naeem's — Authentic Skincare",
+        title: "Naeem's | Authentic Skincare",
         description: FALLBACK_DESCRIPTION,
         image: FALLBACK_IMAGE,
         url: slug ? `${SITE_URL}/brand/${slug}` : SITE_URL,
@@ -126,12 +126,12 @@ export default async function handler(req: MinimalRequest, res: MinimalResponse)
     );
     const total = Number(countRes.headers.get('content-range')?.split('/')[1]);
     if (countRes.ok && Number.isFinite(total) && total > 0) {
-      countText = ` — ${total} product${total === 1 ? '' : 's'}`;
+      countText = `, ${total} product${total === 1 ? '' : 's'}`;
     }
 
     res.status(200).send(
       renderHtml({
-        title: `${brand.name} — Naeem's`,
+        title: `${brand.name} | Naeem's`,
         description: `Shop authentic ${brand.name} at Naeem's${countText}.`,
         image: brand.banner_image_url ?? brand.logo_url ?? FALLBACK_IMAGE,
         url: `${SITE_URL}/brand/${slug}`,

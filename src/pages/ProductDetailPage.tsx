@@ -49,7 +49,7 @@ const VARIANT_PARAM = 'variant';
 /** App-wide og: values from index.html, restored when the detail page unmounts. */
 const DEFAULT_OG = {
   title: "NAEEM'S",
-  description: 'Premium Australian skincare — check prices instantly',
+  description: 'Premium Australian skincare. Check prices instantly',
   image: window.location.origin + '/og-image.png',
   url: window.location.origin + '/',
 };
@@ -521,7 +521,7 @@ function DetailContent({
               <img
                 key={url}
                 src={url}
-                alt={`${product.name} — image ${index + 1}`}
+                alt={`${product.name}, image ${index + 1}`}
                 {...protectedImageProps}
                 className={`product-detail__image ${PROTECTED_IMAGE_CLASS}`}
                 loading={index === 0 ? 'eager' : 'lazy'}
@@ -916,7 +916,7 @@ export function ProductDetailPage() {
     const price = formatTaka(mainPrice);
     const note = product.note ?? '';
     setOgTag('title', product.name);
-    setOgTag('description', note === '' ? price : `${price} — ${note}`);
+    setOgTag('description', note === '' ? price : `${price}. ${note}`);
     setOgTag('image', coverImage(product) ?? DEFAULT_OG.image);
     setOgTag('url', window.location.href);
     setProductJsonLd(product, mainPrice, !isOutOfStock(product));
@@ -930,7 +930,7 @@ export function ProductDetailPage() {
     };
   }, [product]);
 
-  useDocumentTitle(product ? `${product.name} — NAEEM'S` : "NAEEM'S");
+  useDocumentTitle(product ? `${product.name} | NAEEM'S` : "NAEEM'S");
 
   const showLoading = !product && (isLoading || isFetching);
 

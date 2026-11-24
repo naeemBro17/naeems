@@ -163,7 +163,7 @@ export function ComboReadyView({ combo, onClearCart }: { combo: ReadyCombo; onCl
       return;
     }
     const ok = await copyText(link);
-    showToast(ok ? 'Link copied — paste it in Messenger' : 'Could not copy the link');
+    showToast(ok ? 'Link copied. Paste it in Messenger' : 'Could not copy the link');
   };
 
   const more = async () => {
@@ -231,7 +231,7 @@ export function ComboReadyView({ combo, onClearCart }: { combo: ReadyCombo; onCl
           {combo.previewSrc ? <img src={combo.previewSrc} alt="" width={1200} height={630} /> : <span className="combo-preview__blank" />}
         </div>
         <div className="combo-preview__body">
-          <p className="combo-preview__title">{combo.name} — picked for you by NAEEM&apos;S</p>
+          <p className="combo-preview__title">{combo.name}, picked for you by NAEEM&apos;S</p>
           <p className="combo-preview__desc">
             {n} product{n === 1 ? '' : 's'}, hand-picked by Naeem. 100% authentic.
           </p>

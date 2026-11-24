@@ -204,7 +204,7 @@ export function categoryShares<T extends { amount: number }>(rows: readonly T[])
 /* ------------------------------------------------------ due reminder */
 
 export const DEFAULT_REMINDER_TEMPLATE =
-  "Hello {name},\nYou have Tk. {due} left to pay as on {date}.\nThank you!\n– Naeem's - SkinScience\nView your orders: {link}";
+  "Hello {name},\nYou have Tk. {due} left to pay as on {date}.\nThank you!\nNaeem's - SkinScience\nView your orders: {link}";
 
 /** "3,070" (Bangladeshi grouping, paisa only when there are any). */
 export function reminderAmount(amount: number): string {

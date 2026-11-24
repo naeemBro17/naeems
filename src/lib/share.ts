@@ -24,7 +24,7 @@ export async function shareProduct(
     try {
       await navigator.share({
         title: product.name,
-        text: `${product.name} — ${price}`,
+        text: `${product.name}: ${price}`,
         url,
       });
     } catch {
@@ -34,5 +34,5 @@ export async function shareProduct(
   }
 
   await navigator.clipboard.writeText(url);
-  showToast('Link copied — share it anywhere');
+  showToast('Link copied. Share it anywhere');
 }

@@ -97,6 +97,10 @@
   background: transparent; color: var(--adm-text); text-align: left; cursor: pointer;
 }
 .nord-res:hover, .nord-res:focus-visible { background: var(--adm-card-2); outline: none; }
+/* Batch 64: the row the arrow keys are on: the hover look plus a ring
+   (inset, so the list's rounded edge never clips it). Keyboard mode only
+   (lib/inputModality.ts), so taps and clicks look exactly as before. */
+:root[data-input='keyboard'] .nord-res.is-active { background: var(--adm-card-2); outline: 2px solid var(--focus-ring, var(--adm-or)); outline-offset: -2px; }
 .nord-res--out { opacity: 0.5; }
 .nord-res__main { flex: 1; min-width: 0; }
 .nord-res__name {
@@ -185,3 +189,18 @@
 @media (prefers-reduced-motion: reduce) {
   .nord-page * { transition: none !important; }
 }
+
+/* Batch 64: "You have an unsaved order from 10:42 PM." above the form.
+   Neutral: Restore is an outlined button, Discard plain text. */
+.nord-draft {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
+  background: var(--adm-card); border: 1px solid var(--adm-line);
+}
+.nord-draft__text { flex: 1 1 200px; margin: 0; font-size: 14px; font-weight: 600; color: var(--adm-text); }
+.nord-draft__actions { display: flex; align-items: center; gap: 4px; }
+.nord-draft__discard {
+  min-height: 44px; padding: 0 12px; border: 0; background: transparent;
+  color: var(--adm-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.nord-draft__discard:hover { color: var(--adm-text); }

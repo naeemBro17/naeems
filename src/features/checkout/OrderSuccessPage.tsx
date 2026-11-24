@@ -103,7 +103,7 @@ function HeroName({ name }: { name: string }) {
 const fadeUp = (offset: string): CssVars => ({ '--o': offset });
 
 export function OrderSuccessPage() {
-  useDocumentTitle("Order Placed — NAEEM'S");
+  useDocumentTitle("Order Placed | NAEEM'S");
   const { lastOrder, markCelebrated } = useCheckoutState();
   const { settings } = useProducts();
   const [isMakingInvoice, setIsMakingInvoice] = useState(false);

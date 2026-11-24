@@ -30,7 +30,7 @@ import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from './types';
 
 export function CartPage() {
-  useDocumentTitle("Your Cart — NAEEM'S");
+  useDocumentTitle("Your Cart | NAEEM'S");
   const { items, subtotal, updateQuantity } = useCheckoutState();
   const { session, isAdmin } = useAuth();
   const { clearCart } = useCart();

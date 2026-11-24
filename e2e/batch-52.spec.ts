@@ -350,7 +350,7 @@ for (const theme of ['light', 'dark'] as const) {
       { product_id: picks.out.id, variant_id: null, quantity: 1 },
     ]);
     await expect(page.getByTestId('combo-share-whatsapp')).toHaveAttribute('href', `https://wa.me/?text=${encodeURIComponent(`http://${link}`)}`);
-    await expect(page.getByTestId('combo-chat-preview')).toContainText("Sadia's glow routine — picked for you by NAEEM'S");
+    await expect(page.getByTestId('combo-chat-preview')).toContainText("Sadia's glow routine, picked for you by NAEEM'S");
     await expect(page.getByTestId('combo-chat-preview')).toContainText('3 products, hand-picked by Naeem. 100% authentic.');
     await page.getByTestId('combo-copy').click();
     await expect(page.getByTestId('combo-copy')).toHaveText('Copied');
@@ -475,7 +475,7 @@ test('Messenger on a computer: copies the link and says "Link copied — paste i
   await page.goto('/admin?tab=combos');
   await page.getByTestId('admin-combo-share').click({ timeout: 30_000 });
   await page.getByTestId('combo-share-messenger').click();
-  await expect(page.locator('.toast').first()).toContainText('Link copied — paste it in Messenger');
+  await expect(page.locator('.toast').first()).toContainText('Link copied. Paste it in Messenger');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`/c/${CODE}$`));
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await ctx.close();

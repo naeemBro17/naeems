@@ -33,6 +33,7 @@ import { CategoryChips } from '../components/viewer/CategoryChips';
 import { BrandRow } from '../components/viewer/BrandRow';
 import { ProductGrid } from '../components/viewer/ProductGrid';
 import { SiteFooter } from '../components/shared/SiteFooter';
+import { HomeWalletOpenNote } from '../components/account/WalletOpenNote';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
@@ -59,7 +60,7 @@ function OfflineBanner() {
         <path d="M8.53 16.11a6 6 0 016.95 0" />
         <path d="M12 20h.01" />
       </svg>
-      You're offline — showing saved data
+      You're offline. Showing saved data
     </div>
   );
 }
@@ -459,6 +460,8 @@ export function ViewerPage() {
       </main>
 
       <SiteFooter />
+
+      <HomeWalletOpenNote />
 
       <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <FilterSheet

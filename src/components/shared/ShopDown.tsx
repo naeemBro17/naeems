@@ -16,7 +16,7 @@ export function ShopDownPage() {
       <div className="shop-down__card">
         <img className="shop-down__logo" src="/icons/icon-splash-192.png" alt="" width={72} height={72} />
         <h1 className="shop-down__title">Our online shop is being updated.</h1>
-        <p className="shop-down__text">You can still order — message us:</p>
+        <p className="shop-down__text">You can still order. Message us:</p>
         <div className="shop-down__actions">
           <a
             className="button button--primary shop-down__button"

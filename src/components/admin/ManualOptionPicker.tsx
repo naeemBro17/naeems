@@ -4,6 +4,7 @@ import { formatTaka } from '../../lib/format';
 import type { SellableOption, SellableProduct } from '../../lib/manualOrderSearch';
 import { stockLine } from '../../lib/newOrderLook';
 import { AdminIcon } from './ui/AdminIcon';
+import type { ListKeyboard } from './useListKeyboard';
 
 /** Batch 63: the neutral tile's bottle outline when a product has no photo. */
 export function BottleIcon() {
@@ -18,13 +19,30 @@ export function BottleIcon() {
 
 /** Batch 63: one result with its small photo, name, stock line and price
  *  (or "3 sizes · from ৳…" and a chevron for a product with sizes). */
-function PhotoRow({ group, onTap }: { group: SellableProduct; onTap: () => void }) {
+function PhotoRow({
+  group,
+  onTap,
+  optionId,
+  selected = false,
+}: {
+  group: SellableProduct;
+  onTap: () => void;
+  /** Batch 64: set when the list has arrow keys (a listbox row). */
+  optionId?: string;
+  selected?: boolean;
+}) {
   const single = group.options.length === 1 ? group.options[0] : null;
   const thumb = single ? single.thumbUrl : (group.options[0]?.thumbUrl ?? null);
   const stock = single ? stockLine(single.stockQuantity) : null;
   const isOut = stock?.tone === 'out';
   return (
-    <button type="button" className={`nord-res${isOut ? ' nord-res--out' : ''}`} onClick={onTap} data-testid="manual-product-result">
+    <button
+      type="button"
+      className={`nord-res${isOut ? ' nord-res--out' : ''}${selected ? ' is-active' : ''}`}
+      onClick={onTap}
+      data-testid="manual-product-result"
+      {...(optionId ? { id: optionId, role: 'option', 'aria-selected': selected, tabIndex: -1 } : {})}
+    >
       <span className="nord-thumb">
         {thumb ? <img src={thumb} alt="" width={52} height={52} loading="lazy" decoding="async" /> : <BottleIcon />}
       </span>
@@ -68,6 +86,7 @@ export function ProductResults({
   className = 'picker-sheet__list',
   photos = false,
   label,
+  keyboard,
 }: {
   results: SellableProduct[];
   onAdd: (option: SellableOption, quantity: number) => void;
@@ -75,23 +94,41 @@ export function ProductResults({
   photos?: boolean;
   /** A small heading at the top of the list (New order: "Products"). */
   label?: string;
+  /** Batch 64: arrow keys and Enter from the search box (photo rows only). */
+  keyboard?: ListKeyboard;
 }) {
   const [picking, setPicking] = useState<SellableProduct | null>(null);
-  if (results.length === 0 && picking === null) return null;
+  const keys = photos ? keyboard : undefined;
   const tap = (group: SellableProduct) => (group.options.length === 1 ? onAdd(group.options[0], 1) : setPicking(group));
+  if (keys) {
+    keys.pickRef.current = (index) => {
+      const group = results[index];
+      if (group) tap(group);
+    };
+  }
+  if (results.length === 0 && picking === null) return null;
   return (
     <>
       {results.length > 0 && (
-        <ul className={className} data-testid="manual-product-results">
+        <ul
+          className={className}
+          data-testid="manual-product-results"
+          {...(keys ? { id: keys.listId, role: 'listbox', 'aria-label': label ?? 'Products' } : {})}
+        >
           {label && (
-            <li className="nord-drop__label" aria-hidden="true">
+            <li className="nord-drop__label" aria-hidden="true" role={keys ? 'presentation' : undefined}>
               {label}
             </li>
           )}
-          {results.map((group) => (
-            <li key={group.productId}>
+          {results.map((group, index) => (
+            <li key={group.productId} role={keys ? 'presentation' : undefined}>
               {photos ? (
-                <PhotoRow group={group} onTap={() => tap(group)} />
+                <PhotoRow
+                  group={group}
+                  onTap={() => tap(group)}
+                  optionId={keys?.optionId(index)}
+                  selected={keys !== undefined && keys.active === index}
+                />
               ) : (
               <button
                 type="button"

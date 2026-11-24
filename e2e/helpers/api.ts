@@ -59,6 +59,9 @@ export async function useSessionInPage(page: Page, session: TestSession): Promis
     },
     [storageKey, value]
   );
+  // Batch 64: the one-time "Your wallet is open" note counts as seen (it is
+  // only ever shown to customers; for staff this key is simply unused).
+  await page.addInitScript((key) => window.localStorage.setItem(key, '1'), `naeems.walletOpenSeen.p:${session.userId}`);
 }
 
 export interface ApiResult<T> {

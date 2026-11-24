@@ -110,7 +110,7 @@ class MemoryStore implements PayoutStore {
       const p = this.payouts.get(id);
       if (!p) continue;
       const hasToCheck = [...this.items.values()].some((i) => i.payout_id === p.id && i.match_status === 'to_check');
-      out.set(id, { id: p.id, itemsSynced: p.items_synced, hasToCheck });
+      out.set(id, { id: p.id, itemsSynced: p.items_synced, hasToCheck, steadfastStatus: p.steadfast_status });
     }
     return out;
   }
@@ -119,9 +119,11 @@ class MemoryStore implements PayoutStore {
     this.payouts.set(row.steadfast_payment_id, { ...row, id });
     return id;
   }
-  async touchPayout(paymentId: string, at: string): Promise<void> {
+  async touchPayout(paymentId: string, at: string, steadfastStatus?: string): Promise<void> {
     const p = this.payouts.get(paymentId);
-    if (p) p.last_synced_at = at;
+    if (!p) return;
+    p.last_synced_at = at;
+    if (steadfastStatus !== undefined) p.steadfast_status = steadfastStatus;
   }
   async findOrders(invoices: string[], cids: string[]): Promise<OrderForMatch[]> {
     return ORDERS.filter((o) => invoices.includes(o.order_number) || cids.includes(o.steadfast_consignment_id ?? ''));

@@ -304,7 +304,7 @@ test('Part 6: checkout — thanas grouped by district, searchable, "Other" saves
 
   // "Other — type your thana".
   await page.getByLabel('Search thana').fill('');
-  await list.getByRole('button', { name: 'Other — type your thana' }).click();
+  await list.getByRole('button', { name: 'Other: type your thana' }).click();
   await page.getByLabel('Type your thana').fill('E2E Test Para');
   await page.getByRole('button', { name: 'Use this' }).click();
   await expect(page.locator(`#${prefix}-thana`)).toHaveText('E2E Test Para');
@@ -345,7 +345,7 @@ test('Part 6: the same thana list in admin New order and Edit order', async ({ p
   await pickDhakaDhaka(page, 'manual-order');
   await page.locator('#manual-order-thana').click();
   await expect(page.getByTestId('thana-list').locator('.thana-picker__district').first()).toHaveText('Dhaka');
-  await expect(page.getByTestId('thana-list').getByRole('button', { name: 'Other — type your thana' })).toBeVisible();
+  await expect(page.getByTestId('thana-list').getByRole('button', { name: 'Other: type your thana' })).toBeVisible();
 
   await page.goto(`/admin?tab=orders&order=${order.id}`);
   await page.getByTestId('edit-order').click();
@@ -673,7 +673,7 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
     await field.fill('+880 1799 990030');
     const results = page.getByTestId('customer-results');
     await expect(results).toContainText('E2E B30 Phone Customer', { timeout: 15_000 });
-    await results.getByRole('button', { name: /E2E B30 Phone Customer/ }).click();
+    await results.getByRole('option', { name: /E2E B30 Phone Customer/ }).click();
     await expect(page.getByTestId('customer-picked')).toContainText('E2E B30 Phone Customer');
     await expect(page.locator('#manual-order-name')).toHaveValue('E2E B30 Phone Customer');
     await expect(page.locator('#manual-order-phone')).toHaveValue(PHONE_CUSTOMER);
@@ -702,7 +702,7 @@ test('Part 4: New order finds the customer by phone (+880 / spaces), fills name 
   await page.goto('/admin?tab=orders');
   await page.getByRole('button', { name: 'New order' }).click();
   await page.getByLabel('Customer', { exact: true }).fill('+880 1799 990031');
-  await page.getByTestId('customer-results').getByRole('button', { name: /New customer/ }).click();
+  await page.getByTestId('customer-results').getByRole('option', { name: /New customer/ }).click();
   await expect(page.getByTestId('customer-picked')).toContainText('New customer');
   await expect(page.locator('#manual-order-phone')).toHaveValue('+880 1799 990031');
 });
