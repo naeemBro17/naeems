@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,13 +32,41 @@ export function supabaseCli(): string | null {
   return null;
 }
 
-/** Runs the SQL; resolves with everything the command printed. */
-export function runSql(sql: string): Promise<string> {
-  const cli = supabaseCli();
-  if (!cli) return Promise.reject(new Error('The Supabase command line was not found (set SUPABASE_CLI).'));
-  const dir = mkdtempSync(join(tmpdir(), 'b39-sql-'));
-  const file = join(dir, 'script.sql');
-  writeFileSync(file, sql);
+/**
+ * Batch 63: the command line signs in with a temporary login role
+ * (cli_login_postgres) and gives it a NEW password on every run. Two runs at
+ * the same moment (two test workers) change each other's password, and one
+ * of them fails with "password authentication failed for user
+ * cli_login_postgres" or stops after "Initialising login role...". So only
+ * one script runs at a time on this computer (a lock folder every test
+ * worker shares), and a run that still could not sign in is tried again.
+ */
+const LOCK_DIR = join(tmpdir(), 'naeems-supabase-sql.lock');
+/** A lock older than this was left by a test run that was stopped. */
+const STALE_LOCK_MS = 15 * 60_000;
+const SIGN_IN_TRIES = 3;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function takeLock(): Promise<void> {
+  for (;;) {
+    try {
+      mkdirSync(LOCK_DIR);
+      return;
+    } catch {
+      try {
+        if (Date.now() - statSync(LOCK_DIR).mtimeMs > STALE_LOCK_MS) rmSync(LOCK_DIR, { recursive: true, force: true });
+      } catch {
+        // The lock was just released: try again.
+      }
+      await wait(250);
+    }
+  }
+}
+
+function runOnce(cli: string, file: string): Promise<string> {
   return new Promise((resolvePromise) => {
     let out = '';
     // Batch 43: Supabase CLI 3 refuses SQL on the hosted project from an
@@ -49,6 +77,32 @@ export function runSql(sql: string): Promise<string> {
     child.stderr.on('data', (d: Buffer) => (out += d.toString()));
     child.on('close', () => resolvePromise(out));
   });
+}
+
+/** The run never signed in (no answer from the database at all). */
+function couldNotSignIn(output: string): boolean {
+  return /password authentication failed|failed to connect as temp role/.test(output) || !output.includes('{');
+}
+
+/** Runs the SQL; resolves with everything the command printed. */
+export async function runSql(sql: string): Promise<string> {
+  const cli = supabaseCli();
+  if (!cli) throw new Error('The Supabase command line was not found (set SUPABASE_CLI).');
+  const dir = mkdtempSync(join(tmpdir(), 'b39-sql-'));
+  const file = join(dir, 'script.sql');
+  writeFileSync(file, sql);
+  await takeLock();
+  try {
+    let out = '';
+    for (let attempt = 1; attempt <= SIGN_IN_TRIES; attempt += 1) {
+      out = await runOnce(cli, file);
+      if (!couldNotSignIn(out)) break;
+      await wait(2000);
+    }
+    return out;
+  } finally {
+    rmSync(LOCK_DIR, { recursive: true, force: true });
+  }
 }
 
 /** The error message the database returned, or null when the script ran
