@@ -389,7 +389,9 @@ test('Part 3: Smart paste — reading 2–3 s (orb and flower never together), t
   await page.goto('/admin/orders/new');
   const card = page.getByTestId('smart-paste');
   await expect(card).toContainText('Smart paste');
-  await expect(card).toContainText("Paste the customer's message");
+  await expect(card).toContainText("Paste the customer's message and we fill the form for you");
+  // Batch 63: Smart paste starts as one row; Paste opens the message box.
+  await page.getByTestId('smart-paste-open').click();
   await expect(page.getByText(/\bAI\b/)).toHaveCount(0);
 
   await page.getByTestId('smart-paste-text').fill(MESSAGE);
@@ -464,6 +466,7 @@ test('Part 3: a saved customer with the pasted phone is offered; one tap fills f
   });
   await useSessionInPage(page, admin);
   await page.goto('/admin/orders/new');
+  await page.getByTestId('smart-paste-open').click();
   await page.getByTestId('smart-paste-text').fill(MESSAGE);
   await page.getByTestId('smart-paste-fill').click();
   const saved = page.getByTestId('smart-paste-saved');
@@ -478,6 +481,7 @@ test('Part 3: COD / Product labels are hints only; reduced motion — no spin, s
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await useSessionInPage(page, admin);
   await page.goto('/admin/orders/new');
+  await page.getByTestId('smart-paste-open').click();
   await page.getByTestId('smart-paste-text').fill('Name: Tania\nPhone: +88 01812-345678\nAddress: House 4, Road 2, Dhanmondi, Dhaka\nCOD: 1250 tk\nProduct: Scalpe Plus x2');
   await page.getByTestId('smart-paste-fill').click();
   const spin = await page.locator('[data-testid="smart-paste"] .am__spin').evaluate((el) => getComputedStyle(el).animationName);

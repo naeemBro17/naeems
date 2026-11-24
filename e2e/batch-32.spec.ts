@@ -74,7 +74,7 @@ async function pickDhakaDhaka(page: Page, prefix: string): Promise<void> {
 
 async function addItem(page: Page): Promise<void> {
   await page.getByPlaceholder('Search product name...').fill(product.name.slice(0, 18));
-  await page.locator('.picker-sheet__row').filter({ hasText: product.name }).first().click();
+  await page.getByTestId('manual-product-result').filter({ hasText: product.name }).first().click();
 }
 
 async function deleteStaffAndRole(): Promise<void> {
@@ -160,7 +160,7 @@ test('Part 1: payment section — summary, Full amount, method chips, inline err
     await addItem(page);
     const section = page.getByTestId('payment-section');
     const summary = page.getByTestId('payment-summary');
-    const totalText = await page.locator('.checkout-summary-card__row--total span').last().innerText();
+    const totalText = await page.getByTestId('new-order-total').innerText();
     const total = Number(totalText.replace(/[^0-9.]/g, ''));
     expect(total).toBeGreaterThan(0);
 
@@ -184,7 +184,7 @@ test('Part 1: payment section — summary, Full amount, method chips, inline err
     await expect(section.getByRole('button', { name: 'Bank' })).toBeVisible();
     await expect(summary.getByTestId('summary-paid-now')).toHaveText(taka(100));
     await expect(summary.getByTestId('summary-courier')).toHaveText(taka(total - 100));
-    await expect(section.getByText(`Remaining ${taka(total - 100)}`)).toBeVisible();
+    await expect(section.getByText(`The rest ${taka(total - 100)}`)).toBeVisible();
     await expect(section.getByRole('radio', { name: 'Collect on delivery' })).toHaveAttribute('aria-checked', 'true');
 
     // Full amount: nothing remains, the courier collects ৳0.

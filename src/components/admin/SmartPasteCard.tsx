@@ -31,6 +31,9 @@ interface SmartPasteCardProps {
   /** A saved customer with the pasted phone (null = none). */
   savedCustomer: { name: string; place: string } | null;
   onUseSaved: () => void;
+  /** Batch 63: start as one row with a Paste button; tapping it opens the
+   *  message box (it never closes again by itself). */
+  startCollapsed?: boolean;
 }
 
 type CardState = 'idle' | 'reading' | 'filled';
@@ -45,9 +48,12 @@ function prefersReducedMotion(): boolean {
  * flower while "reading" (2–3 s), then the fields fill one by one.
  * Nothing is saved until Create order.
  */
-export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustomer, onUseSaved }: SmartPasteCardProps) {
+export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustomer, onUseSaved, startCollapsed = false }: SmartPasteCardProps) {
   const [text, setText] = useState('');
   const [state, setState] = useState<CardState>('idle');
+  const [collapsed, setCollapsed] = useState(startCollapsed);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const focusOnOpen = useRef(false);
   const timers = useRef<number[]>([]);
   const { list } = useThanaList(true);
 
@@ -59,6 +65,13 @@ export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustom
     return list.map((t) => ({ ...t, bnName: bn.get(`${t.name.toLowerCase()}|${t.district}`) }));
   }, [list]);
   const districts = useMemo(() => BD_DISTRICTS.map((d) => ({ name: d.name, bnName: d.bnName })), []);
+
+  useEffect(() => {
+    if (!collapsed && focusOnOpen.current) {
+      focusOnOpen.current = false;
+      textRef.current?.focus();
+    }
+  }, [collapsed]);
 
   useEffect(
     () => () => {
@@ -116,7 +129,32 @@ export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustom
   };
 
   const title = state === 'filled' ? 'Filled, please check' : 'Smart paste';
-  const subtitle = state === 'filled' ? 'Orange outline = guessed, tap to change' : "Paste the customer's message";
+  const subtitle = state === 'filled' ? 'Orange outline = guessed, tap to change' : "Paste the customer's message and we fill the form for you";
+
+  if (collapsed) {
+    return (
+      <section className="smart-paste smart-paste--idle" aria-label="Smart paste" data-testid="smart-paste" data-state="collapsed">
+        <div className="smart-paste__collapsed">
+          <AssistantMark state="idle" size={34} />
+          <div className="smart-paste__titles">
+            <p className="smart-paste__title">Smart paste</p>
+            <p className="smart-paste__subtitle">{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            className="adm-btn adm-btn--ghost smart-paste__open"
+            onClick={() => {
+              focusOnOpen.current = true;
+              setCollapsed(false);
+            }}
+            data-testid="smart-paste-open"
+          >
+            Paste
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={`smart-paste smart-paste--${state}`} aria-label="Smart paste" data-testid="smart-paste" data-state={state}>
@@ -140,6 +178,7 @@ export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustom
             Customer's message
           </label>
           <textarea
+            ref={textRef}
             id="smart-paste-text"
             className="form-input form-textarea smart-paste__text"
             rows={4}
@@ -150,7 +189,7 @@ export function SmartPasteCard({ onStart, onPatch, onFilled, onUndo, savedCustom
           />
           <button
             type="button"
-            className="adm-btn adm-btn--primary smart-paste__fill"
+            className="adm-btn adm-btn--ghost smart-paste__fill"
             onClick={fill}
             disabled={text.trim() === ''}
             data-testid="smart-paste-fill"

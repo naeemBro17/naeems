@@ -49,7 +49,13 @@ interface AddressFormFieldsProps {
   /** Batch 36: shown under the thana picker (New order's Smart paste
    *  chips). */
   thanaExtra?: ReactNode;
+  /** Batch 63: which fields to show. 'all' (default) is the form exactly as
+   *  checkout has it; Admin → New order shows 'contact' (name, phone) and
+   *  'address' (division, district, thana, house / road) on two cards. */
+  part?: AddressPart;
 }
+
+export type AddressPart = 'all' | 'contact' | 'address';
 
 /** The Full name / Phone / Division / District / Thana / Address fields,
  *  shared by DeliveryDetailsPage (checkout step 2) and the account page's
@@ -62,6 +68,7 @@ export function AddressFormFields({
   onLocationChange,
   idPrefix,
   thanaExtra,
+  part = 'all',
 }: AddressFormFieldsProps) {
   const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
 
@@ -99,126 +106,130 @@ export function AddressFormFields({
     onLocationChange?.(form.district, thana);
   };
 
-  return (
+  const nameField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-name`}>
+        Full name <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <input
+        id={`${idPrefix}-name`}
+        type="text"
+        className="form-input"
+        value={form.fullName}
+        onChange={(e) => onChange({ fullName: e.target.value })}
+      />
+      {errors.fullName && (
+        <p className="form-error" role="alert">
+          {errors.fullName}
+        </p>
+      )}
+    </div>
+  );
+  const phoneField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-phone`}>
+        Phone number <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <input
+        id={`${idPrefix}-phone`}
+        type="tel"
+        inputMode="tel"
+        className="form-input"
+        value={form.phone}
+        onChange={(e) => onChange({ phone: e.target.value })}
+      />
+      {errors.phone && (
+        <p className="form-error" role="alert">
+          {errors.phone}
+        </p>
+      )}
+    </div>
+  );
+  const divisionField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-division`}>
+        Division <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <button
+        type="button"
+        id={`${idPrefix}-division`}
+        className={`form-picker-button${form.division === '' ? ' form-picker-button--placeholder' : ''}`}
+        onClick={() => setOpenPicker('division')}
+      >
+        {form.division || 'Select division'}
+      </button>
+      {errors.division && (
+        <p className="form-error" role="alert">
+          {errors.division}
+        </p>
+      )}
+    </div>
+  );
+  const districtField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-district`}>
+        District <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <button
+        type="button"
+        id={`${idPrefix}-district`}
+        className={`form-picker-button${form.district === '' ? ' form-picker-button--placeholder' : ''}`}
+        onClick={() => selectedDivision && setOpenPicker('district')}
+        disabled={!selectedDivision}
+      >
+        {form.district || 'Select district'}
+      </button>
+      {errors.district && (
+        <p className="form-error" role="alert">
+          {errors.district}
+        </p>
+      )}
+    </div>
+  );
+  const thanaField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-thana`}>
+        Thana / Upazila <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <button
+        type="button"
+        id={`${idPrefix}-thana`}
+        className={`form-picker-button${form.thana === '' ? ' form-picker-button--placeholder' : ''}`}
+        onClick={() => selectedDistrict && setOpenPicker('thana')}
+        disabled={!selectedDistrict}
+      >
+        {form.thana || 'Select thana'}
+      </button>
+      {errors.thana && (
+        <p className="form-error" role="alert">
+          {errors.thana}
+        </p>
+      )}
+      {thanaExtra}
+    </div>
+  );
+  const addressField = (
+    <div className="form-field">
+      <label className="form-label" htmlFor={`${idPrefix}-address`}>
+        House / road / landmark <span className="form-required" aria-hidden="true">*</span>
+      </label>
+      <textarea
+        id={`${idPrefix}-address`}
+        className="form-input form-textarea"
+        rows={3}
+        placeholder="House, road, landmark"
+        value={form.fullAddress}
+        onChange={(e) => onChange({ fullAddress: e.target.value })}
+      />
+      {errors.fullAddress && (
+        <p className="form-error" role="alert">
+          {errors.fullAddress}
+        </p>
+      )}
+    </div>
+  );
+  const sheets = (
     <>
-      <div className="form-field">
-        <label className="form-label" htmlFor={`${idPrefix}-name`}>
-          Full name <span className="form-required" aria-hidden="true">*</span>
-        </label>
-        <input
-          id={`${idPrefix}-name`}
-          type="text"
-          className="form-input"
-          value={form.fullName}
-          onChange={(e) => onChange({ fullName: e.target.value })}
-        />
-        {errors.fullName && (
-          <p className="form-error" role="alert">
-            {errors.fullName}
-          </p>
-        )}
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor={`${idPrefix}-phone`}>
-          Phone number <span className="form-required" aria-hidden="true">*</span>
-        </label>
-        <input
-          id={`${idPrefix}-phone`}
-          type="tel"
-          inputMode="tel"
-          className="form-input"
-          value={form.phone}
-          onChange={(e) => onChange({ phone: e.target.value })}
-        />
-        {errors.phone && (
-          <p className="form-error" role="alert">
-            {errors.phone}
-          </p>
-        )}
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor={`${idPrefix}-division`}>
-          Division <span className="form-required" aria-hidden="true">*</span>
-        </label>
-        <button
-          type="button"
-          id={`${idPrefix}-division`}
-          className={`form-picker-button${form.division === '' ? ' form-picker-button--placeholder' : ''}`}
-          onClick={() => setOpenPicker('division')}
-        >
-          {form.division || 'Select division'}
-        </button>
-        {errors.division && (
-          <p className="form-error" role="alert">
-            {errors.division}
-          </p>
-        )}
-      </div>
-
-      <div className="form-row">
-        <div className="form-field">
-          <label className="form-label" htmlFor={`${idPrefix}-district`}>
-            District <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <button
-            type="button"
-            id={`${idPrefix}-district`}
-            className={`form-picker-button${form.district === '' ? ' form-picker-button--placeholder' : ''}`}
-            onClick={() => selectedDivision && setOpenPicker('district')}
-            disabled={!selectedDivision}
-          >
-            {form.district || 'Select district'}
-          </button>
-          {errors.district && (
-            <p className="form-error" role="alert">
-              {errors.district}
-            </p>
-          )}
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor={`${idPrefix}-thana`}>
-            Thana / Upazila <span className="form-required" aria-hidden="true">*</span>
-          </label>
-          <button
-            type="button"
-            id={`${idPrefix}-thana`}
-            className={`form-picker-button${form.thana === '' ? ' form-picker-button--placeholder' : ''}`}
-            onClick={() => selectedDistrict && setOpenPicker('thana')}
-            disabled={!selectedDistrict}
-          >
-            {form.thana || 'Select thana'}
-          </button>
-          {errors.thana && (
-            <p className="form-error" role="alert">
-              {errors.thana}
-            </p>
-          )}
-          {thanaExtra}
-        </div>
-      </div>
-
-      <div className="form-field">
-        <label className="form-label" htmlFor={`${idPrefix}-address`}>
-          House / road / landmark <span className="form-required" aria-hidden="true">*</span>
-        </label>
-        <textarea
-          id={`${idPrefix}-address`}
-          className="form-input form-textarea"
-          rows={3}
-          placeholder="House, road, landmark"
-          value={form.fullAddress}
-          onChange={(e) => onChange({ fullAddress: e.target.value })}
-        />
-        {errors.fullAddress && (
-          <p className="form-error" role="alert">
-            {errors.fullAddress}
-          </p>
-        )}
-      </div>
-
       <PickerSheet
         isOpen={openPicker === 'division'}
         onClose={() => setOpenPicker(null)}
@@ -244,6 +255,49 @@ export function AddressFormFields({
         selectedThana={form.thana}
         onPick={handlePickThana}
       />
+    </>
+  );
+
+  if (part === 'contact') {
+    return (
+      <div className="nord-pair">
+        {nameField}
+        {phoneField}
+      </div>
+    );
+  }
+
+  if (part === 'address') {
+    return (
+      <>
+        <div className="nord-trio">
+          {divisionField}
+          {districtField}
+          {thanaField}
+        </div>
+        {addressField}
+        {sheets}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {nameField}
+
+      {phoneField}
+
+      {divisionField}
+
+      <div className="form-row">
+        {districtField}
+
+        {thanaField}
+      </div>
+
+      {addressField}
+
+      {sheets}
     </>
   );
 }

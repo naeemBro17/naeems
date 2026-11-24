@@ -5,11 +5,11 @@
 // payment, and save. Saved through admin_create_order() (migration-028) —
 // every price/stock check happens in the database, never trusted from this
 // form; this component only shapes the input and shows a live preview.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { productSearchGroups, searchProductGroups, type SellableOption, type SellableProduct } from '../../lib/manualOrderSearch';
-import { ProductResults } from './ManualOptionPicker';
+import { BottleIcon, ProductResults } from './ManualOptionPicker';
 import { Toggle } from './edit-sheets/SheetChrome';
 import { type AddressFieldErrors } from '../checkout/AddressFormFields';
 import { CustomerDetailsFields } from './CustomerDetailsFields';
@@ -41,7 +41,8 @@ import type { ParsedOrderMessage, ThanaOption } from '../../lib/smartPaste';
 import { bdPhoneKey } from '../../lib/phone';
 import { isTestCustomer, isTestViewer } from '../../lib/testData';
 import type { DeliveryAddress } from '../../features/checkout/types';
-import { PaymentSection } from './PaymentSection';
+import { PaymentSection, PaymentSummaryRows } from './PaymentSection';
+import { customerInitials, itemsWord } from '../../lib/newOrderLook';
 import { legacyPaymentMethod, planPayment, type CollectMode } from '../../lib/paymentPlan';
 import { isCollectModeReady } from '../../lib/orders';
 import type { PaymentMethodId } from '../../lib/payments';
@@ -51,11 +52,19 @@ import type { DiscountReason, OrderSource } from '../../types';
 interface NewOrderFormProps {
   /** The page's Create order button submits this form by id. */
   formId: string;
-  /** Tells the page whether its Create order button can be pressed. */
-  onState: (state: { canSave: boolean; isSaving: boolean }) => void;
+  /** Tells the page whether its Create order button can be pressed (and,
+   *  Batch 63, the item count and total for the phone's bottom bar). */
+  onState: (state: NewOrderFormState) => void;
   /** Called with the new order's id once saved — the page opens its detail
    *  immediately so Naeem lands right on the invoice/Steadfast button. */
   onCreated: (orderId: string) => void | Promise<void>;
+}
+
+export interface NewOrderFormState {
+  canSave: boolean;
+  isSaving: boolean;
+  itemCount: number;
+  total: number;
 }
 
 type DeliveryZoneChoice = 'inside_dhaka' | 'outside_dhaka' | 'hand_delivered';
@@ -67,6 +76,9 @@ interface OrderLine {
   productName: string;
   variantLabel: string | null;
   imageUrl: string | null;
+  /** Batch 63: the small photo on the line (the full one only when the
+   *  product has no small copy yet, as before). */
+  thumbUrl: string | null;
   listPrice: number;
   soldPrice: number;
   soldPriceInput: string;
@@ -88,6 +100,45 @@ function emptyForm(): DeliveryAddress {
 }
 
 const emptyErrors: AddressFieldErrors = {};
+
+/**
+ * Batch 63: a floating result list closes on Escape or a tap outside its
+ * search box and list; typing in the box or tapping into it opens it again.
+ */
+function useFloatingList(ref: RefObject<HTMLElement | null>): {
+  open: boolean;
+  show: () => void;
+  onKeyDown: (event: ReactKeyboardEvent) => void;
+} {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && ref.current && !ref.current.contains(target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open, ref]);
+  return {
+    open,
+    show: () => setOpen(true),
+    onKeyDown: (event) => {
+      if (event.key === 'Escape' && open) {
+        event.preventDefault();
+        setOpen(false);
+      }
+    },
+  };
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
 
 /**
  * Batch 32 Part 3: the form of the New order page (/admin/orders/new) —
@@ -271,6 +322,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           productName: option.productName,
           variantLabel: option.variantLabel,
           imageUrl: option.imageUrl,
+          thumbUrl: option.thumbUrl ?? option.imageUrl,
           listPrice: option.listPrice,
           soldPrice: option.listPrice,
           soldPriceInput: String(option.listPrice),
@@ -608,8 +660,13 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   };
 
   useEffect(() => {
-    onState({ canSave, isSaving });
-  }, [canSave, isSaving, onState]);
+    onState({ canSave, isSaving, itemCount: lines.length, total: totals.total });
+  }, [canSave, isSaving, lines.length, totals.total, onState]);
+
+  const customerBox = useRef<HTMLDivElement>(null);
+  const productBox = useRef<HTMLDivElement>(null);
+  const customerList = useFloatingList(customerBox);
+  const productList = useFloatingList(productBox);
 
   const warningMessage = pendingWarnings
     ? pendingWarnings
@@ -623,6 +680,42 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // selling anyway records the missing units as "Sold without stock".
   const warningInUnits = pendingWarnings?.some((w) => w.unit) ?? false;
 
+  const thanaChips =
+    smart && smart.thanaChoices.length > 0 ? (
+      <div className="smart-thana" data-testid="smart-thana">
+        {smart.thanaMatchedText && <p className="smart-thana__matched">matched “{smart.thanaMatchedText}”</p>}
+        <div className="smart-thana__chips" role="group" aria-label="Thana suggestions">
+          {smart.thanaChoices.map((option) => {
+            const on = address.thana === option.name && address.district === placeFor(option).district;
+            return (
+              <button
+                key={`${option.name}|${option.district}`}
+                type="button"
+                className={`smart-thana__chip${on ? ' is-on' : ''}`}
+                aria-pressed={on}
+                onClick={() => handlePickThanaChip(option)}
+              >
+                {option.name}
+                {smart.thanaChoices.some((o) => o !== option && o.name === option.name) ? `, ${option.district}` : ''}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  const customerFieldProps = {
+    idPrefix: 'manual-order',
+    address,
+    errors: emptyErrors,
+    onAddressChange: handleAddressEdit,
+    onLocationChange: handleLocationChange,
+    altPhone,
+    onAltPhoneChange: setAltPhone,
+  };
+
+  const shownCustomers = customerResults.filter((c) => !hideTestCustomers || !isTestCustomer({ name: c.fullName }));
+
   return (
     <>
       <form
@@ -634,487 +727,560 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
           void handleSave(false);
         }}
       >
-        <SmartPasteCard
-          onStart={handleSmartStart}
-          onPatch={handleSmartPatch}
-          onFilled={handleSmartFilled}
-          onUndo={handleSmartUndo}
-          savedCustomer={
-            savedMatch
-              ? { name: savedMatch.fullName || savedMatch.phone, place: [savedMatch.thana, savedMatch.district].filter(Boolean).join(', ') }
-              : null
-          }
-          onUseSaved={handleUseSaved}
-        />
-        {smart && (smart.codHint || smart.productHint) && (
-          <p className="smart-paste__hints" data-testid="smart-paste-hints">
-            In the message (not added):{' '}
-            {[smart.codHint ? `COD ${smart.codHint}` : null, smart.productHint ? `Product: ${smart.productHint}` : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        )}
-
-        <div className="form-field customer-pick">
-          <label className="form-label" htmlFor="manual-order-customer">
-            Customer
-          </label>
-          {pickedCustomer ? (
-            <div className="customer-pick__chosen" data-testid="customer-picked">
-              <span className="customer-pick__chosen-main">
-                <strong>{pickedCustomer === 'new' ? 'New customer' : pickedCustomer.fullName || pickedCustomer.phone}</strong>
-                <span className="customer-pick__sub">
-                  {pickedCustomer === 'new'
-                    ? 'Fill in the details below'
-                    : `${pickedCustomer.phone}${pickedCustomer.orderCount > 0 ? ` · ${pickedCustomer.orderCount} order${pickedCustomer.orderCount === 1 ? '' : 's'}` : ''}${pickedCustomer.totalDue ? ` · ${formatTaka(pickedCustomer.totalDue)} due` : ''}`}
-                </span>
-              </span>
-              <button type="button" className="account-card__edit" onClick={handleChangeCustomer}>
-                Change
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="search-bar">
-                <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="M21 21l-4.35-4.35" />
-                </svg>
-                <input
-                  id="manual-order-customer"
-                  type="search"
-                  className="search-bar__input"
-                  placeholder="Type a phone number or name"
-                  value={customerQuery}
-                  onChange={(e) => setCustomerQuery(e.target.value)}
-                  autoComplete="off"
-                />
+        <div className="nord-grid">
+          <div
+            className="nord-col smart-guess"
+            data-guess-name={guesses.name ? '' : undefined}
+            data-guess-address={guesses.address ? '' : undefined}
+            data-guess-thana={guesses.thana ? '' : undefined}
+          >
+            <section className="nord-card" data-testid="nord-card-customer">
+              <div className="nord-card__head">
+                <span className="nord-step" aria-hidden="true">1</span>
+                <h2 className="nord-card__title" id="nord-card-customer">Customer</h2>
               </div>
-              {customerQuery.trim().length >= 2 && (
-                <ul className="picker-sheet__list customer-pick__results" data-testid="customer-results">
-                  {customerResults.filter((c) => !hideTestCustomers || !isTestCustomer({ name: c.fullName })).map((c) => (
-                    <li key={c.key}>
-                      <button type="button" className="picker-sheet__row" onClick={() => handlePickCustomer(c)}>
-                        <span className="picker-sheet__row-label customer-pick__row">
-                          <span>
-                            {c.fullName || c.phone}
-                            {c.profileId && <span className="customer-pick__tag">Account</span>}
+
+              <SmartPasteCard
+                startCollapsed
+                onStart={handleSmartStart}
+                onPatch={handleSmartPatch}
+                onFilled={handleSmartFilled}
+                onUndo={handleSmartUndo}
+                savedCustomer={
+                  savedMatch
+                    ? { name: savedMatch.fullName || savedMatch.phone, place: [savedMatch.thana, savedMatch.district].filter(Boolean).join(', ') }
+                    : null
+                }
+                onUseSaved={handleUseSaved}
+              />
+              {smart && (smart.codHint || smart.productHint) && (
+                <p className="smart-paste__hints" data-testid="smart-paste-hints">
+                  In the message (not added):{' '}
+                  {[smart.codHint ? `COD ${smart.codHint}` : null, smart.productHint ? `Product: ${smart.productHint}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
+
+              <div className="form-field customer-pick">
+                <label className="form-label visually-hidden" htmlFor="manual-order-customer">
+                  Customer
+                </label>
+                {pickedCustomer ? (
+                  <div className="nord-picked" data-testid="customer-picked">
+                    {pickedCustomer === 'new' ? (
+                      <span className="nord-av nord-av--new">
+                        <PlusIcon />
+                      </span>
+                    ) : (
+                      <span className="nord-av" aria-hidden="true">
+                        {customerInitials(pickedCustomer.fullName, pickedCustomer.phone)}
+                      </span>
+                    )}
+                    <span className="nord-picked__main">
+                      <strong>{pickedCustomer === 'new' ? 'New customer' : pickedCustomer.fullName || pickedCustomer.phone}</strong>
+                      <span className="nord-picked__sub">
+                        {pickedCustomer === 'new'
+                          ? 'Fill in the details below'
+                          : `${pickedCustomer.phone}${pickedCustomer.orderCount > 0 ? ` · ${pickedCustomer.orderCount} order${pickedCustomer.orderCount === 1 ? '' : 's'}` : ''}${pickedCustomer.totalDue ? ` · ${formatTaka(pickedCustomer.totalDue)} due` : ''}`}
+                      </span>
+                    </span>
+                    <button type="button" className="account-card__edit" onClick={handleChangeCustomer}>
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="nord-search" ref={customerBox} onKeyDown={customerList.onKeyDown}>
+                    <div className="search-bar">
+                      <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="M21 21l-4.35-4.35" />
+                      </svg>
+                      <input
+                        id="manual-order-customer"
+                        type="search"
+                        className="search-bar__input"
+                        placeholder="Type a phone number or name"
+                        value={customerQuery}
+                        onChange={(e) => {
+                          setCustomerQuery(e.target.value);
+                          customerList.show();
+                        }}
+                        onFocus={customerList.show}
+                        onClick={customerList.show}
+                        autoComplete="off"
+                      />
+                    </div>
+                    {customerList.open && customerQuery.trim().length >= 2 && (
+                      <ul className="nord-drop" data-testid="customer-results">
+                        {shownCustomers.length > 0 && (
+                          <li className="nord-drop__label" aria-hidden="true">
+                            Customers
+                          </li>
+                        )}
+                        {shownCustomers.map((c) => (
+                          <li key={c.key}>
+                            <button type="button" className="nord-res" onClick={() => handlePickCustomer(c)} data-testid="customer-result">
+                              <span className="nord-av" aria-hidden="true">
+                                {customerInitials(c.fullName, c.phone)}
+                              </span>
+                              <span className="nord-res__main">
+                                <span className="nord-res__name">
+                                  {c.fullName || c.phone}
+                                  {c.profileId && <span className="nord-tag">Account</span>}
+                                </span>
+                                <span className="nord-res__sub">
+                                  {c.phone}
+                                  {c.thana || c.district ? ` · ${[c.thana, c.district].filter(Boolean).join(', ')}` : ''}
+                                  {c.orderCount > 0 ? ` · ${c.orderCount} order${c.orderCount === 1 ? '' : 's'}` : ''}
+                                  {c.totalDue ? (
+                                    <>
+                                      {' · '}
+                                      <span className="nord-due" data-testid="customer-result-due">
+                                        {formatTaka(c.totalDue)} due
+                                      </span>
+                                    </>
+                                  ) : null}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                        <li>
+                          <button type="button" className="nord-res customer-pick__new" onClick={handleNewCustomer} data-testid="customer-new">
+                            <span className="nord-av nord-av--new">
+                              <PlusIcon />
+                            </span>
+                            <span className="nord-res__main">
+                              <span className="nord-res__name">New customer</span>
+                              <span className="nord-res__sub">
+                                {looksLikePhone(customerQuery) ? `With phone ${customerQuery.trim()}` : `Named ${customerQuery.trim()}`}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-field">
+                <span className="form-label">
+                  Where did this order come from? <span className="form-required" aria-hidden="true">*</span>
+                </span>
+                <div className="chip-group" role="group" aria-label="Order source">
+                  {MANUAL_ORDER_SOURCES.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`chip-select${source === opt.id ? ' chip-select--on' : ''}`}
+                      aria-pressed={source === opt.id}
+                      onClick={() => handlePickSource(opt.id)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <CustomerDetailsFields
+                {...customerFieldProps}
+                part="contact"
+                afterPhone={
+                  <>
+                    <FraudCheckCard phone={address.phone} />
+                    {matches && (
+                      <div className="admin-panel manual-order-suggestion">
+                        {matches.fromProfile && (
+                          <>
+                            <p className="admin-panel__description">Account found: {matches.fromProfile.fullName || address.phone}</p>
+                            <div className="admin-section-header__actions">
+                              <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('profile')}>
+                                Fill in details
+                              </button>
+                            </div>
+                          </>
+                        )}
+                        {matches.fromOrder && !matches.fromProfile && (
+                          <>
+                            <p className="admin-panel__description">
+                              Previous order found: {matches.fromOrder.fullName}, {matches.fromOrder.addressLine}
+                            </p>
+                            <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('order')}>
+                              Fill in details
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                }
+              />
+            </section>
+
+            <section className="nord-card" data-testid="nord-card-address">
+              <div className="nord-card__head">
+                <span className="nord-step" aria-hidden="true">2</span>
+                <h2 className="nord-card__title" id="nord-card-address">Delivery address</h2>
+              </div>
+              <CustomerDetailsFields {...customerFieldProps} part="address" thanaExtra={thanaChips} />
+            </section>
+
+            <section className="nord-card" data-testid="nord-card-items">
+              <div className="nord-card__head">
+                <span className="nord-step" aria-hidden="true">3</span>
+                <h2 className="nord-card__title" id="nord-card-items">Items</h2>
+                {lines.length > 0 && (
+                  <span className="nord-card__hint" data-testid="nord-items-hint">
+                    {itemsWord(lines.length)}
+                  </span>
+                )}
+              </div>
+              <div className="nord-search" ref={productBox} onKeyDown={productList.onKeyDown}>
+                <div className="search-bar">
+                  <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="search"
+                    className="search-bar__input"
+                    placeholder="Search product name..."
+                    aria-label="Search products"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      productList.show();
+                    }}
+                    onFocus={productList.show}
+                    onClick={productList.show}
+                    autoComplete="off"
+                  />
+                </div>
+                <ProductResults results={productList.open ? searchResults : []} onAdd={addLine} className="nord-drop" photos label="Products" />
+              </div>
+
+              {lines.length > 0 && (
+                <ul className="nord-lines manual-order-lines">
+                  {lines.map((line) => (
+                    <li key={line.key} className="nord-line" data-testid="new-order-line">
+                      <span className="nord-thumb nord-thumb--sm">
+                        {line.thumbUrl ? (
+                          <img src={line.thumbUrl} alt={line.productName} width={44} height={44} loading="lazy" decoding="async" />
+                        ) : (
+                          <BottleIcon />
+                        )}
+                      </span>
+                      <div className="nord-line__mid">
+                        <span className="nord-line__name">{line.productName}</span>
+                        {line.variantLabel && <span className="checkout-cart__variant">{line.variantLabel}</span>}
+                        <PackStockLine units={stockUnits} productId={line.productId} variantId={line.variantId} />
+                        {line.packSize > 1 && (
+                          <div className="chip-group" role="group" aria-label={`Sell ${line.productName} in`} data-testid="line-sold-unit">
+                            <button
+                              type="button"
+                              className={`chip-select${line.soldUnit === null ? ' chip-select--on' : ''}`}
+                              aria-pressed={line.soldUnit === null}
+                              onClick={() => setLineSoldUnit(line.key, null)}
+                            >
+                              Packs ({line.packSize} {line.stockUnit})
+                            </button>
+                            <button
+                              type="button"
+                              className={`chip-select${line.soldUnit !== null ? ' chip-select--on' : ''}`}
+                              aria-pressed={line.soldUnit !== null}
+                              onClick={() => setLineSoldUnit(line.key, line.stockUnit)}
+                            >
+                              Loose {line.stockUnit}
+                            </button>
+                          </div>
+                        )}
+                        {line.soldUnit !== null && !inventoryOn && (
+                          <span className="checkout-cart__variant" data-testid="line-units-note">
+                            Loose {line.soldUnit} don&apos;t change the stock number while Inventory mode is Off.
                           </span>
-                          <span className="picker-sheet__row-sub">
-                            {c.phone}
-                            {c.thana || c.district ? ` · ${[c.thana, c.district].filter(Boolean).join(', ')}` : ''}
-                            {c.orderCount > 0 ? ` · ${c.orderCount} order${c.orderCount === 1 ? '' : 's'}` : ''}
-                            {c.totalDue ? ` · ${formatTaka(c.totalDue)} due` : ''}
+                        )}
+                        {line.soldUnit === null && line.stockQuantity !== null && line.stockQuantity < line.quantity && (
+                          <span
+                            className="checkout-cart__variant"
+                            style={{ color: 'var(--color-danger, #d33)' }}
+                            role="alert"
+                            data-testid="line-stock-error"
+                          >
+                            {line.stockQuantity <= 0 ? 'Sold out — none left in stock' : `Only ${line.stockQuantity} in stock`}
                           </span>
+                        )}
+                        {!isAdmin ? (
+                          <span className="checkout-cart__variant">
+                            {formatTaka(line.listPrice)} {line.soldUnit ? `per ${line.soldUnit}` : 'each'}
+                          </span>
+                        ) : (
+                          <div className="manual-order-line__price-row">
+                            {line.soldPrice !== line.listPrice && (
+                              <span className="manual-order-line__list-price">{formatTaka(line.listPrice)}</span>
+                            )}
+                            <MoneyInput
+                              min="0"
+                              className="manual-order-line__price-input"
+                              value={line.soldPriceInput}
+                              onChange={(e) => setLineSoldPrice(line.key, e.target.value)}
+                              aria-label={line.soldUnit ? `Price per ${line.soldUnit}` : undefined}
+                            />
+                            {line.soldUnit && <span className="checkout-cart__variant">per {line.soldUnit}</span>}
+                            <button type="button" className="account-card__edit" onClick={() => setLineFree(line.key)}>
+                              Free
+                            </button>
+                          </div>
+                        )}
+                        {belowCostText(belowCost.get(line.key), canSeeCost) && (
+                          <span className="smart-below" role="status" data-testid="line-below-cost">
+                            {belowCostText(belowCost.get(line.key), canSeeCost)}
+                          </span>
+                        )}
+                        {isAdmin && lineNeedsReason(line.listPrice, line.soldPrice) && (
+                          <div className="chip-group" role="group" aria-label="Reason for discount">
+                            {DISCOUNT_REASONS.map((r) => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                className={`chip-select${line.reason === r.id ? ' chip-select--on' : ''}`}
+                                onClick={() => updateLine(line.key, { reason: r.id })}
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="nord-line__end">
+                        <span className="nord-line__total" data-testid="new-order-line-total">
+                          {formatTaka(line.soldPrice * line.quantity)}
                         </span>
-                      </button>
+                        {line.soldUnit ? (
+                          <label className="manual-order-line__units">
+                            <input
+                              className="form-input"
+                              type="number"
+                              min="1"
+                              step="1"
+                              inputMode="numeric"
+                              value={line.quantity}
+                              onChange={(e) => setLineQuantity(line.key, Math.floor(Number(e.target.value) || 1))}
+                              aria-label={`Loose ${line.soldUnit} of ${line.productName}`}
+                              data-testid="line-units-input"
+                            />
+                            <span className="checkout-cart__variant">{line.soldUnit}</span>
+                          </label>
+                        ) : (
+                          <div className="checkout-cart__stepper">
+                            <button type="button" className="checkout-cart__step-btn" onClick={() => setLineQuantity(line.key, line.quantity - 1)} aria-label="Decrease quantity">
+                              &minus;
+                            </button>
+                            <span className="checkout-cart__step-count">{line.quantity}</span>
+                            <button type="button" className="checkout-cart__step-btn" onClick={() => setLineQuantity(line.key, line.quantity + 1)} aria-label="Increase quantity">
+                              +
+                            </button>
+                          </div>
+                        )}
+                        <button type="button" className="nord-line__remove" onClick={() => removeLine(line.key)}>
+                          Remove
+                        </button>
+                      </div>
                     </li>
                   ))}
-                  <li>
-                    <button type="button" className="picker-sheet__row customer-pick__new" onClick={handleNewCustomer}>
-                      <span className="picker-sheet__row-label">
-                        New customer
-                        <span className="picker-sheet__row-sub">
-                          {looksLikePhone(customerQuery) ? `With phone ${customerQuery.trim()}` : `Named ${customerQuery.trim()}`}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
                 </ul>
               )}
-            </>
-          )}
-        </div>
+            </section>
 
-        <div className="form-field">
-          <span className="form-label">
-            Source <span className="form-required" aria-hidden="true">*</span>
-          </span>
-          <div className="chip-group" role="group" aria-label="Order source">
-            {MANUAL_ORDER_SOURCES.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`chip-select${source === opt.id ? ' chip-select--on' : ''}`}
-                aria-pressed={source === opt.id}
-                onClick={() => handlePickSource(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <section className="nord-card" data-testid="nord-card-note">
+              <div className="nord-card__head">
+                <span className="nord-step" aria-hidden="true">4</span>
+                <h2 className="nord-card__title" id="nord-card-note">
+                  <label htmlFor="manual-order-note">Admin note</label>
+                </h2>
+                <span className="nord-card__hint">Only you see this</span>
+              </div>
+              <div className="form-field">
+                <input
+                  id="manual-order-note"
+                  type="text"
+                  className="form-input"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder="Anything to remember about this order"
+                />
+              </div>
+            </section>
           </div>
-        </div>
 
-        <div
-          className="smart-guess"
-          data-guess-name={guesses.name ? '' : undefined}
-          data-guess-address={guesses.address ? '' : undefined}
-          data-guess-thana={guesses.thana ? '' : undefined}
-        >
-          <CustomerDetailsFields
-            idPrefix="manual-order"
-            address={address}
-            errors={emptyErrors}
-            onAddressChange={handleAddressEdit}
-            onLocationChange={handleLocationChange}
-            altPhone={altPhone}
-            onAltPhoneChange={setAltPhone}
-            thanaExtra={
-              smart && smart.thanaChoices.length > 0 ? (
-                <div className="smart-thana" data-testid="smart-thana">
-                  {smart.thanaMatchedText && (
-                    <p className="smart-thana__matched">matched “{smart.thanaMatchedText}”</p>
-                  )}
-                  <div className="smart-thana__chips" role="group" aria-label="Thana suggestions">
-                    {smart.thanaChoices.map((option) => {
-                      const on = address.thana === option.name && address.district === placeFor(option).district;
-                      return (
-                        <button
-                          key={`${option.name}|${option.district}`}
-                          type="button"
-                          className={`smart-thana__chip${on ? ' is-on' : ''}`}
-                          aria-pressed={on}
-                          onClick={() => handlePickThanaChip(option)}
-                        >
-                          {option.name}
-                          {smart.thanaChoices.some((o) => o !== option && o.name === option.name) ? `, ${option.district}` : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null
-            }
-          />
-        </div>
+          <div className="nord-side">
+            <section className="nord-card" data-testid="nord-card-pay">
+              <div className="nord-card__head">
+                <h2 className="nord-card__title" id="nord-card-pay">Delivery and payment</h2>
+              </div>
 
-        <FraudCheckCard phone={address.phone} />
-
-        {matches && (
-          <div className="admin-panel manual-order-suggestion">
-            {matches.fromProfile && (
-              <>
-                <p className="admin-panel__description">
-                  Account found: {matches.fromProfile.fullName || address.phone}
-                </p>
-                <div className="admin-section-header__actions">
-                  <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('profile')}>
-                    Fill in details
+              <div className="form-field">
+                <span className="form-label">Delivery</span>
+                <div className="chip-group" role="group" aria-label="Delivery zone">
+                  <button type="button" className={`chip-select${zone === 'inside_dhaka' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('inside_dhaka')}>
+                    Inside Dhaka
+                  </button>
+                  <button type="button" className={`chip-select${zone === 'outside_dhaka' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('outside_dhaka')}>
+                    Outside Dhaka
+                  </button>
+                  <button type="button" className={`chip-select${zone === 'hand_delivered' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('hand_delivered')}>
+                    Hand delivered
                   </button>
                 </div>
-              </>
-            )}
-            {matches.fromOrder && !matches.fromProfile && (
-              <>
-                <p className="admin-panel__description">
-                  Previous order found: {matches.fromOrder.fullName}, {matches.fromOrder.addressLine}
-                </p>
-                <button type="button" className="button button--secondary button--small" onClick={() => handleUseSuggestion('order')}>
-                  Fill in details
-                </button>
-              </>
-            )}
-          </div>
-        )}
+              </div>
 
-        <div className="form-field">
-          <span className="form-label">Items <span className="form-required" aria-hidden="true">*</span></span>
-          <div className="search-bar">
-            <svg className="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-            <input
-              type="search"
-              className="search-bar__input"
-              placeholder="Search product name..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-          <ProductResults results={searchResults} onAdd={addLine} />
-        </div>
-
-        {lines.length > 0 && (
-          <ul className="checkout-cart__list manual-order-lines">
-            {lines.map((line) => (
-              <li key={line.key} className="checkout-cart__row">
-                <span className="checkout-cart__thumb">
-                  {line.imageUrl ? <img src={line.imageUrl} alt={line.productName} /> : <span className="checkout-cart__thumb-empty" aria-hidden="true" />}
-                </span>
-                <div className="checkout-cart__info">
-                  <span className="checkout-cart__name">{line.productName}</span>
-                  {line.variantLabel && <span className="checkout-cart__variant">{line.variantLabel}</span>}
-                  <PackStockLine units={stockUnits} productId={line.productId} variantId={line.variantId} />
-                  {line.packSize > 1 && (
-                    <div className="chip-group" role="group" aria-label={`Sell ${line.productName} in`} data-testid="line-sold-unit">
-                      <button
-                        type="button"
-                        className={`chip-select${line.soldUnit === null ? ' chip-select--on' : ''}`}
-                        aria-pressed={line.soldUnit === null}
-                        onClick={() => setLineSoldUnit(line.key, null)}
-                      >
-                        Packs ({line.packSize} {line.stockUnit})
-                      </button>
-                      <button
-                        type="button"
-                        className={`chip-select${line.soldUnit !== null ? ' chip-select--on' : ''}`}
-                        aria-pressed={line.soldUnit !== null}
-                        onClick={() => setLineSoldUnit(line.key, line.stockUnit)}
-                      >
-                        Loose {line.stockUnit}
-                      </button>
-                    </div>
-                  )}
-                  {line.soldUnit !== null && !inventoryOn && (
-                    <span className="checkout-cart__variant" data-testid="line-units-note">
-                      Loose {line.soldUnit} don&apos;t change the stock number while Inventory mode is Off.
-                    </span>
-                  )}
-                  {line.soldUnit === null && line.stockQuantity !== null && line.stockQuantity < line.quantity && (
-                    <span
-                      className="checkout-cart__variant"
-                      style={{ color: 'var(--color-danger, #d33)' }}
-                      role="alert"
-                      data-testid="line-stock-error"
-                    >
-                      {line.stockQuantity <= 0 ? 'Sold out — none left in stock' : `Only ${line.stockQuantity} in stock`}
-                    </span>
-                  )}
-                  {!isAdmin ? (
-                    <span className="checkout-cart__variant">
-                      {formatTaka(line.listPrice)} {line.soldUnit ? `per ${line.soldUnit}` : 'each'}
-                    </span>
-                  ) : (
-                  <div className="manual-order-line__price-row">
-                    {line.soldPrice !== line.listPrice && (
-                      <span className="manual-order-line__list-price">{formatTaka(line.listPrice)}</span>
-                    )}
-                    <MoneyInput
-                      min="0"
-                      className="manual-order-line__price-input"
-                      value={line.soldPriceInput}
-                      onChange={(e) => setLineSoldPrice(line.key, e.target.value)}
-                      aria-label={line.soldUnit ? `Price per ${line.soldUnit}` : undefined}
-                    />
-                    {line.soldUnit && <span className="checkout-cart__variant">per {line.soldUnit}</span>}
-                    <button type="button" className="account-card__edit" onClick={() => setLineFree(line.key)}>
-                      Free
-                    </button>
+              {/* Batch 47: shown for hand delivered too (৳0 by default, any
+                  other amount may be typed). */}
+              <div className={isAdmin ? 'nord-pair nord-pair--keep' : undefined}>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="manual-order-fee">
+                    Delivery fee
+                  </label>
+                  <MoneyInput id="manual-order-fee" min="0" value={feeInput} onChange={(e) => setFeeInput(e.target.value)} aria-label="Delivery fee" />
+                </div>
+                {isAdmin && (
+                  <div className="form-field">
+                    <label className="form-label" htmlFor="manual-order-discount">
+                      Order discount
+                    </label>
+                    <MoneyInput id="manual-order-discount" min="0" value={orderDiscountInput} onChange={(e) => setOrderDiscountInput(e.target.value)} />
                   </div>
-                  )}
-                  {belowCostText(belowCost.get(line.key), canSeeCost) && (
-                    <span className="smart-below" role="status" data-testid="line-below-cost">
-                      {belowCostText(belowCost.get(line.key), canSeeCost)}
-                    </span>
-                  )}
-                  {isAdmin && lineNeedsReason(line.listPrice, line.soldPrice) && (
-                    <div className="chip-group" role="group" aria-label="Reason for discount">
+                )}
+              </div>
+              {isAdmin && orderDiscount > 0 && (
+                <>
+                  <div className="form-field">
+                    <span className="form-label">Reason for order discount</span>
+                    <div className="chip-group" role="group" aria-label="Reason for order discount">
                       {DISCOUNT_REASONS.map((r) => (
                         <button
                           key={r.id}
                           type="button"
-                          className={`chip-select${line.reason === r.id ? ' chip-select--on' : ''}`}
-                          onClick={() => updateLine(line.key, { reason: r.id })}
+                          className={`chip-select${discountReason === r.id ? ' chip-select--on' : ''}`}
+                          onClick={() => setDiscountReason(r.id)}
                         >
                           {r.label}
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
-                <div className="checkout-cart__row-end">
-                  {line.soldUnit ? (
-                    <label className="manual-order-line__units">
-                      <input
-                        className="form-input"
-                        type="number"
-                        min="1"
-                        step="1"
-                        inputMode="numeric"
-                        value={line.quantity}
-                        onChange={(e) => setLineQuantity(line.key, Math.floor(Number(e.target.value) || 1))}
-                        aria-label={`Loose ${line.soldUnit} of ${line.productName}`}
-                        data-testid="line-units-input"
-                      />
-                      <span className="checkout-cart__variant">{line.soldUnit}</span>
-                    </label>
-                  ) : (
-                  <div className="checkout-cart__stepper">
-                    <button type="button" className="checkout-cart__step-btn" onClick={() => setLineQuantity(line.key, line.quantity - 1)} aria-label="Decrease quantity">
-                      &minus;
-                    </button>
-                    <span className="checkout-cart__step-count">{line.quantity}</span>
-                    <button type="button" className="checkout-cart__step-btn" onClick={() => setLineQuantity(line.key, line.quantity + 1)} aria-label="Increase quantity">
-                      +
-                    </button>
                   </div>
-                  )}
-                  <span className="checkout-cart__line-total">{formatTaka(line.soldPrice * line.quantity)}</span>
-                  <button type="button" className="account-card__edit" onClick={() => removeLine(line.key)}>
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                  <div className="form-field">
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Optional note"
+                      value={discountNote}
+                      onChange={(e) => setDiscountNote(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
 
-        {isAdmin && (
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label" htmlFor="manual-order-discount">Order discount (৳)</label>
-            <MoneyInput
-              id="manual-order-discount"
-              min="0"
-              value={orderDiscountInput}
-              onChange={(e) => setOrderDiscountInput(e.target.value)}
-            />
-          </div>
-        </div>
-        )}
-        {isAdmin && orderDiscount > 0 && (
-          <>
-            <div className="form-field">
-              <span className="form-label">Reason for order discount</span>
-              <div className="chip-group" role="group" aria-label="Reason for order discount">
-                {DISCOUNT_REASONS.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    className={`chip-select${discountReason === r.id ? ' chip-select--on' : ''}`}
-                    onClick={() => setDiscountReason(r.id)}
-                  >
-                    {r.label}
-                  </button>
-                ))}
+              <div className="form-field">
+                <span className="form-label">Payment</span>
+                <PaymentSection
+                  idPrefix="manual-order"
+                  total={totals.total}
+                  plan={plan}
+                  paidNowInput={paidNowInput}
+                  onPaidNowInput={setPaidNowInput}
+                  method={paidMethod}
+                  onMethod={setPaidMethod}
+                  trxId={paidTrxId}
+                  onTrxId={setPaidTrxId}
+                  mode={collectMode}
+                  onMode={setCollectMode}
+                  payLaterAvailable={payLaterReady}
+                  methodMissing={methodMissing}
+                  summaryOutside
+                />
               </div>
-            </div>
-            <div className="form-field">
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Optional note"
-                value={discountNote}
-                onChange={(e) => setDiscountNote(e.target.value)}
-              />
-            </div>
-          </>
-        )}
 
-        <div className="form-field">
-          <span className="form-label">Delivery</span>
-          <div className="chip-group" role="group" aria-label="Delivery zone">
-            <button type="button" className={`chip-select${zone === 'inside_dhaka' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('inside_dhaka')}>
-              Inside Dhaka
-            </button>
-            <button type="button" className={`chip-select${zone === 'outside_dhaka' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('outside_dhaka')}>
-              Outside Dhaka
-            </button>
-            <button type="button" className={`chip-select${zone === 'hand_delivered' ? ' chip-select--on' : ''}`} onClick={() => handlePickZone('hand_delivered')}>
-              No delivery (hand delivered)
-            </button>
-          </div>
-          {/* Batch 47: shown for hand delivered too (৳0 by default, any
-              other amount may be typed). */}
-          <MoneyInput
-            min="0"
-            style={{ marginTop: 8 }}
-            value={feeInput}
-            onChange={(e) => setFeeInput(e.target.value)}
-            aria-label="Delivery fee"
-          />
-        </div>
+              {storeBalance > 0 && (
+                <div className="form-field" data-testid="new-order-use-wallet">
+                  <div className="order-admin-detail__field-row">
+                    <span className="form-label" style={{ margin: 0 }}>
+                      Use wallet balance ({formatTaka(storeBalance)})
+                    </span>
+                    <Toggle checked={useStore} onChange={setUseStore} label="Use wallet balance" />
+                  </div>
+                  {useStore && (
+                    <p className="form-hint">
+                      From wallet {formatTaka(fromStore)} · still to collect {formatTaka(Math.max(0, totals.total - plan.paidNow - fromStore))}
+                    </p>
+                  )}
+                </div>
+              )}
 
-        <div className="form-field">
-          <span className="form-label">Payment</span>
-          <PaymentSection
-            idPrefix="manual-order"
-            total={totals.total}
-            plan={plan}
-            paidNowInput={paidNowInput}
-            onPaidNowInput={setPaidNowInput}
-            method={paidMethod}
-            onMethod={setPaidMethod}
-            trxId={paidTrxId}
-            onTrxId={setPaidTrxId}
-            mode={collectMode}
-            onMode={setCollectMode}
-            payLaterAvailable={payLaterReady}
-            methodMissing={methodMissing}
-          />
-        </div>
+              {zone === 'hand_delivered' && isPaidNow && (
+                <div className="form-field">
+                  <div className="order-admin-detail__field-row">
+                    <span className="form-label" style={{ margin: 0 }}>Mark as delivered right away</span>
+                    <Toggle checked={markDelivered} onChange={setMarkDelivered} label="Mark as delivered right away" />
+                  </div>
+                </div>
+              )}
 
-        {storeBalance > 0 && (
-          <div className="form-field" data-testid="new-order-use-wallet">
-            <div className="order-admin-detail__field-row">
-              <span className="form-label" style={{ margin: 0 }}>
-                Use wallet balance ({formatTaka(storeBalance)})
-              </span>
-              <Toggle checked={useStore} onChange={setUseStore} label="Use wallet balance" />
-            </div>
-            {useStore && (
-              <p className="form-hint">
-                From wallet {formatTaka(fromStore)} · still to collect {formatTaka(Math.max(0, totals.total - plan.paidNow - fromStore))}
-              </p>
-            )}
-          </div>
-        )}
+              <div className="nord-div" />
 
-        {zone === 'hand_delivered' && isPaidNow && (
-          <div className="form-field">
-            <div className="order-admin-detail__field-row">
-              <span className="form-label" style={{ margin: 0 }}>Mark as delivered right away</span>
-              <Toggle checked={markDelivered} onChange={setMarkDelivered} label="Mark as delivered right away" />
-            </div>
-          </div>
-        )}
+              <div data-testid="new-order-totals">
+                <div className="nord-kv">
+                  <span>Subtotal</span>
+                  <b>{formatTaka(totals.subtotal)}</b>
+                </div>
+                {totals.lineDiscount > 0 && (
+                  <div className="nord-kv">
+                    <span>Item discounts</span>
+                    <b>-{formatTaka(totals.lineDiscount)}</b>
+                  </div>
+                )}
+                {totals.freeValue > 0 && (
+                  <div className="nord-kv">
+                    <span>Free items (list value)</span>
+                    <b>{formatTaka(totals.freeValue)}</b>
+                  </div>
+                )}
+                <div className="nord-kv">
+                  <span>Delivery</span>
+                  <b>{formatTaka(totals.deliveryFee)}</b>
+                </div>
+                {totals.orderDiscount > 0 && (
+                  <div className="nord-kv">
+                    <span>Order discount</span>
+                    <b>-{formatTaka(totals.orderDiscount)}</b>
+                  </div>
+                )}
+                <div className="nord-kv nord-kv--total">
+                  <span>Total</span>
+                  <b data-testid="new-order-total">{formatTaka(totals.total)}</b>
+                </div>
+              </div>
 
-        <div className="form-field">
-          <label className="form-label" htmlFor="manual-order-note">Admin note (optional)</label>
-          <input
-            id="manual-order-note"
-            type="text"
-            className="form-input"
-            value={adminNote}
-            onChange={(e) => setAdminNote(e.target.value)}
-          />
-        </div>
+              <div className="nord-cod" aria-live="polite" data-testid="payment-summary">
+                <PaymentSummaryRows plan={plan} rowClass="nord-kv" strongClass="nord-kv--strong" />
+              </div>
 
-        <div className="checkout-summary-card">
-          <div className="checkout-summary-card__row">
-            <span>Subtotal</span>
-            <span>{formatTaka(totals.subtotal)}</span>
-          </div>
-          {totals.lineDiscount > 0 && (
-            <div className="checkout-summary-card__row checkout-summary-card__row--discount">
-              <span>Item discounts</span>
-              <span>-{formatTaka(totals.lineDiscount)}</span>
-            </div>
-          )}
-          {totals.freeValue > 0 && (
-            <div className="checkout-summary-card__row checkout-summary-card__row--discount">
-              <span>Free items (list value)</span>
-              <span>{formatTaka(totals.freeValue)}</span>
-            </div>
-          )}
-          <div className="checkout-summary-card__row">
-            <span>Delivery</span>
-            <span>{formatTaka(totals.deliveryFee)}</span>
-          </div>
-          {totals.orderDiscount > 0 && (
-            <div className="checkout-summary-card__row checkout-summary-card__row--discount">
-              <span>Order discount</span>
-              <span>-{formatTaka(totals.orderDiscount)}</span>
-            </div>
-          )}
-          <div className="checkout-summary-card__row checkout-summary-card__row--total">
-            <span>Total</span>
-            <span>{formatTaka(totals.total)}</span>
+              <div className="nord-create-wrap">
+                <button
+                  type="submit"
+                  className="adm-btn adm-btn--primary nord-create"
+                  disabled={!canSave || isSaving}
+                  aria-busy={isSaving || undefined}
+                  data-testid="nord-create"
+                >
+                  {isSaving ? <span className="spinner" aria-hidden="true" /> : 'Create order'}
+                </button>
+                <p className="nord-fine">Nothing is saved until you tap Create order</p>
+              </div>
+            </section>
           </div>
         </div>
-
       </form>
 
       <ConfirmDialog
