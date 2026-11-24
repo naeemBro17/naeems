@@ -106,7 +106,7 @@ function isValidBangladeshiPhone(raw: string): boolean {
 }
 
 export function OrderSummaryPage() {
-  useDocumentTitle("Order Summary — NAEEM'S");
+  useDocumentTitle("Order Summary | NAEEM'S");
   const {
     items,
     isCatalogLoading,
@@ -206,7 +206,7 @@ export function OrderSummaryPage() {
       discountAmount: valid.discountAmount,
       computedDiscount,
     });
-    setPromoSuccess(`${valid.code} applied — ${formatTaka(computedDiscount)} off`);
+    setPromoSuccess(`${valid.code} applied, ${formatTaka(computedDiscount)} off`);
     setPromoInput('');
   };
 

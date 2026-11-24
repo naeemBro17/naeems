@@ -42,7 +42,7 @@ export function InAppBrowserBar() {
 
   const copyLink = async () => {
     const ok = await copyText(window.location.href);
-    showToast(ok ? `Link copied — paste it in ${browser}` : 'Could not copy the link');
+    showToast(ok ? `Link copied. Paste it in ${browser}` : 'Could not copy the link');
   };
 
   return (

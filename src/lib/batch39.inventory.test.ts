@@ -213,7 +213,7 @@ describe('Batch 39: loose units on orders, invoices and customer pages', () => {
     expect(lineQuantityText(loose)).toBe('150 pcs');
     expect(lineQuantityText(packs)).toBe('2');
     expect(orderItemCount([loose, packs])).toBe(3);
-    expect(lineNameWithUnits('Fish Oil 1000mg', loose)).toBe('Fish Oil 1000mg — 150 pcs');
+    expect(lineNameWithUnits('Fish Oil 1000mg', loose)).toBe('Fish Oil 1000mg, 150 pcs');
   });
 
   it('the invoice prints "Fish Oil 1000mg — 150 pcs", 1 × the line total, with no cost or lot anywhere', () => {
@@ -223,7 +223,7 @@ describe('Batch 39: loose units on orders, invoices and customer pages', () => {
       ],
     });
     const inv = invoiceFromOrder(order, []);
-    expect(inv.lines[0]).toMatchObject({ name: 'Fish Oil 1000mg — 150 pcs', quantity: 1, amount: 1200 });
+    expect(inv.lines[0]).toMatchObject({ name: 'Fish Oil 1000mg, 150 pcs', quantity: 1, amount: 1200 });
     expect(inv.itemCount).toBe(1);
     expect(JSON.stringify(inv)).not.toMatch(/landed|lot|cost/i);
   });

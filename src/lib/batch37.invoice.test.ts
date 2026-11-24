@@ -88,7 +88,7 @@ describe('Batch 37: invoice numbers', () => {
   it('fully paid: COD ৳0 "Paid — do not collect"', () => {
     const { order, payments } = invoiceCases().paid;
     const inv = invoiceFromOrder(order, payments);
-    expect(inv.cod).toEqual({ amount: 0, note: 'Paid — do not collect' });
+    expect(inv.cod).toEqual({ amount: 0, note: 'Paid, do not collect' });
     expect(inv.finalRow.amount).toBe(0);
     expect(inv.paymentLabel).toBe('Paid (bKash)');
   });
@@ -117,7 +117,7 @@ describe('Batch 37: invoice numbers', () => {
 
   it('before the payments table exists the old paid flag decides', () => {
     const inv = invoiceFromOrder(mockOrder({ payment_status: 'paid', payment_method: 'bkash' }), null);
-    expect(inv.cod.note).toBe('Paid — do not collect');
+    expect(inv.cod.note).toBe('Paid, do not collect');
   });
 
   it('customer copy from the checkout: no consignment, bKash counts as paid', () => {
@@ -138,7 +138,7 @@ describe('Batch 37: invoice numbers', () => {
     const inv = invoiceFromSnapshot(snap);
     expect(inv.audience).toBe('customer');
     expect(inv.consignmentId).toBeNull();
-    expect(inv.cod).toEqual({ amount: 0, note: 'Paid — do not collect' });
+    expect(inv.cod).toEqual({ amount: 0, note: 'Paid, do not collect' });
   });
 
   it('settings: defaults, then QR link / switch / phone from settings', () => {

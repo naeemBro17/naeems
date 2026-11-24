@@ -124,7 +124,7 @@ function WishCard({ product }: { product: Product }) {
  * products drop out. Add to cart follows the order limit.
  */
 export function WishlistPage() {
-  useDocumentTitle("Wishlist — NAEEM'S");
+  useDocumentTitle("Wishlist | NAEEM'S");
   const { session, isLoading: authLoading } = useAuth();
   const { products, isLoading } = useProducts();
   const { ids, ready } = useWishlist();

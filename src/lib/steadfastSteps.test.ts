@@ -65,7 +65,7 @@ describe('Steadfast statuses', () => {
   it('exceptional / unknown → Needs attention (admin), a calm message for the customer', () => {
     for (const s of ['exceptional', 'unknown', 'unknown_approval_pending']) {
       expect(label(booked(s), 'admin')).toBe('Needs attention');
-      expect(label(booked(s))).toBe("Delayed — we're checking");
+      expect(label(booked(s))).toBe("Delayed, we're checking");
     }
   });
 });
@@ -127,7 +127,7 @@ describe('tracking texts', () => {
 
 describe('customer-safe text (no rider name or phone)', () => {
   it('a rider assignment becomes one plain sentence', () => {
-    expect(customerSafeText('Assigned to rider Md. Karim (01711111111)')).toBe('Assigned to a rider — your parcel is out for delivery.');
+    expect(customerSafeText('Assigned to rider Md. Karim (01711111111)')).toBe('Assigned to a rider. Your parcel is out for delivery.');
   });
   it('phone numbers are removed from any other text', () => {
     const out = customerSafeText('Call 01711-111111 or +8801722222222 before delivery');

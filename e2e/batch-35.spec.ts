@@ -128,7 +128,7 @@ test('Part 2: Processing — Order placed is current, expected date, pay on deli
   await openCustomerOrder(page, order.id);
   await expect(page.getByRole('heading', { name: `Order ${order.orderNumber}` })).toBeVisible();
   await expect(page.locator('.ot-track__label')).toHaveText('Expected delivery');
-  await expect(page.getByTestId('tracking-headline')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}( [A-Z][a-z]{2})? – [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}$/);
+  await expect(page.getByTestId('tracking-headline')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}( [A-Z][a-z]{2})? to [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}$/);
   await expect(page.getByTestId('delivery-status')).toHaveText('Order placed');
   expect(await stepStates(page)).toEqual(['current', 'upcoming', 'upcoming', 'upcoming', 'upcoming']);
   await expect(page.getByTestId('payment-pill')).toHaveText(/^Pay on delivery: ৳[\d,]+$/);

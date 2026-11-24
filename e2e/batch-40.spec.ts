@@ -131,7 +131,7 @@ test.describe('Part 3 — if Supabase is blocked or down', () => {
     const down = page.getByTestId('shop-down');
     await expect(down).toBeVisible({ timeout: 10_000 });
     await expect(down.getByRole('heading')).toHaveText('Our online shop is being updated.');
-    await expect(down).toContainText('You can still order — message us:');
+    await expect(down).toContainText('You can still order. Message us:');
     const whatsapp = page.getByTestId('shop-down-whatsapp');
     const messenger = page.getByTestId('shop-down-messenger');
     await expect(whatsapp).toHaveAttribute('href', 'https://wa.me/8801560040012');

@@ -164,7 +164,7 @@ describe("Steadfast's real texts in friendly English", () => {
   });
 
   it('the cleaned rider sentence from the older function still reads right', () => {
-    expect(translateCourierText('Assigned to a rider — your parcel is out for delivery.').step).toBe('out_for_delivery');
+    expect(translateCourierText('Assigned to a rider. Your parcel is out for delivery.').step).toBe('out_for_delivery');
     expect(friendly('Assigned to rider Md. Karim (01711111111)')).toBe('Out for delivery with a rider');
   });
 
@@ -194,19 +194,19 @@ describe("Steadfast's real texts in friendly English", () => {
 describe('expected delivery (one rule)', () => {
   const now = new Date('2026-10-09T06:00:00Z');
   it('inside Dhaka 1–2 days, outside 2–4 days from the In transit date', () => {
-    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-09T05:00:00Z', now }))).toBe('Sat 10 – Sun 11 Oct');
-    expect(formatDayRange(expectedDelivery({ zone: 'outside_dhaka', startAt: '2026-10-09T05:00:00Z', now }))).toBe('Sun 11 – Tue 13 Oct');
+    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-09T05:00:00Z', now }))).toBe('Sat 10 to Sun 11 Oct');
+    expect(formatDayRange(expectedDelivery({ zone: 'outside_dhaka', startAt: '2026-10-09T05:00:00Z', now }))).toBe('Sun 11 to Tue 13 Oct');
   });
   it('the date is the Dhaka calendar day (1:30 AM Dhaka is already the next day)', () => {
-    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-08T19:30:00Z', now }))).toBe('Sat 10 – Sun 11 Oct');
-    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-08T17:30:00Z', now }))).toBe('Fri 9 – Sat 10 Oct');
+    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-08T19:30:00Z', now }))).toBe('Sat 10 to Sun 11 Oct');
+    expect(formatDayRange(expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-08T17:30:00Z', now }))).toBe('Fri 9 to Sat 10 Oct');
   });
   it('across a month, and a late parcel never shows a date in the past', () => {
     expect(
       formatDayRange(expectedDelivery({ zone: 'outside_dhaka', startAt: '2026-10-30T05:00:00Z', now: new Date('2026-10-30T06:00:00Z') }))
-    ).toBe('Sun 1 – Tue 3 Nov');
+    ).toBe('Sun 1 to Tue 3 Nov');
     const late = expectedDelivery({ zone: 'inside_dhaka', startAt: '2026-10-01T05:00:00Z', now });
-    expect(formatDayRange(late)).toBe('Fri 9 – Sat 10 Oct');
+    expect(formatDayRange(late)).toBe('Fri 9 to Sat 10 Oct');
   });
   it('times are shown in Dhaka time', () => {
     expect(formatDhakaDateTime('2026-10-08T07:32:00Z')).toBe('8 Oct, 1:32 PM');

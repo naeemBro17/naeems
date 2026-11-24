@@ -197,7 +197,7 @@ for (const theme of ['light', 'dark'] as const) {
     // Product page (keep selling, none at home): "Get it in 3–5 days".
     await page.goto(`/product/${picks.on.slug}`);
     await expect(page.getByTestId('stock-chip')).toHaveText('In stock', { timeout: 30_000 });
-    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 3–5 days');
+    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 3 to 5 days');
     // First screen: name, price, stock, delivery line above the buy bar.
     const bar = (await page.getByTestId('buy-bar').boundingBox()) ?? { y: 844 };
     const line = (await page.getByTestId('pdp-delivery').boundingBox()) ?? { y: 9999, height: 0 };
@@ -228,8 +228,8 @@ for (const theme of ['light', 'dark'] as const) {
 
     // Sells only from stock with 2 left: amber line, the in-stock delivery line, "the last 2".
     await page.goto(`/product/${picks.low.slug}`);
-    await expect(page.getByTestId('stock-chip')).toHaveText('Only 2 left — order soon', { timeout: 30_000 });
-    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 1–2 days in Dhaka · 2–3 days outside Dhaka');
+    await expect(page.getByTestId('stock-chip')).toHaveText('Only 2 left, order soon', { timeout: 30_000 });
+    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 1 to 2 days in Dhaka · 2 to 3 days outside Dhaka');
     await page.getByTestId('add-to-cart').click();
     await page.getByTestId('buy-bar-plus').click();
     await page.getByTestId('buy-bar-plus').click();
@@ -249,7 +249,7 @@ for (const theme of ['light', 'dark'] as const) {
     // Cart: the keep-selling line (4, none at home) says "Get it in 3–5 days"; the other says nothing.
     await page.goto('/cart');
     const onRow = page.locator('.checkout-cart__row', { hasText: picks.on.name }).first();
-    await expect(onRow.getByTestId('cart-buy-after')).toHaveText('Get it in 3–5 days', { timeout: 20_000 });
+    await expect(onRow.getByTestId('cart-buy-after')).toHaveText('Get it in 3 to 5 days', { timeout: 20_000 });
     await expect(page.locator('.checkout-cart__row', { hasText: picks.low.name }).first().getByTestId('cart-buy-after')).toHaveCount(0);
     await page.getByRole('button', { name: `Increase quantity of ${picks.on.name}` }).click();
     await expect(page.getByTestId('limit-popup-title')).toHaveText('Limit 4 per order');
@@ -286,7 +286,7 @@ for (const theme of ['light', 'dark'] as const) {
       );
     }, snapshot);
     await page.goto('/checkout/success');
-    await expect(page.getByTestId('placed-arriving')).toHaveText('Arriving Sun, 22 – Tue, 24 Nov', { timeout: 20_000 });
+    await expect(page.getByTestId('placed-arriving')).toHaveText('Arriving Sun, 22 to Tue, 24 Nov', { timeout: 20_000 });
     await page.screenshot({ path: `${SHOTS}/${theme}-07-order-placed-arriving.png` });
     await noSidewaysScroll(page);
   });
@@ -315,7 +315,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(cards).toHaveCount(3);
     const stock = page.getByTestId('wish-card-stock');
     await expect(stock.nth(0)).toHaveText('In Stock');
-    await expect(stock.nth(1)).toHaveText('Only 2 left — order soon');
+    await expect(stock.nth(1)).toHaveText('Only 2 left, order soon');
     await expect(stock.nth(2)).toHaveText('Sold out');
     await expect(cards.nth(2).getByRole('button', { name: 'Sold out' })).toBeDisabled();
     await noOrange(page, '.wish-page');
@@ -474,8 +474,8 @@ test('admin Settings: "Order limit and delivery times" shows the four fields (no
   const panel = page.getByTestId('order-limit-panel');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel.getByLabel('Most of one item per order')).toHaveValue('4');
-  await expect(panel.getByLabel('Delivery in Dhaka')).toHaveValue('1–2 days');
-  await expect(panel.getByLabel('Delivery outside Dhaka')).toHaveValue('2–3 days');
-  await expect(panel.getByLabel('Items we buy after the order')).toHaveValue('3–5 days');
+  await expect(panel.getByLabel('Delivery in Dhaka')).toHaveValue('1 to 2 days');
+  await expect(panel.getByLabel('Delivery outside Dhaka')).toHaveValue('2 to 3 days');
+  await expect(panel.getByLabel('Items we buy after the order')).toHaveValue('3 to 5 days');
   await page.screenshot({ path: `${SHOTS}/light-16-settings-order-limit.png` });
 });

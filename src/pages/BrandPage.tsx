@@ -15,7 +15,7 @@ import type { Brand } from '../types';
 /** App-wide og: values from index.html, restored when this page unmounts. */
 const DEFAULT_OG = {
   title: "NAEEM'S",
-  description: 'Premium Australian skincare — check prices instantly',
+  description: 'Premium Australian skincare. Check prices instantly',
   image: window.location.origin + '/og-image.png',
   url: window.location.origin + '/',
 };
@@ -58,14 +58,14 @@ export function BrandPage() {
     [categories, updateParams]
   );
 
-  useDocumentTitle(brand ? `${brand.name} — NAEEM'S` : "NAEEM'S");
+  useDocumentTitle(brand ? `${brand.name} | NAEEM'S` : "NAEEM'S");
 
   // Link preview for a shared brand link (browsers that run the page; link
   // bots get the same from api/brand-og.ts).
   useEffect(() => {
     if (!brand) return;
-    setOgTag('title', `${brand.name} — NAEEM'S`);
-    setOgTag('description', `Shop authentic ${brand.name} at NAEEM'S — ${productCountLabel(brandProducts.length)}.`);
+    setOgTag('title', `${brand.name} | NAEEM'S`);
+    setOgTag('description', `Shop authentic ${brand.name} at NAEEM'S, ${productCountLabel(brandProducts.length)}.`);
     setOgTag('image', brand.banner_image_url ?? brand.logo_url ?? DEFAULT_OG.image);
     setOgTag('url', window.location.href);
     return () => {

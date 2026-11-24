@@ -25,5 +25,5 @@ export function orderItemCount(items: readonly Line[]): number {
 
 /** "Fish Oil 1000mg — 150 pcs" (or the name unchanged for a pack line). */
 export function lineNameWithUnits(name: string, item: Line): string {
-  return item.sold_unit ? `${name} — ${item.quantity} ${item.sold_unit}` : name;
+  return item.sold_unit ? `${name}, ${item.quantity} ${item.sold_unit}` : name;
 }

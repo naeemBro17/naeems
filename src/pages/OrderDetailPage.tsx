@@ -87,7 +87,7 @@ export function OrderDetailPage() {
   const [payment, setPayment] = useState<PaymentSummary | null>(null);
   const [stored, setStored] = useState<OrderUpdates | null>(null);
 
-  useDocumentTitle(order ? `${order.order_number} — NAEEM'S` : "Order — NAEEM'S");
+  useDocumentTitle(order ? `${order.order_number} | NAEEM'S` : "Order | NAEEM'S");
 
   const load = useCallback(async () => {
     if (!orderId) return;

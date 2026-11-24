@@ -16,9 +16,9 @@ export type SellSettings = Pick<
 >;
 
 export const DEFAULT_ORDER_LIMIT = 4;
-export const DEFAULT_DELIVERY_DHAKA = '1–2 days';
-export const DEFAULT_DELIVERY_OUTSIDE = '2–3 days';
-export const DEFAULT_DELIVERY_BUY_AFTER = '3–5 days';
+export const DEFAULT_DELIVERY_DHAKA = '1 to 2 days';
+export const DEFAULT_DELIVERY_OUTSIDE = '2 to 3 days';
+export const DEFAULT_DELIVERY_BUY_AFTER = '3 to 5 days';
 
 /** "Most of one item per order" (at least 1; 4 when blank or not a number). */
 export function orderLimit(settings: Pick<SellSettings, 'order_limit_per_item'>): number {
@@ -55,7 +55,7 @@ export function lowStockText(facts: StockFacts, limit: number): string | null {
   if (facts.keepSelling || facts.stock === null) return null;
   const left = Math.floor(facts.stock);
   if (left < 1 || left > limit) return null;
-  return `Only ${left} left — order soon`;
+  return `Only ${left} left, order soon`;
 }
 
 /** Customer-facing stock status of one option. */
@@ -66,9 +66,15 @@ export function shopStock(facts: StockFacts, available: boolean, limit: number):
   return lowStockText(facts, limit) ? 'low' : 'in';
 }
 
+/** Batch 64: a range typed with a dash ("1–2 days", saved in Settings)
+ *  reads "1 to 2 days" in the shop. */
+export function rangeWithTo(text: string): string {
+  return text.replace(/\s*[–—]\s*/g, ' to ');
+}
+
 function deliveryText(value: string | undefined, fallback: string): string {
   const text = (value ?? '').trim();
-  return text === '' ? fallback : text;
+  return text === '' ? fallback : rangeWithTo(text);
 }
 
 export function deliveryTimes(settings: Partial<SellSettings>): { dhaka: string; outside: string; buyAfter: string } {
@@ -143,7 +149,7 @@ export function arrivalText(
   const to = addDays(start, days[1]);
   if (from.getTime() === to.getTime()) return `Arriving ${dayLabel(from)} ${MONTH_NAMES[from.getUTCMonth()]}`;
   if (from.getUTCMonth() === to.getUTCMonth()) {
-    return `Arriving ${dayLabel(from)} – ${dayLabel(to)} ${MONTH_NAMES[to.getUTCMonth()]}`;
+    return `Arriving ${dayLabel(from)} to ${dayLabel(to)} ${MONTH_NAMES[to.getUTCMonth()]}`;
   }
-  return `Arriving ${dayLabel(from)} ${MONTH_NAMES[from.getUTCMonth()]} – ${dayLabel(to)} ${MONTH_NAMES[to.getUTCMonth()]}`;
+  return `Arriving ${dayLabel(from)} ${MONTH_NAMES[from.getUTCMonth()]} to ${dayLabel(to)} ${MONTH_NAMES[to.getUTCMonth()]}`;
 }

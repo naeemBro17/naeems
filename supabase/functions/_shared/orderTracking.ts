@@ -503,8 +503,8 @@ export function formatDayRange(range: ExpectedRange): string {
   const a = dayParts(range.fromDay);
   const b = dayParts(range.toDay);
   if (range.fromDay === range.toDay) return `${a.weekday} ${a.date} ${a.month}`;
-  if (a.month === b.month) return `${a.weekday} ${a.date} – ${b.weekday} ${b.date} ${b.month}`;
-  return `${a.weekday} ${a.date} ${a.month} – ${b.weekday} ${b.date} ${b.month}`;
+  if (a.month === b.month) return `${a.weekday} ${a.date} to ${b.weekday} ${b.date} ${b.month}`;
+  return `${a.weekday} ${a.date} ${a.month} to ${b.weekday} ${b.date} ${b.month}`;
 }
 
 /** "Thu, 10 Oct" in Dhaka time. */

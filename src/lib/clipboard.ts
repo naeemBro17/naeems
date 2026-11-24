@@ -12,7 +12,7 @@ export function buildCopyText(product: Product, price?: number): string {
   // A selected variant (or a card's "from" price) supplies its own figure.
   const mainPrice = price ?? getDisplayPrice(product).mainPrice;
   const formattedPrice = '৳' + mainPrice.toLocaleString('en-IN');
-  return product.name + ' — ' + formattedPrice;
+  return product.name + ': ' + formattedPrice;
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {

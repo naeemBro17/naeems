@@ -130,7 +130,7 @@ function lineOf(name: string, variant: string | null | undefined, listPrice: num
 }
 
 function codNote(due: number, payLater: boolean): string {
-  if (due <= 0) return 'Paid — do not collect';
+  if (due <= 0) return 'Paid, do not collect';
   if (payLater) return 'Customer pays later';
   return 'Cash on delivery';
 }

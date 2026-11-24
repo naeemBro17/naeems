@@ -39,7 +39,7 @@ function metaContent(html: string, key: string): string | null {
 describe('Part 1 — link previews', () => {
   it('product: "{name} — NAEEM\'S", the fixed description, the square photo, no price', () => {
     const f = productPreview('Avène Thermal Spring Water 300 ml', 'https://x.supabase.co/a.webp', `${URL_BASE}/product/avene`);
-    expect(f.title).toBe("Avène Thermal Spring Water 300 ml — NAEEM'S");
+    expect(f.title).toBe("Avène Thermal Spring Water 300 ml | NAEEM'S");
     expect(f.description).toBe('100% authentic. Imported for you.');
     expect(f.description).toBe(PRODUCT_DESCRIPTION);
     expect(f.image).toBe('https://x.supabase.co/a.webp');
@@ -55,14 +55,14 @@ describe('Part 1 — link previews', () => {
 
   it('product without a photo falls back to the shop banner (wide)', () => {
     const f = productPreview('Bio Oil', null, `${URL_BASE}/product/bio-oil`);
-    expect(f.title).toBe("Bio Oil — NAEEM'S");
+    expect(f.title).toBe("Bio Oil | NAEEM'S");
     expect(f.image).toBe(`${URL_BASE}/og-shop.jpg`);
     expect([f.imageWidth, f.imageHeight]).toEqual([1200, 630]);
   });
 
   it('shop: exact title and description, the 1200 × 630 banner', () => {
     const f = shopPreview();
-    expect(f.title).toBe("NAEEM'S — 100% Authentic Skincare");
+    expect(f.title).toBe("NAEEM'S | 100% Authentic Skincare");
     expect(f.description).toBe(
       'Imported from Australia, USA, Canada, Korea, Japan, India & UK. Cash on delivery all over Bangladesh.'
     );
@@ -74,7 +74,7 @@ describe('Part 1 — link previews', () => {
 
   it('combo: "{name} — picked for you by NAEEM\'S", "{n} products, hand-picked by Naeem. 100% authentic."', () => {
     const f = comboPreview("Sadia's glow routine", 3, 'https://x.supabase.co/combos/abc.jpg', `${URL_BASE}/c/abcdefgh`);
-    expect(f.title).toBe("Sadia's glow routine — picked for you by NAEEM'S");
+    expect(f.title).toBe("Sadia's glow routine, picked for you by NAEEM'S");
     expect(f.description).toBe('3 products, hand-picked by Naeem. 100% authentic.');
     expect([f.imageWidth, f.imageHeight]).toEqual([1200, 630]);
     expect(comboPreview('One', 1, null, '').description).toBe('1 product, hand-picked by Naeem. 100% authentic.');
@@ -105,7 +105,7 @@ describe('Part 1 — link previews', () => {
 
   it('index.html (home and every page without its own preview) has the shop tags', () => {
     const html = readFileSync('index.html', 'utf8');
-    expect(metaContent(html, 'og:title')).toBe("NAEEM'S — 100% Authentic Skincare");
+    expect(metaContent(html, 'og:title')).toBe("NAEEM'S | 100% Authentic Skincare");
     expect(metaContent(html, 'og:description')).toBe(
       'Imported from Australia, USA, Canada, Korea, Japan, India &amp; UK. Cash on delivery all over Bangladesh.'
     );

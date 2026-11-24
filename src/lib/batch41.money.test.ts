@@ -106,14 +106,14 @@ describe('Batch 41 — due reminder', () => {
 
   it('fills the brief\'s message', () => {
     expect(reminderMessage(DEFAULT_REMINDER_TEMPLATE, { name: 'Rahima', due: 3070, date: '2026-10-11', link })).toBe(
-      "Hello Rahima,\nYou have Tk. 3,070 left to pay as on 11 Oct 2026.\nThank you!\n– Naeem's - SkinScience\nView your orders: https://naeems-all.vercel.app/orders/abc-123"
+      "Hello Rahima,\nYou have Tk. 3,070 left to pay as on 11 Oct 2026.\nThank you!\nNaeem's - SkinScience\nView your orders: https://naeems-all.vercel.app/orders/abc-123"
     );
   });
 
   it('leaves out the "View your orders" line when the due is only a previous balance', () => {
     const text = reminderMessage(DEFAULT_REMINDER_TEMPLATE, { name: 'Rahima', due: 1000, date: '2026-10-11', link: null });
     expect(text).not.toContain('View your orders');
-    expect(text.endsWith("– Naeem's - SkinScience")).toBe(true);
+    expect(text.endsWith("Naeem's - SkinScience")).toBe(true);
   });
 
   it('an empty Settings text falls back to the default', () => {
