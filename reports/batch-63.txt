@@ -75,7 +75,9 @@ TESTS
    batch-32 (total read from the new total; "The rest"; product rows),
    batch-32-screens, batch-33, batch-39, batch-43 (product rows),
    batch-36 and batch-36-screens (tap Paste first; new subtitle),
-   batch-45 (order line class), batch-47 ("Hand delivered").
+   batch-45 (order line class), batch-47 ("Hand delivered"),
+   batch-30 and batch-32 again (the "Order … saved" toast check, see
+   Test runs), and the shared helper e2e/helpers/sqlRunner.ts (section 4).
  • Frame captures: reports/batch-63-screens/ at 390, 1024 and 1440 px,
    light and dark: empty page, Smart paste collapsed and open, customer
    list, product list, three lines with a discount and Paid now (whole
@@ -87,26 +89,38 @@ TESTS
 TEST RUNS (the honest summary)
  • npm run build: passes, zero errors.
  • Unit tests (vitest): 825 passed, 0 failed.
- • Full npm run verify: Claude Code stopped it because the computer was
-   running low on memory. It got through the build and the unit tests, but
-   NO browser test finished, so there is no full-suite pass / skip / fail
-   line for this batch. I did not restart it (it could run out of memory
-   again). Please run it once: npm run verify
- • npm run verify:quick, before that, stopped at its 10-minute limit. What
-   it had finished:
-     - 33 passed, 29 skipped, 1 failed in the parallel group. The failure is
-       batch-45's database test: "password authentication failed for user
-       cli_login_postgres". That is the Supabase command-line login on this
-       computer, not this batch.
-     - in the serial group, 2 failures were mine: batch-30 Part 4 (a card
-       name clashed with the "Customer" search box; fixed) and batch-32
-       Part 1 (see section 4). I re-ran both alone afterwards: both pass.
-       The other 2 failures, "Target crashed" and "worker process exited",
-       happened when the run was stopped / the computer was short of
-       memory.
- • Not re-checked after my changes because of the stopped runs: the rest of
-   batch-36, batch-39 and the other serial tests listed as "did not run",
-   and batch-34's focus-ring check of the New order search boxes.
+
+ FINAL FULL RUN (npm run verify, the second full run, see below why two):
+   build OK · vitest 825/825 · e2e 506 passed, 136 skipped, 2 FAILED
+   Both failures were timing flakes in tests about other pages; each file
+   was then run alone 3 times (CLAUDE.md flake rule), all green:
+     - batch-52-1 (keep-selling cart, a read-only database query that got
+       no answer once): 8 passed · 8 passed · 8 passed.
+     - batch-33 "Screenshots: photos row …" (the Edit product photo row
+       had not loaded its photos in time; Batch 63 does not touch that
+       page): 11 passed · 11 passed · 11 passed.
+
+ HOW I GOT THERE
+ • Fixed the Supabase command-line login first (section 4 explains it).
+ • First full run: e2e 471 passed, 169 skipped, 4 failed.
+     - batch-30 Part 4 and batch-32 Part 1: BROKEN BY BATCH 63 (the tests'
+       check, not the page). They wait for the toast "Order NM-… saved"
+       with a loose pattern, and the new Delivery and payment card
+       ("Order discount" … "Nothing is saved until you tap Create order")
+       matched it at once. The test then hid its made-up product before the
+       real save, and the database refused the order ("is not active").
+       Fixed: the tests now look at the toast itself. Both files re-run
+       alone: 30 passed.
+     - batch-39 "two orders at the same moment": broken by my first login
+       fix (it let only one database script run at a time, but this test
+       needs two at once). Fixed (section 4); re-run alone: passes.
+     - batch-35 Part 2 (customer order page, not touched): timing flake,
+       3 runs alone: 27 passed each time.
+   The login fix changes a helper every database test uses, so I ran the
+   whole suite once more (the final run above), as CLAUDE.md asks when a
+   fix can affect other files.
+ • Earlier, during the batch: one verify:quick run and one full run were
+   stopped (time limit / low memory); nothing from them is counted here.
 
 ======================================================================
 2. SQL NAEEM MUST RUN IN SUPABASE
@@ -116,10 +130,6 @@ None needed.
 ======================================================================
 3. WHAT I COULD NOT FINISH
 ======================================================================
- • The full npm run verify (stopped by low memory; see above). Run it
-   once; read only its last line. If only batch-45's database test fails
-   with the cli_login_postgres password error, run `supabase login` /
-   re-link the CLI and run that one file again.
  • "Compare with Edit order's PaymentSection for the same plan": opening
    Edit order needs a real saved order, which this fully made-up test does
    not create. Instead the test checks the three numbers against the same
@@ -130,11 +140,24 @@ None needed.
 ======================================================================
 4. WHAT I FOUND ALONG THE WAY
 ======================================================================
- • batch-32 Part 1 checks "we landed on the new order's page" with a
-   pattern that /admin/orders/new also matches, so on a slow run it can
-   read the address before the page has moved. It passed when re-run. Worth
-   tightening to exclude "/new" (I did not, it is not this batch's file to
-   rework).
+ • THE SUPABASE COMMAND-LINE LOGIN ("password authentication failed for
+   user cli_login_postgres"). Nothing was wrong with the login itself:
+   a single query worked every time. The command line signs in with a
+   temporary login and gives it a NEW password on every run. When two test
+   files ran database scripts at the same moment, they changed each
+   other's password and one failed. I proved it: 3 harmless "select 1"
+   queries started together, only 1 answered. Fix, in the shared test
+   helper e2e/helpers/sqlRunner.ts: only one run signs in at a time on this
+   computer (a lock held for the first 4 seconds of a run, so scripts can
+   still overlap, which batch-39's two-orders test needs), and a run that
+   could not sign in is tried again (up to 3 times). No database change;
+   nothing on the live shop was touched.
+ • batch-32 Part 1 also checks "we landed on the new order's page" with a
+   pattern that /admin/orders/new itself matches. It passes now that the
+   toast check is fixed, but it is still loose. Worth tightening one day.
+ • A smaller side note: "npx --no-install supabase" no longer works on this
+   computer (the project now asks for CLI 3.3.0, which is not downloaded).
+   The tests do not need it: they use the copy (2.119.0) in the npx cache.
  • The admin colour --adm-thumb (the photo tile) has no dark version, so
    in dark mode the no-photo bottle tile is light. The CSS I was given
    uses it as-is; see the dark frames.
