@@ -1226,6 +1226,11 @@ html[data-input='keyboard'] .focus-host :focus-visible {
 
 .accordion__title {
   font-size: 15px;
+  /* Batch 64: a fixed line, the height it has with the loaded font. With
+     "normal" each title was 1 px taller while the fallback font showed, so
+     the product page shrank 4 px when the web font arrived and a Back
+     restored near the bottom landed 4 px short. */
+  line-height: 19px;
   font-weight: 700;
   color: var(--color-text-primary);
 }
