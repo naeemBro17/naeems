@@ -527,7 +527,7 @@ test('database: Restock Add / Set to per option, saved and logged (Inventory mod
   expect((results ?? []).length).toBeGreaterThanOrEqual(7);
 });
 
-test('Restock: the sheet adds to the stock it shows; saved (Mode Off) or the database refusal shown (Mode On); refused without "Edit products and stock"', async ({ page }) => {
+test('Restock: the sheet adds to the stock it shows (Mode Off); hidden in Mode On (Batch 62); refused without "Edit products and stock"', async ({ page }) => {
   test.setTimeout(90_000);
   // Batch 61: the live shop's Inventory mode decides what Save does; saving
   // itself is checked in the rolled-back database test above.
@@ -540,20 +540,20 @@ test('Restock: the sheet adds to the stock it shows; saved (Mode Off) or the dat
   await expect(menu).toBeVisible({ timeout: 15_000 });
   await menu.click();
   const items = await page.getByRole('menuitem').allInnerTexts();
-  expect(items.map((t) => t.trim()).slice(0, 2)).toEqual(['Edit', 'Restock']);
-  await page.getByRole('menuitem', { name: 'Restock' }).click();
-
-  const sheet = page.locator('[data-testid="restock-sheet"]');
-  await expect(sheet.locator('[data-testid="restock-row"]')).toHaveCount(2);
-  await sheet.locator('[data-testid="restock-row"]').nth(0).locator('input').fill('24');
-  await expect(sheet.locator('[data-testid="restock-preview"]')).toHaveText(String(base + 24));
-  await sheet.getByRole('button', { name: 'Save stock' }).click();
   if (modeOn) {
-    // The database refuses (see the test above); the sheet shows its own
-    // general message and stays open (reports/batch-61.txt, section 4).
-    await expect(sheet.getByRole('alert')).toContainText('Could not save the stock.', { timeout: 10_000 });
-    await expect(sheet).toBeVisible();
+    // Batch 62: while Inventory mode is On there is no Restock (stock comes
+    // from lots); the database refuses it too (the test above).
+    expect(items.map((t) => t.trim())).not.toContain('Restock');
+    expect(items.map((t) => t.trim())[0]).toBe('Edit');
+    await page.keyboard.press('Escape');
   } else {
+    expect(items.map((t) => t.trim()).slice(0, 2)).toEqual(['Edit', 'Restock']);
+    await page.getByRole('menuitem', { name: 'Restock' }).click();
+    const sheet = page.locator('[data-testid="restock-sheet"]');
+    await expect(sheet.locator('[data-testid="restock-row"]')).toHaveCount(2);
+    await sheet.locator('[data-testid="restock-row"]').nth(0).locator('input').fill('24');
+    await expect(sheet.locator('[data-testid="restock-preview"]')).toHaveText(String(base + 24));
+    await sheet.getByRole('button', { name: 'Save stock' }).click();
     await expect(sheet).toBeHidden({ timeout: 10_000 });
   }
   const after = await select<{ stock_quantity: number }[]>(admin.accessToken, `products?select=stock_quantity&id=eq.${productIds[0]}`);

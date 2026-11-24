@@ -227,17 +227,28 @@ function VariantForm({
   );
 }
 
+/** Batch 62: the "Show in shop" eye (crossed out when hidden). */
+function EyeGlyph({ open }: { open: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {!open && <path d="M4 4l16 16" />}
+    </svg>
+  );
+}
+
 /**
  * Region → Size variants of one product, edited inside the product sheet.
  * Each variant saves on its own, immediately, and the shared variant list is
  * reloaded so the grid's "from" price and the detail page follow.
  */
 export function VariantEditor({ productId, showLabel = true }: VariantEditorProps) {
-  const { products, variantsFor, allVariants, reloadVariants, settings } = useProducts();
+  const { products, adminVariantsFor, allVariants, reloadVariants, settings } = useProducts();
   // Batch 52.1: while Inventory mode is On, lots set each option's stock.
   const stockFromLots = settings.inventory_mode === 'true';
   const { showToast } = useToast();
-  const variants = variantsFor(productId);
+  const variants = adminVariantsFor(productId);
 
   const knownRegions = useMemo(() => distinctRegions(products, allVariants), [products, allVariants]);
   const knownSizes = useMemo(() => distinctSizes(products, allVariants), [products, allVariants]);
@@ -327,6 +338,20 @@ export function VariantEditor({ productId, showLabel = true }: VariantEditorProp
     showToast('Variant saved');
   };
 
+  // Batch 62: "Show in shop". Off hides this size from the shop (the
+  // database stops sending it to customers); admin screens keep it.
+  const handleToggleVisible = async (variant: ProductVariant) => {
+    const next = variant.is_visible === false;
+    const { error } = await supabase.from('product_variants').update({ is_visible: next }).eq('id', variant.id);
+    if (error) {
+      console.error('Variant visibility update failed:', error);
+      showToast(/is_visible/.test(error.message) ? 'Run the Batch 62 SQL first (migration-061).' : 'Could not update the variant', 'error');
+      return;
+    }
+    await reloadVariants();
+    showToast(next ? 'Shown in the shop' : 'Hidden from the shop');
+  };
+
   const handleDelete = async () => {
     if (!pendingDelete) return;
     const target = pendingDelete;
@@ -354,13 +379,22 @@ export function VariantEditor({ productId, showLabel = true }: VariantEditorProp
         <ul className="variant-list">
           {variants.map((variant) => (
             <li key={variant.id} className="variant-list__item">
-              <div className={`variant-list__row${variant.in_stock ? '' : ' variant-list__row--out'}`}>
+              <div
+                className={`variant-list__row${variant.in_stock ? '' : ' variant-list__row--out'}${variant.is_visible === false ? ' variant-list__row--hidden' : ''}`}
+                data-testid="variant-row"
+                data-visible={variant.is_visible === false ? 'false' : 'true'}
+              >
                 <span className="variant-list__region">{variant.region}</span>
                 <span className="variant-list__main">
                   <span className="variant-list__size">{variant.size}</span>
                   {stockFromLots && (
                     <span className="variant-list__stock" data-testid="variant-stock-text">
                       From lots: {variant.stock_quantity ?? 0}
+                    </span>
+                  )}
+                  {variant.is_visible === false && (
+                    <span className="variant-list__stock" data-testid="variant-hidden-text">
+                      Hidden from the shop
                     </span>
                   )}
                 </span>
@@ -380,6 +414,18 @@ export function VariantEditor({ productId, showLabel = true }: VariantEditorProp
                     label={`${variant.region} ${variant.size} in stock`}
                   />
                 )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={variant.is_visible !== false}
+                  aria-label={`Show ${variant.region} ${variant.size} in shop`}
+                  title="Show in shop"
+                  className={`variant-eye${variant.is_visible === false ? ' variant-eye--off' : ''}`}
+                  onClick={() => void handleToggleVisible(variant)}
+                  data-testid="variant-show-in-shop"
+                >
+                  <EyeGlyph open={variant.is_visible !== false} />
+                </button>
                 <RowIconButton
                   label={`Edit ${variant.region} ${variant.size}`}
                   onClick={() => (editingId === variant.id ? closeForm() : startEdit(variant))}

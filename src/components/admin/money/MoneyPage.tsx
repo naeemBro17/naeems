@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useSwrLoad } from '../../../hooks/useSwrLoad';
 import { dhakaToday } from '../../../lib/inventory/api';
 import type { LoadState } from '../../../lib/payouts';
 import { fetchSummary } from '../../../lib/money/api';
@@ -29,22 +31,18 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
   const today = dhakaToday();
   const [period, setPeriod] = useState<PeriodKind>('month');
   const [custom, setCustom] = useState({ from: `${today.slice(0, 7)}-01`, to: today });
-  const [state, setState] = useState<LoadState<MoneySummary> | null>(null);
   const [showCheck, setShowCheck] = useState(false);
-  const [reload, setReload] = useState(0);
   const range = periodRange(period, today, custom);
-
-  useEffect(() => {
-    if (!range.from || !range.to || range.to < range.from) return;
-    let alive = true;
-    setState(null);
-    void fetchSummary(range.from, range.to).then((answer) => {
-      if (alive) setState(answer);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [range.from, range.to, reload]);
+  const { session } = useAuth();
+  // Batch 62: the last copy shows at once with "Updating…" until the fresh
+  // numbers arrive (shown only; nothing is saved from it).
+  const valid = Boolean(range.from && range.to && range.to >= range.from);
+  const summary = useSwrLoad<LoadState<MoneySummary> | null>(
+    valid && session ? `money-summary:${session.user.id}:${range.from}:${range.to}` : null,
+    () => (valid ? fetchSummary(range.from, range.to) : Promise.resolve(null)),
+    { keep: (answer) => answer?.kind === 'ready' }
+  );
+  const state = summary.data;
 
   const data = state?.kind === 'ready' ? state.data : null;
   const p = data?.profit;
@@ -109,7 +107,14 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
               {dayText(range.from)}
               {range.to !== range.from ? ` – ${dayText(range.to)}` : ''} · {p.orders} order{p.orders === 1 ? '' : 's'}
             </p>
-            <p className="money-big-label">Your profit</p>
+            <p className="money-big-label">
+              Your profit
+              {summary.fromCopy && (
+                <span className="swr-updating" data-testid="money-updating">
+                  Updating…
+                </span>
+              )}
+            </p>
             <p className={`money-big${p.your_profit < 0 ? ' money-out' : ''}`} data-testid="money-your-profit">
               {signedMoney(p.your_profit)}
             </p>
@@ -160,7 +165,7 @@ export function MoneyPage({ onOpen }: { onOpen: MoneyOpen }) {
             <Line label="Stock at landed cost" value={pos.stock_value} sign="=" />
           </div>
 
-          <PayoutsToPlace onPlaced={() => setReload((n) => n + 1)} />
+          <PayoutsToPlace onPlaced={() => void summary.reload()} />
 
           <div
             className={`adm-ocard inv-stack money-check${pos.balanced === true ? ' money-check--ok' : pos.balanced === false ? ' money-check--bad' : ''}`}

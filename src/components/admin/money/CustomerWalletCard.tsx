@@ -12,12 +12,14 @@ import {
   defaultStoreWalletAccount,
   fetchCustomerStoreWallet,
   rejectStoreWalletRequest,
+  setStoreWalletOpen,
   storeWalletEntryLabel,
   type CustomerStoreWallet,
   type StoreWalletWaiting,
 } from '../../../lib/storeWallet';
 import { usePayAccounts } from './LotPayments';
 import { ConfirmSheet } from '../OrderActionCards';
+import { Toggle } from '../edit-sheets/SheetChrome';
 
 function signed(amount: number): string {
   return `${amount < 0 ? '−' : '+'}${moneyText(Math.abs(amount))}`;
@@ -33,6 +35,9 @@ function whenText(iso: string): string {
  * payments). Balance, each waiting "I sent money" request with Confirm /
  * Reject, "Add to wallet" (money they sent on WhatsApp), the history, and
  * for the Super Admin "Correct" (password typed again).
+ *
+ * Batch 62: the "Wallet open" switch (wallets are by invitation). Add to
+ * wallet opens it by itself; closing is refused while it holds money.
  */
 export function CustomerWalletCard({ customerKey, onChanged }: { customerKey: string; onChanged?: () => void }) {
   const { isAdmin, session } = useAuth();
@@ -53,6 +58,8 @@ export function CustomerWalletCard({ customerKey, onChanged }: { customerKey: st
   const [why, setWhy] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setWallet(await fetchCustomerStoreWallet(customerKey));
@@ -73,6 +80,19 @@ export function CustomerWalletCard({ customerKey, onChanged }: { customerKey: st
     showToast(message);
     await load();
     onChanged?.();
+  };
+
+  const switchOpen = async (next: boolean) => {
+    if (switching) return;
+    setSwitchError(null);
+    setSwitching(true);
+    const answer = await setStoreWalletOpen(customerKey, next);
+    setSwitching(false);
+    if (!answer.ok) {
+      setSwitchError(answer.error ?? 'Could not save');
+      return;
+    }
+    await changed(answer.data ? 'Wallet opened' : 'Wallet closed');
   };
 
   const openConfirm = (w: StoreWalletWaiting) => {
@@ -172,8 +192,22 @@ export function CustomerWalletCard({ customerKey, onChanged }: { customerKey: st
   ) : null;
 
   return (
-    <div className="adm-ocard inv-stack" data-testid="customer-wallet-card">
+    <div className="adm-ocard inv-stack" data-testid="customer-wallet-card" data-own-save="">
       <h3 className="adm-group__title">WALLET</h3>
+      {wallet.canSwitch && (
+        <div className="inv-line" data-testid="customer-wallet-open">
+          <span>
+            <b>Wallet open</b>
+            <span className="inv-muted mw-admin-open__hint">{wallet.open ? 'The customer can add money.' : 'Closed: the customer sees "Invite only".'}</span>
+          </span>
+          <Toggle checked={wallet.open} onChange={(next) => void switchOpen(next)} label="Wallet open" />
+        </div>
+      )}
+      {switchError && (
+        <p className="inv-error" role="alert" data-testid="customer-wallet-open-error">
+          {switchError}
+        </p>
+      )}
       <div className="inv-line inv-line--total">
         <span>Balance</span>
         <b data-testid="customer-wallet-balance">{moneyText(wallet.balance)}</b>

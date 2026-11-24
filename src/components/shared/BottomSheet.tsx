@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { useModalBackClose } from '../../hooks/useModalBackClose';
 
 interface BottomSheetProps {
@@ -11,6 +11,10 @@ interface BottomSheetProps {
   headerAction?: ReactNode;
   /** Batch 31: extra class on the panel (e.g. a fixed height for a picker). */
   panelClassName?: string;
+  /** Batch 62: no × in the header (the sheet has its own button to close). */
+  hideClose?: boolean;
+  /** Batch 62: a finger dragging the sheet down closes it. */
+  swipeToClose?: boolean;
 }
 
 const FOCUSABLE_SELECTOR =
@@ -28,7 +32,47 @@ const CLOSE_ANIMATION_MS = 220;
  * Closing keeps the sheet mounted for one animation so it slides back down
  * instead of vanishing.
  */
-export function BottomSheet({ isOpen, onClose, title, children, headerAction, panelClassName }: BottomSheetProps) {
+/** Batch 62: how far down (px) a swipe must pull the sheet to close it. */
+const SWIPE_CLOSE_PX = 80;
+
+export function BottomSheet({ isOpen, onClose, title, children, headerAction, panelClassName, hideClose = false, swipeToClose = false }: BottomSheetProps) {
+  // Batch 62: swipe down to close. Only a downward, mostly vertical drag
+  // that starts with the sheet scrolled to its top moves it; only its
+  // transform changes (no layout), and it snaps back when not pulled far.
+  const dragRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const onDragStart = (e: TouchEvent<HTMLDivElement>) => {
+    const p = e.touches[0];
+    dragRef.current = p && (panelRef.current?.scrollTop ?? 0) <= 0 ? { x: p.clientX, y: p.clientY, active: false } : null;
+  };
+  const onDragMove = (e: TouchEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const p = e.touches[0];
+    const panel = panelRef.current;
+    if (!drag || !p || !panel) return;
+    const dx = p.clientX - drag.x;
+    const dy = p.clientY - drag.y;
+    if (!drag.active) {
+      if (dy > 10 && Math.abs(dy) > Math.abs(dx)) drag.active = true;
+      else if (Math.abs(dx) > 10 || dy < -10) {
+        dragRef.current = null;
+        return;
+      } else return;
+    }
+    panel.style.transition = 'none';
+    panel.style.transform = `translateY(${Math.max(0, dy)}px)`;
+  };
+  const onDragEnd = (e: TouchEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    const panel = panelRef.current;
+    if (!drag?.active || !panel) return;
+    const p = e.changedTouches[0];
+    const dy = p ? p.clientY - drag.y : 0;
+    panel.style.transition = '';
+    panel.style.transform = '';
+    if (dy > SWIPE_CLOSE_PX) onClose();
+  };
+
   const panelRef = useRef<HTMLDivElement>(null);
   // Batch 31 Part 3: the focus effect below must run only when the sheet
   // opens or closes. Callers often pass a new onClose on every render; with
@@ -116,11 +160,16 @@ export function BottomSheet({ isOpen, onClose, title, children, headerAction, pa
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
+        onTouchStart={swipeToClose ? onDragStart : undefined}
+        onTouchMove={swipeToClose ? onDragMove : undefined}
+        onTouchEnd={swipeToClose ? onDragEnd : undefined}
+        onTouchCancel={swipeToClose ? onDragEnd : undefined}
       >
         <div className="sheet-handle" aria-hidden="true" />
         <header className="sheet-header">
           <h2 className="sheet-title">{title}</h2>
           {headerAction && <div className="sheet-header__actions">{headerAction}</div>}
+          {!hideClose && (
           <button
             type="button"
             className="sheet-close"
@@ -138,6 +187,7 @@ export function BottomSheet({ isOpen, onClose, title, children, headerAction, pa
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
+          )}
         </header>
         <div className="sheet-body">{children}</div>
       </div>

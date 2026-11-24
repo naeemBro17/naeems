@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminPageHeader, EmptyState, SkeletonRows } from './ui/AdminUi';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
-import { ComboThumbs, ShareComboSheet, type ReadyCombo } from '../combo/ComboShare';
+import { ComboThumbs, MakeComboSheet, ShareComboSheet, type ReadyCombo } from '../combo/ComboShare';
 import { useComboLines } from '../../hooks/useComboLines';
 import { useToast } from '../../hooks/useToast';
 import { comboPath, comboTotals, comboUrl, deleteCombo, listCombos, type ComboListLoad, type ComboRow } from '../../lib/combos';
 import { formatTakaBd } from '../../lib/adminNav';
+
+const NO_ITEMS: readonly [] = [];
 
 function createdText(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Dhaka' });
@@ -84,6 +86,8 @@ export function CombosTab() {
   const [load, setLoad] = useState<ComboListLoad | null>(null);
   const [sharing, setSharing] = useState<ReadyCombo | null>(null);
   const [deleting, setDeleting] = useState<ComboRow | null>(null);
+  // Batch 62: a combo made here, with Add products (no cart needed).
+  const [making, setMaking] = useState(false);
 
   const reload = useCallback(async () => {
     setLoad(await listCombos());
@@ -95,7 +99,15 @@ export function CombosTab() {
 
   return (
     <section aria-label="Combos" className="adm-combos">
-      <AdminPageHeader title="Combos" subtitle="Product picks you shared as a link. Make one from your cart." />
+      <AdminPageHeader
+        title="Combos"
+        subtitle="Product picks you shared as a link. Make one here or from your cart."
+        primary={
+          <button type="button" className="adm-btn adm-btn--primary" onClick={() => setMaking(true)} data-testid="admin-combo-new">
+            New combo
+          </button>
+        }
+      />
 
       {load === null ? (
         <SkeletonRows rows={3} />
@@ -126,6 +138,7 @@ export function CombosTab() {
       )}
 
       <ShareComboSheet combo={sharing} onClose={() => setSharing(null)} />
+      <MakeComboSheet isOpen={making} onClose={() => setMaking(false)} items={NO_ITEMS} onCreated={() => void reload()} />
       <ConfirmDialog
         isOpen={deleting !== null}
         title="Delete this combo?"

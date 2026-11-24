@@ -91,15 +91,6 @@
 }
 .mw-head--small { font-size: 20px; text-align: center; margin: 28px 0 0; opacity: 0.85; }
 .mw-lead { font-size: 14.5px; line-height: 1.55; color: var(--color-text-secondary); margin: 0 0 22px; }
-.mw-ben { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
-.mw-ben__icon {
-  width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--mw-row-bg); border: 1px solid var(--mw-row-border); color: var(--mw-accent);
-}
-.mw-ben__title { display: block; font-size: 14px; font-weight: 700; color: var(--color-text-primary); }
-.mw-ben__text { font-size: 12.5px; color: var(--color-text-secondary); }
-.mw-cta { position: fixed; left: 18px; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
 .mw-btn {
   display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
   min-height: 48px; border: 0; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer;
@@ -186,3 +177,61 @@
 .mw-page .detail-header__back { position: relative; }
 .mw-page-actions { margin-top: 4px; }
 .mw-page { max-width: 480px; margin: 0 auto; }
+
+/* Batch 62 — the jar story (approved mockup). Dark in both themes on
+   purpose: the gold coins need the dark. Replaces Batch 60's story. */
+.mw-story { --mwj-bg:#121313; --mwj-card:#2b2a28; --mwj-tx:#f4efe8; --mwj-tx2:#b9b2a8; --mwj-gold:#f2b544; --mwj-wa:#25D366;
+  min-height: 100dvh; background: var(--mwj-bg); color: var(--mwj-tx); padding: 18px 18px calc(24px + env(safe-area-inset-bottom)); }
+.mw-story .mw-back { width: 44px; height: 44px; border-radius: 50%; background: #232423; color: #cfcfcf; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; border: 0; }
+.mwj-hero { position: relative; height: 360px; border-radius: 30px; overflow: hidden;
+  background: radial-gradient(120% 90% at 80% 10%, #4a3a2c 0%, var(--mwj-card) 55%, #22211f 100%); }
+.mwj-title { position: absolute; left: 24px; top: 26px; margin: 0; z-index: 3; font-family: 'Anton', Impact, 'Arial Narrow Bold', sans-serif; font-weight: 400;
+  font-size: 50px; line-height: 1.02; letter-spacing: .5px; text-transform: uppercase; color: #f6f1ea; }
+.mwj-title .ln { display: block; }
+.mwj-title .w { display: inline-block; opacity: 0; transform: translateY(16px); animation: mwj-rise .8s cubic-bezier(.22,1,.36,1) forwards; }
+.mwj-title .gold { color: var(--mwj-gold); }
+.mwj-jar { position: absolute; right: 18px; bottom: 14px; width: 118px; height: 150px; z-index: 2; transform-origin: 50% 100%; animation: mwj-sway 6s ease-in-out 2s infinite; }
+.mwj-fill { transform-origin: 50% 100%; transform: scaleY(.18); animation: mwj-fill 10s ease-out forwards; }
+.mwj-coin { position: absolute; top: -40px; width: 34px; height: 34px; border-radius: 50%; opacity: 0; z-index: 4;
+  background: radial-gradient(circle at 35% 30%, #ffe7a3, #f2b544 55%, #c88a1e); box-shadow: inset 0 -3px 0 rgba(0,0,0,.18), 0 6px 12px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #8a5a0c; }
+.mwj-coin.c1 { right: 60px; animation: mwj-drop 2.2s cubic-bezier(.45,0,.6,1) 2.2s 3; }
+.mwj-coin.c2 { right: 54px; animation: mwj-drop 2.2s cubic-bezier(.45,0,.6,1) 2.9s 3; }
+.mwj-coin.c3 { right: 66px; animation: mwj-drop 2.2s cubic-bezier(.45,0,.6,1) 3.6s 3; }
+.mwj-coin.float { left: 30px; bottom: 30px; top: auto; width: 28px; height: 28px; font-size: 13px; z-index: 1;
+  animation: mwj-appear .8s ease 2.6s forwards, mwj-bob 3.6s ease-in-out 3.4s infinite; }
+.mwj-badge { display: inline-flex; align-items: center; gap: 6px; margin: 18px 0 0; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  color: var(--mwj-gold); border: 1px solid rgba(242,181,68,.35); opacity: 0; animation: mwj-rise .9s ease 2.7s forwards; }
+.mwj-badge.open { color: #7be3a0; border-color: rgba(123,227,160,.35); }
+.mwj-ben { display: flex; gap: 14px; align-items: flex-start; margin-top: 22px; opacity: 0; transform: translateY(10px); animation: mwj-rise .9s cubic-bezier(.22,1,.36,1) forwards; }
+.mwj-ic { width: 52px; height: 52px; border-radius: 50%; border: 1.5px solid #3a3a38; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #e9e3da; }
+.mwj-bt b { display: block; font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+.mwj-bt span { font-size: 14px; line-height: 1.5; color: var(--mwj-tx2); }
+.mwj-cta { margin-top: 26px; opacity: 0; transform: translateY(10px); animation: mwj-rise .9s cubic-bezier(.22,1,.36,1) forwards; }
+.mwj-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 54px; border: 0; border-radius: 999px; font-weight: 700; font-size: 16px; cursor: pointer; }
+.mwj-btn.wa { background: var(--mwj-wa); color: #06260f; }
+.mwj-btn.or { background: var(--color-primary); color: #fff; }
+.mwj-fine { font-size: 12px; color: #8f8a82; text-align: center; margin: 10px 0 0; line-height: 1.45; }
+@keyframes mwj-rise { to { opacity: 1; transform: none; } }
+@keyframes mwj-appear { to { opacity: 1; } }
+@keyframes mwj-drop { 0% { opacity: 0; transform: translateY(0) scale(1); } 12% { opacity: 1; } 68% { opacity: 1; transform: translateY(222px) scale(1); } 84% { opacity: 0; transform: translateY(240px) scale(.45); } 100% { opacity: 0; transform: translateY(240px) scale(.45); } }
+/* the jar rises one step each time a coin lands (9 coins) */
+@keyframes mwj-fill { 0% { transform: scaleY(.18); } 37% { transform: scaleY(.18); } 40.5% { transform: scaleY(.247); } 44% { transform: scaleY(.247); } 47.5% { transform: scaleY(.313); } 51% { transform: scaleY(.313); } 54.5% { transform: scaleY(.38); } 59% { transform: scaleY(.38); } 62.5% { transform: scaleY(.447); } 66% { transform: scaleY(.447); } 69.5% { transform: scaleY(.513); } 73% { transform: scaleY(.513); } 76.5% { transform: scaleY(.58); } 81% { transform: scaleY(.58); } 84.5% { transform: scaleY(.647); } 88% { transform: scaleY(.647); } 91.5% { transform: scaleY(.713); } 95% { transform: scaleY(.713); } 98.5%, 100% { transform: scaleY(.78); } }
+@keyframes mwj-bob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-10px) rotate(5deg); } }
+@keyframes mwj-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-1.5deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mwj-title .w, .mwj-badge, .mwj-ben, .mwj-cta, .mwj-coin.float { animation: none; opacity: 1; transform: none; }
+  .mwj-jar { animation: none; } .mwj-fill { animation: none; transform: scaleY(.78); } .mwj-coin.c1, .mwj-coin.c2, .mwj-coin.c3 { display: none; }
+}
+
+/* Batch 62 — small pieces around the story. */
+.mw-story { max-width: 480px; margin: 0 auto; }
+.mwj-btn:disabled { opacity: .6; cursor: default; }
+.mwj-btn .mw-wa-icon svg { width: 20px; height: 20px; }
+/* A rejected request: neutral grey with a small red dot (not the amber "waiting"). */
+.mw-wait--rejected { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+.mw-wait--rejected::before { background: #e5372c; }
+/* Account card, closed wallet: the story line instead of a balance. */
+.mw-card__balance--story { font-family: inherit; font-size: 20px; font-weight: 800; line-height: 1.2; }
+/* Admin WALLET card: the line under "Wallet open". */
+.mw-admin-open__hint { display: block; font-size: 12px; }

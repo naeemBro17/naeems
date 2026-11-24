@@ -257,7 +257,9 @@ export function ConfirmSheet({
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={title} panelClassName="adm-csheet">
-      <div className="adm-csheet__body" data-testid="confirm-sheet">
+      {/* Batch 62: what is typed here is saved (or dropped) by this sheet itself,
+          so it never makes the page behind ask "Discard changes?". */}
+      <div className="adm-csheet__body" data-testid="confirm-sheet" data-own-save="">
         {warning && (
           <p className="adm-csheet__warning" role="alert" data-testid="confirm-sheet-warning">
             <AdminIcon name="alert" className="adm-icon--sm" />

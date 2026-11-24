@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, uploadAdminImage } from '../../lib/supabase';
-import { clearCache } from '../../lib/cache';
+import { clearSwr } from '../../lib/swrCache';
 import {
   BANNER_SLIDES_KEY,
   CTA_ACTION_LABELS,
@@ -985,7 +985,7 @@ export function SettingsTab() {
   };
 
   const handleClearCache = () => {
-    clearCache();
+    clearSwr();
     showToast('Saved data cleared');
   };
 

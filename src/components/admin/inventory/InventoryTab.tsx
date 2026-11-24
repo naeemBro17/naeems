@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fetchLots, lotTotals } from '../../../lib/inventory/api';
 import type { LotSummary } from '../../../lib/inventory/types';
 import type { LoadState } from '../../../lib/payouts';
@@ -29,8 +29,12 @@ import '../../../styles/adminInventory.css';
  */
 export function InventoryTab() {
   const { view, lotId, open, back, href } = useInvNav();
+  // Batch 62: Edit product's "+ Add a lot" opens New lot with that product
+  // (or option) already added: ?add=<productId>[:<variantId>].
+  const [searchParams] = useSearchParams();
+  const addKey = searchParams.get('add');
 
-  if (view === 'new') return <LotForm lotId={null} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
+  if (view === 'new') return <LotForm lotId={null} addKey={addKey} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
   if (view === 'edit' && lotId) return <LotForm lotId={lotId} onBack={back} onSaved={(id) => open('lot', id, { replace: true })} />;
   if (view === 'lot' && lotId) return <LotDetailView key={lotId} lotId={lotId} onBack={back} onEdit={() => open('edit', lotId)} onDeleted={() => open('home', undefined, { replace: true })} />;
   if (view === 'compare') return <CompareView onBack={back} />;

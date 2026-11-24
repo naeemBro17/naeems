@@ -1,6 +1,7 @@
 import { sectionPath } from '../../lib/adminNav';
 import { ActionLink } from '../shared/ActionLink';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { isFresh, readSwr, writeSwr } from '../../lib/swrCache';
 import { useNavigate } from 'react-router-dom';
 import { adminPath } from '../../lib/adminPages';
 import { fetchWaitingStoreWalletRequests, type WaitingStoreWalletRequest } from '../../lib/storeWallet';
@@ -23,6 +24,14 @@ import '../../styles/adminInventory.css';
 import '../../styles/adminMoney.css';
 import '../../styles/adminReports.css';
 
+/** Batch 62: Home's last good copy. */
+interface HomeCopy {
+  data: DashboardData | null;
+  due: DueSummary | null;
+  unpaidCount: number;
+  walletWaiting: WaitingStoreWalletRequest[];
+}
+
 interface HomeTabProps {
   /** "NAEEM'S SUPER ADMIN" / "NAEEM'S <ROLE>". */
   title: string;
@@ -38,23 +47,27 @@ interface HomeTabProps {
  * section, and money only with "See sales figures".
  */
 export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
-  const { staff, profile, can } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const { staff, profile, can, session } = useAuth();
+  // Batch 62: the last copy of Home shows at once; fresh replaces it.
+  const homeKey = session ? `admin-home:${session.user.id}` : null;
+  const [homeCopy] = useState(() => (homeKey ? readSwr<HomeCopy>(homeKey)?.data ?? null : null));
+  const [data, setData] = useState<DashboardData | null>(homeCopy?.data ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(homeCopy === null);
+  const homeFetchedAt = useRef(0);
 
   // Batch 32 Part 5: "৳X due from N customers" — the same numbers as the
   // Customers page's Due filter (hidden customers included: money owed is
   // still owed; the tests' own customers left out for real staff).
-  const [due, setDue] = useState<DueSummary | null>(null);
+  const [due, setDue] = useState<DueSummary | null>(homeCopy?.due ?? null);
   const canSeeCustomers = can('view_customers');
   const hideTests = !isTestViewer(staff);
   // Batch 36 Part 1: Steadfast orders not paid after 7 days (only with
   // "View profit & costs"; the database answers nobody else).
   const canSeeCosts = can('view_profit_costs');
-  const [unpaidCount, setUnpaidCount] = useState(0);
+  const [unpaidCount, setUnpaidCount] = useState(homeCopy?.unpaidCount ?? 0);
   // Batch 60: "I sent money" wallet requests waiting for a Confirm.
-  const [walletWaiting, setWalletWaiting] = useState<WaitingStoreWalletRequest[]>([]);
+  const [walletWaiting, setWalletWaiting] = useState<WaitingStoreWalletRequest[]>(homeCopy?.walletWaiting ?? []);
   const navigate = useNavigate();
 
   // Batch 42 Part 1: for "View profit & costs" Home is the Dashboard — the
@@ -63,21 +76,35 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
   const [period, setPeriod] = useState<DashboardPeriod>('month');
   const [money, setMoney] = useState<MoneyDashboard | null>(null);
   const [moneyError, setMoneyError] = useState<string | null>(null);
+  // Batch 62: money numbers from the last copy say "Updating…" until fresh.
+  const [moneyFromCopy, setMoneyFromCopy] = useState(false);
+  const [moneyTick, setMoneyTick] = useState(0);
+  const moneyFetchedAt = useRef(0);
   useEffect(() => {
     if (!canSeeCosts) return;
     let alive = true;
-    setMoney(null);
+    const moneyKey = session ? `admin-home-money:${session.user.id}:${period}` : null;
+    const copy = moneyKey ? readSwr<MoneyDashboard>(moneyKey) : null;
+    setMoney(copy?.data ?? null);
+    setMoneyFromCopy(copy !== null);
     setMoneyError(null);
+    moneyFetchedAt.current = Date.now();
     const ranges = dashboardRanges(period, dhakaToday());
     void fetchMoneyDashboard(ranges.current, ranges.previous).then((answer) => {
       if (!alive) return;
-      if (answer.kind === 'ready') setMoney(answer.data);
-      else setMoneyError(answer.kind === 'error' ? answer.message : 'The Batch 42 database step has not been run.');
+      setMoneyFromCopy(false);
+      if (answer.kind === 'ready') {
+        setMoney(answer.data);
+        if (moneyKey) writeSwr<MoneyDashboard>(moneyKey, answer.data);
+      } else {
+        setMoney(null);
+        setMoneyError(answer.kind === 'error' ? answer.message : 'The Batch 42 database step has not been run.');
+      }
     });
     return () => {
       alive = false;
     };
-  }, [canSeeCosts, period]);
+  }, [canSeeCosts, period, session, moneyTick]);
 
   const load = useCallback(async () => {
     const [result, customers, unpaid, waiting] = await Promise.all([
@@ -86,20 +113,35 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
       canSeeCosts ? fetchUnpaidOrders() : Promise.resolve([]),
       canSeeCosts ? fetchWaitingStoreWalletRequests() : Promise.resolve([]),
     ]);
-    setUnpaidCount(overdueOrders(unpaid).length);
+    const unpaidNow = overdueOrders(unpaid).length;
+    const dueNow =
+      customers && !customers.error
+        ? dueSummary(customers.rows.filter((r) => !hideTests || !isTestCustomer({ name: r.full_name, email: r.email })))
+        : null;
+    setUnpaidCount(unpaidNow);
     setWalletWaiting(waiting);
     setData(result.data);
     setError(result.error);
-    setDue(
-      customers && !customers.error
-        ? dueSummary(customers.rows.filter((r) => !hideTests || !isTestCustomer({ name: r.full_name, email: r.email })))
-        : null
-    );
+    setDue(dueNow);
     setIsLoading(false);
-  }, [canSeeCustomers, canSeeCosts, hideTests]);
+    if (homeKey && !result.error) writeSwr<HomeCopy>(homeKey, { data: result.data, due: dueNow, unpaidCount: unpaidNow, walletWaiting: waiting });
+  }, [canSeeCustomers, canSeeCosts, hideTests, homeKey]);
 
   useEffect(() => {
+    homeFetchedAt.current = Date.now();
     void load();
+  }, [load]);
+
+  // Batch 62: back in the app after more than 60 seconds: Home again, quietly.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible' || homeFetchedAt.current === 0 || isFresh(homeFetchedAt.current)) return;
+      homeFetchedAt.current = Date.now();
+      void load();
+      if (moneyFetchedAt.current !== 0 && !isFresh(moneyFetchedAt.current)) setMoneyTick((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    return () => document.removeEventListener('visibilitychange', onReturn);
   }, [load]);
 
   const name = greetingName(staff?.full_name || profile?.full_name, staff?.username);
@@ -309,6 +351,11 @@ export function HomeTab({ title, onOpen, shoppingCount = 0 }: HomeTabProps) {
         />
       ) : (
         <>
+          {canSeeCosts && moneyFromCopy && money && (
+            <p className="swr-updating swr-updating--line" data-testid="home-money-updating">
+              Updating…
+            </p>
+          )}
           {canSeeCosts && (
             <DashboardTop data={money} error={moneyError} period={period} onPeriod={setPeriod} onOpen={onOpen} />
           )}

@@ -4,6 +4,7 @@
 // signed-out visitor sees an empty list, not an error, same as any other
 // empty state).
 import { useEffect, useState } from 'react';
+import { readSwr, writeSwr } from '../lib/swrCache';
 import { Link } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -46,11 +47,21 @@ export function OrdersListPage() {
       return;
     }
     let cancelled = false;
-    setIsLoading(true);
+    // Batch 62: the last copy of My Orders shows at once; the fresh list
+    // replaces it quietly.
+    const copyKey = `my-orders:${session.user.id}`;
+    const copy = readSwr<Order[]>(copyKey);
+    if (copy) {
+      setOrders(copy.data);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     void fetchMyOrders().then((data) => {
       if (cancelled) return;
       setOrders(data);
       setIsLoading(false);
+      writeSwr<Order[]>(copyKey, data);
       void fetchOrdersPaidFromWallet(data.map((o) => o.id)).then((map) => {
         if (!cancelled) setFromWallet(map);
       });

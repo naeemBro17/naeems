@@ -6,6 +6,7 @@ import { appHistory } from './lib/appHistory';
 import { pageForPath, preloadShopPages } from './lib/routePages';
 import { trackInputModality } from './lib/inputModality';
 import { leaveInAppBrowserOnStart } from './lib/inAppBrowser';
+import { dropOtherVersions } from './lib/swrCache';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/orderTracking.css';
@@ -18,6 +19,9 @@ import './styles/batch60.css';
 // Android → reopen this same address in Chrome, once, before anything is
 // drawn or tapped (Google login does not work in their browser).
 leaveInAppBrowserOnStart();
+
+// Batch 62: saved screen copies from another app version are removed.
+dropOtherVersions();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

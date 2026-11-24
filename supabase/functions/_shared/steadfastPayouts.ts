@@ -830,7 +830,10 @@ export async function syncSteadfastPayouts(
       deliveryTotalPaisa: summary.deliveryTotalPaisa ?? more.deliveryTotalPaisa ?? null,
       paidBillsPaisa: summary.paidBillsPaisa ?? more.paidBillsPaisa ?? null,
     };
-    const payoutId = await store.upsertPayout(baseRow(merged, true, stamp, items.length));
+    // Batch 62: done only once its parcel lines came back (or Steadfast says
+    // it is final and truly has none). A payout still "processing" with no
+    // lines yet is asked again on the next sync.
+    const payoutId = await store.upsertPayout(baseRow(merged, payoutLinesDone(merged, items.length), stamp, items.length));
 
     const orders = await store.findOrders(
       items.map((i) => i.invoice).filter((v): v is string => v !== null),
@@ -858,6 +861,15 @@ export async function syncSteadfastPayouts(
 
   await store.saveBalance(result.balance, result.error ?? balanceError, now().toISOString());
   return result;
+}
+
+/** Batch 62: a payout counts as synced only when its parcel lines came
+ *  back, or Steadfast's status is final and it has no parcels at all. */
+export function payoutLinesDone(s: Pick<PayoutSummary, 'steadfastStatus' | 'parcelCount'>, itemCount: number): boolean {
+  if (itemCount > 0) return true;
+  const status = (s.steadfastStatus ?? '').trim().toLowerCase();
+  const final = ['paid', 'completed', 'complete', 'done', 'success', 'successful'].includes(status);
+  return final && (s.parcelCount ?? 0) === 0;
 }
 
 function baseRow(s: PayoutSummary, itemsSynced: boolean, stamp: string, itemCount: number | null): PayoutRow {

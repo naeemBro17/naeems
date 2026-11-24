@@ -16,6 +16,7 @@ import {
   whatsAppShareUrl,
   type ComboItem,
 } from '../../lib/combos';
+import { ComboItemsEditor } from './ComboItemsEditor';
 
 /* ---------------------------------------------------------------- icons */
 
@@ -258,22 +259,28 @@ export function ShareComboSheet({ combo, onClose }: { combo: ReadyCombo | null; 
 
 /**
  * "Share as a combo" (mockup frame 2, without a combo price): name, note,
- * Create link → the link-ready view. Saves the cart's lines (product,
- * option, quantity); prices are never saved.
+ * Create link → the link-ready view. Saves the lines (product, option,
+ * quantity); prices are never saved. Batch 62: starts from the cart (or
+ * empty, from Admin → Combos) and "Add products" adds any active product.
  */
 export function MakeComboSheet({
   isOpen,
   onClose,
   items,
   onClearCart,
+  onCreated,
 }: {
   isOpen: boolean;
   onClose: () => void;
   items: readonly ComboItem[];
-  onClearCart: () => void;
+  /** The cart's "Clear cart" (none when the combo was not made from it). */
+  onClearCart?: () => void;
+  /** Batch 62: called once the link is made. */
+  onCreated?: () => void;
 }) {
   const { showToast } = useToast();
-  const lines = useComboLines(items);
+  const [list, setList] = useState<ComboItem[]>(() => [...items]);
+  const lines = useComboLines(list);
   const totals = useMemo(() => comboTotals(lines), [lines]);
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -284,6 +291,7 @@ export function MakeComboSheet({
   // A fresh form each time the sheet opens; the local picture is let go.
   useEffect(() => {
     if (!isOpen) return;
+    setList([...items]);
     setName('');
     setNote('');
     setError(null);
@@ -303,7 +311,8 @@ export function MakeComboSheet({
     }
     setBusy(true);
     setError(null);
-    const result = await createCombo({ name, note, items: [...items] });
+    // Batch 62: only lines the shop still has (the list shown), in its order.
+    const result = await createCombo({ name, note, items: lines.map((l) => ({ product_id: l.product.id, variant_id: l.variantId, quantity: l.quantity })) });
     if (!result.ok) {
       setBusy(false);
       setError(result.message);
@@ -313,6 +322,7 @@ export function MakeComboSheet({
     const picture = await drawComboCollage(lines.map((l) => l.photo ?? '').filter((u) => u !== ''));
     if (picture) await saveComboPreview(result.id, result.code, picture);
     setBusy(false);
+    onCreated?.();
     setReady({
       code: result.code,
       name: name.trim(),
@@ -328,11 +338,15 @@ export function MakeComboSheet({
       {ready ? (
         <ComboReadyView
           combo={ready}
-          onClearCart={() => {
-            onClearCart();
-            showToast('Cart cleared');
-            onClose();
-          }}
+          onClearCart={
+            onClearCart
+              ? () => {
+                  onClearCart();
+                  showToast('Cart cleared');
+                  onClose();
+                }
+              : undefined
+          }
         />
       ) : (
         <form
@@ -348,6 +362,7 @@ export function MakeComboSheet({
             {n} product{n === 1 ? '' : 's'} · total <span className="combo-price">{formatTaka(totals.total)}</span>
           </p>
           <ComboThumbs lines={lines} />
+          <ComboItemsEditor items={list} lines={lines} onChange={setList} />
 
           <label className="combo-field">
             <span className="combo-field__label">Combo name</span>

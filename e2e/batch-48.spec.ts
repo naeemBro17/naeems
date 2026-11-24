@@ -69,14 +69,23 @@ const HALF_PERCENT: Rule = { enabled: true, type: 'percent', value: 0.5 };
 async function withAdvanceSettings(page: Page, rule: Rule): Promise<void> {
   await page.route(/\/rest\/v1\/app_settings\?/, async (route: Route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    const response = await route.fetch();
-    const rows = ((await response.json()) as { key: string; value: string }[]).filter((r) => !r.key.startsWith('advance_discount_'));
+    // Batch 62: a page that has already moved on drops the background
+    // refresh's answer (nothing to change then).
+    let response: Awaited<ReturnType<Route['fetch']>>;
+    let all: { key: string; value: string }[];
+    try {
+      response = await route.fetch();
+      all = (await response.json()) as { key: string; value: string }[];
+    } catch {
+      return;
+    }
+    const rows = all.filter((r) => !r.key.startsWith('advance_discount_'));
     rows.push(
       { key: 'advance_discount_enabled', value: rule.enabled ? 'true' : 'false' },
       { key: 'advance_discount_type', value: rule.type },
       { key: 'advance_discount_value', value: String(rule.value) }
     );
-    await route.fulfill({ response, json: rows });
+    await route.fulfill({ response, json: rows }).catch(() => undefined);
   });
 }
 

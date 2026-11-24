@@ -835,3 +835,19 @@
 .account-page--glass .account-header__email {
   color: var(--color-text-secondary);
 }
+
+/* Batch 62 — Pre-orders: a floating card (Batch 53 mockup), 12 px from the
+   left, right and bottom edges, every corner rounded; no × (Got it, a tap
+   outside or a swipe down closes it). */
+.sheet-panel.acct-sheet--float {
+  width: calc(100% - 24px);
+  max-width: 480px;
+  margin: 0 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 24px !important;
+  border-bottom: 1px solid var(--acct-glass-border);
+  padding-bottom: var(--space-4);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel.acct-sheet--float { transition: none; }
+}

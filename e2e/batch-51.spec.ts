@@ -302,7 +302,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: `${SHOTS}/${theme}-08-account-wishlist-preorders.png` });
     await page.getByTestId('account-preorders').click();
     const sheet = page.getByTestId('preorders-sheet');
-    await expect(sheet).toContainText("Soon you can reserve sold-out favourites — we'll bring them in just for you.");
+    await expect(sheet).toContainText("Soon you can reserve sold-out favourites, and we'll bring them in just for you.");
     await expect(page.getByRole('button', { name: 'Got it' })).toBeVisible();
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${SHOTS}/${theme}-09-preorders-sheet.png` });

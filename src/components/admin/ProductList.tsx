@@ -59,7 +59,7 @@ function noPriceMessage(error: { message?: string }): string | null {
 }
 
 export function ProductList() {
-  const { products, categories, settings, isLoading, refetch, patchProductLocal, variantsFor } = useProducts();
+  const { products, categories, settings, isLoading, refetch, patchProductLocal, adminVariantsFor } = useProducts();
   const { showToast } = useToast();
   const navigate = useNavigate();
   // Batch 24: deleting a product stays with the Super Admin; moderators
@@ -350,7 +350,11 @@ export function ProductList() {
   const rowMenu = (product: Product): MenuItem[] => {
     const items: MenuItem[] = [
       { label: 'Edit', icon: 'edit', onSelect: () => openEditor(product) },
-      { label: 'Restock', icon: 'restock', onSelect: () => setRestockProduct(product) },
+      // Batch 62: while Inventory mode is On stock comes from lots, so there
+      // is no Restock (Inventory → New lot instead).
+      ...(settings.inventory_mode === 'true'
+        ? []
+        : [{ label: 'Restock', icon: 'restock', onSelect: () => setRestockProduct(product) } satisfies MenuItem]),
       {
         label: product.is_featured ? 'Remove from home' : 'Feature on home',
         icon: 'star',
@@ -372,7 +376,7 @@ export function ProductList() {
 
   const subLine = (product: Product): string => {
     const parts = [product.sku];
-    const variantCount = variantsFor(product.id).length;
+    const variantCount = adminVariantsFor(product.id).length;
     if (variantCount > 0) parts.push(`${variantCount} variant${variantCount === 1 ? '' : 's'}`);
     const info = editInfo.get(product.id);
     if (info) parts.push(`updated by ${info.lastEditedBy} · ${timeAgo(info.lastEditedAt)}`);
@@ -693,7 +697,7 @@ export function ProductList() {
 
       <RestockSheet
         product={restockProduct ? (products.find((p) => p.id === restockProduct.id) ?? restockProduct) : null}
-        variants={restockProduct ? variantsFor(restockProduct.id) : []}
+        variants={restockProduct ? adminVariantsFor(restockProduct.id) : []}
         onClose={() => setRestockProduct(null)}
         onDone={refetch}
       />

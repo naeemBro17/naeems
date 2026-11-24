@@ -147,8 +147,9 @@ export function OrderSummaryPage() {
   // advance discount on what is left of the products.
   const promoPart = promoDiscountRounded(discount);
   // Batch 60: the store wallet pays first (only when switched on).
-  const { wallet: myStore, reload: reloadStore } = useMyStoreWallet({ toast: false });
-  const storeBalance = myStore.available ? myStore.balance : 0;
+  const { wallet: myStore, reload: reloadStore } = useMyStoreWallet({ toast: false, cache: false });
+  // Batch 62: only an open wallet (a closed one never holds money anyway).
+  const storeBalance = myStore.available && myStore.open ? myStore.balance : 0;
   const [useStore, setUseStore] = useState(false);
   const payTotalBeforeStore = Math.max(0, subtotal + zone.fee - promoPart);
   const split = splitStoreWallet(payTotalBeforeStore, storeBalance, useStore && storeBalance > 0);

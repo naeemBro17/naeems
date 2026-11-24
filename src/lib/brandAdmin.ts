@@ -396,6 +396,8 @@ export async function restock(
   if (error) {
     if (/not authorized/i.test(error.message)) return { error: 'You are not allowed to change stock.' };
     if (/whole number/i.test(error.message)) return { error: 'Enter a whole number of 0 or more.' };
+    // Batch 62: the real reason, not a "try again" that never works.
+    if (/inventory mode is on/i.test(error.message)) return { error: 'Stock now comes from lots. Add a lot to change it.' };
     return { error: 'Could not save the stock. Please try again.' };
   }
   const result = data as { before: number | null; after: number };

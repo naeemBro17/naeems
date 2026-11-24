@@ -308,14 +308,23 @@ async function withCardCopies(page: Page): Promise<{ slug: string; large: string
   let first: { slug: string; large: string; card: string } | null = null;
   await page.route(/\/rest\/v1\/products_view\?/, async (route: Route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    const response = await route.fetch();
-    const rows = (await response.json()) as { slug: string; image_urls: string[] | null; image_urls_thumb: string[] | null }[];
+    // Batch 62: the shop shows its saved copy at once and reads the fresh
+    // one in the background; a page that has already moved on drops that
+    // answer (nothing to change then).
+    let response: Awaited<ReturnType<Route['fetch']>>;
+    let rows: { slug: string; image_urls: string[] | null; image_urls_thumb: string[] | null }[];
+    try {
+      response = await route.fetch();
+      rows = (await response.json()) as typeof rows;
+    } catch {
+      return;
+    }
     for (const row of Array.isArray(rows) ? rows : [rows]) {
       const full = row.image_urls ?? [];
       row.image_urls_thumb = full.map((u) => u.split('?')[0].replace('/products/', '/products/card/'));
       if (!first && full.length > 0) first = { slug: row.slug, large: full[0], card: row.image_urls_thumb[0] };
     }
-    return route.fulfill({ response, json: rows });
+    return route.fulfill({ response, json: rows }).catch(() => undefined);
   });
   await page.goto('/');
   await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });

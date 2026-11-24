@@ -10818,19 +10818,9 @@ html.vt-fade::view-transition-new(root) {
   gap: var(--space-4);
 }
 
-.pform__side {
-  display: contents;
-}
-
-.pform__section--basics { order: 1; }
-.pform__section--shop { order: 2; }
-.pform__section--photos { order: 3; }
-.pform__section--price { order: 4; }
-.pform__section--stock { order: 5; }
-.pform__section--variants { order: 6; }
-.pform__section--details { order: 7; }
-.pform__section--reference { order: 8; }
-.pform__footer { order: 9; }
+/* Batch 62: the sections come in the phone order (Product, Photos, Price,
+   Shop, Variants, Stock, Product page text, More details); the Edit
+   product page places them in two columns on a computer (admin.css). */
 
 .pform__section {
   min-width: 0;
@@ -10937,3 +10927,69 @@ html.vt-fade::view-transition-new(root) {
   opacity: 0.65;
   cursor: not-allowed;
 }
+
+/* ---------- Batch 62: Edit product reorganised (approved mockup) ---------- */
+.pform-grid > .pform-full { min-width: 0; }
+.pform-stack { display: flex; flex-direction: column; gap: 16px; }
+.pform-more { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--adm-muted, var(--color-text-muted)); margin: 6px 0 -4px; }
+.pform-more::before, .pform-more::after { content: ''; flex: 1; height: 1px; background: var(--adm-line, var(--color-border)); }
+
+/* Photos: big square tiles (3 a row; 8 on the Edit product page on a
+   computer, admin.css), Main on the first, × on each, "+ Add photos" last. */
+.pform-photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pform-photos > * { aspect-ratio: 1; }
+.image-uploader--tiles .image-uploader__grid { overflow: visible; padding: 0; }
+.image-uploader--tiles .image-uploader__item { width: auto; height: auto; }
+.image-uploader--tiles .image-uploader__thumb,
+.image-uploader--tiles .image-uploader__placeholder { border-radius: 14px; }
+.image-uploader--tiles .image-uploader__remove { top: 6px; right: 6px; }
+.image-uploader--tiles .image-uploader__main-tag { top: 8px; left: 8px; }
+.image-uploader--tiles .image-uploader__add { border-radius: 14px; font-size: 12.5px; }
+
+/* Price: Retail, Offer, Wholesale side by side on every screen. */
+.pform-price.pform__row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pform-price__help { margin-top: -6px; }
+
+/* Shop: the three switches, each with its line. */
+.pform-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pform-switch__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pform-switch__text .form-helper { margin: 0; }
+
+/* Brand: the typed name, and "Choose" (the picker sheet) on a touch screen. */
+.pform-brand { display: flex; gap: 8px; align-items: stretch; }
+.pform-brand .form-input { flex: 1 1 auto; min-width: 0; }
+.pform-brand__pick { flex: none; }
+
+/* Stock while Inventory mode is On. */
+.pform-lots__big { display: flex; align-items: baseline; gap: 8px; margin: 0; color: var(--color-text-primary); }
+.pform-lots__big b { font-family: var(--font-price); font-size: 30px; font-weight: 800; line-height: 1.1; }
+.pform-lots__big span { font-size: 14px; color: var(--color-text-secondary); }
+.pform-lots__list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--color-text-secondary); }
+.pform-lots__list li { display: flex; justify-content: space-between; gap: 12px; }
+.pform-lots .form-helper { margin-top: 6px; }
+
+/* Product page text: tabs above one editor; a phone preview beside it on
+   the Edit product page on a computer (admin.css). */
+.pform-text { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.pform-text__edit { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.pform-text__panel[hidden] { display: none; }
+.pform-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--color-bg-secondary); overflow-x: auto; scrollbar-width: none; }
+.pform-tab { flex: 1 0 auto; min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--color-text-secondary); white-space: nowrap; }
+.pform-tab--on { background: var(--color-surface); color: var(--color-text-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.pform-preview { display: none; width: 360px; position: sticky; top: 84px; }
+.pform-preview__screen { border-radius: 36px; padding: 12px; background: #111113; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+.pform-preview__screen > .accordion { margin: 0; padding: 14px 16px 6px; border-radius: 26px; background: var(--pdp-bg, var(--color-bg)); max-height: 640px; overflow-y: auto; }
+.pform-preview__screen .accordion__item { border-top: 0; }
+.pform-preview__screen .accordion__item:last-child { border-bottom: 0; }
+.pform-preview__header { cursor: default; }
+.pform-preview__empty { margin: 0; }
+
+/* Variants: the "Show in shop" eye, and a hidden size dimmed. */
+.variant-eye { flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--color-text-primary); }
+.variant-eye:hover { background: var(--color-bg-secondary); }
+.variant-eye--off { color: var(--color-text-muted); }
+.variant-list__row--hidden .variant-list__size,
+.variant-list__row--hidden .variant-list__prices { opacity: 0.55; }
+
+/* Admin New order / Edit order: "Stock: 1 bottle (473 ml)". */
+.pack-stock-line { display: block; color: var(--color-text-secondary); }
