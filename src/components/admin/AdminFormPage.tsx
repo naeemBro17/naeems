@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, SyntheticEvent } from 'react';
 import { AdminIcon } from './ui/AdminIcon';
 import { AdminThemeButton } from './ui/AdminUi';
 import { useLeaveGuard } from './LeaveGuard';
@@ -92,7 +92,17 @@ export function AdminFormPage({
   children,
 }: AdminFormPageProps) {
   const { markDirty } = useLeaveGuard();
-  const onEdit = guard ? markDirty : undefined;
+  // Batch 62: parts that save on their own (confirm sheets, the customer's
+  // WALLET card; marked data-own-save) never count as unsaved typing. React
+  // hands events from a sheet's portal to this page too, which is why
+  // saving Add to wallet used to leave the page asking "Discard changes?".
+  const onEdit = guard
+    ? (event: SyntheticEvent) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest('[data-own-save]')) return;
+        markDirty();
+      }
+    : undefined;
   return (
     <section
       className={`adm-fpage${primary ? ' adm-fpage--docked' : ''}${className ? ` ${className}` : ''}`}

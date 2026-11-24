@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { AdminLayout } from '../components/admin/AdminLayout';
@@ -30,6 +30,7 @@ import { ReportsTab } from '../components/admin/reports/ReportsTab';
 import { KaarbarImportTab } from '../components/admin/kaarbar/KaarbarImportTab';
 import { AdminPageHeader } from '../components/admin/ui/AdminUi';
 import { fetchAllOrders } from '../lib/orders';
+import { isFresh, readSwr, writeSwr } from '../lib/swrCache';
 import { fetchOwnRoleName } from '../lib/staff';
 import {
   ALL_SECTIONS,
@@ -86,7 +87,7 @@ export function AdminPage() {
 }
 
 function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: () => void }) {
-  const { isAdmin, can, staff, refreshStaff } = useAuth();
+  const { isAdmin, can, staff, refreshStaff, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { requestLeave, leave } = useLeaveGuard();
@@ -113,7 +114,10 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
   const orderParam = searchParams.get('order');
 
   const [wholesalers, setWholesalers] = useState<WholesalerAccount[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  // Batch 62: the last copy of the orders shows at once; fresh replaces it.
+  const ordersCopyKey = session ? `admin-orders:${session.user.id}` : null;
+  const [orders, setOrders] = useState<Order[]>(() => (ordersCopyKey ? readSwr<Order[]>(ordersCopyKey)?.data ?? [] : []));
+  const ordersFetchedAt = useRef(0);
   const canViewOrders = can('view_orders');
   const canViewWholesalers = can('view_wholesalers');
 
@@ -148,8 +152,21 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
   // change so both the list and the "to confirm" badge stay in sync.
   const loadOrders = useCallback(async () => {
     if (!canViewOrders) return;
-    setOrders(await fetchAllOrders());
-  }, [canViewOrders]);
+    ordersFetchedAt.current = Date.now();
+    const fresh = await fetchAllOrders();
+    setOrders(fresh);
+    if (ordersCopyKey) writeSwr<Order[]>(ordersCopyKey, fresh);
+  }, [canViewOrders, ordersCopyKey]);
+
+  // Batch 62: back in the app after more than 60 seconds: the orders again.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible' || ordersFetchedAt.current === 0 || isFresh(ordersFetchedAt.current)) return;
+      void loadOrders();
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    return () => document.removeEventListener('visibilitychange', onReturn);
+  }, [loadOrders]);
 
   // Batch 51: the Shopping list — its count is the badge, Home's tile and
   // the list page. Read again whenever the orders are.

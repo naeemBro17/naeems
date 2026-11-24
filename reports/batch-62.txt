@@ -1,0 +1,259 @@
+BATCH 62 — Wallet by invitation, Edit product reorganised, loose ml / tab,
+hide a size, combos, Pre-orders sheet, faster return, 4 fixes from Batch 61
+Version 1.62.0 · Branch feature/batch-62 (from main at 1.61.0) · 24 Nov 2026
+
+======================================================================
+WHAT NAEEM DOES, IN ORDER
+======================================================================
+ 1. Supabase → SQL Editor → paste ALL of supabase/migration-061-batch62.sql
+    → Run. One transaction, safe to run again, needs no sign-in.
+    (I tested it exactly like that: postgres role, no sign-in, twice in a
+    row inside one transaction, rolled back. I did NOT run it on the live
+    database.)
+ 2. Open Money once: the line under "Money now" should still say
+    "All figures match" (the database test kept it at ৳0.00).
+ 3. Merge the pull request (link at the end). Vercel puts it live.
+ 4. Nothing to deploy: the Steadfast fix is already live. I deployed the
+    two Edge Functions from this computer (steadfast, steadfast-refresh-all).
+    After step 1, press "Check payouts" (or wait for the next automatic
+    sync) and payout SFC-33372895 is read again.
+ 5. Still waiting from Batch 61: re-upload the photo of "CeraVe Hydrating
+    Cleanser 236ml" (FA-002). That is the only failing test.
+
+ Before step 1 the site keeps working as today: every wallet counts as
+ open, no size can be hidden yet (the eye says "Run the Batch 62 SQL
+ first"), and the fish oils still say pcs.
+
+======================================================================
+1. WHAT I DID
+======================================================================
+HOW A CUSTOMER ASKS FOR A WALLET, AND HOW YOU OPEN IT
+ • Every wallet is now CLOSED until you open it. The SQL opens it
+   automatically for the customers who already had wallet money or a
+   request (3 customers today), so nobody with money loses anything.
+ • A customer with a closed wallet sees, on Account, "MY WALLET · Save for
+   the glow you love · Invite only · Tap to learn more". Tapping opens the
+   new jar story (dark page, "SAVE FOR THE GLOW YOU LOVE" in the Anton
+   font, coins dropping into a jar that fills a step with each one), the
+   badge INVITE ONLY, three promises and a green "Ask us to open my
+   wallet" button. It opens WhatsApp to your shop number with:
+       হাই, আমি আমার Wallet চালু করতে চাই।
+       নাম: <their name>
+ • You open it on the customer's admin page, WALLET card: switch
+   "Wallet open". "Add to wallet" also opens it by itself. Any money that
+   comes into a wallet (also an over-paid / cancelled order's extra) opens
+   it, so a balance is never hidden.
+ • Closing a wallet that still has money is refused: "This wallet still
+   has ৳2,000. It can be closed when the balance is ৳0." (also refused
+   while a request is waiting).
+ • Open but empty: the same jar story with "YOUR WALLET IS OPEN", two
+   promises and the orange Add money. With money or history: Batch 60's
+   balance page, its last line now "Save for the glow you love."
+ • A closed wallet's "I sent money" is refused by the database too:
+   "Your wallet isn't open yet. Message us on WhatsApp and we'll open it."
+   Checkout's "Use wallet balance" shows only for an open wallet.
+ • Rejected request text: "Your ৳3,000 wasn't added. The payment didn't
+   match our records. Message us on WhatsApp and we'll sort it out." in a
+   plain grey box with a small red dot (WhatsApp and Dismiss stay).
+ • "Discard changes?" after Add to wallet (customer 01912809053): the
+   cause was that the customer page treated typing anywhere in it as
+   unsaved, and a sheet's typing reaches the page too. Confirm sheets
+   (Add to wallet, Confirm, Reject, Correct) and the WALLET card save on
+   their own, so the page now ignores them. Also fixes the same thing for
+   the other confirm sheets on that page.
+ • Home "Needs attention" never shows "p:f05af719-…" any more: name, else
+   phone, else "A customer" (in the database and on the screen).
+
+WHAT EDIT PRODUCT LOOKS LIKE NOW
+ • Computer: two columns. Top: Product (name, brand, category, region,
+   size) | Price (Retail, Offer, Wholesale side by side) and Shop (Active,
+   Keep selling, Featured, each with its line). Then Photos full width
+   (big tiles, 8 a row, Main on the first, × on each, "+ Add photos"
+   last, drag to reorder as before). Then Variants | Stock. Then Product
+   page text full width: Description / How to Use / Key Ingredients as
+   tabs above one editor, Video review under it, and on the right a phone
+   preview "About this product" that shows the text exactly as the
+   product page does, live as you type. At the bottom, after "MORE
+   DETAILS": For search and filters (skin type, skin condition) | Note and
+   reference (note, SKU).
+ • Phone: one column: Product, Photos (3 a row), Price, Shop, Variants,
+   Stock, text, More details. The editor is now exactly as wide as the
+   product page's text, with the same size and line height, so a
+   paragraph breaks at the same words (checked with a real Bangla
+   description).
+ • Stock card with Inventory mode On: a big number "N bottles in lots"
+   (for ml / tab products also every unit, e.g. "2 bottles in lots
+   (946 ml)"), per size when there are sizes, Stock unit / Pack size,
+   "+ Add a lot" (opens New lot with this product already in it) and
+   "Remove stock…". Mode Off: Stock Status / Quantity as before.
+ • Brand on a phone: a "Choose" button next to the box opens the list
+   (the same picker as thanas). Typing a new name still makes a new brand.
+ • No field was removed; saving is unchanged.
+
+HOW TO HIDE A SIZE
+ • Edit product → Variants → tap the eye on a size ("Show in shop").
+   Crossed eye = hidden: the row says "Hidden from the shop".
+ • A hidden size disappears from the product page, cards ("From ৳…"),
+   search, combos and new combos. A cart that already holds it shows it as
+   "can't be ordered" (the existing path). The database refuses it at
+   checkout ("This size is no longer available.") and never sends it to
+   customers or visitors at all. Admin screens, New / Edit order, old
+   orders, invoices, lots and reports still see it.
+
+LOOSE ML / TAB
+ • New lot: "Lot total · 100 ml", mixed: "Lot total · 2 pcs, 300 ml"
+   (it always said pcs).
+ • New stock unit "tab". The SQL changes only the word of the two fish
+   oils from pcs to tab (pack sizes 400 and 150, stock and costs
+   untouched). Changing only the word is allowed even when a product has
+   lots; changing the pack size is still blocked (Batch 55.1).
+ • Admin New order / Edit order, products in packs: "Stock: 1 bottle
+   (473 ml)", "Stock: 0 bottles + 300 ml", "Stock: 4 bottles (1,600 tab)".
+
+COMBOS
+ • Admin → Combos has "New combo" (no cart needed), and the "Share as a
+   combo" sheet now has "Add products" (the New order search: product,
+   then size). Any active product can be added, also out of stock; each
+   shows its shop status (In stock / Only N left / Out of stock / Keep
+   selling). Quantity −/+, move up / down, remove. Create link and the
+   link work as before.
+
+PRE-ORDERS SHEET
+ • Now a floating card: 12 px from the left, right and bottom, 24 px
+   corners all round, no ×. Closes with Got it, a tap outside, or a swipe
+   down. Glass, COMING SOON and the text kept (only the dash in the text
+   became a comma: no dashes in customer text).
+
+FASTER WHEN YOU COME BACK
+ • The shop (products, settings, sizes), the customer's wallet and My
+   Orders, and admin Home, Orders, Customers and Money keep their last
+   good copy in the phone. Opening shows that copy at once, then the
+   fresh one replaces it quietly. Coming back to the app reads again only
+   if the copy is older than 60 seconds. Admin money numbers shown from
+   the copy say "Updating…" until the fresh ones arrive.
+ • The copies are only for showing: placing orders, payments, stock and
+   checkout's wallet always use fresh data (checkout never uses the
+   copy). Signing out deletes every copy; a new app version starts fresh.
+ • Measured (npm run preview, Storage mocked, one try each, this PC):
+     Home, reopen:          no copy 1.16 s to first products · with copy 0.59 s
+                            requests 8 / 479 KB both (the fresh read still happens)
+     Admin Orders, reopen:  no copy 1.53 s to first order · with copy 1.00 s
+                            requests 21 / 673 KB both
+     Back in the app within 60 s: 0 requests (the wallet used to read
+                            again on every focus; now at most once a minute)
+   Honest note: the win is speed you SEE (the screen no longer waits for
+   the network; on a slow phone connection that is seconds, not half a
+   second), not fewer bytes on a reopen. Bandwidth only drops for quick
+   returns (under 60 s).
+
+THE FOUR PROBLEMS BATCH 61 FOUND
+ 1. Stuck Steadfast payout: a payout now counts as synced only when its
+    parcel lines came back (or Steadfast says it is final and has no
+    parcels). The SQL marks payouts with no lines as "not synced", so
+    SFC-33372895 (৳6,836, paid 19 Nov) is read again and matched the
+    normal way. Edge Functions deployed. Balance check stays green.
+ 2. Reopen a "Keep selling" order at stock 0 now works, like placing it
+    (Mode On: the units are "sold without stock"; Mode Off: "bought after
+    the order"). A product without Keep selling is still refused.
+ 3. Restock is hidden while Inventory mode is On; where it can still be
+    reached the message is "Stock now comes from lots. Add a lot to change
+    it."
+ 4. Names in Needs attention (above).
+ Also: CLAUDE.md has Batch 61's tip for running one serial test file.
+
+TESTS
+ • Database (rolled back, migration in front): 52 checks, all OK —
+   wallet open / closed (request refused, direct insert refused, admin add
+   opens, closing with money or a waiting request refused, switch, names),
+   hidden size (refused by place_order, not readable by visitors or
+   customers in the view or the table, admin sees it), tab (word change
+   allowed, pack change refused, unknown word refused), Keep selling
+   reopen Mode On and Off, payout lines, balance check ৳0.00 at every step.
+   Batch 60's own database test (98 checks) also passes with the migration.
+ • Browser (e2e/batch-62.spec.ts, all mocked or read-only): 24 tests.
+ • Unit: 14 new (vitest).
+ • Frame captures: reports/batch-62-screens/.
+ • Full run: see section 3 / the summary line below.
+FULL_RUN_RESULT
+
+======================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+======================================================================
+The whole file supabase/migration-061-batch62.sql (paste all of it, Run).
+It is one BEGIN … COMMIT, safe to run more than once, needs no sign-in.
+
+======================================================================
+3. WHAT I COULD NOT FINISH
+======================================================================
+ • Hiding the product's MAIN size (the product's own price, not a row in
+   Variants) is not possible: the eye is on the extra sizes. To hide the
+   whole product use Active. So "every size hidden" cannot happen today;
+   the shop would treat it as not buyable anyway because the main size
+   still shows. (See Design decisions.)
+ • Batch 40 "no broken images" still fails until FA-002's photo is
+   re-uploaded (not something code can fix).
+
+======================================================================
+4. WHAT I FOUND ALONG THE WAY (not fixed)
+======================================================================
+ • Old customer texts still have dashes: wishlist "Only 2 left — order
+   soon", the cart / product page low-stock line, "1–2 days" delivery
+   times. Small job if you want them gone everywhere.
+ • 4 more Steadfast payouts are "processing" with lines; they are never
+   read again when Steadfast later marks them paid (only the status
+   word is old; the money is right).
+ • The old product cache (before this batch) stored the admin's view
+   (hidden products, wholesale prices) for anyone on the same phone when
+   offline. The new copies are kept per person and deleted at sign-out.
+ • PackSizePanel shows only the extra sizes for a product with sizes, not
+   the main size (older behaviour).
+
+======================================================================
+5. DESIGN DECISIONS
+======================================================================
+ • Money into a closed wallet (an over-paid / cancelled order's extra)
+   opens it automatically: a balance must never be hidden.
+ • Closing is also refused while a request waits (otherwise the
+   customer's request would hang on a closed wallet).
+ • Before the SQL is run every wallet counts as open (keeps Batch 60
+   working until you run it).
+ • Hidden sizes: filtered in the database (view and table for customers /
+   visitors) and also on screen for staff browsing the shop. Combos'
+   "Add products" offers only the sizes the shop shows.
+ • Two-column Edit product only on the Edit product page (≥ 1024 px); the
+   quick-edit sheet in the shop stays one column so nothing is cramped.
+ • The preview's title follows the tab (About this product / How to use /
+   Key ingredients).
+ • Editor = product page text on phones up to 599 px: same width (the
+   editor reaches into the card's side padding), 13.5 px, line height 1.7,
+   and font ligatures on (the editor library turns them off, which made
+   its letters slightly narrower).
+ • Price labels shortened to "Retail ৳ / Offer ৳ / Wholesale ৳" so three
+   fit side by side on a phone; same fields and ids.
+ • Combo arrows (↑ ↓ ×) are plain text symbols, not emoji.
+ • Copies kept in localStorage (wrapped in try / catch), keyed by app
+   version and by who is signed in; checkout never reads one.
+ • batch-62.spec.ts runs in the "serial" group (its database test changes
+   settings inside a rolled-back transaction).
+ • Tests changed for the new behaviour: batch-26 (no Restock in Mode On),
+   batch-51 (Pre-orders text without the dash), batch-60 (the old story
+   tests moved to batch-62; new rejected text), e2e/sql/batch-60.sql
+   (opens the test customer's wallet inside its transaction).
+
+======================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (not done)
+======================================================================
+ 1. A customer-facing "Your wallet is open" message (SMS / WhatsApp
+    template) when you open one — today they only see it next visit.
+    Small.
+ 2. Replace the remaining dashes and odd punctuation in customer texts in
+    one pass (see section 4). Small.
+ 3. Products list and admin Orders are read whole on every open (480 KB /
+    670 KB). Asking only for what changed since the saved copy would cut
+    Supabase bandwidth a lot. Medium.
+ 4. Let the main size be hidden too (needs the main size to become a
+    normal size row). Medium.
+ 5. Combos: show the total saved vs. buying separately, and an expiry
+    date for a shared link. Small.
+
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-62

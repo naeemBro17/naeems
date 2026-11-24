@@ -56,10 +56,12 @@ function PreordersSheet({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       onClose={onClose}
       title="Pre-orders"
       headerAction={<span className="acct-soon">COMING SOON</span>}
-      panelClassName="acct-sheet"
+      panelClassName="acct-sheet acct-sheet--float"
+      hideClose
+      swipeToClose
     >
       <div className="acct-sheet__body" data-testid="preorders-sheet">
-        <p className="acct-sheet__text">Soon you can reserve sold-out favourites — we'll bring them in just for you.</p>
+        <p className="acct-sheet__text">Soon you can reserve sold-out favourites, and we'll bring them in just for you.</p>
         <button type="button" className="acct-sheet__ok" onClick={onClose}>
           Got it
         </button>
@@ -147,16 +149,26 @@ function areaSummary(division: string | null, district: string | null, thana: st
 }
 
 /** Batch 60: the My Wallet card, right under the header (signed-in
- *  customers; hidden until migration-060 has been run). */
+ *  customers; hidden until migration-060 has been run). Batch 62: a closed
+ *  wallet (invite only) shows the story line instead of a balance. */
 function WalletCard() {
   const { wallet } = useMyStoreWallet();
   if (!wallet.available) return null;
   const waiting = wallet.waiting[0];
   return (
-    <Link to="/wallet" className="mw-card" data-testid="account-wallet">
+    <Link to="/wallet" className="mw-card" data-testid="account-wallet" data-open={wallet.open ? 'true' : 'false'}>
       <span className="mw-card__label">MY WALLET</span>
-      <p className="mw-card__balance">{formatTaka(wallet.balance)}</p>
-      <span className="mw-card__hint">Your skincare fund</span>
+      {wallet.open ? (
+        <>
+          <p className="mw-card__balance">{formatTaka(wallet.balance)}</p>
+          <span className="mw-card__hint">Your skincare fund</span>
+        </>
+      ) : (
+        <>
+          <p className="mw-card__balance mw-card__balance--story">Save for the glow you love</p>
+          <span className="mw-card__hint">Invite only · Tap to learn more</span>
+        </>
+      )}
       {waiting && <span className="mw-card__wait">{formatTaka(waiting.amount)} waiting for confirmation</span>}
       <svg className="mw-card__chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M9 6l6 6-6 6" />

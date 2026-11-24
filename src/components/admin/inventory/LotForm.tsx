@@ -25,6 +25,7 @@ import { AdminIcon } from '../ui/AdminIcon';
 import { COUNTRIES, OTHER_COUNTRY, matchCountry } from './countries';
 import { LotReceipts } from './LotReceipts';
 import { taka2 } from './invFormat';
+import { lotTotalText } from '../../../lib/inventory/unitText';
 
 interface ItemDraft {
   key: string;
@@ -101,7 +102,18 @@ function draftFromUnit(unit: StockUnit, qty = '1', price = '', expiry = ''): Ite
  * only orange element. The same form edits every lot, the opening lot
  * (L-000) too — the fields that make no sense for it are hidden.
  */
-export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBack: () => void; onSaved: (id: string) => void }) {
+export function LotForm({
+  lotId,
+  addKey = null,
+  onBack,
+  onSaved,
+}: {
+  lotId: string | null;
+  /** Batch 62: a new lot starts with this product ("<productId>:<variantId>"). */
+  addKey?: string | null;
+  onBack: () => void;
+  onSaved: (id: string) => void;
+}) {
   const { showToast } = useToast();
   const { refetch: refetchProducts } = useProducts();
   const [units, setUnits] = useState<StockUnit[] | null>(null);
@@ -200,9 +212,13 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
             .map((c) => ({ key: nextKey(), id: c.id, amount: String(c.amount_bdt), date: c.cost_date ?? '', note: c.note }))
         );
       }
+      if (!lotId && addKey) {
+        const start = byKey.get(addKey.includes(':') ? addKey : `${addKey}:`);
+        if (start) setItems([draftFromUnit(start)]);
+      }
       setUnits(stock.data);
     })();
-  }, [lotId]);
+  }, [lotId, addKey]);
 
   const results = useMemo(() => {
     const term = normalizeText(query.trim());
@@ -228,8 +244,15 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
           ),
     [items, costs, effectiveRate]
   );
+  // Batch 62: the total says each row's own unit word ("2 pcs, 300 ml").
   const totalUnits = useMemo(
-    () => items.reduce((a, i) => a + (Number.isInteger(Number(i.qty)) && Number(i.qty) > 0 ? rowUnits(Number(i.qty), i.entryUnit, i.packSize) : 0), 0),
+    () =>
+      lotTotalText(
+        items.map((i) => ({
+          units: Number.isInteger(Number(i.qty)) && Number(i.qty) > 0 ? rowUnits(Number(i.qty), i.entryUnit, i.packSize) : 0,
+          unit: i.stockUnit,
+        }))
+      ),
     [items]
   );
 
@@ -702,7 +725,7 @@ export function LotForm({ lotId, onBack, onSaved }: { lotId: string | null; onBa
       </div>
 
       <div className="inv-total" data-testid="inv-lot-total">
-        <span>Lot total · {totalUnits} pcs</span>
+        <span>Lot total · {totalUnits}</span>
         <b>{preview === null ? '—' : preview.ok && landedPaisa !== null ? takaExact(landedPaisa) : '—'}</b>
       </div>
       {preview && !preview.ok && (

@@ -17,7 +17,7 @@ import { LimitPopup } from '../components/viewer/LimitPopup';
 import {
   isVariantInStock,
   optionGalleryImages,
-  sortVariants,
+  shopVisibleVariants, sortVariants,
 
   variantDisplayPrice,
   variantOptionLabel,
@@ -883,7 +883,8 @@ export function ProductDetailPage() {
         console.warn('Product variants unavailable:', error);
         return;
       }
-      setFetchedVariants(sortVariants(rows));
+      // Batch 62: a size hidden from the shop is left out here too.
+      setFetchedVariants(shopVisibleVariants(sortVariants(rows)));
     })();
     return () => {
       cancelled = true;

@@ -517,7 +517,7 @@ export interface ManualOrderItemInput {
   soldPrice: number | null;
   /** Batch 39: sold in loose units ('pcs' / 'ml' / 'g'): quantity = units,
    *  prices per unit. Null / missing = whole packs. */
-  soldUnit?: 'pcs' | 'ml' | 'g' | null;
+  soldUnit?: 'pcs' | 'ml' | 'g' | 'tab' | null;
   reason: DiscountReason | null;
   reasonNote: string | null;
 }

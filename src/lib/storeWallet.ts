@@ -162,6 +162,9 @@ export interface StoreWalletResult {
 export interface MyStoreWallet {
   /** False for anyone but a signed-in customer (or before migration-060). */
   available: boolean;
+  /** Batch 62: the wallet is opened by the shop (invitation only). Before
+   *  migration-061 the answer has no "open" and every wallet counts as open. */
+  open: boolean;
   balance: number;
   /** What they owe on orders and an older balance ("Due ৳X"). */
   due: number;
@@ -171,7 +174,7 @@ export interface MyStoreWallet {
   history: StoreWalletEntry[];
 }
 
-export const EMPTY_STORE_WALLET: MyStoreWallet = { available: false, balance: 0, due: 0, waiting: [], results: [], history: [] };
+export const EMPTY_STORE_WALLET: MyStoreWallet = { available: false, open: false, balance: 0, due: 0, waiting: [], results: [], history: [] };
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -216,6 +219,7 @@ export function parseMyStoreWallet(raw: unknown): MyStoreWallet {
   const j = raw as Record<string, unknown>;
   return {
     available: j.available === true,
+    open: j.available === true && j.open !== false,
     balance: num(j.balance),
     due: num(j.due),
     waiting: list(j.waiting).map(toWaiting),
@@ -299,6 +303,10 @@ export interface CustomerStoreWalletRequest {
 }
 
 export interface CustomerStoreWallet {
+  /** Batch 62: open (true before migration-061, which has no switch). */
+  open: boolean;
+  /** False before migration-061: the Wallet open switch is hidden. */
+  canSwitch: boolean;
   balance: number;
   waiting: StoreWalletWaiting[];
   requests: CustomerStoreWalletRequest[];
@@ -312,6 +320,8 @@ export async function fetchCustomerStoreWallet(customerKey: string): Promise<Cus
   if (error || !data || typeof data !== 'object') return null;
   const j = data as Record<string, unknown>;
   return {
+    open: j.open !== false,
+    canSwitch: typeof j.open === 'boolean',
     balance: num(j.balance),
     waiting: list(j.waiting).map(toWaiting),
     requests: list(j.requests).map((r) => ({
@@ -339,6 +349,16 @@ export interface WaitingStoreWalletRequest {
   createdAt: string;
 }
 
+/** Batch 62: how a wallet request is listed: the name, else the phone,
+ *  else "A customer" — never the internal key (p:… / ph:…). */
+export function storeWalletRequestName(name: string, phone?: string | null): string {
+  const clean = name.trim();
+  if (clean !== '' && !/^(p|ph|n):/.test(clean)) return clean;
+  const fromKey = clean.startsWith('ph:') ? clean.slice(3) : '';
+  const number = (phone ?? '').trim() || fromKey;
+  return number !== '' ? number : 'A customer';
+}
+
 /** Every waiting request (Home "Needs attention"). */
 export async function fetchWaitingStoreWalletRequests(): Promise<WaitingStoreWalletRequest[]> {
   const { data, error } = await supabase.rpc('store_wallet_waiting');
@@ -346,7 +366,7 @@ export async function fetchWaitingStoreWalletRequests(): Promise<WaitingStoreWal
   return (data as Record<string, unknown>[]).map((r) => ({
     id: str(r.id),
     customerKey: str(r.customer_key),
-    name: str(r.name),
+    name: storeWalletRequestName(str(r.name)),
     amount: num(r.amount),
     method: method(r.method),
     trxId: str(r.trx_id),
@@ -382,6 +402,19 @@ export async function addToStoreWallet(input: {
   });
   if (error) return { ok: false, error: errorText(error) };
   return { ok: true, data: num((data as Record<string, unknown> | null)?.balance) };
+}
+
+/** Batch 62: the admin "Wallet open" switch. Closing is refused by the
+ *  database while the wallet holds money or a waiting request. */
+export async function setStoreWalletOpen(customerKey: string, open: boolean): Promise<Done<boolean>> {
+  const { data, error } = await supabase.rpc('store_wallet_set_open', { p_customer_key: customerKey, p_open: open });
+  if (error) return { ok: false, error: errorText(error) };
+  return { ok: true, data: (data as Record<string, unknown> | null)?.open === true };
+}
+
+/** Batch 62: the WhatsApp message a customer sends to ask for a wallet. */
+export function storeWalletOpenMessage(name: string): string {
+  return ['হাই, আমি আমার Wallet চালু করতে চাই।', `নাম: ${name.trim()}`].join('\n');
 }
 
 export async function correctStoreWallet(customerKey: string, newBalance: number, note: string): Promise<Done<number>> {

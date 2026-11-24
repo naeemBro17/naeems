@@ -4051,37 +4051,46 @@ a.adm-lrow__open:focus-visible {
   color: var(--adm-muted);
 }
 
-/* Computer: main details left, a narrower right column with the shop
-   switches, photos and the SKU. Save stays in the sticky top bar. */
+/* Batch 62 — Edit product reorganised (approved mockup). Computer: two
+   columns, most-used on top; Save stays in the sticky top bar.
+   | Product            | Price / Shop |
+   | Photos (full width)               |
+   | Variants           | Stock        |
+   | Product page text + phone preview |
+   | MORE DETAILS                      |
+   | For search and filters | Note and reference | */
 @media (min-width: 1024px) {
   .adm-ppage .adm-fpage__body {
     max-width: 1200px;
   }
 
-  .adm-ppage .pform {
+  .adm-ppage .pform.pform-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-    column-gap: var(--adm-s5);
-    row-gap: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
     align-items: start;
   }
 
-  .adm-ppage .pform > .pform__section {
-    grid-column: 1;
-    margin-bottom: var(--adm-s4);
-  }
-
-  .adm-ppage .pform__side {
-    display: flex;
-    flex-direction: column;
-    gap: var(--adm-s4);
-    grid-column: 2;
-    grid-row: 1 / span 6;
-  }
+  .adm-ppage .pform-grid > .pform-full { grid-column: 1 / -1; }
+  .adm-ppage .pform-grid > .pform__section { margin: 0; }
+  .adm-ppage .pform-grid > .pform__section--basics { grid-column: 1; grid-row: 1 / span 2; }
+  .adm-ppage .pform-grid > .pform__section--price { grid-column: 2; grid-row: 1; }
+  .adm-ppage .pform-grid > .pform__section--shop { grid-column: 2; grid-row: 2; }
+  .adm-ppage .pform-grid > .pform__section--photos { grid-row: 3; }
+  .adm-ppage .pform-grid > .pform__section--variants { grid-column: 1; grid-row: 4; }
+  .adm-ppage .pform-grid > .pform__section--stock { grid-column: 2; grid-row: 4; }
+  .adm-ppage .pform-grid > .pform__section--details { grid-row: 5; }
+  .adm-ppage .pform-grid > .pform-more { grid-row: 6; }
+  .adm-ppage .pform-grid > .pform__section--search { grid-column: 1; grid-row: 7; }
+  .adm-ppage .pform-grid > .pform__section--reference { grid-column: 2; grid-row: 7; }
 
   .adm-ppage .pform__section {
     padding: 20px 22px;
   }
+
+  .adm-ppage .pform-photos { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; }
+  .adm-ppage .pform-text { grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; }
+  .adm-ppage .pform-preview { display: block; }
 }
 
 .adm .pform__section .admin-panel {
@@ -4091,4 +4100,29 @@ a.adm-lrow__open:focus-visible {
   border-top: 1px solid var(--adm-line);
   border-radius: 0;
   background: none;
+}
+
+/* Batch 62: a number shown from the last saved copy, until the fresh one comes. */
+.swr-updating { display: inline-block; margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--adm-muted); vertical-align: middle; }
+.swr-updating--line { display: block; margin: 0 0 6px; }
+
+/* Batch 62: on a phone the description editor is exactly as wide as the
+   product page's "About this product" text (the window less 64 px), with
+   the same size, line height and alignment, so a paragraph breaks at the
+   same words in both. The editor reaches into the section's side padding
+   (negative margins) to get that width. */
+@media (max-width: 599px) {
+  .adm-ppage .pform__section--details .rt-editor {
+    margin-left: calc(-1 * var(--space-4));
+    margin-right: calc(-1 * var(--space-4));
+  }
+
+  /* The editor library turns font ligatures off, which makes its letters
+     a little narrower than the product page's: on again here. */
+  .adm-ppage .pform__section--details .rt-editor__content.rich-text {
+    font-size: 13.5px;
+    line-height: 1.7;
+    font-variant-ligatures: normal;
+    font-feature-settings: normal;
+  }
 }

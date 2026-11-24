@@ -32,10 +32,10 @@ export interface EditDraftItem {
   /** Batch 39: sold in loose units ('pcs' / 'ml' / 'g'; quantity = units,
    *  price per unit). Null / missing = whole packs. Chosen only for a line
    *  added in this edit; a saved line keeps how it was sold. */
-  soldUnit?: 'pcs' | 'ml' | 'g' | null;
+  soldUnit?: 'pcs' | 'ml' | 'g' | 'tab' | null;
   /** Units in one pack and the pack's list price (lines added in this edit). */
   packSize?: number;
-  stockUnit?: 'pcs' | 'ml' | 'g';
+  stockUnit?: 'pcs' | 'ml' | 'g' | 'tab';
   packListPrice?: number;
 }
 

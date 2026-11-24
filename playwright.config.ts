@@ -39,6 +39,9 @@ const SERIAL_SPECS = [
   'fix-rich-text-editor',
   'fix-order-actions',
   'checkout',
+  // Batch 62: its database test changes settings inside a rolled-back
+  // transaction (row locks while it runs).
+  'batch-62',
 ];
 const SERIAL_MATCH = new RegExp(`(^|[\\\\/])(${SERIAL_SPECS.join('|')})\\.spec\\.ts$`);
 const PARALLEL_WORKERS = Number(process.env.E2E_WORKERS ?? 2);

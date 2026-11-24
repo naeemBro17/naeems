@@ -70,7 +70,11 @@ BEGIN
     RAISE EXCEPTION 'The e2e test customer login (@naeems.test) was not found.';
   END IF;
   k_cust := 'p:' || v_cust;
-  c_admin := json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2')::text;
+  -- Batch 62: a request needs an open wallet (opened in this transaction only).
+  IF to_regprocedure('store_wallet_open_key(text)') IS NOT NULL THEN
+    EXECUTE 'SELECT store_wallet_open_key($1)' USING k_cust;
+  END IF;
+  c_admin :=json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2')::text;
   c_admin_pw := json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2',
                   'amr', json_build_array(json_build_object('method', 'password', 'timestamp', extract(epoch FROM now())::bigint)))::text;
   c_cust := json_build_object('sub', v_cust, 'role', 'authenticated')::text;

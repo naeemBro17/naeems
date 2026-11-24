@@ -19,6 +19,7 @@ import { formatTaka } from '../../lib/format';
 import { zoneForAddress } from '../../lib/deliveryZones';
 import { adminCreateOrder, findCustomerMatches, type ManualOrderItemInput } from '../../lib/orders';
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
+import { PackStockLine, useStockUnitsMap } from './PackStockLine';
 import type { StockUnitWord } from '../../lib/inventory/types';
 import { useAuth } from '../../contexts/AuthContext';
 import { belowCostText, type BelowCostInput } from '../../lib/smart/belowCost';
@@ -100,7 +101,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   const { isAdmin, staff, can } = useAuth();
   const canSeeCost = can('view_profit_costs');
   const hideTestCustomers = !isTestViewer(staff);
-  const { products, variantsFor, settings } = useProducts();
+  const { products, adminVariantsFor, settings } = useProducts();
   const { showToast } = useToast();
 
   const [source, setSource] = useState<OrderSource | null>(null);
@@ -184,6 +185,8 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
     };
   }, []);
   const inventoryOn = settings.inventory_mode === 'true';
+  // Batch 62: units in lots for the "Stock: 1 bottle (473 ml)" line.
+  const stockUnits = useStockUnitsMap();
 
   // A fresh form every time the page opens — a manual order is a one-shot
   // entry, not a draft worth remembering between sessions.
@@ -249,7 +252,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // Batch 45 Part 4: each product once in the search. A product with
   // options opens a picker (its own size first, then each option with its
   // own price and stock).
-  const sellableProducts = useMemo<SellableProduct[]>(() => productSearchGroups(products, variantsFor), [products, variantsFor]);
+  const sellableProducts = useMemo<SellableProduct[]>(() => productSearchGroups(products, adminVariantsFor), [products, adminVariantsFor]);
   const searchResults = useMemo(() => searchProductGroups(sellableProducts, query), [query, sellableProducts]);
 
   const addLine = (option: SellableOption, quantity = 1) => {
@@ -843,6 +846,7 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
                 <div className="checkout-cart__info">
                   <span className="checkout-cart__name">{line.productName}</span>
                   {line.variantLabel && <span className="checkout-cart__variant">{line.variantLabel}</span>}
+                  <PackStockLine units={stockUnits} productId={line.productId} variantId={line.variantId} />
                   {line.packSize > 1 && (
                     <div className="chip-group" role="group" aria-label={`Sell ${line.productName} in`} data-testid="line-sold-unit">
                       <button

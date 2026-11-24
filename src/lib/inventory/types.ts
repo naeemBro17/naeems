@@ -11,7 +11,7 @@ export const LOT_CURRENCIES = ['BDT', 'AUD', 'USD', 'CAD', 'JPY', 'KRW', 'INR', 
 export type LotCurrency = (typeof LOT_CURRENCIES)[number];
 
 /** Batch 39: how a product is counted in stock. */
-export const STOCK_UNITS = ['pcs', 'ml', 'g'] as const;
+export const STOCK_UNITS = ['pcs', 'ml', 'g', 'tab'] as const;
 export type StockUnitWord = (typeof STOCK_UNITS)[number];
 /** A lot row was typed in whole packs or in loose units. */
 export type EntryUnit = 'pack' | 'unit';

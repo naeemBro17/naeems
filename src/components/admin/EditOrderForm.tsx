@@ -32,6 +32,7 @@ import type { DeliveryAddress } from '../../features/checkout/types';
 import type { OrderWithDetails } from '../../types';
 import { useProducts } from '../../contexts/ProductContext';
 import { fetchPackUnits, packKey, type PackUnit } from '../../lib/inventory/api';
+import { PackStockLine, useStockUnitsMap } from './PackStockLine';
 import { MANUAL_ORDER_SOURCES, ORDER_SOURCE_LABELS, isHandOverSource, type StockWarning } from '../../lib/manualOrders';
 import type { OrderSource } from '../../types';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
@@ -74,11 +75,13 @@ const emptyErrors = {};
 export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAddPayment, onUnchanged, onSaved }: EditOrderFormProps) {
   const { showToast } = useToast();
   const { stockFor } = useSellableOptions();
-  const { settings, products, variantsFor, refetch: refetchProducts } = useProducts();
+  const { settings, products, adminVariantsFor, refetch: refetchProducts } = useProducts();
   // Batch 39: while Inventory mode is On the database checks stock in lots
   // and asks "sell anyway?"; the shop's number is not the limit here.
   const inventoryOn = settings.inventory_mode === 'true';
   const [packs, setPacks] = useState<Map<string, PackUnit>>(new Map());
+  // Batch 62: units in lots for the "Stock: 1 bottle (473 ml)" line.
+  const stockUnits = useStockUnitsMap();
   const [pendingWarnings, setPendingWarnings] = useState<StockWarning[] | null>(null);
   useEffect(() => {
     let alive = true;
@@ -140,7 +143,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
   const totals = draft ? draftTotals(draft) : null;
   // Batch 47: each product once; a product with sizes opens the same size
   // picker as New order (its own size first, like the shop).
-  const sellableProducts = useMemo(() => productSearchGroups(products, variantsFor), [products, variantsFor]);
+  const sellableProducts = useMemo(() => productSearchGroups(products, adminVariantsFor), [products, adminVariantsFor]);
   const results = useMemo(() => searchProductGroups(sellableProducts, query, 12), [query, sellableProducts]);
 
   const alreadyPaid = payments ? summarizePayments(order.total, payments).paid : 0;
@@ -209,7 +212,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
 
   /** Batch 39: a NEW line of a product with a pack size can be sold in
    *  loose units — price per unit = pack price ÷ pack size. */
-  const setItemSoldUnit = (key: string, unit: 'pcs' | 'ml' | 'g' | null) =>
+  const setItemSoldUnit = (key: string, unit: 'pcs' | 'ml' | 'g' | 'tab' | null) =>
     setDraft((d) => {
       if (!d) return d;
       return {
@@ -377,6 +380,7 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
                   <div className="edit-order__item-main">
                     <span className="edit-order__item-name">{item.productName}</span>
                     {item.variantLabel && <span className="edit-order__item-sub">{item.variantLabel}</span>}
+                    <PackStockLine units={stockUnits} productId={item.productId} variantId={item.variantId} />
                     {item.id === null && (item.packSize ?? 1) > 1 && (
                       <div className="chip-group" role="group" aria-label={`Sell ${item.productName} in`} data-testid="edit-line-sold-unit">
                         <button

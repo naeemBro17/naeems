@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { clearSwr } from '../lib/swrCache';
 import type { Profile, StaffMember, StaffPermission } from '../types';
 import { fetchOwnStaffMember, logStaffEvent, staffEmail } from '../lib/staff';
 import { listDevices, needsTwoStepCode, sessionHasVerifiedFactor } from '../lib/mfa';
@@ -183,6 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession);
         setSessionChecked(true);
         if (_event === 'SIGNED_IN') stripOAuthArtifactsFromUrl();
+        // Batch 62: signing out removes every saved copy of the screens.
+        if (_event === 'SIGNED_OUT') clearSwr();
       }
     );
 
@@ -393,6 +396,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await logStaffEvent('staff.logout');
     }
     await supabase.auth.signOut();
+    clearSwr();
     setProfile(null);
     setStaff(null);
   }, [profile]);

@@ -18,6 +18,13 @@ import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/Sheet
 import { VariantEditor } from './edit-sheets/VariantEditor';
 import { RemoveStockPanel } from './money/RemoveStockPanel';
 import { PackSizePanel } from './inventory/PackSizePanel';
+import { PickerSheet } from '../shared/PickerSheet';
+import { RichTextView } from '../shared/RichTextView';
+import { useStockUnitsMap } from './PackStockLine';
+import { useLeaveGuard } from './LeaveGuard';
+import { packKey } from '../../lib/inventory/api';
+import { lotsStockText, packWord } from '../../lib/inventory/unitText';
+import { useNavigate } from 'react-router-dom';
 import type { Product, ProductFormData, FormImage } from '../../types';
 
 interface ProductEditorFormProps {
@@ -209,6 +216,13 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   const [emptiedConfirm, setEmptiedConfirm] = useState<string[] | null>(null);
   // The long texts as last saved — the page stays open after Save (Fix
   // Part 3), so the "delete this text?" check compares with these.
+  // Batch 62: which long text's tab is open, the Brand picker (phones) and
+  // whether this is a touch screen (the brand list there is a picker sheet).
+  const [activeText, setActiveText] = useState<(typeof LONG_TEXTS)[number]['key']>('description');
+  const [brandPickerOpen, setBrandPickerOpen] = useState(false);
+  const coarsePointer = useCoarsePointer();
+  const navigate = useNavigate();
+  const { requestLeave } = useLeaveGuard();
   const [savedTexts, setSavedTexts] = useState<Pick<Product, 'description' | 'how_to_use' | 'key_ingredients'> | null>(product);
 
   // A fresh form for whichever product this instance was mounted to edit
@@ -486,12 +500,18 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   }, [canSave, isSaving, loadingText, onState]);
   const saveLabel = loadingText ? LOADING_TEXT_LABEL : product ? 'Save Changes' : 'Add Product';
 
-  // Batch 52.1 Part 2: the same fields, grouped into sections. One column
-  // on a phone; on the Edit product page at 1024 px and wider the side
-  // sections (Shop, Photos, Reference) sit in a narrow right column.
+  // Batch 62: Edit product reorganised (approved mockup). One column on a
+  // phone in the order Product, Photos, Price, Shop, Variants, Stock,
+  // Product page text, More details. On the Edit product page at 1024 px
+  // and wider: two columns, most-used on top (admin.css). No field was
+  // removed and saving is unchanged.
+  const textTab = LONG_TEXTS.find((t) => t.key === activeText) ?? LONG_TEXTS[0];
+  const previewTitle = activeText === 'description' ? 'About this product' : activeText === 'how_to_use' ? 'How to use' : 'Key ingredients';
+  const previewValue = form[activeText];
+
   return (
-    <form id={formId} onSubmit={handleSubmit} className="form pform" noValidate>
-      <FormSection id="basics" title="Basics">
+    <form id={formId} onSubmit={handleSubmit} className="form pform pform-grid" noValidate>
+      <FormSection id="basics" title="Product">
         <div className="form-field">
           <label className="form-label" htmlFor="pf-name">
             Product Name <span className="form-required" aria-hidden="true">*</span>
@@ -518,21 +538,35 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
             <label className="form-label" htmlFor="pf-brand">
               Brand
             </label>
-            <input
-              id="pf-brand"
-              type="text"
-              className="form-input"
-              placeholder="e.g. CeraVe — shown above the product name"
-              value={form.brand}
-              onChange={(e) => setField('brand', e.target.value)}
-              list="pf-brand-options"
-              autoComplete="off"
-            />
-            <datalist id="pf-brand-options">
-              {brandNames.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
+            <div className={coarsePointer ? 'pform-brand pform-brand--pick' : 'pform-brand'}>
+              <input
+                id="pf-brand"
+                type="text"
+                className="form-input"
+                placeholder="e.g. CeraVe — shown above the product name"
+                value={form.brand}
+                onChange={(e) => setField('brand', e.target.value)}
+                list={coarsePointer ? undefined : 'pf-brand-options'}
+                autoComplete="off"
+              />
+              {coarsePointer && brandNames.length > 0 && (
+                <button
+                  type="button"
+                  className="button button--secondary pform-brand__pick"
+                  onClick={() => setBrandPickerOpen(true)}
+                  data-testid="pf-brand-pick"
+                >
+                  Choose
+                </button>
+              )}
+            </div>
+            {!coarsePointer && (
+              <datalist id="pf-brand-options">
+                {brandNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            )}
             <p className="form-helper">
               Pick a brand from the list. A new name makes a new brand (set its logo in Brands).
             </p>
@@ -620,7 +654,321 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
             </p>
           </div>
         )}
+      </FormSection>
 
+      <FormSection id="photos" title="Photos" className="pform-full">
+        <div className="form-field">
+          <span className="form-label visually-hidden">Product Images</span>
+          <ImageUploader
+            layout="tiles"
+            images={images}
+            onAddFiles={(files) => {
+              setUploadError(null);
+              setImages((prev) => [
+                ...prev,
+                ...files.map((file) => ({
+                  id: `new-${nextImageKey++}`,
+                  url: null,
+                  file,
+                })),
+              ]);
+            }}
+            onRemove={(id) => {
+              setImages((prev) => prev.filter((img) => img.id !== id));
+            }}
+            onReorder={setImages}
+            isUploading={isUploadingImage}
+            uploadError={uploadError}
+          />
+        </div>
+      </FormSection>
+
+      <FormSection id="price" title="Price">
+        <div className="pform__row pform__row--3 pform-price">
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-retail">
+              Retail ৳ <span className="form-required" aria-hidden="true">*</span>
+            </label>
+            <MoneyInput
+              id="pf-retail"
+              min="0"
+              step="0.01"
+              className={fieldError('retail_price') ? 'form-input--error' : undefined}
+              value={form.retail_price}
+              onChange={(e) => setField('retail_price', e.target.value)}
+              onBlur={() => markTouched('retail_price')}
+              required
+              aria-required="true"
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-offer">
+              Offer ৳
+            </label>
+            <MoneyInput
+              id="pf-offer"
+              min="0"
+              step="0.01"
+              className={fieldError('offer_price') ? 'form-input--error' : undefined}
+              value={form.offer_price}
+              onChange={(e) => setField('offer_price', e.target.value)}
+              onBlur={() => markTouched('offer_price')}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="pf-wholesale">
+              Wholesale ৳
+            </label>
+            <MoneyInput
+              id="pf-wholesale"
+              min="0"
+              step="0.01"
+              className={fieldError('wholesale_price') ? 'form-input--error' : undefined}
+              value={form.wholesale_price}
+              onChange={(e) => setField('wholesale_price', e.target.value)}
+              onBlur={() => markTouched('wholesale_price')}
+            />
+          </div>
+        </div>
+        <p className="form-helper pform-price__help">Leave offer blank for no offer.</p>
+        {(['retail_price', 'offer_price', 'wholesale_price'] as const).map((field) =>
+          fieldError(field) ? (
+            <p key={field} className="form-error" role="alert">
+              {fieldError(field)}
+            </p>
+          ) : null
+        )}
+      </FormSection>
+
+      <FormSection id="shop" title="Shop">
+        <div className="pform-switch">
+          <span className="pform-switch__text">
+            <span className="toggle-label">Active</span>
+            <span className="form-helper">Visible in the shop</span>
+          </span>
+          <Toggle checked={form.is_active} onChange={(is_active) => setField('is_active', is_active)} label="Active" />
+        </div>
+        {form.is_active && form.retail_price.trim() !== '' && Number(form.retail_price) === 0 && (
+          <p className="form-error" role="alert" data-testid="product-no-price">
+            Set a price before showing this product.
+          </p>
+        )}
+        {keepSellingReady && (
+          <div className="pform-switch">
+            <span className="pform-switch__text">
+              <span className="toggle-label">Keep selling when out of stock</span>
+              <span className="form-helper" data-testid="keep-selling-hint">
+                Customers can order at stock 0. You buy it after the order.
+              </span>
+            </span>
+            <Toggle
+              checked={form.keep_selling}
+              onChange={(keep_selling) => setField('keep_selling', keep_selling)}
+              label="Keep selling when out of stock"
+            />
+          </div>
+        )}
+        <div className="pform-switch">
+          <span className="pform-switch__text">
+            <span className="toggle-label">Featured</span>
+            <span className="form-helper">Shown in the bento grid on Home</span>
+          </span>
+          <Toggle checked={form.is_featured} onChange={(is_featured) => setField('is_featured', is_featured)} label="Featured" />
+        </div>
+      </FormSection>
+
+      {/* Variants only make sense for a product that already exists —
+          a newly-created one has no id to attach them to yet. */}
+      {product && (
+        <FormSection id="variants" title="Variants">
+          <VariantEditor productId={product.id} showLabel={false} />
+        </FormSection>
+      )}
+
+      <FormSection id="stock" title="Stock">
+        {stockFromLots && product ? (
+          <LotsStock product={product} />
+        ) : (
+          <div className="form-row pform__row">
+            <div className="form-field">
+              <label className="form-label" htmlFor="pf-stock-status">
+                Stock Status <span className="form-required" aria-hidden="true">*</span>
+              </label>
+              <select
+                id="pf-stock-status"
+                className="form-input form-select"
+                value={derivedStatus}
+                disabled={quantityDrivesStatus || stockFromLots}
+                onChange={(e) =>
+                  setField('stock_status', e.target.value as ProductFormData['stock_status'])
+                }
+              >
+                <option value="in_stock">In Stock</option>
+                <option value="low_stock">Low Stock</option>
+                <option value="out_of_stock">Out of Stock</option>
+              </select>
+              <p className="form-helper">
+                {quantityDrivesStatus
+                  ? 'Set automatically from the stock quantity.'
+                  : 'Used only while no exact quantity is tracked.'}
+              </p>
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="pf-quantity">
+                Stock Quantity
+              </label>
+              <input
+                id="pf-quantity"
+                type="number"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                placeholder="e.g. 25"
+                className={`form-input${fieldError('stock_quantity') ? ' form-input--error' : ''}`}
+                value={form.stock_quantity}
+                disabled={stockFromLots}
+                onChange={(e) => setField('stock_quantity', e.target.value)}
+                onBlur={() => markTouched('stock_quantity')}
+              />
+              <p className="form-helper">
+                {stockFromLots
+                  ? 'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.'
+                  : 'Leave blank if not tracking exact quantity'}
+              </p>
+              {fieldError('stock_quantity') && (
+                <p className="form-error" role="alert">
+                  {fieldError('stock_quantity')}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {product && <PackSizePanel productId={product.id} />}
+        {product && stockFromLots && (
+          <div className="inv-actions pform-stock__actions">
+            <button type="button" className="adm-btn" onClick={() => requestLeave(() => navigate(addLotPath(product.id)))} data-testid="pf-add-lot">
+              + Add a lot
+            </button>
+          </div>
+        )}
+        {/* Batch 41 Part 5. */}
+        {product && <RemoveStockPanel productId={product.id} />}
+      </FormSection>
+
+      {/* Batch 36 Part 2: the three long texts use the Word-like editor.
+          Batch 62: tabs above one editor; all three stay mounted (hidden),
+          so each is ready and all three still save. */}
+      <FormSection id="details" title="Product page text" className="pform-full">
+        <div className="pform-text">
+          <div className="pform-text__edit">
+            <div className="pform-tabs" role="tablist" aria-label="Product page text">
+              {LONG_TEXTS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  id={`${t.id}-tab`}
+                  aria-selected={activeText === t.key}
+                  aria-controls={`${t.id}-panel`}
+                  className={`pform-tab${activeText === t.key ? ' pform-tab--on' : ''}`}
+                  onClick={() => setActiveText(t.key)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {LONG_TEXTS.map((t) => (
+              <div
+                key={t.key}
+                role="tabpanel"
+                id={`${t.id}-panel`}
+                aria-labelledby={`${t.id}-tab`}
+                hidden={activeText !== t.key}
+                className="pform-text__panel"
+              >
+                <RichTextField
+                  id={t.id}
+                  resetKey={product?.id ?? 'new'}
+                  onReady={markTextReady}
+                  label={t.label}
+                  value={form[t.key]}
+                  onChange={(html) => setField(t.key, html)}
+                  placeholder={TEXT_PLACEHOLDERS[t.key]}
+                  helper={
+                    t.key === 'description'
+                      ? 'Shown on the detail page under "About this product".'
+                      : 'Detail-page accordion. Leave blank to hide the section.'
+                  }
+                />
+              </div>
+            ))}
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="pf-youtube">
+                Video review (YouTube link)
+              </label>
+              <input
+                id="pf-youtube"
+                type="url"
+                className="form-input"
+                placeholder="https://youtube.com/watch?v=…"
+                value={form.youtube_url}
+                onChange={(e) => setField('youtube_url', e.target.value)}
+              />
+              <p className="form-helper">
+                Detail-page accordion. Leave blank to hide the section.
+              </p>
+            </div>
+          </div>
+
+          <aside className="pform-preview" aria-label={`Phone preview: ${textTab.label}`} data-testid="pf-preview">
+            <div className="pform-preview__screen">
+              <div className="accordion">
+                <div className="accordion__item accordion__item--open">
+                  <div className="accordion__header pform-preview__header">
+                    <span className="accordion__title">{previewTitle}</span>
+                  </div>
+                  <div className="accordion__body">
+                    <div className="accordion__content">
+                      {previewValue.trim() === '' ? (
+                        <p className="accordion__text pform-preview__empty">Nothing written yet.</p>
+                      ) : (
+                        <RichTextView value={previewValue} testId="pf-preview-text" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </FormSection>
+
+      <div className="pform-more" role="separator" aria-label="More details">
+        MORE DETAILS
+      </div>
+
+      <FormSection id="search" title="For search and filters">
+        <ChipGroup
+          label="Skin Type (optional)"
+          options={SKIN_TYPES}
+          selected={form.skin_types}
+          onChange={(skin_types) => setField('skin_types', skin_types)}
+        />
+
+        <ChipGroup
+          label="Skin Condition (optional)"
+          options={SKIN_CONDITIONS}
+          selected={form.skin_conditions}
+          onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
+        />
+      </FormSection>
+
+      <FormSection id="reference" title="Note and reference">
         <div className="form-field">
           <label className="form-label" htmlFor="pf-note">
             Note
@@ -637,296 +985,19 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
             {form.note.length} / {NOTE_MAX_LENGTH}
           </p>
         </div>
-
-        <ChipGroup
-          label="Skin Type (optional)"
-          options={SKIN_TYPES}
-          selected={form.skin_types}
-          onChange={(skin_types) => setField('skin_types', skin_types)}
-        />
-
-        <ChipGroup
-          label="Skin Condition (optional)"
-          options={SKIN_CONDITIONS}
-          selected={form.skin_conditions}
-          onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
-        />
-      </FormSection>
-
-      <div className="pform__side">
-        <FormSection id="shop" title="Shop">
-          <div className="form-field form-field--toggle">
-            <span className="toggle-label">Active (visible to viewers)</span>
-            <Toggle
-              checked={form.is_active}
-              onChange={(is_active) => setField('is_active', is_active)}
-              label="Active"
-            />
-          </div>
-          {form.is_active && form.retail_price.trim() !== '' && Number(form.retail_price) === 0 && (
-            <p className="form-error" role="alert" data-testid="product-no-price">
-              Set a price before showing this product.
-            </p>
-          )}
-
-          <div className="form-field form-field--toggle">
-            <span className="toggle-label">Featured (shown in the bento grid)</span>
-            <Toggle
-              checked={form.is_featured}
-              onChange={(is_featured) => setField('is_featured', is_featured)}
-              label="Featured"
-            />
-          </div>
-        </FormSection>
-
-        <FormSection id="photos" title="Photos">
-          <div className="form-field">
-            <span className="form-label visually-hidden">Product Images</span>
-            <ImageUploader
-              images={images}
-              onAddFiles={(files) => {
-                setUploadError(null);
-                setImages((prev) => [
-                  ...prev,
-                  ...files.map((file) => ({
-                    id: `new-${nextImageKey++}`,
-                    url: null,
-                    file,
-                  })),
-                ]);
-              }}
-              onRemove={(id) => {
-                setImages((prev) => prev.filter((img) => img.id !== id));
-              }}
-              onReorder={setImages}
-              isUploading={isUploadingImage}
-              uploadError={uploadError}
-            />
-          </div>
-        </FormSection>
-
         {product && (
-          <FormSection id="reference" title="Reference">
-            <div className="form-field">
-              <span className="form-label">SKU</span>
-              <p className="form-readonly">{product.sku}</p>
-              <p className="form-helper">
-                Generated automatically and kept for reference. Not shown to viewers.
-              </p>
-            </div>
-          </FormSection>
-        )}
-      </div>
-
-      <FormSection id="price" title="Price">
-        <div className="pform__row pform__row--3">
           <div className="form-field">
-            <label className="form-label" htmlFor="pf-retail">
-              Retail Price ৳ <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <MoneyInput
-              id="pf-retail"
-              min="0"
-              step="0.01"
-              className={fieldError('retail_price') ? 'form-input--error' : undefined}
-              value={form.retail_price}
-              onChange={(e) => setField('retail_price', e.target.value)}
-              onBlur={() => markTouched('retail_price')}
-              required
-              aria-required="true"
-            />
-            {fieldError('retail_price') && (
-              <p className="form-error" role="alert">
-                {fieldError('retail_price')}
-              </p>
-            )}
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="pf-offer">
-              Offer Price ৳ (optional)
-            </label>
-            <MoneyInput
-              id="pf-offer"
-              min="0"
-              step="0.01"
-              className={fieldError('offer_price') ? 'form-input--error' : undefined}
-              value={form.offer_price}
-              onChange={(e) => setField('offer_price', e.target.value)}
-              onBlur={() => markTouched('offer_price')}
-            />
+            <span className="form-label">SKU</span>
+            <p className="form-readonly">{product.sku}</p>
             <p className="form-helper">
-              Leave blank for no offer. Must be lower than the retail price.
-            </p>
-            {fieldError('offer_price') && (
-              <p className="form-error" role="alert">
-                {fieldError('offer_price')}
-              </p>
-            )}
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="pf-wholesale">
-              Wholesale Price ৳
-            </label>
-            <MoneyInput
-              id="pf-wholesale"
-              min="0"
-              step="0.01"
-              className={fieldError('wholesale_price') ? 'form-input--error' : undefined}
-              value={form.wholesale_price}
-              onChange={(e) => setField('wholesale_price', e.target.value)}
-              onBlur={() => markTouched('wholesale_price')}
-            />
-            {fieldError('wholesale_price') && (
-              <p className="form-error" role="alert">
-                {fieldError('wholesale_price')}
-              </p>
-            )}
-          </div>
-        </div>
-      </FormSection>
-
-      <FormSection id="stock" title="Stock">
-        <div className="form-row pform__row">
-          <div className="form-field">
-            <label className="form-label" htmlFor="pf-stock-status">
-              Stock Status <span className="form-required" aria-hidden="true">*</span>
-            </label>
-            <select
-              id="pf-stock-status"
-              className="form-input form-select"
-              value={derivedStatus}
-              disabled={quantityDrivesStatus || stockFromLots}
-              onChange={(e) =>
-                setField('stock_status', e.target.value as ProductFormData['stock_status'])
-              }
-            >
-              <option value="in_stock">In Stock</option>
-              <option value="low_stock">Low Stock</option>
-              <option value="out_of_stock">Out of Stock</option>
-            </select>
-            <p className="form-helper">
-              {quantityDrivesStatus
-                ? 'Set automatically from the stock quantity.'
-                : 'Used only while no exact quantity is tracked.'}
-            </p>
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="pf-quantity">
-              Stock Quantity
-            </label>
-            <input
-              id="pf-quantity"
-              type="number"
-              min="0"
-              step="1"
-              inputMode="numeric"
-              placeholder="e.g. 25"
-              className={`form-input${fieldError('stock_quantity') ? ' form-input--error' : ''}`}
-              value={form.stock_quantity}
-              disabled={stockFromLots}
-              onChange={(e) => setField('stock_quantity', e.target.value)}
-              onBlur={() => markTouched('stock_quantity')}
-            />
-            <p className="form-helper">
-              {stockFromLots
-                ? 'Inventory mode is On: the stock number comes from lots (whole packs). Add a lot to change it.'
-                : 'Leave blank if not tracking exact quantity'}
-            </p>
-            {fieldError('stock_quantity') && (
-              <p className="form-error" role="alert">
-                {fieldError('stock_quantity')}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {keepSellingReady && (
-          <div className="form-field">
-            <div className="form-field form-field--toggle">
-              <span className="toggle-label">Keep selling when out of stock</span>
-              <Toggle
-                checked={form.keep_selling}
-                onChange={(keep_selling) => setField('keep_selling', keep_selling)}
-                label="Keep selling when out of stock"
-              />
-            </div>
-            <p className="form-helper" data-testid="keep-selling-hint">
-              Customers can order this even when stock is 0. You buy it after the order comes in.
+              Generated automatically and kept for reference. Not shown to viewers.
             </p>
           </div>
         )}
-
-        {product && <PackSizePanel productId={product.id} />}
-        {/* Batch 41 Part 5. */}
-        {product && <RemoveStockPanel productId={product.id} />}
-      </FormSection>
-
-      {/* Variants only make sense for a product that already exists —
-          a newly-created one has no id to attach them to yet. */}
-      {product && (
-        <FormSection id="variants" title="Variants">
-          <VariantEditor productId={product.id} showLabel={false} />
-        </FormSection>
-      )}
-
-      {/* Batch 36 Part 2: the three long texts use the Word-like editor. */}
-      <FormSection id="details" title="Product page text">
-        <RichTextField
-          id="pf-description"
-          resetKey={product?.id ?? 'new'}
-          onReady={markTextReady}
-          label="Description"
-          value={form.description}
-          onChange={(html) => setField('description', html)}
-          placeholder="What makes this product worth buying — ingredients, benefits, how to use, etc."
-          helper='Shown on the detail page under "About this product".'
-        />
-
-        <RichTextField
-          id="pf-how-to-use"
-          resetKey={product?.id ?? 'new'}
-          onReady={markTextReady}
-          label="How to Use"
-          value={form.how_to_use}
-          onChange={(html) => setField('how_to_use', html)}
-          placeholder="Apply morning and night to clean, dry skin…"
-          helper="Detail-page accordion. Leave blank to hide the section."
-        />
-
-        <RichTextField
-          id="pf-key-ingredients"
-          resetKey={product?.id ?? 'new'}
-          onReady={markTextReady}
-          label="Key Ingredients"
-          value={form.key_ingredients}
-          onChange={(html) => setField('key_ingredients', html)}
-          placeholder="Niacinamide 5%, Hyaluronic Acid, Ceramides…"
-          helper="Detail-page accordion. Leave blank to hide the section."
-        />
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="pf-youtube">
-            Video Review URL
-          </label>
-          <input
-            id="pf-youtube"
-            type="url"
-            className="form-input"
-            placeholder="https://youtube.com/watch?v=…"
-            value={form.youtube_url}
-            onChange={(e) => setField('youtube_url', e.target.value)}
-          />
-          <p className="form-helper">
-            Detail-page accordion. Leave blank to hide the section.
-          </p>
-        </div>
       </FormSection>
 
       {footerVariant === 'sheet' ? (
-        <div className="pform__footer">
+        <div className="pform__footer pform-full">
           <SheetFooter
             onCancel={onCancel}
             isSaving={isSaving}
@@ -937,12 +1008,22 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       ) : footerVariant === 'page' ? null : (
         <button
           type="submit"
-          className="button button--primary button--full pform__footer"
+          className="button button--primary button--full pform__footer pform-full"
           disabled={isSaving || requiredEmpty || hasBlockingErrors || loadingText}
         >
           {isSaving ? <span className="spinner" aria-hidden="true" /> : saveLabel}
         </button>
       )}
+
+      <PickerSheet
+        isOpen={brandPickerOpen}
+        onClose={() => setBrandPickerOpen(false)}
+        title="Brand"
+        options={brandNames.map((name) => ({ id: name, label: name }))}
+        selectedId={brandNames.includes(form.brand.trim()) ? form.brand.trim() : null}
+        onSelect={(option) => setField('brand', option.label)}
+        searchPlaceholder="Search brands"
+      />
 
       <ConfirmDialog
         isOpen={emptiedConfirm !== null}
@@ -960,11 +1041,85 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   );
 }
 
+const TEXT_PLACEHOLDERS: Record<(typeof LONG_TEXTS)[number]['key'], string> = {
+  description: 'What makes this product worth buying — ingredients, benefits, how to use, etc.',
+  how_to_use: 'Apply morning and night to clean, dry skin…',
+  key_ingredients: 'Niacinamide 5%, Hyaluronic Acid, Ceramides…',
+};
+
+/** Batch 62: New lot with this product already added. */
+function addLotPath(productId: string): string {
+  return `/admin?tab=inventory&inv=new&add=${encodeURIComponent(productId)}`;
+}
+
+/** Batch 62: the Stock card while Inventory mode is On — whole packs in
+ *  lots, and every unit for a pack of more than one ("2 bottles in lots
+ *  (946 ml)"). Read from the lots ("View profit & costs"); without that
+ *  permission the shop's own number (also whole packs in lots). */
+function LotsStock({ product }: { product: Product }) {
+  const { adminVariantsFor } = useProducts();
+  const units = useStockUnitsMap();
+  const options = adminVariantsFor(product.id);
+  const rows = [
+    { key: packKey(product.id, null), label: options.length > 0 ? [product.region, product.size].filter(Boolean).join(' · ') || 'This product' : null, stock: product.stock_quantity },
+    ...options.map((v) => ({ key: packKey(product.id, v.id), label: [v.region, v.size].filter(Boolean).join(' · ') || 'Option', stock: v.stock_quantity })),
+  ];
+  const lines = rows.map((row) => {
+    const unit = units.get(row.key);
+    const shown = unit
+      ? lotsStockText(unit.lot_pieces_left, unit.pack_size, unit.stock_unit)
+      : { packs: Math.max(0, row.stock ?? 0), text: packWord(Math.max(0, row.stock ?? 0)) + ' in lots' };
+    return { ...row, ...shown };
+  });
+  const total = lines.reduce((sum, l) => sum + l.packs, 0);
+  return (
+    <div className="pform-lots" data-testid="pf-lots-stock">
+      {lines.length === 1 ? (
+        <p className="pform-lots__big">
+          <b>{lines[0].packs.toLocaleString('en-US')}</b> <span>{lines[0].text}</span>
+        </p>
+      ) : (
+        <>
+          <p className="pform-lots__big">
+            <b>{total.toLocaleString('en-US')}</b> <span>{packWord(total)} in lots</span>
+          </p>
+          <ul className="pform-lots__list">
+            {lines.map((l) => (
+              <li key={l.key}>
+                <span>{l.label}</span>
+                <span>
+                  {l.packs.toLocaleString('en-US')} {l.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="form-helper">Inventory mode is On: stock comes from lots. Add a lot to change it.</p>
+    </div>
+  );
+}
+
+/** Batch 62: a touch screen (no mouse): the datalist dropdown does not work
+ *  there, so Brand opens the site's PickerSheet instead. */
+function useCoarsePointer(): boolean {
+  const query = '(pointer: coarse)';
+  const [coarse, setCoarse] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const list = window.matchMedia(query);
+    const onChange = () => setCoarse(list.matches);
+    list.addEventListener('change', onChange);
+    return () => list.removeEventListener('change', onChange);
+  }, []);
+  return coarse;
+}
+
 /** Batch 52.1 Part 2: one titled group of fields. */
-function FormSection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+function FormSection({ id, title, className, children }: { id: string; title: string; className?: string; children: ReactNode }) {
   return (
     <section
-      className={`pform__section pform__section--${id}`}
+      className={`pform__section pform__section--${id}${className ? ` ${className}` : ''}`}
       aria-labelledby={`pf-section-${id}`}
       data-testid={`pf-section-${id}`}
     >

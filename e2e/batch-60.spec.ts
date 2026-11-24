@@ -7,7 +7,7 @@ import { signInAsTestCustomer } from './helpers/auth';
 
 // Batch 60: My Wallet. Every wallet answer is mocked in the browser, so
 // nothing is saved to Supabase and the screens show known numbers: the
-// Account card, the story (fading in, and at once with reduced motion),
+// Account card, (the story moved to e2e/batch-62.spec.ts in Batch 62),
 // Add money (errors, Submit, "Almost there!" with the WhatsApp message),
 // checkout (part from the wallet, fully paid) and the admin WALLET card.
 // The money rules themselves are tested in e2e/sql/batch-60.sql (rolled
@@ -146,52 +146,9 @@ test('Account page: a confirmed request shows "৳3,000 added to your wallet" on
 
 /* --------------------------------------------------------------- the story */
 
-for (const scheme of ['light', 'dark'] as const) {
-  test(`Wallet page, first visit: the story fades in line by line (${scheme})`, async ({ page }) => {
-    test.setTimeout(90_000);
-    await page.emulateMedia({ colorScheme: scheme });
-    await mockRpc(page, 'store_wallet_my', myWallet());
-    await customerAt(page, '/wallet');
-    const pageEl = page.getByTestId('wallet-page');
-    await expect(pageEl).toHaveAttribute('data-view', 'story', { timeout: 20_000 });
-    // Frames: early the last lines are still see-through, then all show.
-    const last = page.locator('.mw-cta');
-    const early = Number(await last.evaluate((el) => getComputedStyle(el).opacity));
-    await page.screenshot({ path: `${SHOTS}/story-frame-1-${scheme}-390.png` });
-    await page.waitForTimeout(450);
-    await page.screenshot({ path: `${SHOTS}/story-frame-2-${scheme}-390.png` });
-    await expect.poll(async () => Number(await last.evaluate((el) => getComputedStyle(el).opacity)), { timeout: 5000 }).toBe(1);
-    expect(early, 'the Add money button fades in last').toBeLessThan(1);
-    // Only transform and opacity animate.
-    const animated = await page.evaluate(() =>
-      [...document.querySelectorAll('.mw-in')].map((el) => getComputedStyle(el).animationName)
-    );
-    expect(new Set(animated)).toEqual(new Set(['mw-rise']));
-    await expect(page.getByRole('heading', { name: /Save a little now/ })).toBeVisible();
-    await expect(pageEl).toContainText('Pay less on delivery');
-    await expect(pageEl).toContainText('It never expires');
-    await expect(pageEl).toContainText('Your pace, your choice');
-    await expect(pageEl).toContainText("Wallet balance is for shopping with us and can't be refunded as cash.");
-    expect(await orangeOutsidePrimary(page, '[data-testid="wallet-page"]')).toEqual([]);
-    await noSideScroll(page);
-    await page.screenshot({ path: `${SHOTS}/story-${scheme}-390.png` });
-  });
-}
-
-test('Wallet page with reduced motion: everything shows at once', async ({ page }) => {
-  test.setTimeout(90_000);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await mockRpc(page, 'store_wallet_my', myWallet());
-  await customerAt(page, '/wallet');
-  await expect(page.getByTestId('wallet-page')).toHaveAttribute('data-view', 'story', { timeout: 20_000 });
-  const states = await page.evaluate(() =>
-    [...document.querySelectorAll('.mw-in')].map((el) => [getComputedStyle(el).animationName, getComputedStyle(el).opacity])
-  );
-  for (const [name, opacity] of states) {
-    expect(name).toBe('none');
-    expect(opacity).toBe('1');
-  }
-});
+// Batch 62 replaced this story with the jar story (invite only / your
+// wallet is open): its tests, fading in and reduced motion included, are in
+// e2e/batch-62.spec.ts.
 
 /* -------------------------------------------------------------- Add money */
 
@@ -284,7 +241,7 @@ test('Wallet page with money: balance, waiting line, Due, history newest first, 
   await expect(page.getByTestId('wallet-due')).toContainText('৳ 70');
   await expect(page.getByTestId('wallet-waiting')).toContainText('৳ 2,000 waiting for confirmation');
   await expect(page.getByTestId('wallet-waiting')).toContainText('Nagad · N8XYZ');
-  await expect(page.getByTestId('wallet-rejected')).toContainText("We couldn't confirm ৳3,000. Please message us on WhatsApp.");
+  await expect(page.getByTestId('wallet-rejected')).toContainText("Your ৳3,000 wasn't added. The payment didn't match our records. Message us on WhatsApp and we'll sort it out.");
   const rows = page.getByTestId('wallet-history-row');
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText('Used on order NM-5120');

@@ -16,6 +16,14 @@ export const VARIANT_SELECT =
  *  is run those columns are missing and VARIANT_SELECT is used instead. */
 export const VARIANT_SELECT_B51 = `${VARIANT_SELECT}, keep_selling, in_hand`;
 
+/** Batch 62: plus is_visible ("Show in shop", migration-061). */
+export const VARIANT_SELECT_B62 = `${VARIANT_SELECT_B51}, is_visible`;
+
+/** Batch 62: the sizes the shop shows (a hidden one is for admin screens only). */
+export function shopVisibleVariants(variants: ProductVariant[]): ProductVariant[] {
+  return variants.some((v) => v.is_visible === false) ? variants.filter((v) => v.is_visible !== false) : variants;
+}
+
 /** A column the query asked for is not there yet (migration not run). */
 export function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
   return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));

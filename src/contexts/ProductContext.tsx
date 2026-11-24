@@ -9,10 +9,10 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '../lib/supabase';
-import { saveCache, loadCache } from '../lib/cache';
+import { isFresh, readSwr, writeSwr } from '../lib/swrCache';
 import { useAuth } from './AuthContext';
 import { parseBannerSlides, BANNER_SLIDES_KEY } from '../lib/bannerSlides';
-import { sortVariants } from '../lib/variants';
+import { shopVisibleVariants, sortVariants } from '../lib/variants';
 import { fetchVariantRows } from '../lib/variantRows';
 import { BRANDS_TABLE, BRAND_SELECT } from '../lib/brands';
 import { markFirstLoadDone, useBackendDown } from '../lib/backendStatus';
@@ -36,8 +36,12 @@ interface ProductContextValue {
   refetch: () => Promise<void>;
   /** Optimistically patch one product in local state (no network call). */
   patchProductLocal: (id: string, patch: Partial<Product>) => void;
-  /** Region/size variants of one product, in display order. Empty when none. */
+  /** Region/size variants of one product the SHOP shows, in display order
+   *  (Batch 62: a size hidden from the shop is left out). Empty when none. */
   variantsFor: (productId: string) => ProductVariant[];
+  /** Batch 62: every variant of one product, hidden ones too (admin
+   *  screens: the editor, New order / Edit order, Restock). */
+  adminVariantsFor: (productId: string) => ProductVariant[];
   /** Every variant row across every product — lets the admin editor offer
    *  existing Region/Size values instead of free text (see VariantEditor). */
   allVariants: ProductVariant[];
@@ -56,6 +60,18 @@ export const PRODUCTS_VIEW = 'products_view';
 
 /** Shared product select — reused by the single-product fetch on the detail page. */
 export const PRODUCT_SELECT = '*, category:categories(id, name, slug)';
+
+/** Variant rows grouped per product, each list in display order. */
+function groupVariants(rows: ProductVariant[]): Map<string, ProductVariant[]> {
+  const grouped = new Map<string, ProductVariant[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.product_id) ?? [];
+    list.push(row);
+    grouped.set(row.product_id, list);
+  }
+  for (const [id, list] of grouped) grouped.set(id, sortVariants(list));
+  return grouped;
+}
 
 /** Stable empty list so consumers' memo deps don't churn for variant-less products. */
 const EMPTY_VARIANTS: ProductVariant[] = [];
@@ -225,6 +241,14 @@ export function sortFeaturedFirst(products: Product[]): Product[] {
   });
 }
 
+/** Batch 62: the shop's last good copy (shown at once, refreshed quietly). */
+interface ShopCopy {
+  products: Product[];
+  categories: Category[];
+  settings: AppSettings;
+  brands: Brand[];
+}
+
 export function ProductProvider({ children }: { children: ReactNode }) {
   const { session, can, isLoading: authLoading } = useAuth();
   // The Super Admin, and moderators with "Edit products and stock" (Batch
@@ -244,6 +268,13 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // browses active-only like a customer (they just also get wholesale_price).
   const isAdminRef = useRef(isAdmin);
   isAdminRef.current = isAdmin;
+  // Batch 62: whose copy this is (an admin's copy has hidden products and
+  // wholesale prices, so it is never shown to anyone else).
+  const copyKey = `${isAdmin ? 'admin' : 'shop'}:${session?.user.id ?? 'anon'}`;
+  const copyKeyRef = useRef(copyKey);
+  copyKeyRef.current = copyKey;
+  /** When the products / the variants were last read fresh (ms). */
+  const fetchedAtRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     setLoadFailed(false);
@@ -286,14 +317,15 @@ export function ProductProvider({ children }: { children: ReactNode }) {
       setBrands(fetchedBrands);
       setIsOffline(false);
       markFirstLoadDone();
-      saveCache({
+      fetchedAtRef.current = Date.now();
+      writeSwr<ShopCopy>(`shop:${copyKeyRef.current}`, {
         products: fetchedProducts,
         categories: fetchedCategories,
         settings: fetchedSettings,
         brands: fetchedBrands,
       });
     } catch {
-      const cached = loadCache();
+      const cached = readSwr<ShopCopy>(`shop:${copyKeyRef.current}`)?.data;
       if (cached) {
         setProducts(cached.products);
         setCategories(cached.categories);
@@ -322,6 +354,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     }
     for (const [id, list] of grouped) grouped.set(id, sortVariants(list));
     setVariantsByProduct(grouped);
+    writeSwr<ProductVariant[]>(`variants:${copyKeyRef.current}`, rows);
   }, []);
 
   const refetch = useCallback(async () => {
@@ -331,17 +364,45 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // Initial load + reload whenever auth changes. Admins see inactive rows; any
   // login/logout also changes whether products_view returns wholesale_price, so
   // re-fetch on the signed-in user id and admin flag both.
+  //
+  // Batch 62: the last good copy for this visitor shows at once (no
+  // spinner), and the fresh one replaces it quietly when it arrives.
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
-    setIsLoading(true);
+    const copy = readSwr<ShopCopy>(`shop:${copyKey}`);
+    const variantsCopy = readSwr<ProductVariant[]>(`variants:${copyKey}`);
+    if (copy) {
+      setProducts(copy.data.products);
+      setCategories(copy.data.categories);
+      setSettings({ ...DEFAULT_SETTINGS, ...copy.data.settings });
+      setBrands(copy.data.brands ?? []);
+      if (variantsCopy) setVariantsByProduct(groupVariants(variantsCopy.data));
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     Promise.all([fetchData(), reloadVariants()]).finally(() => {
       if (!cancelled) setIsLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isAdmin, session?.user.id, fetchData, reloadVariants]);
+  }, [authLoading, isAdmin, session?.user.id, copyKey, fetchData, reloadVariants]);
+
+  // Batch 62: back in the app after a while (the copy is older than 60 s):
+  // read the shop again, quietly. Sooner than that nothing is asked again
+  // (protects the Supabase bandwidth).
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible' || fetchedAtRef.current === 0) return;
+      if (isFresh(fetchedAtRef.current)) return;
+      fetchedAtRef.current = Date.now();
+      void Promise.all([fetchData(), reloadVariants()]);
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    return () => document.removeEventListener('visibilitychange', onReturn);
+  }, [fetchData, reloadVariants]);
 
   // Batch 40 Part 3: Supabase is reachable again after being blocked or
   // down — load the shop's data again.
@@ -371,7 +432,18 @@ export function ProductProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }, []);
 
+  const visibleByProduct = useMemo(() => {
+    const out = new Map<string, ProductVariant[]>();
+    for (const [id, list] of variantsByProduct) out.set(id, shopVisibleVariants(list));
+    return out;
+  }, [variantsByProduct]);
+
   const variantsFor = useCallback(
+    (productId: string) => visibleByProduct.get(productId) ?? EMPTY_VARIANTS,
+    [visibleByProduct]
+  );
+
+  const adminVariantsFor = useCallback(
     (productId: string) => variantsByProduct.get(productId) ?? EMPTY_VARIANTS,
     [variantsByProduct]
   );
@@ -394,6 +466,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         refetch,
         patchProductLocal,
         variantsFor,
+        adminVariantsFor,
         allVariants,
         reloadVariants,
       }}

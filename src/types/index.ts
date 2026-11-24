@@ -355,6 +355,9 @@ export interface ProductVariant {
   keep_selling?: boolean;
   /** Batch 51: at least one of this option in stock (never a number). */
   in_hand?: boolean;
+  /** Batch 62: "Show in shop". False = hidden from the shop (customers never
+   *  get the row at all; staff still do). Absent before migration-061. */
+  is_visible?: boolean;
 }
 
 /** The variant fields the admin edits in the inline sub-form. */
@@ -652,7 +655,7 @@ export interface OrderItem {
   reason_note: string | null;
   /** Batch 39: 'pcs' / 'ml' / 'g' when sold in loose units (quantity = units,
    *  prices per unit); null / missing = whole packs. */
-  sold_unit?: 'pcs' | 'ml' | 'g' | null;
+  sold_unit?: 'pcs' | 'ml' | 'g' | 'tab' | null;
 }
 
 /** One row of an order's status timeline. */

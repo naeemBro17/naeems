@@ -22,6 +22,7 @@ import {
   SortableContext,
   arrayMove,
   horizontalListSortingStrategy,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -40,6 +41,10 @@ interface ImageUploaderProps {
   isUploading: boolean;
   /** Upload failure message (with retry handled by re-submitting the form). */
   uploadError: string | null;
+  /** Batch 62: 'tiles' = big square tiles in a grid (Edit product: 8 a row
+   *  on a computer, 3 on a phone) with a "+ Add photos" tile; 'row' = the
+   *  scrolling row (default). */
+  layout?: 'row' | 'tiles';
 }
 
 /** Batch 33: a finger holds this long before a thumbnail lifts, so a normal
@@ -204,7 +209,9 @@ export function ImageUploader({
   onReorder,
   isUploading,
   uploadError,
+  layout = 'row',
 }: ImageUploaderProps) {
+  const tiles = layout === 'tiles';
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isFileOver, setIsFileOver] = useState(false);
@@ -276,7 +283,7 @@ export function ImageUploader({
   };
 
   return (
-    <div className="image-uploader">
+    <div className={tiles ? 'image-uploader image-uploader--tiles' : 'image-uploader'}>
       {images.length === 0 ? (
         <div
           className={`image-uploader__dropzone${isFileOver ? ' image-uploader__dropzone--active' : ''}`}
@@ -316,14 +323,14 @@ export function ImageUploader({
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            modifiers={[horizontalOnly]}
+            modifiers={tiles ? [] : [horizontalOnly]}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext items={images.map((img) => img.id)} strategy={horizontalListSortingStrategy}>
+            <SortableContext items={images.map((img) => img.id)} strategy={tiles ? rectSortingStrategy : horizontalListSortingStrategy}>
               <ul
-                className="image-uploader__grid"
-                aria-label="Product images — scroll to see more"
-                onWheel={handleWheel}
+                className={tiles ? 'image-uploader__grid pform-photos' : 'image-uploader__grid'}
+                aria-label={tiles ? 'Product images' : 'Product images — scroll to see more'}
+                onWheel={tiles ? undefined : handleWheel}
                 {...fileDropProps}
               >
                 {images.map((image, index) => (
@@ -343,7 +350,7 @@ export function ImageUploader({
                     type="button"
                     className={`image-uploader__add${isFileOver ? ' image-uploader__add--active' : ''}`}
                     onClick={() => inputRef.current?.click()}
-                    aria-label="Add more images"
+                    aria-label={tiles ? 'Add photos' : 'Add more images'}
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -355,7 +362,7 @@ export function ImageUploader({
                     >
                       <path d="M12 5v14M5 12h14" />
                     </svg>
-                    <span>Add</span>
+                    <span>{tiles ? 'Add photos' : 'Add'}</span>
                   </button>
                 </li>
               </ul>

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from './useToast';
 import { takaTight } from '../lib/advanceDiscount';
 import { EMPTY_STORE_WALLET, fetchMyStoreWallet, markStoreWalletSeen, type MyStoreWallet } from '../lib/storeWallet';
+import { isFresh, readSwr, writeSwr } from '../lib/swrCache';
 
 // Answers already toasted in this tab (the Account and Wallet pages may
 // both be mounted for a moment during a page transition).
@@ -13,8 +14,13 @@ const toasted = new Set<string>();
  * Wallet page and checkout. Loaded again whenever the tab comes back into
  * view, so a request Naeem has just confirmed shows at once. A confirmed
  * request shows the toast "৳3,000 added to your wallet" once.
+ *
+ * Batch 62: the Account card and the Wallet page show the last copy at
+ * once and refresh quietly; back in the app it is read again only when the
+ * copy is older than 60 seconds. Checkout passes cache: false, so it never
+ * uses a saved copy for paying.
  */
-export function useMyStoreWallet(options: { toast?: boolean } = {}): {
+export function useMyStoreWallet(options: { toast?: boolean; cache?: boolean } = {}): {
   wallet: MyStoreWallet;
   loaded: boolean;
   reload: () => Promise<void>;
@@ -24,8 +30,12 @@ export function useMyStoreWallet(options: { toast?: boolean } = {}): {
   const { session, profile } = useAuth();
   const { showToast } = useToast();
   const isCustomer = Boolean(session) && profile?.role === 'customer';
-  const [wallet, setWallet] = useState<MyStoreWallet>(EMPTY_STORE_WALLET);
-  const [loaded, setLoaded] = useState(false);
+  const useCopy = options.cache !== false;
+  const copyKey = isCustomer && session ? `wallet:${session.user.id}` : null;
+  const copy = useCopy && copyKey ? readSwr<MyStoreWallet>(copyKey) : null;
+  const [wallet, setWallet] = useState<MyStoreWallet>(() => copy?.data ?? EMPTY_STORE_WALLET);
+  const [loaded, setLoaded] = useState(() => copy !== null);
+  const fetchedAtRef = useRef(0);
   const wantToast = options.toast !== false;
 
   const reload = useCallback(async () => {
@@ -34,9 +44,11 @@ export function useMyStoreWallet(options: { toast?: boolean } = {}): {
       setLoaded(true);
       return;
     }
+    fetchedAtRef.current = Date.now();
     const next = await fetchMyStoreWallet();
     setWallet(next);
     setLoaded(true);
+    if (copyKey && next.available) writeSwr<MyStoreWallet>(copyKey, next);
     if (!wantToast) return;
     for (const result of next.results) {
       if (result.status !== 'confirmed' || toasted.has(result.id)) continue;
@@ -44,12 +56,15 @@ export function useMyStoreWallet(options: { toast?: boolean } = {}): {
       showToast(`${takaTight(result.amount)} added to your wallet`, 'success');
       void markStoreWalletSeen(result.id);
     }
-  }, [isCustomer, wantToast, showToast]);
+  }, [isCustomer, wantToast, showToast, copyKey]);
 
   useEffect(() => {
     void reload();
     const onFocus = () => {
-      if (document.visibilityState === 'visible') void reload();
+      if (document.visibilityState !== 'visible') return;
+      // Batch 62: not again within 60 seconds (focus and visibility both fire).
+      if (fetchedAtRef.current !== 0 && isFresh(fetchedAtRef.current)) return;
+      void reload();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);

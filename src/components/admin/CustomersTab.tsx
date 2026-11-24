@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { readSwr, writeSwr } from '../../lib/swrCache';
 import { phoneSearchCore } from '../../lib/phone';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUrlParam } from '../../hooks/useUrlParams';
@@ -35,7 +36,7 @@ function dayMonth(iso: string): string {
  * database leaves it out otherwise).
  */
 export function CustomersTab() {
-  const { staff, isAdmin, can } = useAuth();
+  const { staff, isAdmin, can, session } = useAuth();
   const navigate = useNavigate();
   // Batch 32 Part 3: the profile is a page of its own; Back returns here
   // with the search, sort and scroll kept.
@@ -43,14 +44,17 @@ export function CustomersTab() {
   // Batch 31 Part 3: the automatic tests' own customers stay out of the
   // list for real staff (the test logins still see them).
   const hideTestCustomers = !isTestViewer(staff);
-  const [rows, setRows] = useState<CustomerRow[]>([]);
+  // Batch 62: the last copy of the list shows at once; fresh replaces it.
+  const copyKey = session ? `admin-customers:${session.user.id}` : null;
+  const [copy] = useState(() => (copyKey ? readSwr<{ rows: CustomerRow[]; canManage: boolean }>(copyKey)?.data ?? null : null));
+  const [rows, setRows] = useState<CustomerRow[]>(() => copy?.rows ?? []);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(copy === null);
   const [search, setSearch] = useUrlParam<string>('cq', '');
   const [sort, setSort] = useUrlParam<SortKey>('csort', 'recent', SORT_KEYS);
   const [tagFilter, setTagFilter] = useUrlParam<string>('ctag', '');
   const [show, setShow] = useUrlParam<ShowFilter>('cshow', 'all', SHOW_FILTERS);
-  const [canManage, setCanManage] = useState(false);
+  const [canManage, setCanManage] = useState(copy?.canManage ?? false);
   // Private notes and tags (Batch 26): staff only, read with "View
   // customers", changed with "Edit customer notes".
   const [notes, setNotes] = useState<Map<string, CustomerNote>>(() => new Map());
@@ -90,11 +94,12 @@ export function CustomersTab() {
       setError(result.error);
       setCanManage(result.canManage);
       setIsLoading(false);
+      if (copyKey && !result.error) writeSwr(copyKey, { rows: result.rows, canManage: result.canManage });
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [copyKey]);
 
   const showMoney = rows.some((r) => r.total_spent !== null);
   // Batch 30: what each customer still owes (registered or phone-only).
