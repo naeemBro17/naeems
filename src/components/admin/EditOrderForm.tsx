@@ -13,6 +13,7 @@ import { formatTaka } from '../../lib/format';
 import { useSellableOptions } from '../../lib/sellable';
 import { productSearchGroups, searchProductGroups, type SellableOption } from '../../lib/manualOrderSearch';
 import { ProductResults } from './ManualOptionPicker';
+import { useListKeyboard } from './useListKeyboard';
 import {
   adminEditOrder,
   buildOrderChanges,
@@ -145,6 +146,8 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
   // picker as New order (its own size first, like the shop).
   const sellableProducts = useMemo(() => productSearchGroups(products, adminVariantsFor), [products, adminVariantsFor]);
   const results = useMemo(() => searchProductGroups(sellableProducts, query, 12), [query, sellableProducts]);
+  // Batch 64: arrow keys and Enter in the results (taps work as before).
+  const productKeys = useListKeyboard(results.length, true);
 
   const alreadyPaid = payments ? summarizePayments(order.total, payments).paid : 0;
   const plan = totals
@@ -495,11 +498,15 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
               placeholder="Add a product..."
               aria-label="Add a product"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                productKeys.reset();
+              }}
               autoComplete="off"
+              {...productKeys.inputProps}
             />
           </div>
-          <ProductResults results={results} onAdd={addItem} className="picker-sheet__list edit-order__results" photos />
+          <ProductResults results={results} onAdd={addItem} className="picker-sheet__list edit-order__results" photos keyboard={productKeys} />
 
           <h3 className="edit-order__heading">Delivery and money</h3>
           {/* Batch 47: Shop/in person is handed over by hand — picking it
