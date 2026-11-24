@@ -119,6 +119,7 @@
   --adm-kpi-hi: linear-gradient(135deg, #3a1c10, #1b1b1e);
   --adm-chip-on-bg: #ffffff;
   --adm-chip-on-text: #111111;
+  --adm-thumb: linear-gradient(160deg, #2a313a, #1e242b);
   --adm-overlay: rgba(0, 0, 0, 0.6);
   --adm-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   --adm-skeleton: #232327;
@@ -156,6 +157,7 @@
     --adm-kpi-hi: linear-gradient(135deg, #3a1c10, #1b1b1e);
     --adm-chip-on-bg: #ffffff;
     --adm-chip-on-text: #111111;
+    --adm-thumb: linear-gradient(160deg, #2a313a, #1e242b);
     --adm-overlay: rgba(0, 0, 0, 0.6);
     --adm-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
     --adm-skeleton: #232327;
