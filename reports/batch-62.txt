@@ -176,7 +176,23 @@ TESTS
  • Unit: 14 new (vitest).
  • Frame captures: reports/batch-62-screens/.
  • Full run: see section 3 / the summary line below.
-FULL_RUN_RESULT
+ • Full npm run verify (run 3 times in all, because two of the fixes
+   changed shared code). Last run: build OK · vitest 811/811 · e2e 476
+   passed, 150 skipped, 5 failed (41 min). The 5:
+     - Batch 43 database test: the Supabase command line could not log in
+       ("password authentication failed for cli_login_postgres"). Nothing
+       to do with the code; it passed in the runs before.
+     - Batch 54 merge (light): passed 3 of 3 when re-run alone (timing).
+     - Batch 37 invoice settings: passed when its file was re-run whole.
+     - Batch 27 "Back returns to the same scroll position": still lands
+       4 px short in about 1 of 3 tries (see section 3).
+     - Batch 33 photo tests: one of them fails now and then, a different
+       one each run; the whole file passed 11/11 once and 7/8 once
+       (see section 3).
+   Earlier full runs found real problems this batch had caused, all fixed
+   and re-tested: saved copy shown to staff (Settings could save an old
+   value back), the photo tiles under the phone's Save bar, test stubs
+   that broke on the background refresh.
 
 ======================================================================
 2. SQL NAEEM MUST RUN IN SUPABASE
@@ -192,8 +208,20 @@ It is one BEGIN … COMMIT, safe to run more than once, needs no sign-in.
    whole product use Active. So "every size hidden" cannot happen today;
    the shop would treat it as not buyable anyway because the main size
    still shows. (See Design decisions.)
- • Batch 40 "no broken images" still fails until FA-002's photo is
-   re-uploaded (not something code can fix).
+ • Batch 40 "no broken images": passed in the last runs, so FA-002's
+   photo may have been re-uploaded already.
+ • Batch 27 "Back returns to the same scroll position" fails in about 1
+   of 3 tries since this batch: when a product page opens from the saved
+   copy and the fresh data then arrives, the page shifts 4 px and Back
+   lands 4 px higher. It only happens when the page is opened fresh (a
+   reload or a link from outside), not when tapping around inside the
+   shop. I made an identical fresh copy not redraw the page, which helped
+   but did not remove it. Next step: find which part of the product page
+   changes height by 4 px when the fresh data comes in.
+ • Batch 33 photo tests (the editor's photos are big tiles now) fail now
+   and then in long runs, a different test each time. Alone, the whole
+   file passed 11/11. I did not dig further, so that I would not keep
+   running the live-Supabase suite (CLAUDE.md bandwidth rule).
 
 ======================================================================
 4. WHAT I FOUND ALONG THE WAY (not fixed)
@@ -233,12 +261,18 @@ It is one BEGIN … COMMIT, safe to run more than once, needs no sign-in.
  • Price labels shortened to "Retail ৳ / Offer ৳ / Wholesale ৳" so three
    fit side by side on a phone; same fields and ids.
  • Combo arrows (↑ ↓ ×) are plain text symbols, not emoji.
+ • The saved copy of the shop (products, settings, sizes) is used only
+   for customers and visitors, never for you or your team: admin forms
+   (Settings, Edit product, invoice settings) take their starting values
+   once, and an old copy must never be saved back. Your Home, Orders,
+   Customers and Money screens keep their own copies (for showing only).
  • Copies kept in localStorage (wrapped in try / catch), keyed by app
    version and by who is signed in; checkout never reads one.
  • batch-62.spec.ts runs in the "serial" group (its database test changes
    settings inside a rolled-back transaction).
  • Tests changed for the new behaviour: batch-26 (no Restock in Mode On),
-   batch-33 (the photos are big tiles: the test now puts a photo in the
+   batch-48 (same), batch-33 (the cart total is read once the fresh
+   settings are in; and the photos are big tiles: the test now puts a photo in the
    middle of the screen before touching it; at the bottom the phone's
    Save bar covered it), batch-40 and batch-52-1 (their stand-in answers
    now cope with the background refresh: a page that has moved on drops
