@@ -16,6 +16,7 @@ import { BottomSheet } from '../components/shared/BottomSheet';
 import { HeartIcon } from '../components/viewer/Wishlist';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useMyStoreWallet } from '../hooks/useMyStoreWallet';
+import { WalletOpenNote } from '../components/account/WalletOpenNote';
 import { formatTaka } from '../lib/format';
 
 function Chevron() {
@@ -156,24 +157,29 @@ function WalletCard() {
   if (!wallet.available) return null;
   const waiting = wallet.waiting[0];
   return (
-    <Link to="/wallet" className="mw-card" data-testid="account-wallet" data-open={wallet.open ? 'true' : 'false'}>
-      <span className="mw-card__label">MY WALLET</span>
-      {wallet.open ? (
-        <>
-          <p className="mw-card__balance">{formatTaka(wallet.balance)}</p>
-          <span className="mw-card__hint">Your skincare fund</span>
-        </>
-      ) : (
-        <>
-          <p className="mw-card__balance mw-card__balance--story">Save for the glow you love</p>
-          <span className="mw-card__hint">Invite only · Tap to learn more</span>
-        </>
-      )}
-      {waiting && <span className="mw-card__wait">{formatTaka(waiting.amount)} waiting for confirmation</span>}
-      <svg className="mw-card__chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </Link>
+    <>
+      <Link to="/wallet" className="mw-card" data-testid="account-wallet" data-open={wallet.open ? 'true' : 'false'}>
+        <span className="mw-card__label">MY WALLET</span>
+        {wallet.open ? (
+          <>
+            <p className="mw-card__balance">{formatTaka(wallet.balance)}</p>
+            <span className="mw-card__hint">Your skincare fund</span>
+          </>
+        ) : (
+          <>
+            <p className="mw-card__balance mw-card__balance--story">Save for the glow you love</p>
+            <span className="mw-card__hint">Invite only · Tap to learn more</span>
+          </>
+        )}
+        {waiting && <span className="mw-card__wait">{formatTaka(waiting.amount)} waiting for confirmation</span>}
+        <svg className="mw-card__chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </Link>
+      {/* Batch 64: once, when Naeem has opened her wallet (a portal, so the
+          page order above stays as it is). */}
+      <WalletOpenNote walletOpen={wallet.open} />
+    </>
   );
 }
 
@@ -253,7 +259,7 @@ function CustomerAccountView() {
           </div>
         ) : (
           <p className="account-card__empty">
-            No delivery details saved yet — add them for a faster checkout.
+            No delivery details saved yet. Add them for a faster checkout.
           </p>
         )}
       </section>
@@ -404,7 +410,7 @@ function StaffAccountView() {
 /** The bottom nav's Account tab. Public browsing never requires this page —
  *  it's the one place a customer opts into an account at all. */
 export function AccountPage() {
-  useDocumentTitle("Account — NAEEM'S");
+  useDocumentTitle("Account | NAEEM'S");
   const { session, profile, isLoading } = useAuth();
   // Role alone, not approval status — a wholesaler awaiting approval is
   // still a wholesaler, not a customer, and belongs on their own account
