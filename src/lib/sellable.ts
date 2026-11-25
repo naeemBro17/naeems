@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useProducts } from '../contexts/ProductContext';
 import { cardImage } from './productImages';
+import { shopPrice } from './campaigns';
+import { useLiveCampaigns } from '../contexts/CampaignContext';
 
 /** One thing that can go on an order: a product, or one of its options. */
 export interface SellableOption {
@@ -15,10 +17,6 @@ export interface SellableOption {
   stockQuantity: number | null;
 }
 
-function currentPrice(retailPrice: number, offerPrice: number | null): number {
-  return offerPrice !== null && offerPrice < retailPrice ? offerPrice : retailPrice;
-}
-
 /**
  * Every active product / option with its price and tracked stock — the
  * Batch 30 Edit order sheet's "Add a product" list (the same rule the New
@@ -29,6 +27,8 @@ export function useSellableOptions(): {
   stockFor: (productId: string | null, variantId: string | null) => number | null;
 } {
   const { products, variantsFor } = useProducts();
+  // Batch 66: a campaign loading or ending changes the list prices.
+  const liveCampaigns = useLiveCampaigns();
   return useMemo(() => {
     const options: SellableOption[] = [];
     const stock = new Map<string, number | null>();
@@ -46,7 +46,7 @@ export function useSellableOptions(): {
           productName: p.name,
           variantLabel: null,
           imageUrl: cardImage(p),
-          listPrice: currentPrice(p.retail_price, p.offer_price),
+          listPrice: shopPrice(p.id, null, p.retail_price, p.offer_price),
           stockQuantity: p.stock_quantity,
         });
       } else {
@@ -60,7 +60,7 @@ export function useSellableOptions(): {
             productName: p.name,
             variantLabel: variantLabel || null,
             imageUrl: v.image_url ?? cardImage(p),
-            listPrice: currentPrice(v.retail_price, v.offer_price),
+            listPrice: shopPrice(p.id, v.id, v.retail_price, v.offer_price),
             stockQuantity: v.stock_quantity,
           });
         }
@@ -72,5 +72,5 @@ export function useSellableOptions(): {
       return value === undefined ? null : value;
     };
     return { options, stockFor };
-  }, [products, variantsFor]);
+  }, [products, variantsFor, liveCampaigns]);
 }

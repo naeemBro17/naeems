@@ -21,6 +21,7 @@ export type AdminSection =
   | 'brands'
   | 'import-export'
   | 'promo-codes'
+  | 'campaigns'
   | 'wholesalers'
   | 'reviews'
   | 'bento'
@@ -46,6 +47,7 @@ export type AdminIconName =
   | 'brands'
   | 'import'
   | 'promo'
+  | 'campaigns'
   | 'wholesalers'
   | 'reviews'
   | 'bento'
@@ -113,6 +115,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'brands', label: 'Brands', icon: 'brands', group: 'catalog' },
   { id: 'import-export', label: 'Import / Export', icon: 'import', group: 'catalog' },
   { id: 'promo-codes', label: 'Promo Codes', icon: 'promo', group: 'sales' },
+  // Batch 66: timed sales; same permission as Promo Codes (Super Admin,
+  // is_admin() in the database).
+  { id: 'campaigns', label: 'Campaigns', icon: 'campaigns', group: 'sales' },
   { id: 'wholesalers', label: 'Wholesalers', icon: 'wholesalers', group: 'sales' },
   { id: 'reviews', label: 'Reviews', icon: 'reviews', group: 'sales' },
   { id: 'bento', label: 'Bento Tiles', icon: 'bento', group: 'design' },

@@ -1,6 +1,7 @@
 import { cardImage, coverImage, isSmallCopy } from './productImages';
 import { normalizeText } from './format';
 import { variantOptionLabel, variantOptionsFor } from './variants';
+import { shopPrice } from './campaigns';
 import type { Product, ProductVariant } from '../types';
 
 /**
@@ -38,9 +39,6 @@ export interface SellableProduct {
   options: SellableOption[];
 }
 
-function currentPrice(retailPrice: number, offerPrice: number | null): number {
-  return offerPrice !== null && offerPrice < retailPrice ? offerPrice : retailPrice;
-}
 
 /** Batch 63: a small copy only (thumb/ or card/ folder), else null. */
 function smallOnly(full: string | null | undefined, small: string | null | undefined): string | null {
@@ -66,7 +64,8 @@ export function productSearchGroups(products: readonly Product[], variantsFor: (
         variantLabel: label || null,
         imageUrl: o.image_url ?? cardImage(p),
         thumbUrl: o.image_url ? (smallOnly(o.image_url, o.image_url_thumb) ?? productThumb) : productThumb,
-        listPrice: currentPrice(o.retail_price, o.offer_price),
+        // Batch 66: a product in a live campaign is offered at its sale price.
+        listPrice: shopPrice(p.id, o.isBase ? null : o.id, o.retail_price, o.offer_price),
         retailPrice: o.retail_price,
         stockQuantity: o.stock_quantity,
       };

@@ -8,6 +8,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { CustomerOrderNotePopup } from './components/orders/OrderNotePopup';
 import { ProductProvider } from './contexts/ProductContext';
+import { CampaignProvider } from './contexts/CampaignContext';
 import { AdminEditProvider } from './contexts/AdminEditContext';
 import { CartProvider } from './contexts/CartContext';
 import { WishlistProvider } from './contexts/WishlistContext';
@@ -44,6 +45,7 @@ import {
   TermsPage,
   PrivacyPolicyPage,
   AboutPage,
+  CampaignPage,
 } from './lib/routePages';
 import { forgetScroll } from './lib/scrollMemory';
 import { rememberShopPage } from './lib/loginReturn';
@@ -134,6 +136,7 @@ export default function App() {
         <AppUpdatedToast />
         <AuthProvider>
           <ProductProvider>
+            <CampaignProvider>
             <CartProvider>
               <WishlistProvider>
               <CheckoutStateProvider>
@@ -169,6 +172,8 @@ export default function App() {
                           <Route path="/wishlist" element={<WishlistPage />} />
                           {/* Batch 52: a combo Naeem shared (only people with the link). */}
                           <Route path="/c/:code" element={<ComboPage />} />
+                          {/* Batch 66: a live campaign (timed sale). */}
+                          <Route path="/campaign/:slug" element={<CampaignPage />} />
                           <Route path="/orders" element={<OrdersListPage />} />
                           {/* Batch 60: My Wallet (signed-in customers; others go to /account). */}
                           <Route path="/wallet" element={<WalletPage />} />
@@ -208,6 +213,7 @@ export default function App() {
               </CheckoutStateProvider>
               </WishlistProvider>
             </CartProvider>
+            </CampaignProvider>
           </ProductProvider>
         </AuthProvider>
       </ToastContainer>

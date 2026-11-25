@@ -18,6 +18,8 @@ import { useCart } from '../../contexts/CartContext';
 import { computePromoDiscount } from '../../lib/promoCodes';
 import { smallImageFor } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
+import { useLiveCampaigns } from '../../contexts/CampaignContext';
+import { campaignSavings, normalPrice, promoBase as promoBaseOf, saleFor, type CampaignSavings } from '../../lib/campaigns';
 import type { AppSettings } from '../../types';
 import {
   DELIVERY_ZONES,
@@ -71,6 +73,11 @@ interface CheckoutStateValue {
    *  items.length === 0 as "cart is empty" on their very first render. */
   isCatalogLoading: boolean;
   subtotal: number;
+  /** Batch 66: the products' total a promo code / the advance discount
+   *  works on (lines not in a campaign). Equals subtotal with no sale. */
+  promoBase: number;
+  /** Batch 66: "Summer Fest savings" and its amount, or null. */
+  savings: CampaignSavings | null;
   zoneId: DeliveryZoneId;
   zone: DeliveryZoneOption;
   setZoneId: (id: DeliveryZoneId) => void;
@@ -111,6 +118,8 @@ const CheckoutStateContext = createContext<CheckoutStateValue | null>(null);
 export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   const { items: rawItems, updateQuantity, removeItem, clearCart } = useCart();
   const { products, variantsFor, settings, isLoading: isCatalogLoading } = useProducts();
+  // Batch 66: re-prices the cart when a campaign loads or ends.
+  const campaigns = useLiveCampaigns();
 
   const [zoneId, setZoneId] = useState<DeliveryZoneId>(() => loadPersisted().zoneId);
   const [address, setAddress] = useState<DeliveryAddress>(() => loadPersisted().address);
@@ -142,11 +151,36 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
           item.variantId !== null
             ? variantsFor(item.productId).find((v) => v.id === item.variantId)
             : undefined;
+        // Batch 66: the same price place_order_core() charges. A line in a
+        // live campaign costs the sale price; a line added during a sale
+        // that is over costs the normal price again; anything else keeps
+        // the price it was added at (as before).
+        const ownSize = item.variantId === null || item.variantId === item.productId;
+        const prices = variant
+          ? { retail: variant.retail_price, offer: variant.offer_price }
+          : ownSize
+            ? { retail: product.retail_price, offer: product.offer_price }
+            : null;
+        const sale = prices ? saleFor(product.id, ownSize ? null : item.variantId, prices.retail, prices.offer) : null;
+        const unitPrice = sale
+          ? sale.price
+          : prices && item.saleCampaignId
+            ? normalPrice(prices.retail, prices.offer)
+            : item.priceAtAdd;
         return [
           {
             product,
             quantity: item.quantity,
-            unitPrice: item.priceAtAdd,
+            unitPrice,
+            sale: sale
+              ? {
+                  campaignId: sale.campaign.id,
+                  campaignName: sale.campaign.name,
+                  style: sale.campaign.style,
+                  endsAt: sale.campaign.ends_at,
+                  retail: sale.retail,
+                }
+              : null,
             variantId: item.variantId,
             variantLabel: item.variantLabel,
             // Batch 40: the option photo's small copy when it has one.
@@ -154,7 +188,8 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
           },
         ];
       }),
-    [rawItems, products, variantsFor]
+    // campaigns: a sale starting / ending changes the prices above.
+    [rawItems, products, variantsFor, campaigns]
   );
 
   const subtotal = useMemo(
@@ -179,7 +214,10 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
   // Batch 33: follows the cart — when a sold-out line is removed or a
   // quantity lowered, a percent code's discount shrinks with it (the
   // database computes it the same way when the order is placed).
-  const discount = promo ? computePromoDiscount(promo, subtotal) : 0;
+  // Batch 66: only on the lines not in a campaign (none left: no discount).
+  const promoBase = useMemo(() => promoBaseOf(items), [items]);
+  const savings = useMemo(() => campaignSavings(items), [items]);
+  const discount = promo && promoBase > 0 ? computePromoDiscount(promo, promoBase) : 0;
   const total = Math.max(0, subtotal + zone.fee - discount);
 
   const finalizeOrder = useCallback(
@@ -236,6 +274,8 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       items,
       isCatalogLoading,
       subtotal,
+      promoBase,
+      savings,
       zoneId,
       zone,
       setZoneId,
@@ -256,6 +296,8 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
       items,
       isCatalogLoading,
       subtotal,
+      promoBase,
+      savings,
       zoneId,
       zone,
       address,

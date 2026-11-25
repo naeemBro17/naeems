@@ -6,6 +6,7 @@
 // database, keeps stock right and writes every change to History and the
 // Activity Log. Prices and the discount are Super Admin only.
 import { useEffect, useMemo, useState } from 'react';
+import { useLiveCampaigns } from '../../contexts/CampaignContext';
 import { MoneyInput } from '../shared/MoneyInput';
 import { AddressFormFields } from '../checkout/AddressFormFields';
 import { useToast } from '../../hooks/useToast';
@@ -144,7 +145,12 @@ export function EditOrderForm({ order, isAdmin, formId, onState, payments, canAd
   const totals = draft ? draftTotals(draft) : null;
   // Batch 47: each product once; a product with sizes opens the same size
   // picker as New order (its own size first, like the shop).
-  const sellableProducts = useMemo(() => productSearchGroups(products, adminVariantsFor), [products, adminVariantsFor]);
+  // Batch 66: sale prices (live campaigns) are the list prices offered.
+  const liveCampaigns = useLiveCampaigns();
+  const sellableProducts = useMemo(
+    () => productSearchGroups(products, adminVariantsFor),
+    [products, adminVariantsFor, liveCampaigns]
+  );
   const results = useMemo(() => searchProductGroups(sellableProducts, query, 12), [query, sellableProducts]);
   // Batch 64: arrow keys and Enter in the results (taps work as before).
   const productKeys = useListKeyboard(results.length, true);

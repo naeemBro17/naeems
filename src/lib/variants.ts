@@ -1,6 +1,7 @@
 import type { Product, ProductVariant, VariantFormData, VariantOption } from '../types';
 import { isBuyable, optionStockFacts } from './buyRule';
-import type { DisplayPrice } from './pricing';
+import { saleDisplayPrice, type DisplayPrice } from './pricing';
+import { displayCampaign, saleFor } from './campaigns';
 
 /**
  * The ONLY sanctioned variant read source. Like products_view, the view
@@ -71,8 +72,11 @@ export function regionsOf(variants: ProductVariant[]): string[] {
   return regions;
 }
 
-/** Display pricing for one variant — same rules as getDisplayPrice(). */
+/** Display pricing for one variant — same rules as getDisplayPrice()
+ *  (Batch 66: a live campaign's sale price first). */
 export function variantDisplayPrice(variant: ProductVariant): DisplayPrice {
+  const sale = saleFor(variant.product_id, variant.id, variant.retail_price, variant.offer_price);
+  if (sale) return saleDisplayPrice(sale.price, variant.retail_price, displayCampaign(sale.campaign));
   if (variant.offer_price !== null && variant.offer_price < variant.retail_price) {
     const savePercent = Math.round(
       ((variant.retail_price - variant.offer_price) / variant.retail_price) * 100
@@ -89,6 +93,11 @@ export function variantDisplayPrice(variant: ProductVariant): DisplayPrice {
  */
 export function lowestVariantPrice(variants: ProductVariant[]): number | null {
   if (variants.length === 0) return null;
+  // Batch 66: when a size is in a live campaign, the lowest price anyone
+  // pays (each size's own display price).
+  if (variants.some((v) => saleFor(v.product_id, v.id, v.retail_price, v.offer_price) !== null)) {
+    return Math.min(...variants.map((v) => variantDisplayPrice(v).mainPrice));
+  }
   const offers = variants
     .map((v) => v.offer_price)
     .filter((p): p is number => p !== null);

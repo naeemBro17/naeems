@@ -16,6 +16,9 @@ import type { AdminSection, NavAccess } from './adminNav';
  *   /admin/customers/:key/old/:id     One merged old receipt
  *   /admin/customers/:key/join        Merge with another customer (Batch 55;
  *                                     ?pick=<key> picks one first)
+ *   /admin/campaigns/new              New campaign (Batch 66)
+ *   /admin/campaigns/:id/edit         Edit campaign
+ *   (/admin/campaigns itself is the list, /admin?tab=campaigns.)
  * Everything else under /admin is the section list (?tab=...), as before.
  */
 export type AdminSubPage =
@@ -30,7 +33,9 @@ export type AdminSubPage =
   | { kind: 'merge-old'; customerKey: string }
   | { kind: 'merge-receipt'; customerKey: string; bill: string }
   | { kind: 'old-receipt'; customerKey: string; billId: string }
-  | { kind: 'join-customer'; customerKey: string };
+  | { kind: 'join-customer'; customerKey: string }
+  | { kind: 'new-campaign' }
+  | { kind: 'edit-campaign'; campaignId: string };
 
 function decode(part: string): string | null {
   try {
@@ -74,6 +79,11 @@ export function parseAdminSubPage(pathname: string): AdminSubPage | null | 'unkn
     if (customerKey && third === 'merge' && fourth) return { kind: 'merge-receipt', customerKey, bill: fourth };
     if (customerKey && third === 'old' && fourth) return { kind: 'old-receipt', customerKey, billId: fourth };
   }
+  if (section === 'campaigns') {
+    if (parts.length === 2 && second === 'new') return { kind: 'new-campaign' };
+    const campaignId = parts.length === 3 && third === 'edit' ? decode(second) : null;
+    if (campaignId) return { kind: 'edit-campaign', campaignId };
+  }
   if (section === 'payouts' && parts.length === 2) {
     const payoutId = decode(second);
     if (payoutId) return { kind: 'payout', payoutId };
@@ -93,6 +103,9 @@ export function subPageSection(page: AdminSubPage): AdminSection {
       return 'products';
     case 'payout':
       return 'payouts';
+    case 'new-campaign':
+    case 'edit-campaign':
+      return 'campaigns';
     default:
       return 'customers';
   }
@@ -124,6 +137,9 @@ export function canOpenSubPage(page: AdminSubPage, access: NavAccess): boolean {
       return isAdmin;
     case 'old-receipt':
       return can('view_profit_costs');
+    case 'new-campaign':
+    case 'edit-campaign':
+      return isAdmin;
   }
 }
 
@@ -154,6 +170,8 @@ export const adminPath = {
     `/admin/customers/${encodeURIComponent(key)}/join${pickKey ? `?pick=${encodeURIComponent(pickKey)}` : ''}`,
   mergeOld: (key: string) => `/admin/customers/${encodeURIComponent(key)}/merge`,
   mergeReceipt: (key: string, bill: string) => `/admin/customers/${encodeURIComponent(key)}/merge/${encodeURIComponent(bill)}`,
+  newCampaign: () => '/admin/campaigns/new',
+  editCampaign: (id: string) => `/admin/campaigns/${encodeURIComponent(id)}/edit`,
   oldReceipt: (key: string, billId: string) => `/admin/customers/${encodeURIComponent(key)}/old/${encodeURIComponent(billId)}`,
 };
 

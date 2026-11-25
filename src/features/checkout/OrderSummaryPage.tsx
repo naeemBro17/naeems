@@ -32,6 +32,9 @@ import { isStockError } from '../../lib/cartStock';
 import { StockNotice } from '../../components/checkout/StockNotice';
 import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import { useCheckoutState } from './useCheckoutState';
+import type { CartItem } from './types';
+import { supabase } from '../../lib/supabase';
+import { liveCampaignsNow, parseCampaigns, setLiveCampaigns, type LiveCampaign } from '../../lib/campaigns';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import {
   WALLET_NAMES,
@@ -50,6 +53,30 @@ import { advanceDiscountFor, advanceQualifies, splitStoreWallet } from '../../li
 import '../../styles/checkoutFinish.css';
 
 type CheckoutPaymentMethod = 'cod' | WalletMethod;
+
+const ALL_ON_SALE = "Every item in your cart is already on sale, so this code can't be used.";
+
+/** Batch 66: asks the database again which campaigns are live. False (and
+ *  the shop's prices refreshed) when a campaign touching this cart ended,
+ *  started or changed since the screen was drawn. */
+async function salesUnchanged(items: CartItem[]): Promise<boolean> {
+  const { data, error } = await supabase.rpc('live_campaigns');
+  if (error) return true;
+  const fresh = parseCampaigns(data);
+  const now = Date.now();
+  const ids = new Set(items.map((item) => item.product.id));
+  const touching = (list: LiveCampaign[]) =>
+    JSON.stringify(
+      list
+        .filter((c) => new Date(c.starts_at).getTime() <= now && now < new Date(c.ends_at).getTime())
+        .filter((c) => c.items.some((i) => ids.has(i.product_id)))
+        .map((c) => ({ id: c.id, mode: c.discount_mode, percent: c.percent, items: c.items.filter((i) => ids.has(i.product_id)) }))
+        .sort((a, b) => a.id.localeCompare(b.id))
+    );
+  const same = touching(fresh) === touching(liveCampaignsNow(now));
+  if (!same) setLiveCampaigns(fresh);
+  return same;
+}
 
 const WALLET_LOGOS: Record<WalletMethod, string> = {
   bkash: '/payment/bkash.png',
@@ -111,6 +138,8 @@ export function OrderSummaryPage() {
     items,
     isCatalogLoading,
     subtotal,
+    promoBase,
+    savings,
     zone,
     address,
     promo,
@@ -156,7 +185,8 @@ export function OrderSummaryPage() {
   const fromStore = split.fromStore;
   const fullyPaid = split.fullyPaid;
   const method: CheckoutPaymentMethod = fullyPaid ? 'cod' : paymentMethod;
-  const advance = advanceDiscountFor({ rule, productsAfterPromo: subtotal - promoPart, leftAfterStore: split.rest, method });
+  // Batch 66: like the promo code, only on the items not in a campaign.
+  const advance = advanceDiscountFor({ rule, productsAfterPromo: promoBase - promoPart, leftAfterStore: split.rest, method });
   const offerShown = offer && advanceQualifies(split.rest);
   const payTotal = Math.max(0, subtotal + zone.fee - promoPart - advance);
   // What is still to pay after the wallet (the total line).
@@ -199,7 +229,14 @@ export function OrderSummaryPage() {
       return;
     }
 
-    const computedDiscount = computePromoDiscount(valid, subtotal);
+    // Batch 66: every item is already on sale: the code is not applied
+    // (not an "invalid code" message — the code itself is fine).
+    if (promoBase <= 0) {
+      setPromoError(ALL_ON_SALE);
+      setPromoInput('');
+      return;
+    }
+    const computedDiscount = computePromoDiscount(valid, promoBase);
     setPromo({
       code: valid.code,
       discountType: valid.discountType,
@@ -229,6 +266,14 @@ export function OrderSummaryPage() {
     }
     setFieldErrors({});
     setIsPlacing(true);
+
+    // Batch 66: a sale that ended (or was switched off) since this screen
+    // was drawn would change the total: check before placing.
+    if (!(await salesUnchanged(items))) {
+      setIsPlacing(false);
+      setPlaceError('Prices changed because a sale ended. Please check your total.');
+      return;
+    }
 
     const result = await placeOrder({
       items,
@@ -358,9 +403,20 @@ export function OrderSummaryPage() {
               {promoError}
             </p>
           )}
-          {promoSuccess && !promoError && (
+          {promoSuccess && !promoError && (!promo || discount > 0) && (
             <p className="checkout-summary-card__promo-message checkout-summary-card__promo-message--success">
               {promoSuccess}
+            </p>
+          )}
+          {promo && promoBase <= 0 && !promoError && (
+            <p className="cmp-promo-hint" data-testid="promo-all-on-sale">
+              {ALL_ON_SALE}
+            </p>
+          )}
+          {promo && discount > 0 && savings && (
+            <p className="cmp-promo-hint" data-testid="promo-sale-hint">
+              {promo.code} took {formatTaka(promoPart)} off. {savings.name === 'Sale' ? 'Sale' : savings.name} items already have their
+              sale price, so the code skips them.
             </p>
           )}
 
@@ -368,9 +424,17 @@ export function OrderSummaryPage() {
 
           <div className="checkout-summary-card__row">
             <span>Subtotal</span>
-            <span>{formatTaka(subtotal)}</span>
+            {/* Batch 66: at normal prices when items are on sale, so the
+                savings row below adds up to the total. */}
+            <span data-testid="summary-subtotal">{formatTaka(subtotal + (savings?.amount ?? 0))}</span>
           </div>
-          {promo && (
+          {savings && savings.amount > 0 && (
+            <div className="checkout-summary-card__row" data-testid="summary-campaign-savings">
+              <span>{savings.label}</span>
+              <span>&minus;{formatTaka(savings.amount)}</span>
+            </div>
+          )}
+          {promo && discount > 0 && (
             <div className="checkout-summary-card__row checkout-summary-card__row--discount">
               <span>Promo ({promo.code})</span>
               <span>&minus;{formatTaka(promoPart)}</span>

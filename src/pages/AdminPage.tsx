@@ -23,6 +23,8 @@ import { BrandsTab } from '../components/admin/BrandsTab';
 import { PayoutsTab } from '../components/admin/PayoutsTab';
 import { ShoppingListTab } from '../components/admin/ShoppingListTab';
 import { CombosTab } from '../components/admin/CombosTab';
+import { CampaignsTab } from '../components/admin/campaigns/CampaignsTab';
+import { CampaignEditorPage } from '../components/admin/campaigns/CampaignEditorPage';
 import { fetchShoppingList, type ShoppingLoad } from '../lib/shoppingList';
 import { InventoryTab } from '../components/admin/inventory/InventoryTab';
 import { MoneyTab } from '../components/admin/money/MoneyTab';
@@ -72,6 +74,8 @@ import '../styles/adminOrders.css';
 import '../styles/batch63.css';
 // Batch 65: Note to customer card and the Mark returned amount.
 import '../styles/batch65-admin.css';
+// Batch 66: Campaigns list and editor.
+import '../styles/batch66-admin.css';
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -81,6 +85,8 @@ export function AdminPage() {
   const sub = parseAdminSubPage(location.pathname);
   const fallback = sub !== null && sub !== 'unknown' ? subPageFallback(sub) : '/admin';
   const onBack = useCallback(() => goBackFromSubPage(navigate, location, fallback), [navigate, location, fallback]);
+  // Batch 66: /admin/campaigns is the Campaigns list.
+  if (location.pathname.replace(/\/+$/, '') === '/admin/campaigns') return <Navigate to="/admin?tab=campaigns" replace />;
   if (sub === 'unknown') return <Navigate to="/admin" replace />;
   return (
     <SafetyLockProvider>
@@ -314,6 +320,17 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
             }
           />
         )}
+        {sub?.kind === 'new-campaign' && (
+          <CampaignEditorPage campaignId={null} onBack={back} onDone={() => navigate('/admin?tab=campaigns', { replace: true })} />
+        )}
+        {sub?.kind === 'edit-campaign' && (
+          <CampaignEditorPage
+            key={sub.campaignId}
+            campaignId={sub.campaignId}
+            onBack={back}
+            onDone={() => navigate('/admin?tab=campaigns', { replace: true })}
+          />
+        )}
         {!sub && (
         <>
         {active === 'home' && <HomeTab title={title} onOpen={goTo} shoppingCount={shoppingCount} />}
@@ -358,6 +375,7 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         {active === 'bento' && <BentoTilesTab />}
         {active === 'design' && <BannerTextsTab />}
         {active === 'promo-codes' && <PromoCodesTab />}
+        {active === 'campaigns' && <CampaignsTab />}
         {active === 'settings' && <SettingsTab />}
         {active === 'team' && <TeamTab />}
         {active === 'activity' && <ActivityLogTab />}

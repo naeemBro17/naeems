@@ -73,6 +73,7 @@ export const ReturnPolicyPage = routePage(() => import('../pages/policy/ReturnPo
 export const DeliveryPolicyPage = routePage(() => import('../pages/policy/DeliveryPolicyPage'), (m) => m.DeliveryPolicyPage);
 export const TermsPage = routePage(() => import('../pages/policy/TermsPage'), (m) => m.TermsPage);
 export const PrivacyPolicyPage = routePage(() => import('../pages/policy/PrivacyPolicyPage'), (m) => m.PrivacyPolicyPage);
+export const CampaignPage = routePage(() => import('../pages/CampaignPage'), (m) => m.CampaignPage);
 export const AboutPage = routePage(() => import('../pages/policy/AboutPage'), (m) => m.AboutPage);
 
 /** The page a path opens (null = Home, which is always loaded, or admin,
@@ -83,6 +84,7 @@ export function pageForPath(pathname: string): RoutePage | null {
   if (pathname.startsWith('/brand/')) return BrandPage;
   if (pathname.startsWith('/orders/')) return OrderDetailPage;
   if (pathname.startsWith('/c/')) return ComboPage;
+  if (pathname.startsWith('/campaign/')) return CampaignPage;
   const exact: Record<string, RoutePage> = {
     '/search': SearchPage,
     '/contact': ContactExpertPage,
