@@ -5,6 +5,7 @@
 // Codes panel manages the same rows outside the checkout flow) and is just
 // re-exported here so this file stays the one-stop import for the feature.
 import type { DiscountReason, OrderPaymentMethod, Product, PromoCode } from '../../types';
+import type { CampaignStyle } from '../../lib/campaigns';
 
 export type { OrderPaymentMethod };
 
@@ -31,6 +32,19 @@ export interface CartItem {
   listPrice?: number;
   /** Why unitPrice is below listPrice (Batch 22) — invoice-only, same rule. */
   discountReason?: DiscountReason | null;
+  /** Batch 66: the line is in a live campaign (unitPrice is its sale
+   *  price; promo codes and the advance discount skip it). */
+  sale?: CartLineSale | null;
+}
+
+/** Batch 66: the campaign a cart line is on sale in. */
+export interface CartLineSale {
+  campaignId: string;
+  campaignName: string;
+  style: CampaignStyle;
+  endsAt: string;
+  /** Struck through; savings are worked out from it. */
+  retail: number;
 }
 
 // 'hand_delivered' (Batch 22) only ever appears on a manual order Naeem

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { StockChange } from '../lib/cartStock';
+import { campaignOfProduct } from '../lib/campaigns';
 
 /** One line item: a product id, how many, and the unit price it was added at.
  *  variantId is null for a product with no variants; two lines for the same
@@ -23,6 +24,10 @@ export interface CartItem {
   /** Price per unit at the moment it was added, so a later price change on the
    *  product does not retroactively change what's already in the cart. */
   priceAtAdd: number;
+  /** Batch 66: the live campaign the product was in when it was added. When
+   *  that sale is over, the line costs the normal price again (what the
+   *  database charges), not the sale price it was added at. */
+  saleCampaignId?: string | null;
 }
 
 /** The one variant field addItem/removeItem/updateQuantity take, when the
@@ -108,6 +113,8 @@ function normalizeCartItem(raw: unknown): CartItem | null {
     priceAtAdd: item.priceAtAdd,
     variantId: typeof item.variantId === 'string' ? item.variantId : null,
     variantLabel: typeof item.variantLabel === 'string' ? item.variantLabel : null,
+    // Only on a line added during a sale (other lines keep their old shape).
+    ...(typeof item.saleCampaignId === 'string' ? { saleCampaignId: item.saleCampaignId } : {}),
   };
   return isCartItem(candidate) ? candidate : null;
 }
@@ -158,6 +165,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     (productId: string, price: number, variant?: CartLineVariant | null, quantity = 1) => {
       const variantId = variant?.id ?? null;
       const units = Math.max(1, Math.floor(quantity));
+      // Batch 66: remembered only when the product is in a live campaign.
+      const saleId = campaignOfProduct(productId)?.id ?? null;
       setLastVariants((prev) =>
         prev[productId] === variantId ? prev : { ...prev, [productId]: variantId }
       );
@@ -178,6 +187,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
             variantLabel: variant?.label ?? null,
             quantity: units,
             priceAtAdd: price,
+            ...(saleId ? { saleCampaignId: saleId } : {}),
           },
         ];
       });

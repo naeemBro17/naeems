@@ -164,7 +164,7 @@ test.describe('phone, 360px', () => {
     await expect(page.locator('.adm-row', { hasText: 'Activity Log' }).locator('.adm-pill-lock')).toHaveText('Super Admin');
 
     // Every More item opens its page (by tapping), and phone Back returns.
-    for (const label of ['Categories', 'Brands', 'Import / Export', 'Promo Codes', 'Wholesalers', 'Reviews', 'Bento Tiles', 'Banner, Expert page, Texts', 'Team', 'Activity Log', 'Settings']) {
+    for (const label of ['Categories', 'Brands', 'Import / Export', 'Promo Codes', 'Campaigns', 'Wholesalers', 'Reviews', 'Bento Tiles', 'Banner, Expert page, Texts', 'Team', 'Activity Log', 'Settings']) {
       await page.locator('.adm-row', { hasText: label }).first().click();
       await expect(page.locator('.adm-page-header__title')).toBeVisible();
       await noSidewaysScroll(page);
@@ -198,7 +198,7 @@ test('computer, 1280px: sidebar groups in the mockup order', async ({ page }) =>
   expect((await page.locator('.adm-sidebar__label').allInnerTexts()).map((t) => t.trim())).toEqual([
     'Home', 'Orders', 'Shopping list', 'Combos', 'Steadfast payouts', 'Money', 'Reports', 'Customers',
     'Products', 'Inventory', 'Categories', 'Brands', 'Import / Export',
-    'Promo Codes', 'Wholesalers', 'Reviews',
+    'Promo Codes', 'Campaigns', 'Wholesalers', 'Reviews',
     'Bento Tiles', 'Banner & Texts',
     'Team', 'Activity Log', 'Import from Kaarbar', 'Settings',
   ]);

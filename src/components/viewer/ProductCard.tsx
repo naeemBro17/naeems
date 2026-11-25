@@ -11,6 +11,7 @@ import { cardImage } from '../../lib/productImages';
 import { useProducts } from '../../contexts/ProductContext';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import { lowestVariantPrice, variantOptionsFor } from '../../lib/variants';
+import { campaignOfProduct, productCampaignPercent } from '../../lib/campaigns';
 import { navigateToProductWithHero, productHeroName } from '../../lib/viewTransition';
 import { ProductDetailPage, whenRouteReady } from '../../lib/routePages';
 import { heroReverseTargetFor, rememberHeroOrigin } from '../../lib/heroTransition';
@@ -25,6 +26,8 @@ interface ProductCardProps {
    *  smaller card that opens the product with a plain page switch, so it
    *  can never claim the morph that belongs to the main grid. */
   variant?: 'grid' | 'related';
+  /** Batch 66: on this campaign's own page the tag shows "-X%". */
+  campaignTag?: string;
 }
 
 /**
@@ -56,7 +59,7 @@ export function ProductCardName({ name, href }: { name: string; href?: string })
   );
 }
 
-export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
+export function ProductCard({ product, variant = 'grid', campaignTag }: ProductCardProps) {
   const navigate = useNavigate();
   const appNavigate = useAppNavigate();
   const { variantsFor } = useProducts();
@@ -104,6 +107,14 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
   const showImage = cover !== null && !imageFailed;
   const outOfStock = isOutOfStock(product);
   const { mainPrice, strikePrice, savePercent } = getDisplayPrice(product);
+  // Batch 66: a sale item's tag on the photo: the campaign's name, or its
+  // own "-X%" (rounded down) on the campaign's page.
+  const saleCampaign = campaignOfProduct(product.id);
+  const saleTag = saleCampaign
+    ? campaignTag === saleCampaign.id
+      ? `-${productCampaignPercent(saleCampaign, product, variantsFor)}%`
+      : saleCampaign.name
+    : null;
   const priceClass = `product-card__price${outOfStock ? ' product-card__price--out' : ''}`;
 
   return (
@@ -164,6 +175,12 @@ export function ProductCard({ product, variant = 'grid' }: ProductCardProps) {
                 <path d="M12 13v8" />
               </svg>
             </div>
+          )}
+
+          {saleTag && (
+            <span className={`cmp-tag${saleCampaign?.style === 'glitter' ? ' cmp-tag--glitter' : ''}`} data-testid="campaign-tag">
+              {saleTag}
+            </span>
           )}
 
           {/* The menu stays functional on out-of-stock cards. */}

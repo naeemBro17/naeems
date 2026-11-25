@@ -14,6 +14,9 @@ interface ProductGridProps {
   /** Active Brand/Skin Type filter count, and how to clear them. */
   activeFilterCount: number;
   onClearFilters: () => void;
+  /** Batch 66: on a campaign page, its id — that campaign's cards show
+   *  "-X%" in the photo tag instead of the campaign name. */
+  campaignTag?: string;
 }
 
 /** Cards drawn straight away — about two screens on a phone. */
@@ -94,6 +97,7 @@ export function ProductGrid({
   onClearSearch,
   activeFilterCount,
   onClearFilters,
+  campaignTag,
 }: ProductGridProps) {
   const cardsToDraw = useCardsToDraw(products.length);
 
@@ -133,7 +137,7 @@ export function ProductGrid({
   return (
     <div className="product-grid">
       {(cardsToDraw >= products.length ? products : products.slice(0, cardsToDraw)).map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard key={product.id} product={product} campaignTag={campaignTag} />
       ))}
     </div>
   );

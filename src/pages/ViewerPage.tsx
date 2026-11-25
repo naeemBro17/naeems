@@ -35,6 +35,7 @@ import { ProductGrid } from '../components/viewer/ProductGrid';
 import { SiteFooter } from '../components/shared/SiteFooter';
 import { HomeWalletOpenNote } from '../components/account/WalletOpenNote';
 import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
+import { HomeCampaigns } from '../components/campaign/HomeCampaigns';
 import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
 import { ProductEditSheet } from '../components/admin/edit-sheets/deferred';
@@ -375,6 +376,9 @@ export function ViewerPage() {
           activeFilterCount={productFilters.activeCount}
         />
       </div>
+
+      {/* Batch 66: live campaigns (at most 2), before the movable sections. */}
+      <HomeCampaigns />
 
       {movableSections.map((id, index) => {
         const content: Record<ReorderableSection, ReactNode> = {

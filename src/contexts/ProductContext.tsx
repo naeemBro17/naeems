@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { supabase } from '../lib/supabase';
@@ -16,6 +17,7 @@ import { shopVisibleVariants, sortVariants } from '../lib/variants';
 import { fetchVariantRows } from '../lib/variantRows';
 import { BRANDS_TABLE, BRAND_SELECT } from '../lib/brands';
 import { markFirstLoadDone, useBackendDown } from '../lib/backendStatus';
+import { campaignsVersion, subscribeCampaigns } from '../lib/campaigns';
 import type { Product, Category, AppSettings, ProductVariant, Brand } from '../types';
 
 interface ProductContextValue {
@@ -254,6 +256,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   // The Super Admin, and moderators with "Edit products and stock" (Batch
   // 24), manage inactive products too.
   const isAdmin = can('edit_products');
+  // Batch 66: a campaign loading or ending re-renders every price reader
+  // (the value below is a new object on each render).
+  useSyncExternalStore(subscribeCampaigns, campaignsVersion);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);

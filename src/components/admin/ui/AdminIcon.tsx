@@ -114,6 +114,14 @@ const PATHS: Record<AdminUiIconName, ReactNode> = {
       <path d="M13.5 9.5L17 6l3.5 3.5" />
     </>
   ),
+  // Batch 66: a price tag with a small spark.
+  campaigns: (
+    <>
+      <path d="M3 12.2V5a2 2 0 0 1 2-2h7.2l8.3 8.3a1.7 1.7 0 0 1 0 2.4l-6.8 6.8a1.7 1.7 0 0 1-2.4 0z" />
+      <circle cx="7.5" cy="7.5" r="1.3" />
+      <path d="M19 2.5v3M17.5 4h3" />
+    </>
+  ),
   promo: (
     <>
       <path d="M19 5L5 19" />

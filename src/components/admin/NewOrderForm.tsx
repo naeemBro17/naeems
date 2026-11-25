@@ -6,6 +6,7 @@
 // every price/stock check happens in the database, never trusted from this
 // form; this component only shapes the input and shows a live preview.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
+import { useLiveCampaigns } from '../../contexts/CampaignContext';
 import { MoneyInput } from '../shared/MoneyInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { productSearchGroups, searchProductGroups, type SellableOption, type SellableProduct } from '../../lib/manualOrderSearch';
@@ -317,7 +318,12 @@ export function NewOrderForm({ formId, onState, onCreated }: NewOrderFormProps) 
   // Batch 45 Part 4: each product once in the search. A product with
   // options opens a picker (its own size first, then each option with its
   // own price and stock).
-  const sellableProducts = useMemo<SellableProduct[]>(() => productSearchGroups(products, adminVariantsFor), [products, adminVariantsFor]);
+  // Batch 66: sale prices (live campaigns) are the list prices offered.
+  const liveCampaigns = useLiveCampaigns();
+  const sellableProducts = useMemo<SellableProduct[]>(
+    () => productSearchGroups(products, adminVariantsFor),
+    [products, adminVariantsFor, liveCampaigns]
+  );
   const searchResults = useMemo(() => searchProductGroups(sellableProducts, query), [query, sellableProducts]);
 
   const addLine = (option: SellableOption, quantity = 1) => {

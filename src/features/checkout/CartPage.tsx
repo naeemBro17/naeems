@@ -28,6 +28,7 @@ import { useCartStockCheck } from '../../hooks/useCartStockCheck';
 import { MakeComboSheet, ShareComboCard } from '../../components/combo/ComboShare';
 import { useCart } from '../../contexts/CartContext';
 import type { CartItem } from './types';
+import { CartSaleTag } from '../../components/campaign/CartSaleTag';
 
 export function CartPage() {
   useDocumentTitle("Your Cart | NAEEM'S");
@@ -154,6 +155,7 @@ export function CartPage() {
                     <span className="checkout-cart__variant">{item.variantLabel}</span>
                   )}
                   <span className="checkout-cart__unit-price">{formatTaka(item.unitPrice)}</span>
+                  {item.sale && <CartSaleTag sale={item.sale} />}
                   {notCovered.has(lineKey(item.product.id, item.variantId)) && (
                     <span className="checkout-cart__eta" data-testid="cart-buy-after">
                       {cartBuyAfterNote(settings)}
