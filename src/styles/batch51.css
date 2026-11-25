@@ -218,12 +218,3 @@
   color: var(--color-text-primary);
 }
 
-/* ---------- Cart: "Get it in 3–5 days" ---------- */
-
-.checkout-cart__eta {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}

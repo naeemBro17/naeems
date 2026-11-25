@@ -643,7 +643,18 @@ test('Part 5: shop — every field and button: tap shows no box, keyboard shows 
     { name: 'Shop: Search page field', open: goto('/search', (p) => p.locator('.search-bar__input').first()) },
     { name: 'Shop: cart quantity stepper', open: goto('/cart', (p) => p.getByRole('button', { name: /^Increase quantity of/ }).first()) },
     { name: 'Shop: checkout field', open: goto('/checkout/delivery', (p) => p.locator('.form-input').first()) },
-    { name: 'Shop: promo code field', open: goto('/checkout/summary', (p) => p.locator('.checkout-summary-card__promo-input')) },
+    {
+      // Batch 67: the field opens from the "Add a promo code" row.
+      name: 'Shop: promo code field',
+      open: async (p) => {
+        const field = await goto('/checkout/summary', (pg) => pg.getByLabel('Promo code'))(p);
+        if (!(await field.isVisible().catch(() => false))) {
+          await p.getByRole('button', { name: 'Add a promo code' }).click();
+          await field.waitFor();
+        }
+        return field;
+      },
+    },
     { name: 'Shop: wholesaler login field', open: goto('/wholesaler-access', (p) => p.locator('input.form-input').first()) },
     { name: 'Shop: admin login field', open: goto('/admin-access', (p) => p.locator('#admin-access-email')) },
   ]);

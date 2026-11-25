@@ -190,7 +190,7 @@ for (const theme of ['light', 'dark'] as const) {
     // Add all → the cart, with the combo's quantities.
     await page.getByTestId('combo-add-all').click();
     await expect(page).toHaveURL(/\/cart$/);
-    await expect(page.locator('.checkout-cart__row')).toHaveCount(3);
+    await expect(page.locator('[data-testid="cart-line"]')).toHaveCount(3);
     const cart = await page.evaluate(() => JSON.parse(localStorage.getItem('nph_cart') ?? '[]') as { productId: string; quantity: number }[]);
     expect(cart.find((l) => l.productId === picks.b.id)?.quantity).toBe(2);
     await expect(page.locator('.toast').first()).toContainText('Added 3 items');
@@ -374,14 +374,14 @@ test('the combo card is only for the admin (a customer and a logged-out visitor 
   await prepare(page, 'light', customer);
   await seedCart(page);
   await page.goto('/cart');
-  await expect(page.locator('.checkout-cart__row').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="cart-line"]').first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('combo-card')).toHaveCount(0);
 
   const anon = await browser.newPage();
   await anon.setViewportSize({ width: WIDTH, height: 844 });
   await seedCart(anon);
   await anon.goto('/cart');
-  await expect(anon.locator('.checkout-cart__row').first()).toBeVisible({ timeout: 30_000 });
+  await expect(anon.locator('[data-testid="cart-line"]').first()).toBeVisible({ timeout: 30_000 });
   await expect(anon.getByTestId('combo-card')).toHaveCount(0);
   await anon.close();
 });

@@ -438,8 +438,9 @@ test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, eve
   const names = page.getByTestId('summary-item-name');
   const qtys = page.getByTestId('summary-item-qty');
   await expect(names).toHaveCount(2);
-  await expect(qtys.nth(0)).toHaveText('× 2');
-  await expect(qtys.nth(1)).toHaveText('× 1');
+  // Batch 67: the quantity is a small badge on the photo.
+  await expect(qtys.nth(0)).toHaveText('2');
+  await expect(qtys.nth(1)).toHaveText('1');
   for (let i = 0; i < 2; i += 1) {
     await expect(qtys.nth(i)).toBeInViewport();
     const box = await qtys.nth(i).boundingBox();
@@ -461,7 +462,7 @@ test('Tasks 8 + 9: order summary at 390 px — long names wrap to two lines, eve
   await expect(page.getByTestId('summary-total')).toContainText('Pay on delivery');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow, 'no sideways scroll at phone width').toBeLessThanOrEqual(0);
-  await page.locator('.checkout-summary-card').first().scrollIntoViewIfNeeded();
+  await page.getByTestId('summary-item').first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/10-order-summary-390.png` });
 });
 

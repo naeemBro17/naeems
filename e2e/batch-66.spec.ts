@@ -274,14 +274,19 @@ test('cart tag, summary hint and savings row; the order total is the one place_o
 
   await setAddress(page);
   await page.goto('/checkout/summary');
+  await page.getByRole('button', { name: 'Add a promo code' }).click();
   await page.getByLabel('Promo code').fill('E2E10');
   await page.getByRole('button', { name: 'Apply' }).click();
+  // Batch 67: the amount is on the promo row and the bill; the hint says why.
+  await expect(page.getByTestId('summary-promo')).toContainText('E2E10 applied');
+  await expect(page.getByTestId('summary-promo')).toContainText('−৳ 50');
+  await expect(page.getByTestId('summary-promo-row')).toHaveText('Promo (E2E10)−৳ 50');
   await expect(page.getByTestId('promo-sale-hint')).toHaveText(
-    `E2E10 took ৳ 50 off. ${NAME} items already have their sale price, so the code skips them.`
+    `${NAME} items already have their sale price, so the code skips them.`
   );
   await expect(page.getByTestId('summary-campaign-savings')).toHaveText(`${NAME} savings−৳ 400`);
   const fee = await page.evaluate(() => {
-    const row = [...document.querySelectorAll('.checkout-summary-card__row')].find((r) => r.textContent?.startsWith('Delivery'));
+    const row = [...document.querySelectorAll('.b67-bill__r')].find((r) => r.textContent?.startsWith('Delivery'));
     return Number((row?.lastElementChild?.textContent ?? '').replace(/[^\d.]/g, ''));
   });
   // The same order in e2e/sql/batch-66.sql: place_order_core charges
@@ -320,10 +325,11 @@ test('every item on sale: the code is not applied, with its own message', async 
   await setCart(page, [{ id: A.id, qty: 1, price: 800, sale: true }]);
   await setAddress(page);
   await page.goto('/checkout/summary');
+  await page.getByRole('button', { name: 'Add a promo code' }).click();
   await page.getByLabel('Promo code').fill('E2E10');
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByText("Every item in your cart is already on sale, so this code can't be used.")).toBeVisible();
-  await expect(page.locator('.checkout-summary-card__row--discount')).toHaveCount(0);
+  await expect(page.getByTestId('summary-promo-row')).toHaveCount(0);
 });
 
 test('a sale that ends: the cart re-prices itself, the page says the sale has ended', async ({ page }) => {
@@ -336,9 +342,9 @@ test('a sale that ends: the cart re-prices itself, the page says the sale has en
   await setCart(page, [{ id: A.id, qty: 1, price: 800, sale: true }]);
   await page.goto('/cart');
   await expect(page.getByTestId('cart-sale-tag')).toBeVisible();
-  await expect(page.locator('.checkout-cart__unit-price')).toHaveText('৳ 800');
+  await expect(page.getByTestId('cart-line-total')).toHaveText('৳ 800');
   await expect(page.getByTestId('cart-sale-tag')).toHaveCount(0, { timeout: 15_000 });
-  await expect(page.locator('.checkout-cart__unit-price')).toHaveText('৳ 1,000');
+  await expect(page.getByTestId('cart-line-total')).toHaveText('৳ 1,000');
   ended = true;
   await page.goto(`/campaign/${SLUG}`);
   await expect(page.getByTestId('campaign-ended')).toBeVisible();

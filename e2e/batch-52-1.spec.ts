@@ -315,12 +315,12 @@ test('admin (sees the real stock 0): keep-selling items, with and without an opt
 
   await openCartAndWaitForCheck(page);
   await expect(page.getByTestId('stock-notice')).toHaveCount(0);
-  await expect(page.locator('.checkout-cart__row')).toHaveCount(3);
-  await expect(page.locator('.checkout-cart__row', { hasText: picks.withOption.variant_label })).toHaveCount(1);
+  await expect(page.locator('[data-testid="cart-line"]')).toHaveCount(3);
+  await expect(page.locator('[data-testid="cart-line"]', { hasText: picks.withOption.variant_label })).toHaveCount(1);
   // A second visit re-checks again: still nothing removed.
   await openCartAndWaitForCheck(page);
   await expect(page.getByTestId('stock-notice')).toHaveCount(0);
-  await expect(page.locator('.checkout-cart__row')).toHaveCount(3);
+  await expect(page.locator('[data-testid="cart-line"]')).toHaveCount(3);
   await emptyCart(page);
 });
 
@@ -337,7 +337,7 @@ test('customer: keep-selling items at stock 0 go in the cart, survive the re-che
 
   await openCartAndWaitForCheck(page);
   await expect(page.getByTestId('stock-notice')).toHaveCount(0);
-  await expect(page.locator('.checkout-cart__row')).toHaveCount(2);
+  await expect(page.locator('[data-testid="cart-line"]')).toHaveCount(2);
   await expect(page.getByTestId('cart-buy-after').first()).toBeVisible({ timeout: 20_000 });
 
   // Checkout, as the existing checkout test does it.

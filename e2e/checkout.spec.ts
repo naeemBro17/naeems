@@ -31,10 +31,10 @@ test.describe('Logged-in checkout', () => {
     await page.goto('/cart');
     let removeGuard = 0;
     while (
-      (await page.locator('.checkout-cart__thumb').count()) > 0 &&
+      (await page.getByTestId('cart-line-thumb').count()) > 0 &&
       removeGuard < 20
     ) {
-      const decrease = page.getByRole('button', { name: /^Decrease quantity of /i }).first();
+      const decrease = page.getByTestId('cart-minus').first();
       if ((await decrease.count()) === 0) break;
       await decrease.click();
       await page.waitForTimeout(100);

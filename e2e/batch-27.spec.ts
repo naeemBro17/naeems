@@ -543,10 +543,10 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
 
     // Cart page shows 2; change it to 3 there.
     await page.goto('/cart');
-    const row = page.locator('.checkout-cart__row', { hasText: name }).first();
-    await expect(row.locator('.checkout-cart__step-count')).toHaveText('2');
+    const row = page.locator('[data-testid="cart-line"]', { hasText: name }).first();
+    await expect(row.getByTestId('cart-qty')).toHaveText('2');
     await page.getByRole('button', { name: `Increase quantity of ${name}` }).click();
-    await expect(row.locator('.checkout-cart__step-count')).toHaveText('3');
+    await expect(row.getByTestId('cart-qty')).toHaveText('3');
 
     await page.goto('/');
     await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('3');
