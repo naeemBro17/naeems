@@ -5,7 +5,7 @@
 // this customer's own order (or any order, for an admin browsing here), so
 // a mismatched/foreign id resolves to null exactly like a missing one and
 // gets the same "not found" state.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAY_ON_DELIVERY_LABEL } from '../lib/checkoutCopy';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
@@ -37,6 +37,7 @@ import { OrderTrackingCard, type CustomerTrackingView } from '../components/orde
 import { LineIcon } from '../components/orders/TrackIcons';
 import { lineQuantityText, orderItemCount, soldInUnits } from '../lib/orderLines';
 import { advanceLineLabel, orderDiscountParts } from '../lib/advanceDiscount';
+import { markOrderNoteSeen, noteDateText, noteSeen } from '../lib/orderNotes';
 
 function DetailSkeleton() {
   return (
@@ -104,6 +105,17 @@ export function OrderDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Batch 65: a note from Naeem's shown here counts as seen (once).
+  const markedNote = useRef<string | null>(null);
+  useEffect(() => {
+    if (!order?.note_to_customer || !order.note_to_customer_at) return;
+    if (noteSeen(order.note_to_customer_at, order.note_to_customer_seen_at)) return;
+    const key = `${order.id}:${order.note_to_customer_at}`;
+    if (markedNote.current === key) return;
+    markedNote.current = key;
+    void markOrderNoteSeen(order.id);
+  }, [order]);
 
   const view = useMemo<CustomerTrackingView | null>(() => {
     if (!order) return null;
@@ -201,6 +213,30 @@ export function OrderDetailPage() {
         ) : (
           <>
             <OrderTrackingCard view={view} />
+
+            {order.note_to_customer && (
+              <section className="ot-card onote" aria-label="Note from Naeem's" data-testid="order-note">
+                <div className="onote__head">
+                  <svg
+                    className="onote__icon"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <h2 className="onote__title">Note from Naeem&apos;s</h2>
+                  {order.note_to_customer_at && <span className="onote__date">{noteDateText(order.note_to_customer_at)}</span>}
+                </div>
+                <p className="onote__text">{order.note_to_customer}</p>
+              </section>
+            )}
 
             <section className="ot-card ot-items" aria-label="Your items">
               <h2 className="ot-card__title">Your items ({orderItemCount(order.items)})</h2>

@@ -70,6 +70,8 @@ import '../styles/adminOrders.css';
 // Batch 63: Admin → New order's new look (after the admin styles above,
 // which it adjusts on that page only).
 import '../styles/batch63.css';
+// Batch 65: Note to customer card and the Mark returned amount.
+import '../styles/batch65-admin.css';
 
 export function AdminPage() {
   const navigate = useNavigate();

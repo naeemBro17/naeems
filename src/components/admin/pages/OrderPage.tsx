@@ -56,6 +56,9 @@ import '../../../styles/adminPayouts.css';
 import { fetchOrderPayout, shortDhakaDate, takaExact, takaWhole, type LoadState, type OrderPayoutInfo } from '../../../lib/payouts';
 import { adminPath } from '../../../lib/adminPages';
 import { useProducts } from '../../../contexts/ProductContext';
+import { NoteToCustomerCard } from '../NoteToCustomerCard';
+import { fetchOrderProfit } from '../../../lib/inventory/api';
+import { cleanTakaInput, returnLoss, setReturnDeliveryPaid } from '../../../lib/orderNotes';
 import { fetchCourierBillStatus, markReturnedDamaged } from '../../../lib/money/api';
 import { courierBillLine } from '../../../lib/money/courierBill';
 import type { CourierBillStatus } from '../../../lib/money/types';
@@ -134,6 +137,14 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
   const [returnOpen, setReturnOpen] = useState(false);
   // Batch 41 Part 5.2: items ticked "Damaged" (units per order line).
   const [damaged, setDamaged] = useState<Record<string, number>>({});
+  // Batch 65: delivery charge the customer paid when the parcel came back
+  // (typed on Mark returned, corrected later on a returned order), and the
+  // courier cost the Profit card shows (null when not known).
+  const [returnPaid, setReturnPaid] = useState('');
+  const [courierCost, setCourierCost] = useState<number | null>(null);
+  const [payEditOpen, setPayEditOpen] = useState(false);
+  const [payEditValue, setPayEditValue] = useState('');
+  const paidNum = Number(returnPaid || 0);
 
   useEffect(() => {
     let alive = true;
@@ -274,12 +285,33 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
     setTransitOpen(false);
   };
 
+  // Batch 65: each time Mark returned opens, the amount starts empty and the
+  // courier cost is read the way the Profit card reads it.
+  useEffect(() => {
+    if (!returnOpen || !orderId) return;
+    setReturnPaid('');
+    setCourierCost(null);
+    if (!canSeeCosts) return;
+    let alive = true;
+    void fetchOrderProfit(orderId).then((answer) => {
+      if (!alive || answer.kind !== 'ready') return;
+      const known = ['exact', 'share', 'expected', 'none'].includes(answer.data.courier_kind ?? '');
+      setCourierCost(known ? answer.data.courier : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [returnOpen, orderId, canSeeCosts]);
+
   const handleMarkReturned = async () => {
     if (!order) return;
     const broken = Object.entries(damaged)
       .filter(([, n]) => n > 0)
       .map(([order_item_id, units]) => ({ order_item_id, units }));
-    const { error } = broken.length > 0 ? await markReturnedDamaged(order.id, null, broken) : await adminMarkOrderReturned(order.id, null);
+    const { error } =
+      broken.length > 0
+        ? await markReturnedDamaged(order.id, null, broken, paidNum)
+        : await adminMarkOrderReturned(order.id, null, paidNum);
     if (error) {
       showToast(error, 'error');
       return;
@@ -288,6 +320,24 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
     setDamaged({});
     showToast(broken.length > 0 ? 'Order marked Returned: damaged items written off, the rest back in stock' : 'Order marked Returned: its goods are back in stock');
     await Promise.all([reload(), refetchProducts()]);
+  };
+
+  const openPayEdit = () => {
+    if (!order) return;
+    setPayEditValue(order.return_delivery_paid > 0 ? String(Math.round(order.return_delivery_paid)) : '');
+    setPayEditOpen(true);
+  };
+
+  const handleSavePayEdit = async () => {
+    if (!order) return;
+    const { error } = await setReturnDeliveryPaid(order.id, Number(payEditValue || 0));
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    setPayEditOpen(false);
+    showToast('Saved');
+    await reload();
   };
 
   const handleReopen = async () => {
@@ -559,6 +609,22 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
               </div>
               {track.note === 'awaiting_confirmation' && (
                 <p className="adm-ocard__muted">Delivered, waiting for Steadfast to confirm.</p>
+              )}
+              {order.status === 'returned' && (
+                <p className="adm-rpay__row" data-testid="return-paid-row">
+                  {order.return_delivery_paid > 0 ? (
+                    <span>
+                      Customer paid delivery charge <b>{formatTakaBd(order.return_delivery_paid)}</b>
+                    </span>
+                  ) : (
+                    <span>Customer paid no delivery charge</span>
+                  )}
+                  {canChangeStatus && (
+                    <button type="button" className="adm-cnote__link" onClick={openPayEdit} data-testid="return-paid-edit">
+                      Edit
+                    </button>
+                  )}
+                </p>
               )}
             </section>
 
@@ -907,6 +973,17 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
               </section>
             )}
 
+            {/* Batch 65: a note the customer sees (My Orders and once as a card). */}
+            <NoteToCustomerCard
+              key={`${order.id}:${order.note_to_customer_at ?? ''}`}
+              orderId={order.id}
+              note={order.note_to_customer}
+              noteAt={order.note_to_customer_at}
+              seenAt={order.note_to_customer_seen_at}
+              canEdit={canChangeStatus}
+              onSaved={reload}
+            />
+
             {/* Tracking number and private note */}
             <section className="adm-ocard" aria-label="Tracking number and note">
               <h2 className="adm-ocard__title">Tracking number and note</h2>
@@ -1106,9 +1183,43 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
             onClose={() => setReturnOpen(false)}
           >
             <p className="adm-csheet__text" data-testid="return-effects">
-              {`${units} item${units === 1 ? '' : 's'} go${units === 1 ? 'es' : ''} back to stock.`} The order counts no sale; the
-              courier charge counts as a loss. This can&apos;t be undone.
+              {`${units} item${units === 1 ? '' : 's'} go${units === 1 ? 'es' : ''} back to stock.`} The order counts no sale.
             </p>
+            <label className="adm-rpay" htmlFor={`rpay-${order.id}`}>
+              <span className="adm-rpay__label">Customer paid delivery charge</span>
+              <span className="adm-rpay__box">
+                <span className="adm-rpay__cur" aria-hidden="true">
+                  ৳
+                </span>
+                <input
+                  id={`rpay-${order.id}`}
+                  className="adm-rpay__input"
+                  type="text"
+                  inputMode="numeric"
+                  value={returnPaid}
+                  onChange={(e) => setReturnPaid(cleanTakaInput(e.target.value))}
+                  placeholder="0"
+                  data-testid="return-delivery-paid"
+                />
+              </span>
+              <span className="adm-rpay__hint">Leave empty if the customer paid nothing.</span>
+            </label>
+            {courierCost !== null && (
+              <div className="adm-rpay__math" data-testid="return-loss">
+                <div className="adm-rpay__line">
+                  <span>Courier charge</span>
+                  <b>{formatTakaBd(courierCost)}</b>
+                </div>
+                <div className="adm-rpay__line">
+                  <span>Customer paid</span>
+                  <b>−{formatTakaBd(paidNum)}</b>
+                </div>
+                <div className="adm-rpay__line adm-rpay__line--total">
+                  <span>{returnLoss(courierCost, paidNum).kind === 'loss' ? 'Loss on this return' : 'Gain on this return'}</span>
+                  <b>{formatTakaBd(returnLoss(courierCost, paidNum).amount)}</b>
+                </div>
+              </div>
+            )}
             {canMarkDamaged && (
               <div className="money-damaged" data-testid="return-damaged">
                 {order.items.map((item) => (
@@ -1143,6 +1254,35 @@ export function OrderPage({ orderNumber, onBack, onChanged }: OrderPageProps) {
                 <p className="inv-muted">Ticked units are written off as damaged (a loss at their cost) instead of going back to stock.</p>
               </div>
             )}
+          </ConfirmSheet>
+
+          <ConfirmSheet
+            isOpen={payEditOpen}
+            title="Customer paid delivery charge"
+            keepLabel="Cancel"
+            confirmLabel="Save"
+            onConfirm={handleSavePayEdit}
+            onClose={() => setPayEditOpen(false)}
+          >
+            <label className="adm-rpay" htmlFor={`rpay-edit-${order.id}`}>
+              <span className="adm-rpay__label">Amount</span>
+              <span className="adm-rpay__box">
+                <span className="adm-rpay__cur" aria-hidden="true">
+                  ৳
+                </span>
+                <input
+                  id={`rpay-edit-${order.id}`}
+                  className="adm-rpay__input"
+                  type="text"
+                  inputMode="numeric"
+                  value={payEditValue}
+                  onChange={(e) => setPayEditValue(cleanTakaInput(e.target.value))}
+                  placeholder="0"
+                  data-testid="return-delivery-paid-edit"
+                />
+              </span>
+              <span className="adm-rpay__hint">Leave empty if the customer paid nothing.</span>
+            </label>
           </ConfirmSheet>
 
           <ConfirmSheet

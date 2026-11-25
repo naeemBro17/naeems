@@ -75,7 +75,9 @@ export type LedgerType =
   | 'steadfast_payout_out'
   | 'courier_fees'
   | 'steadfast_unmatched'
-  | 'steadfast_courier_only';
+  | 'steadfast_courier_only'
+  /** Batch 65: delivery charge the customer paid on a returned order. */
+  | 'return_delivery_paid';
 
 /** What the "Add money" screen can add (a move is stored as a pair). */
 export type EntryKind =
@@ -114,7 +116,7 @@ export interface MoneyMovement {
 }
 
 export interface LedgerRow {
-  source: 'movement' | 'payout_out' | 'payment' | 'due_payment' | 'store_wallet' | 'payout_fees' | 'payout_unmatched';
+  source: 'movement' | 'payout_out' | 'payment' | 'due_payment' | 'store_wallet' | 'payout_fees' | 'payout_unmatched' | 'payout_settled' | 'return_delivery';
   source_id: string;
   entry_date: string;
   account_id: string;

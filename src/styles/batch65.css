@@ -1,0 +1,52 @@
+/* Batch 65: a note from Naeem's about an order (customer side).
+   The admin side is batch65-admin.css. Only transform / opacity animate. */
+
+/* ---------- customer: note inside the order ---------- */
+.onote { background: var(--color-bg-secondary); border-color: var(--color-border); }
+.onote__head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.onote__icon { color: var(--color-text-primary); flex-shrink: 0; }
+.onote__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--color-text-primary); }
+.onote__date { margin-left: auto; font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
+.onote__text { margin: 0; font-size: 14px; line-height: 1.6; color: var(--color-text-secondary); white-space: pre-line; overflow-wrap: anywhere; }
+
+/* ---------- customer: one-time floating card ---------- */
+.onote-pop { position: fixed; inset: 0; z-index: 900; }
+.onote-pop__dim { position: absolute; inset: 0; background: rgba(20, 20, 20, 0.28); animation: onote-fade 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.onote-pop__card {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  max-width: 440px;
+  margin: 0 auto;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+  animation: onote-up 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.onote-pop__head { display: flex; gap: 12px; align-items: flex-start; }
+.onote-pop__icon { width: 42px; height: 42px; border-radius: 12px; background: var(--color-bg-secondary); display: grid; place-items: center; flex-shrink: 0; }
+.onote-pop__eyebrow { margin: 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--color-text-muted); }
+.onote-pop__title { margin: 2px 0 0; font-size: 16px; font-weight: 700; }
+.onote-pop__msg {
+  margin: 14px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--color-bg-secondary);
+  font-size: 14px; line-height: 1.55; color: var(--color-text-secondary);
+  white-space: pre-line; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto;
+}
+.onote-pop__sig { margin: 6px 0 0; font-size: 12px; color: var(--color-text-muted); }
+.onote-pop__btns { display: flex; gap: 10px; margin-top: 14px; }
+.onote-pop__main { flex: 1; height: 46px; border: 0; border-radius: 14px; background: #ff7a45; color: #fff; font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+.onote-pop__ok { width: 80px; height: 46px; border: 0; border-radius: 14px; background: transparent; color: var(--color-text-secondary); font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+html[data-input='keyboard'] .onote-pop__main:focus-visible, html[data-input='keyboard'] .onote-pop__ok:focus-visible { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.onote-pop--out .onote-pop__dim { animation: onote-fade-out 260ms ease both; }
+.onote-pop--out .onote-pop__card { animation: onote-down 260ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes onote-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes onote-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes onote-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes onote-down { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(24px); } }
+@media (prefers-reduced-motion: reduce) {
+  .onote-pop__card, .onote-pop--out .onote-pop__card { animation-name: onote-fade; }
+  .onote-pop--out .onote-pop__card { animation-name: onote-fade-out; }
+}

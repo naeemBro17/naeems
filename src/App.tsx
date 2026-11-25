@@ -6,6 +6,7 @@ import { GlassCartButton } from './components/viewer/GlassCartButton';
 import { CartUndoToast } from './components/viewer/CartUndoToast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { CustomerOrderNotePopup } from './components/orders/OrderNotePopup';
 import { ProductProvider } from './contexts/ProductContext';
 import { AdminEditProvider } from './contexts/AdminEditContext';
 import { CartProvider } from './contexts/CartContext';
@@ -200,6 +201,8 @@ export default function App() {
                     <CartUndoToast />
                     <WishlistToast />
                     <WishlistLoginSheet />
+                    {/* Batch 65: a note about her order, once per app load. */}
+                    <CustomerOrderNotePopup />
                   </ShopDownGate>
                 </AdminEditProvider>
               </CheckoutStateProvider>

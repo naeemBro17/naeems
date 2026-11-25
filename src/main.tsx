@@ -15,6 +15,7 @@ import './styles/wishlist.css';
 import './styles/batch52.css';
 import './styles/batch60.css';
 import './styles/batch64.css';
+import './styles/batch65.css';
 
 // Batch 52 Part 4: opened inside Facebook / Messenger / Instagram on
 // Android → reopen this same address in Chrome, once, before anything is

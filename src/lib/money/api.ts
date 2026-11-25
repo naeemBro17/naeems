@@ -450,9 +450,15 @@ export async function fetchWriteOffs(filter: { from: string; to: string; product
 export async function markReturnedDamaged(
   orderId: string,
   note: string | null,
-  damaged: { order_item_id: string; units: number }[]
+  damaged: { order_item_id: string; units: number }[],
+  customerPaidDelivery = 0
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('admin_mark_order_returned_damaged', { p_order_id: orderId, p_note: note, p_damaged: damaged });
+  // Batch 65: the paid delivery charge only when there is one (works before migration-062).
+  const args =
+    customerPaidDelivery > 0
+      ? { p_order_id: orderId, p_note: note, p_damaged: damaged, p_customer_paid_delivery: customerPaidDelivery }
+      : { p_order_id: orderId, p_note: note, p_damaged: damaged };
+  const { error } = await supabase.rpc('admin_mark_order_returned_damaged', args);
   return { error: error ? message(error) : null };
 }
 
