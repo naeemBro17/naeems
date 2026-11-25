@@ -475,10 +475,10 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('2');
 
     await page.goto('/cart');
-    const row = page.locator('.checkout-cart__row', { hasText: pname }).first();
-    await expect(row.locator('.checkout-cart__step-count')).toHaveText('2');
+    const row = page.locator('[data-testid="cart-line"]', { hasText: pname }).first();
+    await expect(row.getByTestId('cart-qty')).toHaveText('2');
     await page.getByRole('button', { name: `Increase quantity of ${pname}` }).click();
-    await expect(row.locator('.checkout-cart__step-count')).toHaveText('3');
+    await expect(row.getByTestId('cart-qty')).toHaveText('3');
 
     await page.goto(`/search?q=${encodeURIComponent(pname)}`);
     const card = page.locator('.product-card', {
@@ -715,8 +715,8 @@ test.describe('Part 6 — cart page', () => {
       [p.id, stock] as const
     );
     await page.goto('/cart');
-    const row = page.locator('.checkout-cart__row', { hasText: p.name }).first();
-    const count = row.locator('.checkout-cart__step-count');
+    const row = page.locator('[data-testid="cart-line"]', { hasText: p.name }).first();
+    const count = row.getByTestId('cart-qty');
     await expect(count).toHaveText(String(stock - 1));
     const plus = page.getByRole('button', { name: `Increase quantity of ${p.name}` });
     await plus.click();

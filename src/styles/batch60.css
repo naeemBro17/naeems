@@ -139,16 +139,6 @@
 .mw-receipt div { display: flex; justify-content: space-between; padding: 3px 0; }
 .mw-receipt b { color: var(--color-text-primary); }
 
-/* Checkout */
-.mw-use { border: 1.5px solid var(--color-border); border-radius: 16px; padding: 14px; margin-bottom: 12px; background: var(--color-surface); }
-.mw-use--on { border-color: var(--color-text-primary); }
-.mw-use__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.mw-use__title { font-size: 14.5px; font-weight: 700; color: var(--color-text-primary); }
-.mw-use__have { font-size: 12px; color: var(--color-text-secondary); }
-.mw-use__split { margin-top: 10px; font-size: 13.5px; color: var(--color-text-primary); }
-.mw-use__split div { display: flex; justify-content: space-between; padding: 4px 0; }
-.mw-paid { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--mw-ok-bg); color: var(--mw-ok-fg); font-size: 13.5px; font-weight: 700; }
-
 /* The gentle fade in (one after another, set --mw-i on each item) */
 .mw-in {
   opacity: 0;

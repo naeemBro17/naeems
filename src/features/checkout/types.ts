@@ -17,6 +17,9 @@ export interface CartItem {
   quantity: number;
   /** Unit price captured when the item was added; immune to later price edits. */
   unitPrice: number;
+  /** Batch 67: the retail (struck-through) price of one unit, or null when
+   *  unknown. Shown struck through when it is above unitPrice. */
+  retail: number | null;
   variantId: string | null;
   /** e.g. "AU · 340g" — snapshot label, shown in cart/summary/WhatsApp/PDF. */
   variantLabel: string | null;

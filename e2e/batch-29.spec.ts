@@ -299,7 +299,7 @@ test.describe('Part 4 — Removed · Undo', () => {
     const [a, b, c] = await plainProducts(3);
     const original = [lineFor(a, 2), lineFor(b, 1), lineFor(c, 3)];
     await openWith(page, '/cart', { cart: original });
-    await page.getByRole('button', { name: `Decrease quantity of ${b.name}` }).click();
+    await page.getByRole('button', { name: `Remove ${b.name}` }).click();
 
     await expect(page.getByText('Remove this item?')).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -310,12 +310,12 @@ test.describe('Part 4 — Removed · Undo', () => {
     expect((await cartLines(page)).map((l) => l.productId)).toEqual([a.id, c.id]);
 
     // Never covers the cart's total bar.
-    expect(overlaps(await box(toast), await box(page.locator('.checkout-cart__sticky-bar')))).toBe(false);
+    expect(overlaps(await box(toast), await box(page.getByTestId('cart-bar')))).toBe(false);
 
     await toast.getByRole('button', { name: 'Undo' }).click();
     await expect(toast).toHaveCount(0);
     expect(await cartLines(page)).toEqual(original);
-    await expect(page.getByRole('button', { name: `Decrease quantity of ${b.name}` })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Remove ${b.name}` })).toBeVisible();
   });
 
   test('product card: − at 1 removes; Undo brings the stepper, the badge and the floating cart back', async ({ page }) => {
@@ -356,22 +356,22 @@ test.describe('Part 4 — Removed · Undo', () => {
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('1');
     expect(await cartLines(page)).toEqual([lineFor(product, 1)]);
     await page.goto('/cart');
-    await expect(page.locator('.checkout-cart__step-count')).toHaveText('1');
+    await expect(page.getByTestId('cart-qty')).toHaveText('1');
   });
 
   test('the toast leaves after about 5 s; a new removal replaces the old toast', async ({ page }) => {
     const [a, b] = await plainProducts(2);
     await openWith(page, '/cart', { cart: [lineFor(a, 1), lineFor(b, 1)] });
-    await page.getByRole('button', { name: `Decrease quantity of ${a.name}` }).click();
+    await page.getByRole('button', { name: `Remove ${a.name}` }).click();
     await expect(page.getByTestId('undo-toast')).toBeVisible();
     await page.waitForTimeout(2000);
-    await page.getByRole('button', { name: `Decrease quantity of ${b.name}` }).click();
+    await page.getByRole('button', { name: `Remove ${b.name}` }).click();
     await expect(page.getByTestId('undo-toast')).toHaveCount(1);
     // Undo now restores only the latest removal.
     await page.getByTestId('undo-toast').getByRole('button', { name: 'Undo' }).click();
     expect(await cartLines(page)).toEqual([lineFor(b, 1)]);
 
-    await page.getByRole('button', { name: `Decrease quantity of ${b.name}` }).click();
+    await page.getByRole('button', { name: `Remove ${b.name}` }).click();
     await expect(page.getByTestId('undo-toast')).toBeVisible();
     await page.waitForTimeout(4300);
     await expect(page.getByTestId('undo-toast')).toBeVisible();

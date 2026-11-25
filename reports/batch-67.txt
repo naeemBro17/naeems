@@ -1,0 +1,151 @@
+BATCH 67 — Cart and Order Summary redesign
+Branch: feature/batch-67-cart-summary   Version: 1.67.0
+
+1. WHAT I DID
+
+Cart page. Rebuilt to the approved mockup. Each product is now its own
+rounded white card on a soft grey page, with a bigger photo, the name on
+up to two lines, the line total in bold, and the retail price struck
+through when there is a discount ("৳800 each ৳1,000" when there are 2 or
+more). The quantity control is a small grey pill; at quantity 1 the minus
+becomes a bin icon and still removes the item at once with the usual
+"Removed · Undo" message. A campaign line shows a black tag (plain style)
+or a gold tag with a little star (glitter style) with the countdown in
+bold. Under the products: "100% authentic, imported by Naeem's." The
+header shows the piece count ("4 items"). The bottom bar shows Subtotal,
+a green "You save ৳650" (against retail prices) and the orange Checkout
+button. The empty cart has a new drawing, "Your cart is empty", "Find
+something your skin will love." and the orange "Browse products" button.
+
+Order Summary page. Now made of cards: "Delivering to" (name, phone, one
+address line, the zone, with a "Change" link), "Your order · 4 items" (small
+photos with the quantity as a badge, an "Edit" link back to the cart),
+the promo row ("Add a promo code" opens the field; once applied it says
+"SAVE10 applied · Tap to change" with the amount in green), the wallet
+card (when the customer has wallet money), Payment method (Cash on
+Delivery with "Pay the rider when it arrives", then the "Pay in advance"
+group with bKash and Nagad), and Bill details. When bKash or Nagad is
+chosen, the steps open right under that option, in that wallet's colours:
+1) Send Money ৳X to this number, with a Copy button that copies the shop
+number, 2) Enter the details below. The bottom bar shows the total and the
+orange "Place order" button. The bar's total is always the same number as
+the bill's total.
+
+Nothing about prices, promo codes, campaigns, the wallet, the advance
+discount, stock checks, or placing an order was changed. Only the look.
+The one data addition: each cart line now carries its retail price (only
+used to show the strikethrough and "You save").
+
+Old styles. The old cart / summary / payment-box styles that no page uses
+any more were deleted. The ones the admin order forms still share were
+kept.
+
+Tests. New file e2e/batch-67.spec.ts (9 tests, made-up products in the
+test browser only, nothing written to Supabase). It checks the words, the
+strikethrough, "You save", exactly one orange element per screen, no
+sideways scroll at 390 and 360 px, the bar never covering the last card,
+the limit popup, Removed · Undo, the promo row, bKash/Nagad boxes and
+Copy, the wallet split and fully-paid case, placing COD / bKash / wallet
+orders, and that reduced-motion turns the animations off. New unit tests
+in src/lib/cartTotals.test.ts for the piece count, "You save" and the
+address line. Older tests that looked for the old class names were changed
+to the new data-testids. No test was weakened (see section 5 for two
+places where the design itself changed what is shown).
+
+Testing (Naeem approved a quick batch): instead of the full npm run verify
+at the end, I ran npm run verify:quick ONCE over every e2e file that opens
+/cart or /checkout/summary plus batch-66 and batch-67. The next batch's
+full run covers the rest. Result: see "VERIFY RESULT" at the end.
+
+Captures: reports/batch-67-screens/ (390 px): cart light and dark, cart at
+360, glitter line, empty cart light and dark, limit popup, Removed · Undo
+with the bar, summary COD with code (full page, plus top and bottom as the
+phone shows them, plus 360 px), bKash chosen, Nagad chosen, wallet on
+(dark). Note: in a "full page" picture the fixed bottom bar is drawn in the
+middle of the page. That is how full-page screenshots work, not a bug. The
+"-screen" / "-top" / "-bottom" pictures show what the phone really shows.
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+
+None needed.
+
+3. WHAT I COULD NOT FINISH
+
+Nothing in scope. As planned, the full npm run verify was skipped for
+this batch (Naeem's instruction); the next batch's full run covers it.
+
+4. WHAT I FOUND ALONG THE WAY
+
+- The Delivery step (the middle checkout screen) still has the old look.
+  Going Cart -> Delivery -> Summary, the middle screen will look different
+  until a later batch restyles it. The new grey stepper bars only appear on
+  Cart and Summary; Delivery keeps the old dots.
+- CLAUDE.md says the brand orange is #FF7A45, but the site's real
+  --color-primary token is #F05020. The new buttons use the token, so they
+  match the rest of the shop. The Batch 67 test counts both colours.
+- The empty cart no longer shows the Cart / Delivery / Payment stepper
+  (the mockup code hides it when there is nothing to check out).
+- The "Removed · Undo" message on the cart touched the new bar when the
+  bar shows its taller "You save" line (found by the Batch 29 test). I
+  lifted the message a little higher, on the cart page only, and made the
+  Batch 67 test check exactly that case.
+- Three test failures come from live shop data, not this batch (see
+  VERIFY RESULT): the "Delivery in Dhaka" setting now reads "1–2 days"
+  while the Batch 51 test expects "1 to 2 days"; the Batch 66 database
+  test's balance check is ৳3,199 off before it starts; and the Batch 27
+  card tests pick "CeraVe Foaming Cleanser Eco-Recharge Refill 473mL",
+  which has only 1 left, so "One more" correctly stops at 1. The Batch 27
+  test should pick a product with at least 3 in stock.
+- Python on Windows writes Windows line endings. I caught it and put the
+  files back to the repo's normal line endings before committing. Future
+  sessions editing files with Python should open them with newline=''.
+
+5. DESIGN DECISIONS
+
+- Two older tests changed with the design, but they check the same thing:
+  the summary quantity is now a badge ("2") instead of "× 2", and the bKash
+  / Nagad box colour is now checked on its numbered step circles (the box
+  no longer has a border).
+- Batch 47 requires every summary product name to reserve two lines so
+  rows line up. The mockup CSS did not reserve that space, so I added a
+  two-line minimum height to the name. This keeps Batch 47 working.
+- The address line skips the thana / district when the typed address
+  already mentions it. I also made it skip a district that has the same
+  name as the thana, so you never see "Cumilla, Cumilla".
+- The piece count, "You save" and the address line are small helper
+  functions in src/lib/cartTotals.ts, so they can be unit tested.
+- "You save" uses each product's retail price. For a wholesaler, this
+  compares the wholesale price with retail, the same way the product cards
+  already show it.
+
+6. INDUSTRY-LEVEL SUGGESTIONS (not done; highest impact first)
+
+- Restyle the Delivery step to match (medium). Right now the middle step
+  of checkout looks like a different shop, and that is exactly where
+  customers decide whether to trust the site with their address.
+- Show the delivery fee (or "Delivery calculated next") in the cart bar
+  (small). Shoppers drop out when the total jumps at the last step.
+- Remember the promo code field's last error until the code changes
+  (small). Today the error stays until the next Apply. Fine for now, but
+  clearing it when the customer types would feel more polished.
+- Add a "Pay with bKash app" deep link next to Copy (medium). Most bKash
+  customers would rather tap once to open the app than copy and switch.
+
+VERIFY RESULT
+
+One combined run (npm run verify:quick over all 22 files that open /cart
+or /checkout/summary, plus batch-66 and batch-67):
+  build OK, unit tests 888/888, e2e 129 passed, 125 skipped, 13 failed.
+Of the 13:
+  - 8 serial tests never ran: the test worker crashed on start-up
+    (Windows code 0xC0000142). Re-ran those 8 files once, serial,
+    alone: 112 passed, 2 failed (the Batch 27 stock-1 product, above).
+  - batch-29 Removed · Undo: a real overlap (fixed, above). Re-ran
+    batch-29 + batch-67 after the fix: 28 passed.
+  - batch-29 logo test and batch-67 empty cart: timing. Both passed in
+    the re-run.
+  - batch-51 delivery-time text and batch-66 database balance: live data
+    (above), not caused by this batch.
+Still failing, all from live data: batch-27 (2 tests), batch-51 (1),
+batch-66 database (1). The full npm run verify was skipped as Naeem
+asked; the next batch's full run covers the rest.

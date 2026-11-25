@@ -172,6 +172,7 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
             product,
             quantity: item.quantity,
             unitPrice,
+            retail: prices ? prices.retail : null,
             sale: sale
               ? {
                   campaignId: sale.campaign.id,

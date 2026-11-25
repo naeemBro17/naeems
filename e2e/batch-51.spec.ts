@@ -248,9 +248,9 @@ for (const theme of ['light', 'dark'] as const) {
 
     // Cart: the keep-selling line (4, none at home) says "Get it in 3–5 days"; the other says nothing.
     await page.goto('/cart');
-    const onRow = page.locator('.checkout-cart__row', { hasText: picks.on.name }).first();
+    const onRow = page.locator('[data-testid="cart-line"]', { hasText: picks.on.name }).first();
     await expect(onRow.getByTestId('cart-buy-after')).toHaveText('Get it in 3 to 5 days', { timeout: 20_000 });
-    await expect(page.locator('.checkout-cart__row', { hasText: picks.low.name }).first().getByTestId('cart-buy-after')).toHaveCount(0);
+    await expect(page.locator('[data-testid="cart-line"]', { hasText: picks.low.name }).first().getByTestId('cart-buy-after')).toHaveCount(0);
     await page.getByRole('button', { name: `Increase quantity of ${picks.on.name}` }).click();
     await expect(page.getByTestId('limit-popup-title')).toHaveText('Limit 4 per order');
     await page.waitForTimeout(400);

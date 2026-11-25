@@ -207,8 +207,17 @@ async function payWithWallet(page: Page, wallet: 'bkash' | 'nagad', p: Product):
   await expect(box).toContainText(`Pay with ${name}`);
   await expect(page.getByTestId('wallet-amount')).toHaveText(taka(total));
   await expect(box.getByLabel(new RegExp(`Your ${name} number`))).toBeVisible();
-  // The group turns neutral once a wallet is picked.
-  await expect(page.getByTestId('pay-advance-group')).toHaveClass(/cf-adv--picked/);
+  // Batch 67: the steps open right under the chosen wallet, inside the group.
+  await expect(page.getByTestId('pay-advance-group').getByTestId('wallet-box')).toBeVisible();
+  const [optBox, stepsBox] = await Promise.all([
+    page.getByTestId(`pay-option-${wallet}`).boundingBox(),
+    box.boundingBox(),
+  ]);
+  expect(optBox && stepsBox && stepsBox.y >= optBox.y + optBox.height).toBe(true);
+  if (wallet === 'bkash') {
+    const nagadBox = await page.getByTestId('pay-option-nagad').boundingBox();
+    expect(stepsBox && nagadBox && stepsBox.y + stepsBox.height <= nagadBox.y).toBe(true);
+  }
 }
 
 test('Task 2 + 5: Payment step at 360 px — slim stepper on one line, Cash on Delivery first, Pay in advance group with the offer badge, bKash and Nagad boxes in their own colours, the discount line and the Total count down', async ({ page }) => {
@@ -236,22 +245,23 @@ test('Task 2 + 5: Payment step at 360 px — slim stepper on one line, Cash on D
   await expect(options.first()).toHaveAttribute('data-testid', 'pay-option-cod');
   await expect(page.getByTestId('pay-option-cod')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('advance-badge')).toHaveText('0.5% OFF');
-  await expect(page.getByTestId('pay-advance-group')).not.toHaveClass(/cf-adv--picked/);
+  await expect(page.getByTestId('wallet-box')).toHaveCount(0);
   await expect(page.getByTestId('pay-option-bkash').locator('img')).toHaveAttribute('src', '/payment/bkash.png');
   await expect(page.getByTestId('pay-option-nagad').locator('img')).toHaveAttribute('src', '/payment/nagad.png');
   await expect(page.getByTestId('summary-advance')).toHaveCount(0);
   await expect(page.getByTestId('summary-total')).toContainText('Pay on delivery');
   // The select button sits on the RIGHT of the row.
   const cod = page.getByTestId('pay-option-cod');
-  const [rowBox, radioBox] = await Promise.all([cod.boundingBox(), cod.locator('.cf-opt__radio').boundingBox()]);
+  const [rowBox, radioBox] = await Promise.all([cod.boundingBox(), cod.locator('.b67-opt__radio').boundingBox()]);
   expect(rowBox && radioBox && radioBox.x > rowBox.x + rowBox.width / 2).toBe(true);
   await noSidewaysScroll(page);
   await page.screenshot({ path: `${SHOTS}/01-payment-cod.png`, fullPage: true });
 
   // bKash: its box in its own colours.
   await payWithWallet(page, 'bkash', p);
-  const bkBorder = await page.getByTestId('wallet-box').evaluate((el) => getComputedStyle(el).borderTopColor);
-  expect(bkBorder).toBe('rgb(245, 194, 216)');
+  // Batch 67: the numbered steps in bKash pink.
+  const bkStep = await page.getByTestId('wallet-box').locator('.b67-pay__step i').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bkStep).toBe('rgb(226, 19, 110)');
   // Required fields still checked.
   await page.getByRole('button', { name: /Place order/i }).click();
   await expect(page.getByText('Transaction ID is required')).toBeVisible();
@@ -263,8 +273,8 @@ test('Task 2 + 5: Payment step at 360 px — slim stepper on one line, Cash on D
 
   // Nagad: the same box, Nagad's colours and words.
   await payWithWallet(page, 'nagad', p);
-  const ngBorder = await page.getByTestId('wallet-box').evaluate((el) => getComputedStyle(el).borderTopColor);
-  expect(ngBorder).toBe('rgb(248, 205, 185)');
+  const ngStep = await page.getByTestId('wallet-box').locator('.b67-pay__step i').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(ngStep).toBe('rgb(236, 28, 36)');
   await page.getByTestId('wallet-box').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/03-payment-nagad-open.png`, fullPage: true });
 
@@ -419,7 +429,8 @@ test('Task 4: offer Off — no badge, no green group, no discount line; bKash an
   if (!p) return;
   await openPaymentStep(page, p, { enabled: false, type: 'percent', value: 0.5 }, 'NM-4805');
   await expect(page.getByTestId('advance-badge')).toHaveCount(0);
-  await expect(page.getByTestId('pay-advance-group')).toHaveClass(/cf-adv--plain/);
+  // Batch 67: the group keeps its "Pay in advance" heading, with no badge.
+  await expect(page.getByTestId('pay-advance-group')).toContainText('Pay in advance');
   await page.getByTestId('pay-option-nagad').click();
   await expect(page.getByTestId('wallet-box')).toContainText('Pay with Nagad');
   await expect(page.getByTestId('summary-advance')).toHaveCount(0);

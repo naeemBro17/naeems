@@ -501,7 +501,7 @@ async function seedCart(page: Page, lines: { id: string; quantity: number; price
 }
 
 async function totalShown(page: Page): Promise<number> {
-  const text = await page.locator('.checkout-summary-card__row--total span').last().innerText();
+  const text = await page.getByTestId('summary-total').locator('b').innerText();
   return Number(text.replace(/[^0-9.]/g, ''));
 }
 
@@ -523,7 +523,7 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
   await expect(page.getByRole('button', { name: /Place order/i })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('stock-notice')).toHaveCount(0);
   // Both lines (and their prices) are in before the total is read.
-  await expect(page.locator('.checkout-summary-card__item')).toHaveCount(2);
+  await expect(page.getByTestId('summary-item')).toHaveCount(2);
   await expect.poll(() => totalShown(page)).toBeGreaterThan(1500 + 700);
   // Batch 62: the page first shows the saved copy of the shop's settings;
   // the total is read once the fresh ones (this test's) are in.
@@ -537,8 +537,8 @@ test('Part 3: two carts, one last unit — the second gets "just sold out", the 
   const notice = page.getByTestId('stock-notice');
   await expect(notice).toContainText(`Sorry, ${last.name} just sold out.`, { timeout: 15_000 });
   await expect(notice).toContainText("We've updated your cart.");
-  await expect(page.locator('.checkout-summary-page__error')).toHaveCount(0);
-  const lines = page.locator('.checkout-summary-card__item');
+  await expect(page.locator('.b67-error')).toHaveCount(0);
+  const lines = page.getByTestId('summary-item');
   await expect(lines.filter({ hasText: last.name })).toHaveCount(0);
   await expect(lines.filter({ hasText: other.name })).toHaveCount(1);
   await expect.poll(() => totalShown(page)).toBe(before - 1500);
@@ -558,7 +558,7 @@ test('Part 3: fewer left than in the cart — "Only 1 left", quantity lowered (c
   const notice = page.getByTestId('stock-notice');
   // Batch 51: no stock number in the message any more.
   await expect(notice).toContainText(`We've lowered ${few.name} to what we have left.`, { timeout: 20_000 });
-  await expect(page.locator('.checkout-cart__step-count').first()).toHaveText('1');
+  await expect(page.getByTestId('cart-qty').first()).toHaveText('1');
   await notice.getByRole('button', { name: 'Close message' }).click();
   await expect(notice).toHaveCount(0);
 });
