@@ -178,6 +178,9 @@ export interface OrderProfit {
   /** Part of cost that is provisional (sold without stock, not filled). */
   provisional: number;
   delivery: number;
+  /** Batch 65 (migration-062): a returned order's delivery charge the
+   *  customer paid on return (in profit). Missing before that SQL. */
+  return_delivery_paid?: number;
   courier: number;
   courier_known: boolean;
   /** Batch 53 (migration-054): how sure the courier amount is. Missing

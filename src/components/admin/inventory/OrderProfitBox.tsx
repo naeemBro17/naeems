@@ -50,6 +50,7 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
   const p = state.data;
   const tag = courierLabel(p.courier_kind, p.courier_known);
   const separately = p.bill_paid_separately ?? 0;
+  const paidOnReturn = p.return_delivery_paid ?? 0;
 
   return (
     <section className="adm-ocard" aria-label="Profit" data-testid="order-profit">
@@ -67,6 +68,12 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
           <span>Delivery charged to the customer</span>
           <span>+{formatTakaBd(p.delivery)}</span>
         </div>
+        {paidOnReturn > 0 && (
+          <div className="adm-ototals__row" data-testid="order-profit-return-paid">
+            <span>Delivery charge paid on return</span>
+            <span>+{formatTakaBd(paidOnReturn)}</span>
+          </div>
+        )}
         <div className="adm-ototals__row" data-testid="order-profit-courier">
           <span>
             Courier + COD fee
@@ -111,7 +118,7 @@ export function OrderProfitBox({ orderId, version }: { orderId: string; version:
             ? "Cancelled: no sale; Steadfast's charge is the loss."
             : 'Cancelled: counts nothing.'
           : p.status === 'returned'
-            ? `Returned${p.counted_at ? ` ${formatDhakaDateTime(p.counted_at)}` : ''}: the goods came back; the courier charge is the loss.`
+            ? `Returned${p.counted_at ? ` ${formatDhakaDateTime(p.counted_at)}` : ''}: the goods came back; the courier charge${paidOnReturn > 0 ? ', less what the customer paid,' : ''} is the loss.`
             : p.counted_at
               ? `Counted in sales profit on ${formatDhakaDateTime(p.counted_at)} (Delivered).`
               : 'Counts in sales profit when the order is Delivered.'}

@@ -25,6 +25,7 @@ interface OrderRow {
   steadfast_cod_amount: number | string | null;
   delivery_fee: number | string | null;
   delivery_zone: string | null;
+  return_delivery_paid?: number | string | null;
 }
 
 interface PaymentRow {
@@ -100,17 +101,22 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
     },
 
     async findOrders(invoices: string[], consignmentIds: string[]): Promise<OrderForMatch[]> {
-      const columns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount, delivery_fee, delivery_zone';
+      const oldColumns = 'id, order_number, status, total, collect_mode, steadfast_consignment_id, steadfast_cod_amount, delivery_fee, delivery_zone';
+      // Batch 65: return_delivery_paid (migration-062). Until that SQL is run
+      // the column is missing ("42703") and the older list is read instead.
+      const columns = `${oldColumns}, return_delivery_paid`;
+      const read = async (field: 'order_number' | 'steadfast_consignment_id', values: string[]): Promise<OrderRow[]> => {
+        const first = await db.from('orders').select(columns).in(field, values);
+        const res = first.error?.code === '42703' ? await db.from('orders').select(oldColumns).in(field, values) : first;
+        if (res.error) fail('Reading orders', res.error.message);
+        return (res.data ?? []) as OrderRow[];
+      };
       const found = new Map<string, OrderRow>();
       if (invoices.length > 0) {
-        const { data, error } = await db.from('orders').select(columns).in('order_number', invoices);
-        if (error) fail('Reading orders', error.message);
-        for (const o of (data ?? []) as OrderRow[]) found.set(o.id, o);
+        for (const o of await read('order_number', invoices)) found.set(o.id, o);
       }
       if (consignmentIds.length > 0) {
-        const { data, error } = await db.from('orders').select(columns).in('steadfast_consignment_id', consignmentIds);
-        if (error) fail('Reading orders', error.message);
-        for (const o of (data ?? []) as OrderRow[]) found.set(o.id, o);
+        for (const o of await read('steadfast_consignment_id', consignmentIds)) found.set(o.id, o);
       }
       const ids = [...found.keys()];
       const paid = new Map<string, number>();
@@ -139,6 +145,7 @@ export function supabasePayoutStore(db: SupabaseClient): PayoutStore {
         delivery_fee: o.delivery_fee === null ? null : Number(o.delivery_fee),
         delivery_zone: o.delivery_zone,
         steadfast_cod_paid: Math.round((viaSteadfast.get(o.id) ?? 0) * 100) / 100,
+        return_delivery_paid: o.return_delivery_paid === null || o.return_delivery_paid === undefined ? 0 : Number(o.return_delivery_paid),
       }));
     },
 

@@ -1,0 +1,38 @@
+/* Batch 65 (admin): the "Note to customer" card on the order page and the
+   "Customer paid delivery charge" field on Mark returned. Loaded after
+   admin.css. The only orange here is the Send note button (.adm-btn--primary). */
+
+/* ---------- admin: Note to customer card ---------- */
+.adm-cnote__hint { margin: -4px 0 14px; font-size: 13px; line-height: 1.45; color: var(--adm-muted); }
+.adm-cnote__input {
+  width: 100%; min-height: 96px; resize: vertical; border-radius: 14px;
+  background: var(--adm-input-bg); border: 1px solid var(--adm-line); color: var(--adm-text);
+  padding: 12px 14px; font: inherit; font-size: 14px; line-height: 1.55;
+}
+.adm-cnote__input:focus { outline: none; border-color: var(--adm-text); }
+.adm-cnote__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; }
+.adm-cnote__count { font-size: 12px; color: var(--adm-muted); font-variant-numeric: tabular-nums; }
+.adm-cnote__actions { display: inline-flex; align-items: center; gap: 14px; }
+.adm-cnote__sent { border-radius: 14px; background: var(--adm-input-bg); border: 1px solid var(--adm-line); padding: 12px 14px; }
+.adm-cnote__text { margin: 0; font-size: 14px; line-height: 1.55; color: var(--adm-text); white-space: pre-line; overflow-wrap: anywhere; }
+.adm-cnote__meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--adm-muted); flex-wrap: wrap; }
+.adm-cnote__seen { color: #3fa877; font-weight: 600; }
+.adm-cnote__link { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--adm-text); cursor: pointer; }
+.adm-cnote__link:disabled { opacity: 0.5; }
+
+/* ---------- admin: Customer paid delivery charge (Mark returned) ---------- */
+.adm-rpay { display: block; margin: 4px 0 0; }
+.adm-rpay__label { display: block; font-size: 13px; font-weight: 600; color: var(--adm-text); margin-bottom: 6px; }
+.adm-rpay__box { display: flex; align-items: center; gap: 6px; height: var(--adm-input-h, 48px); border-radius: 14px; background: var(--adm-input-bg); border: 1.5px solid var(--adm-line); padding: 0 14px; }
+.adm-rpay__box:focus-within { border-color: var(--adm-text); }
+.adm-rpay__cur { color: var(--adm-muted); }
+.adm-rpay__input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--adm-text); font: inherit; font-size: 16px; outline: none; }
+.adm-rpay__hint { display: block; margin-top: 6px; font-size: 12px; color: var(--adm-muted); }
+.adm-rpay__math { margin: 14px 0 4px; border-radius: 14px; background: var(--adm-card-2); border: 1px solid var(--adm-line); padding: 10px 14px; }
+.adm-rpay__line { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--adm-muted); padding: 3px 0; font-variant-numeric: tabular-nums; }
+.adm-rpay__line b { color: var(--adm-text); font-weight: 600; }
+.adm-rpay__line--total { border-top: 1px solid var(--adm-line); margin-top: 4px; padding-top: 8px; }
+
+/* The returned order's row ("Customer paid delivery charge ৳80 · Edit"). */
+.adm-rpay__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 0; font-size: 13.5px; color: var(--adm-muted); }
+.adm-rpay__row b { color: var(--adm-text); font-weight: 600; font-variant-numeric: tabular-nums; }

@@ -592,6 +592,15 @@ export interface Order {
   advance_discount: number;
   advance_discount_type: 'percent' | 'fixed' | null;
   advance_discount_value: number | null;
+  /** Batch 65 (migration-062): a note Naeem sends the customer (she sees
+   *  it in My Orders and once as a card), when it was sent and when she
+   *  saw it. Only the order detail reads these; null elsewhere. */
+  note_to_customer: string | null;
+  note_to_customer_at: string | null;
+  note_to_customer_seen_at: string | null;
+  /** Batch 65: delivery charge the customer paid when the parcel came
+   *  back (a returned order; 0 otherwise). */
+  return_delivery_paid: number;
   payment_status: OrderPaymentStatus;
   status: OrderStatus;
   source: OrderSource;

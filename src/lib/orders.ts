@@ -30,6 +30,11 @@ const ORDER_SELECT_035 = `${ORDER_SELECT_033}, collect_mode`;
 // Batch 48 (migration-049): the advance-payment discount of each order.
 const ORDER_SELECT_049 = `${ORDER_SELECT_035}, advance_discount, advance_discount_type, advance_discount_value`;
 
+// Batch 65 (migration-062): the note to the customer and the delivery
+// charge paid on a return. Only the single-order read (admin order page,
+// customer order detail) asks for them.
+const ORDER_SELECT_062 = `${ORDER_SELECT_049}, note_to_customer, note_to_customer_at, note_to_customer_seen_at, return_delivery_paid`;
+
 const ORDER_SELECT_030 =
   'id, order_number, customer_id, source, customer_name, customer_phone, division, district, thana, address_line, delivery_zone, delivery_fee, subtotal, discount, discount_reason, discount_note, list_value, free_value, promo_code, total, payment_method, bkash_trx_id, bkash_sender, payment_status, status, tracking_number, customer_note, admin_note, steadfast_consignment_id, steadfast_tracking_code, steadfast_tracking_link, steadfast_status, steadfast_status_updated_at, created_at, updated_at';
 
@@ -88,6 +93,11 @@ function normalizeOrderRow(row: Record<string, unknown>): Order {
       row.advance_discount_type === 'percent' || row.advance_discount_type === 'fixed' ? row.advance_discount_type : null,
     advance_discount_value:
       row.advance_discount_value === null || row.advance_discount_value === undefined ? null : Number(row.advance_discount_value),
+    note_to_customer: (row.note_to_customer as string | null | undefined) ?? null,
+    note_to_customer_at: (row.note_to_customer_at as string | null | undefined) ?? null,
+    note_to_customer_seen_at: (row.note_to_customer_seen_at as string | null | undefined) ?? null,
+    return_delivery_paid:
+      row.return_delivery_paid === null || row.return_delivery_paid === undefined ? 0 : Number(row.return_delivery_paid),
   };
 }
 
@@ -125,6 +135,8 @@ type OrderQueryResult = {
 };
 
 async function selectOrderById(orderId: string): Promise<OrderQueryResult> {
+  const b65 = await supabase.from('orders').select(ORDER_SELECT_062).eq('id', orderId).maybeSingle();
+  if (b65.error?.code !== UNDEFINED_COLUMN) return b65;
   const b48 = await supabase.from('orders').select(ORDER_SELECT_049).eq('id', orderId).maybeSingle();
   if (b48.error?.code !== UNDEFINED_COLUMN) return b48;
   const b32 = await supabase.from('orders').select(ORDER_SELECT_035).eq('id', orderId).maybeSingle();
@@ -819,8 +831,18 @@ export async function adminReopenOrder(orderId: string): Promise<{ status: Order
 /** Batch 39: a sent order (In transit or Delivered) came back. Its goods
  *  go back to stock — to the same lot rows when they came from lots. See
  *  admin_mark_order_returned() (migration-042). */
-export async function adminMarkOrderReturned(orderId: string, note: string | null): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('admin_mark_order_returned', { p_order_id: orderId, p_note: note });
+export async function adminMarkOrderReturned(
+  orderId: string,
+  note: string | null,
+  customerPaidDelivery = 0
+): Promise<{ error: string | null }> {
+  // Batch 65: the paid delivery charge is sent only when there is one, so
+  // Mark returned keeps working the same way before migration-062 is run.
+  const args =
+    customerPaidDelivery > 0
+      ? { p_order_id: orderId, p_note: note, p_customer_paid_delivery: customerPaidDelivery }
+      : { p_order_id: orderId, p_note: note };
+  const { error } = await supabase.rpc('admin_mark_order_returned', args);
   return { error: error ? error.message || 'Could not mark the order returned.' : null };
 }
 

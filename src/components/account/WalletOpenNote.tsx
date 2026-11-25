@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppNavigate } from '../../hooks/useAppNavigate';
 import type { MyStoreWallet } from '../../lib/storeWallet';
 import { readSwr } from '../../lib/swrCache';
 import { customerKeyFor, markWalletNoteSeen, readWalletNoteSeen, shouldShowWalletNote } from '../../lib/walletOpenNote';
+import { orderNoteGate, subscribeOrderNoteGate, walletNoteMayShow } from '../../lib/orderNotes';
 
 /** Must match .wallet-note's in / out animations (batch64.css). */
 const LEAVE_MS = 280;
@@ -37,10 +38,13 @@ export function WalletOpenNote({ walletOpen, aboveNav = false }: { walletOpen: b
   const [closed, setClosed] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const timerRef = useRef<number>();
+  // Batch 65: a note about her order goes first; this card waits until the
+  // note check has answered, and for the next app load after a note.
+  const gate = useSyncExternalStore(subscribeOrderNoteGate, orderNoteGate);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
-  if (!show || closed || customerKey === null) return null;
+  if (!show || closed || customerKey === null || !walletNoteMayShow(gate)) return null;
 
   const later = () => {
     if (leaving) return;

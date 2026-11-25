@@ -315,6 +315,17 @@ export interface OrderForMatch {
   delivery_zone?: string | null;
   /** The order's "COD via Steadfast" payment row, if any (Batch 46). */
   steadfast_cod_paid?: number;
+  /** Batch 65: a returned order's delivery charge the customer paid on
+   *  return (the rider collected it, so it comes in this payout). */
+  return_delivery_paid?: number | null;
+}
+
+/** Batch 65: what a returned order's parcel should have collected, when
+ *  the customer paid the delivery charge; null = the older rules apply. */
+export function returnPaidPaisa(order: OrderForMatch): number | null {
+  if (order.status !== 'returned') return null;
+  const paid = toPaisa(order.return_delivery_paid ?? 0);
+  return paid > 0 ? paid : null;
 }
 
 /** Our order numbers ("NM-1979", migration-021); the site books every
@@ -553,6 +564,14 @@ export function matchItems(
       return { ...base, status: 'to_check', reason: 'duplicate' };
     }
     seenOrders.add(order.id);
+    // Batch 65: the customer paid the delivery charge when the parcel came
+    // back; matched when Steadfast collected exactly that.
+    const paidOnReturn = returnPaidPaisa(order);
+    if (paidOnReturn !== null) {
+      return item.codPaisa === paidOnReturn
+        ? { ...base, expectedCodPaisa: paidOnReturn, status: 'matched', reason: null }
+        : { ...base, expectedCodPaisa: paidOnReturn, status: 'to_check', reason: 'cod_differs' };
+    }
     // Batch 46: a parcel Steadfast returned collected nothing, so nothing is
     // expected — whatever the order became here (returned, cancelled, or
     // delivered by hand). It only needs checking when the order still
