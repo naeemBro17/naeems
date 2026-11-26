@@ -213,7 +213,7 @@ for (const [orderNumber, label, note] of LABELS) {
 
 for (const theme of ['light', 'dark'] as const) {
   for (const width of [360, 390, 430]) {
-    test(`account page at ${width} px (${theme}): soft glass background, one glass list, the Pre-orders sheet`, async ({ page }) => {
+    test(`account page at ${width} px (${theme}): soft glow background (Batch 68 layout), the list, the Pre-orders sheet`, async ({ page }) => {
       test.setTimeout(90_000);
       await open(page, theme, width, customer, '/account');
       const list = page.getByTestId('account-list');
@@ -224,7 +224,8 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByText('Need help?')).toBeVisible();
       await expect(page.getByText(/Welcome back|Hi, /)).toHaveCount(0);
       await page.waitForTimeout(300);
-      // Glass: at most two blurred layers on screen (the list, and the sheet while open).
+      // Glass: Batch 68 keeps blur to the two small chips at the top (Back
+      // and Member since), plus the sheet while it is open.
       const blurred = () =>
         page.evaluate(() =>
           Array.from(document.querySelectorAll('body *')).filter((el) => {
@@ -234,9 +235,9 @@ for (const theme of ['light', 'dark'] as const) {
             return f && f !== 'none' && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
           }).length
         );
-      expect(await blurred(), 'one blurred layer: the list').toBeLessThanOrEqual(1);
+      expect(await blurred(), 'two small blurred chips').toBeLessThanOrEqual(2);
       // Readable text: near-black / near-white on the glass.
-      const label = await page.locator('.acct-row__label').first().evaluate((el) => getComputedStyle(el).color);
+      const label = await page.locator('.b68-li b').first().evaluate((el) => getComputedStyle(el).color);
       const lum = (label.match(/\d+/g) ?? []).slice(0, 3).map(Number).reduce((a, b) => a + b, 0) / 3;
       expect(theme === 'light' ? lum < 60 : lum > 200, `row text ${label}`).toBe(true);
       await noSidewaysScroll(page);
@@ -245,7 +246,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByTestId('account-preorders').click();
       await expect(page.getByTestId('preorders-sheet')).toBeVisible();
       await page.waitForTimeout(450);
-      expect(await blurred(), 'the list and the sheet').toBeLessThanOrEqual(2);
+      expect(await blurred(), 'the two chips and the sheet').toBeLessThanOrEqual(3);
       await page.screenshot({ path: `${SHOTS}/${theme}-account-${width}-preorders-sheet.png` });
       await page.getByRole('button', { name: 'Got it' }).click();
       await expect(page.getByTestId('preorders-sheet')).toHaveCount(0);

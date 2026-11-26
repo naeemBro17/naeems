@@ -144,6 +144,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   delivery_time_dhaka: '1 to 2 days',
   delivery_time_outside: '2 to 3 days',
   delivery_time_buy_after: '3 to 5 days',
+  account_intro_image: '',
 };
 
 /**
@@ -218,6 +219,8 @@ function rowsToSettings(rows: { key: string; value: string | null }[]): AppSetti
   const settings: AppSettings = {
     ...DEFAULT_SETTINGS,
     banner_slides: parseBannerSlides(map.get(BANNER_SLIDES_KEY) ?? ''),
+    // Batch 68: optional (string | null), so it is read here, not with the text keys.
+    account_intro_image: map.get('account_intro_image') ?? '',
   };
   for (const key of TEXT_SETTING_KEYS) {
     const value = map.get(key);

@@ -326,6 +326,8 @@ test('Task 7: logging in from the account page returns to the page before it (th
     await page.goto('/search?q=cerave');
     await page.waitForLoadState('domcontentloaded');
     await page.goto('/account');
+    // Batch 68: the Intro first; its slide opens Sign in (no history entry).
+    await page.getByTestId('intro-slide').click();
     await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible({ timeout: 20_000 });
     await page.screenshot({ path: `${SHOTS}/08-account-login.png` });
   });
@@ -337,6 +339,7 @@ test('Task 7: logging in from the account page returns to the page before it (th
   await fresh.setViewportSize({ width: WIDTH, height: 844 });
   const direct = await googleReturnFor(fresh, async () => {
     await fresh.goto('/account');
+    await fresh.getByTestId('intro-slide').click();
     await expect(fresh.getByRole('button', { name: 'Continue with Google' })).toBeVisible({ timeout: 20_000 });
   });
   expect(direct.redirectTo).toBe(`${origin}/`);

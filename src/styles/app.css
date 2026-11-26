@@ -7405,47 +7405,6 @@ html.vt-fade::view-transition-new(root) {
   padding-bottom: var(--space-6);
 }
 
-/* ---------- Logged-out welcome ---------- */
-
-.account-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--space-2);
-  padding: var(--space-8) var(--space-4) var(--space-4);
-}
-
-.account-welcome__mark {
-  width: 88px;
-  height: 88px;
-  margin-bottom: var(--space-4);
-}
-
-.account-welcome__mark svg {
-  width: 100%;
-  height: 100%;
-}
-
-.account-welcome__title {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.account-welcome__message {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--space-5);
-  max-width: 280px;
-}
-
-.account-welcome .google-signin-button {
-  max-width: 320px;
-}
-
 /* ---------- Skeleton ---------- */
 
 .account-skeleton {

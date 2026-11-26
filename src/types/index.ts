@@ -258,6 +258,9 @@ export interface AppSettings {
   /** bKash number customers send advance payment to. Blank hides the bKash
    *  payment option entirely at checkout. */
   shop_bkash_number: string;
+  /** Batch 68: the picture on the Account tab's Intro (before sign-in).
+   *  Empty = the built-in /brand/account-intro.jpg. */
+  account_intro_image?: string | null;
   /** Batch 48: the advance-payment discount (bKash / Nagad). 'true' = On.
    *  The three rows are added by migration-049; until it is run they are
    *  missing, the offer stays off and Nagad is not offered at checkout

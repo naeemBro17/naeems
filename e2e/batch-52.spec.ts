@@ -553,6 +553,8 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(bar).toHaveCount(0);
     await page.goto('/account');
     await expect(page.getByTestId('inapp-bar')).toHaveCount(0);
+    // Batch 68: the Google button is on the Sign in screen, after the Intro.
+    await page.getByTestId('intro-slide').click();
 
     // Google login inside the in-app browser: no trip to Google, the help sheet.
     const google = page.getByRole('button', { name: /Google/ }).first();

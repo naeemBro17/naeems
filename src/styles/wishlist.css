@@ -161,94 +161,6 @@
   }
 }
 
-/* ---------- Account: one glass list ---------- */
-
-.acct-glass {
-  display: flex;
-  flex-direction: column;
-  border-radius: 20px;
-  background: var(--wl-glass-strong);
-  border: 1px solid var(--wl-glass-edge);
-  box-shadow: var(--wl-glass-shadow), inset 0 1px 0 var(--wl-glass-border);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
-  overflow: hidden;
-}
-
-.acct-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 64px;
-  padding: 10px 16px;
-  border: 0;
-  border-top: 1px solid var(--wl-glass-edge);
-  background: transparent;
-  color: var(--color-text-primary);
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.acct-row:first-child {
-  border-top: 0;
-}
-
-.acct-row:active {
-  background: var(--wl-glass-edge);
-}
-
-.acct-row__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-}
-
-.acct-row__icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.acct-row__text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.acct-row__label {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.acct-row__hint {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.acct-row__count {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.acct-row__chevron {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-muted);
-}
-
 .acct-soon {
   flex-shrink: 0;
   padding: 4px 9px;
@@ -259,12 +171,6 @@
   font-weight: 800;
   letter-spacing: 0.6px;
   color: var(--color-text-primary);
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .acct-glass {
-    background: var(--wl-glass-solid);
-  }
 }
 
 /* Pre-orders sheet: glass panel, the badge right after the title. */
@@ -709,98 +615,6 @@
   --acct-dim:          rgba(0, 0, 0, 0.4);
 }
 
-.account-page--glass {
-  position: relative;
-  isolation: isolate;
-}
-
-/* Fixed behind the page (it does not scroll with it, and never makes the
-   page wider: the glows are clipped to the screen). */
-.account-glow {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  background: var(--acct-page-bg);
-  pointer-events: none;
-}
-
-.account-glow__blob {
-  position: absolute;
-  border-radius: 50%;
-  opacity: var(--acct-glow-opacity);
-  filter: blur(60px);
-}
-
-.account-glow__blob--peach {
-  width: 300px;
-  height: 300px;
-  left: -90px;
-  top: 60px;
-  background: var(--acct-glow-peach);
-}
-
-.account-glow__blob--sage {
-  width: 280px;
-  height: 280px;
-  right: -90px;
-  top: 300px;
-  background: var(--acct-glow-sage);
-}
-
-.account-glow__blob--lilac {
-  width: 260px;
-  height: 260px;
-  left: 40px;
-  bottom: -60px;
-  background: var(--acct-glow-lilac);
-}
-
-/* Delivery details: the same see-through look, but no blur of its own. */
-.account-page--glass .account-card {
-  border: 1px solid var(--acct-glass-border);
-  border-radius: 24px;
-  background: var(--acct-glass-solid);
-  box-shadow: var(--acct-glass-shadow), inset 0 1px 0 var(--acct-glass-inset);
-}
-
-.account-page--glass .acct-glass {
-  border-radius: 24px;
-  background: var(--acct-glass-bg);
-  border: 1px solid var(--acct-glass-border);
-  box-shadow: var(--acct-glass-shadow), inset 0 1px 0 var(--acct-glass-inset);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
-}
-
-.account-page--glass .acct-row {
-  gap: 14px;
-  padding: 14px 18px;
-  border-top-color: var(--acct-divider);
-}
-
-.account-page--glass .acct-row__icon {
-  border-radius: 12px;
-  background: var(--acct-icon-bg);
-  border: 1px solid var(--acct-icon-border);
-}
-
-.account-page--glass .acct-row__label {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.account-page--glass .acct-row__count,
-.account-page--glass .acct-row__chevron {
-  color: var(--acct-side-text);
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .account-page--glass .acct-glass {
-    background: var(--acct-glass-solid);
-  }
-}
-
 /* The Pre-orders sheet: the same glass, a little more opaque; a light
    dim behind it. */
 .acct-sheet {
@@ -828,12 +642,6 @@
 
 .acct-sheet__text {
   color: var(--acct-sheet-text);
-}
-
-/* The email under the name sits on the glow: the darker secondary grey
-   keeps it readable (WCAG AA) in both themes. */
-.account-page--glass .account-header__email {
-  color: var(--color-text-secondary);
 }
 
 /* Batch 62 — Pre-orders: a floating card (Batch 53 mockup), 12 px from the
