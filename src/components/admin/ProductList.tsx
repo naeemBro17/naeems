@@ -4,7 +4,7 @@ import { useUrlParam } from '../../hooks/useUrlParams';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl } from '../../lib/supabase';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
-import { normalizeText } from '../../lib/format';
+import { smartSearch } from '../../lib/smartSearch';
 import { productImages, cardImage, productNeedsCardCopies } from '../../lib/productImages';
 import { findShortCacheFiles, findSmallImagesWork, refreshStoredFiles, runSmallImages, workCount } from '../../lib/smallImages';
 import { adminPath, isNewTabClick, openInNewTab } from '../../lib/adminPages';
@@ -146,9 +146,10 @@ export function ProductList() {
     if (stockFilter === 'low') result = result.filter((p) => isLowStockProduct(p, threshold));
     if (stockFilter === 'out') result = result.filter((p) => !hasStock(p));
     if (stockFilter === 'in') result = result.filter((p) => hasStock(p));
-    const q = normalizeText(search.trim());
-    if (q !== '') {
-      result = result.filter((p) => normalizeText(p.name).includes(q) || normalizeText(p.sku).includes(q));
+    // Batch 70: every word must start a word of the name, brand or SKU
+    // (any order), like Kaarbar; a typo falls back to close spellings.
+    if (search.trim() !== '') {
+      result = smartSearch(result, search, (p) => `${p.name} ${p.brand ?? ''} ${p.sku}`);
     }
     return result;
   }, [products, search, categoryFilter, brandFilter, statusFilter, stockFilter, threshold]);

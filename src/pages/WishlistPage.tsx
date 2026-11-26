@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { BackButton } from '../components/shared/BackButton';
 import { HeartIcon } from '../components/viewer/Wishlist';
@@ -19,6 +19,8 @@ import { productPath } from '../lib/slugify';
 import { isOutOfStock } from '../lib/stockStatus';
 import { isVariantInStock, lowestVariantPrice, variantOptionsFor } from '../lib/variants';
 import { trackAddToCart } from '../lib/analytics';
+import { afterAdd } from '../lib/sideCart';
+import { flyToCart } from '../lib/flyToCart';
 import type { Product } from '../types';
 
 /** One saved product: glass card, photo, name, price, stock, heart, Add. */
@@ -42,7 +44,7 @@ function WishCard({ product }: { product: Product }) {
   const image = cardImage(product);
   const status = !available ? 'out' : low ? 'low' : 'in';
 
-  const add = () => {
+  const add = (e: MouseEvent<HTMLButtonElement>) => {
     if (!available) return;
     if (hasOptions) {
       setPickerOpen(true);
@@ -55,7 +57,12 @@ function WishCard({ product }: { product: Product }) {
     }
     addItem(product.id, mainPrice);
     trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
-    showToast('Added to cart', 'success');
+    // Batch 70: the first add of a visit opens the side cart; later adds
+    // keep the toast (this page has no floating cart to fly into).
+    if (!afterAdd(product.id, null)) {
+      flyToCart(e.currentTarget, image);
+      showToast('Added to cart', 'success');
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { Product, ProductVariant, VariantOption } from '../../types';
 import { useCart } from '../../contexts/CartContext';
@@ -13,6 +13,8 @@ import {
   variantOptionsFor,
 } from '../../lib/variants';
 import { trackAddToCart } from '../../lib/analytics';
+import { afterAdd } from '../../lib/sideCart';
+import { flyToCart } from '../../lib/flyToCart';
 import { BottomSheet } from '../shared/BottomSheet';
 import { VariantSelector } from './VariantSelector';
 import { CartIcon } from './CartButton';
@@ -58,7 +60,7 @@ export function VariantPickerSheet({
   const inStock = isVariantInStock(selected);
   const { mainPrice, strikePrice, savePercent } = variantDisplayPrice(selected);
 
-  const handleAdd = () => {
+  const handleAdd = (e: MouseEvent<HTMLButtonElement>) => {
     const label = variantOptionLabel(selected, product.name);
     // Batch 51: never past the order limit (or the last of the stock).
     const facts = sell.factsFor(product, selected);
@@ -76,7 +78,12 @@ export function VariantPickerSheet({
         // Some embedded webviews advertise vibrate but reject the call.
       }
     }
-    showToast(`Added to cart: ${label}`, 'success');
+    // Batch 70: the first add of a visit opens the side cart (which says
+    // "Added to cart"); later adds fly into the bubble with the toast.
+    if (!afterAdd(product.id, selected.id)) {
+      flyToCart(e.currentTarget, image);
+      showToast(`Added to cart: ${label}`, 'success');
+    }
     onClose();
   };
 

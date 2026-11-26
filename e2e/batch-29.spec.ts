@@ -212,7 +212,13 @@ test.describe('Part 2 — stock and note', () => {
     } else {
       expect(Math.abs(noteBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
     }
-    expect(Math.abs(trustBox.y - (noteBox.y + noteBox.height) - 24)).toBeLessThanOrEqual(2);
+    // Batch 70: the in-page Add to Cart now sits between the note and the
+    // trust plate.
+    const buyBox = await box(page.getByTestId('pdp-buy'));
+    expect(buyBox.y - (noteBox.y + noteBox.height)).toBeGreaterThanOrEqual(12);
+    expect(buyBox.y - (noteBox.y + noteBox.height)).toBeLessThanOrEqual(26);
+    expect(trustBox.y - (buyBox.y + buyBox.height)).toBeGreaterThanOrEqual(12);
+    expect(trustBox.y - (buyBox.y + buyBox.height)).toBeLessThanOrEqual(26);
 
     const occurrences = await page.evaluate((text) => document.body.innerText.split(text).length - 1, NOTE);
     expect(occurrences).toBe(1);
@@ -254,11 +260,16 @@ test.describe('Part 3 — floating cart on the product page', () => {
       }
       return g;
     };
+    // Batch 70: the bar shows once the in-page Add to Cart has scrolled away.
+    await expect(page.getByTestId('related-products')).toBeVisible();
+    const buyBottom = await page.getByTestId('pdp-buy').evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), buyBottom);
+    await expect(bar).toHaveAttribute('data-shown', 'true');
+    await page.waitForTimeout(500);
     const shown = await check();
 
-    // Scroll down: the bar slides away and the cart takes its place.
-    await expect(page.getByTestId('related-products')).toBeVisible();
-    await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'instant' }));
+    // Back to the top: the bar slides away and the cart takes its place.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await expect(bar).toHaveAttribute('data-shown', 'false');
     await page.waitForTimeout(500);
     const vh = page.viewportSize()?.height ?? 844;
@@ -267,8 +278,8 @@ test.describe('Part 3 — floating cart on the product page', () => {
     expect(away.y + away.height).toBeLessThanOrEqual(vh);
     expect(overlaps(away, await box(bar))).toBe(false);
 
-    // Scroll up: both come back.
-    await page.evaluate(() => window.scrollBy({ top: -40, behavior: 'instant' }));
+    // Past the in-page button again: both come back.
+    await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), buyBottom);
     await expect(bar).toHaveAttribute('data-shown', 'true');
     await page.waitForTimeout(500);
     const back = await check();
@@ -340,7 +351,8 @@ test.describe('Part 4 — Removed · Undo', () => {
     const product = await multiPhotoProduct();
     await openWith(page, `/product/${product.slug}`, { cart: [lineFor(product, 1)] });
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('1', { timeout: 15_000 });
-    await page.getByTestId('buy-bar-minus').click();
+    // Batch 70: the in-page stepper (the buy bar's own handlers).
+    await page.getByTestId('pdp-buy-minus').click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const toast = page.getByTestId('undo-toast');
     await expect(toast).toBeVisible();

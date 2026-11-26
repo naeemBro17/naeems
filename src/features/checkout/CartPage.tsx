@@ -5,19 +5,17 @@
 // on "Checkout".
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import { BackButton } from '../../components/shared/BackButton';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { cardImage } from '../../lib/productImages';
 import { productPath } from '../../lib/slugify';
 import { formatTaka } from '../../lib/format';
 import { useAuth } from '../../contexts/AuthContext';
-import { CheckoutLoginSheet } from '../../components/checkout/CheckoutLoginSheet';
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
-import { trackInitiateCheckout } from '../../lib/analytics';
 import { useProducts } from '../../contexts/ProductContext';
-import { useSellLimit } from '../../hooks/useSellLimit';
+import { useCartLineLimits } from '../../hooks/useCartLineLimits';
+import { useCartCheckout } from './useCartCheckout';
 import { useCartCover } from '../../hooks/useCartCover';
 import { LimitPopup } from '../../components/viewer/LimitPopup';
 import { cartBuyAfterNote, type LimitReason } from '../../lib/sellRules';
@@ -35,37 +33,19 @@ import '../../styles/batch67.css';
 export function CartPage() {
   useDocumentTitle("Your Cart | NAEEM'S");
   const { items, subtotal, updateQuantity } = useCheckoutState();
-  const { session, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const { clearCart } = useCart();
   // Batch 52: the admin's "Share as a combo" (real session role, never CSS).
   const [comboOpen, setComboOpen] = useState(false);
-  const navigate = useNavigate();
-  const { variantsFor, settings } = useProducts();
-  const sell = useSellLimit();
-  const [showLoginSheet, setShowLoginSheet] = useState(false);
+  const { settings } = useProducts();
   // Batch 51: the limit popup over one line's stepper.
   const [popup, setPopup] = useState<{ key: string; reason: LimitReason } | null>(null);
   // Batch 33: catch a line that sold out while it sat in the cart.
   useCartStockCheck();
 
-  const handleCheckout = () => {
-    trackInitiateCheckout(
-      items.map((item) => ({
-        id: item.product.id,
-        name: item.product.name,
-        price: item.unitPrice,
-        quantity: item.quantity,
-      })),
-      subtotal
-    );
-    // Already logged in — customer, wholesaler, or admin alike — skip the
-    // ask entirely. Only a fully logged-out visitor sees the sheet.
-    if (session) {
-      navigate('/checkout/delivery');
-      return;
-    }
-    setShowLoginSheet(true);
-  };
+  // Batch 70: the same Checkout the side cart runs.
+  const { checkout, loginSheet } = useCartCheckout();
+  const handleCheckout = () => checkout();
 
   // − at 1 removes the line at once, like the cards and the product page's
   // buy bar (Batch 29 Part 4) — the "Removed · Undo" toast puts it back.
@@ -73,19 +53,13 @@ export function CartPage() {
     updateQuantity(item.product.id, item.quantity - 1, item.variantId);
   };
 
-  // + stops at the order limit (Batch 51) — the same rule the cards and
-  // the product page use: the option's own stock for a line with an option
-  // that sells only from stock, the product's otherwise.
-  const lineFacts = (item: CartItem) => {
-    const variant =
-      item.variantId !== null ? variantsFor(item.product.id).find((v) => v.id === item.variantId) ?? null : null;
-    return sell.factsFor(item.product, variant);
-  };
-  const lineLimit = (item: CartItem): number => sell.maxFor(lineFacts(item));
+  // + stops at the order limit (Batch 51) — the same rule the cards, the
+  // product page and the side cart use (useCartLineLimits).
+  const { limitOf: lineLimit, reasonOf: lineReason } = useCartLineLimits();
 
   const handleIncrement = (item: CartItem) => {
     if (item.quantity >= lineLimit(item)) {
-      setPopup({ key: lineKey(item.product.id, item.variantId), reason: sell.reasonFor(lineFacts(item)) });
+      setPopup({ key: lineKey(item.product.id, item.variantId), reason: lineReason(item) });
       return;
     }
     updateQuantity(item.product.id, item.quantity + 1, item.variantId);
@@ -263,11 +237,7 @@ export function CartPage() {
         <MakeComboSheet isOpen={comboOpen} onClose={() => setComboOpen(false)} items={comboItems} onClearCart={clearCart} />
       )}
 
-      <CheckoutLoginSheet
-        isOpen={showLoginSheet}
-        onClose={() => setShowLoginSheet(false)}
-        redirectTo={`${window.location.origin}/checkout/delivery`}
-      />
+      {loginSheet}
     </div>
   );
 }

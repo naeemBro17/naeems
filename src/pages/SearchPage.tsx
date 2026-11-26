@@ -44,7 +44,7 @@ export function SearchPage() {
   const routerNavigate = useRouterNavigate();
   const [searchParams, updateParams] = useUrlParams();
   const navigationType = useNavigationType();
-  const { products, categories, isLoading } = useProducts();
+  const { products, categories, isLoading, variantsFor } = useProducts();
 
   const activeProducts = products.filter((p) => p.is_active);
   const urlQuery = searchParams.get('q') ?? '';
@@ -78,12 +78,22 @@ export function SearchPage() {
   // subsequent real Back to trip over (reports/fix-animation-audit.txt).
   const goBack = useCallback(() => navigateBack(routerNavigate), [routerNavigate]);
 
+  // Batch 70: a product is also found by its options' Region / Size.
+  const optionWords = useCallback(
+    (product: Product) =>
+      variantsFor(product.id)
+        .map((v) => `${v.region ?? ''} ${v.size ?? ''}`)
+        .join(' '),
+    [variantsFor]
+  );
+
   const search = useSearch({
     products: activeProducts,
     defaultOrdered: activeProducts,
     categoryId: selectedCategoryId,
     onSelectSuggestion: openProduct,
     initialQuery: urlQuery,
+    extraText: optionWords,
   });
 
   // Query -> URL, one-directional and replacing (not pushing) so typing

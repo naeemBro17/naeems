@@ -439,7 +439,8 @@
   }
 }
 
-/* The sound button sits at the right of the page title. */
+/* Batch 70: the title alone in the header; the sound switch sits in the
+   scene's bottom-right corner, just below the road line, above the drawing. */
 .b69-head {
   position: relative;
   justify-content: center;
@@ -447,10 +448,10 @@
 .b69-snd {
   position: absolute;
   right: 12px;
-  top: 50%;
-  margin-top: -18px;
-  width: 36px;
-  height: 36px;
+  bottom: -4px;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -459,8 +460,16 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
 }
-.b69-snd svg { width: 17px; height: 17px; }
+.b69-snd::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+}
+.b69-snd svg { position: relative; width: 17px; height: 17px; }
 
 .cf-b69 .cf-thx { font-size: 17px; margin-top: 6px; }
 .cf-b69 .cf-name { font-size: 40px; line-height: 1.08; letter-spacing: -0.03em; }
@@ -485,41 +494,6 @@
 .cf-b69 .cf-sr--due span { font-weight: 400; color: var(--color-text-secondary); }
 .cf-b69 .cf-sr--due b { font-size: 19px; letter-spacing: -0.01em; }
 
-.b69-eta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--color-border);
-}
-.b69-eta__ic {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: var(--b69-sage);
-  color: var(--b69-sage-ink);
-  display: grid;
-  place-items: center;
-}
-.b69-eta__ic svg { width: 22px; height: 22px; }
-.b69-eta__t { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.b69-eta__t small { font-size: 13px; font-weight: 500; color: var(--color-text-muted); }
-.b69-days { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.b69-day {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 7px 11px;
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-}
-.b69-day i { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--color-text-muted); }
-.b69-day b { font-size: 19px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: var(--color-text-primary); }
-.b69-day em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
-.b69-dash { width: 14px; height: 2px; border-radius: 2px; background: var(--color-text-muted); opacity: 0.6; }
-
 .cf-b69 .cf-note {
   margin: 12px 10px 0;
   padding: 0;
@@ -529,11 +503,10 @@
   color: var(--color-text-muted);
 }
 .cf-b69 .cf-acts { gap: 10px; padding-top: 16px; }
-.b69-row1 { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; }
 .b69-keep,
-.cf-b69 .b69-row1 .button--primary {
-  height: 54px;
-  border-radius: 16px;
+.cf-b69 .b70-acts .button--primary {
+  height: 52px;
+  border-radius: 15px;
   font-size: 15px;
   font-weight: 700;
   display: flex;
@@ -543,11 +516,42 @@
   white-space: nowrap;
   text-decoration: none;
 }
-.cf-b69 .b69-row1 .button--primary { font-size: 17px; width: 100%; }
+.cf-b69 .b70-acts .button--primary { width: 100%; }
 .b69-keep {
   background: var(--b69-blue);
   border: 1px solid var(--b69-blue-line);
   color: var(--b69-blue-ink);
 }
-.b69-keep svg { width: 19px; height: 19px; flex: none; }
-.cf-b69 .cf-ghost { height: 46px; border-radius: 14px; font-size: 15px; }
+.b69-keep svg { width: 18px; height: 18px; flex: none; }
+
+/* Batch 70: Keep shopping, View my order, Invoice, Need help? as one 2 x 2
+   grid of equal buttons (Invoice spans both columns without Need help?). */
+.b70-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cf-b69 .b70-acts .cf-ghost {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 8px;
+  border-radius: 15px;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 7px;
+  white-space: nowrap;
+}
+.cf-b69 .b70-acts .cf-ghost svg { width: 18px; height: 18px; }
+.b70-acts--no-help .cf-ghost { grid-column: 1 / -1; }
+
+/* Batch 70 (option C): the arrival dates as a little route. */
+.b70-eta { padding: 14px 0 16px; border-bottom: 1px solid var(--color-border); }
+.b70-eta__lab { display: block; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+.b70-route { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; margin-top: 12px; }
+.b70-d { text-align: center; }
+.b70-d b { display: block; font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: var(--color-text-primary); white-space: nowrap; }
+.b70-d small { display: block; margin-top: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--color-text-muted); }
+.b70-line { position: relative; height: 2px; border-radius: 2px; background: var(--color-border); }
+.b70-line::before,
+.b70-line::after { content: ''; position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--b69-sage-ink); }
+.b70-line::before { left: 0; }
+.b70-line::after { right: 0; }
+.b70-van { position: absolute; left: 50%; top: -14px; margin-left: -14px; width: 28px; height: 28px; border-radius: 9px; background: var(--b69-sage); color: var(--b69-sage-ink); display: grid; place-items: center; }
+.b70-van svg { width: 17px; height: 17px; }
+@media (max-width: 359px) { .b70-d b { font-size: 22px; } }

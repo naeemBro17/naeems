@@ -1,5 +1,5 @@
 import { cardImage, coverImage, isSmallCopy } from './productImages';
-import { normalizeText } from './format';
+import { smartSearch } from './smartSearch';
 import { variantOptionLabel, variantOptionsFor } from './variants';
 import { shopPrice } from './campaigns';
 import type { Product, ProductVariant } from '../types';
@@ -37,6 +37,8 @@ export interface SellableProduct {
   productId: string;
   name: string;
   options: SellableOption[];
+  /** Batch 70: what the search reads: name, option labels, brand and SKU. */
+  searchText: string;
 }
 
 
@@ -70,16 +72,16 @@ export function productSearchGroups(products: readonly Product[], variantsFor: (
         stockQuantity: o.stock_quantity,
       };
     });
-    groups.push({ productId: p.id, name: p.name, options });
+    const searchText = [p.name, ...options.map((o) => o.variantLabel ?? ''), p.brand ?? '', p.sku ?? ''].join(' ');
+    groups.push({ productId: p.id, name: p.name, options, searchText });
   }
   return groups;
 }
 
-/** Products whose name (or one of whose sizes) matches the search. */
+/** Products matching the search (Batch 70: every word starts a word of the
+ *  name, an option label, the brand or the SKU, in any order, like Kaarbar;
+ *  a typo falls back to close spellings). */
 export function searchProductGroups(groups: readonly SellableProduct[], query: string, limit = 20): SellableProduct[] {
-  const term = normalizeText(query.trim());
-  if (term === '') return [];
-  return groups
-    .filter((p) => normalizeText(p.name).includes(term) || p.options.some((o) => normalizeText(o.label).includes(term)))
-    .slice(0, limit);
+  if (query.trim() === '') return [];
+  return smartSearch(groups, query, (p) => p.searchText).slice(0, limit);
 }

@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAppNavigate } from './hooks/useAppNavigate';
 import { BottomNav } from './components/viewer/BottomNav';
 import { GlassCartButton } from './components/viewer/GlassCartButton';
+import { SideCart } from './components/viewer/SideCart';
 import { CartUndoToast } from './components/viewer/CartUndoToast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -51,6 +52,7 @@ import { forgetScroll } from './lib/scrollMemory';
 import { rememberShopPage } from './lib/loginReturn';
 import { useToast } from './hooks/useToast';
 import { consumeUpdatedFlag } from './lib/appUpdate';
+import './styles/batch70.css';
 
 // Admin panel (product editor, CSV import, image editors, banner/bento
 // editors, etc.) is the single biggest chunk of this app's JS — a customer
@@ -203,6 +205,8 @@ export default function App() {
                     </PageTransition>
                     <GlobalBottomNav />
                     <GlassCartButton />
+                    {/* Batch 70: the side cart, outside the animated page too. */}
+                    <SideCart />
                     <CartUndoToast />
                     <WishlistToast />
                     <WishlistLoginSheet />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../../../hooks/useToast';
 import { useProducts } from '../../../contexts/ProductContext';
-import { normalizeText } from '../../../lib/format';
+import { smartSearch } from '../../../lib/smartSearch';
 import { takaExact } from '../../../lib/payouts';
 import { allocateLot, rowUnits } from '../../../lib/inventory/allocation';
 import {
@@ -221,9 +221,9 @@ export function LotForm({
   }, [lotId, addKey]);
 
   const results = useMemo(() => {
-    const term = normalizeText(query.trim());
-    if (!units || term === '') return [];
-    return units.filter((u) => normalizeText(`${unitName(u)} ${u.sku}`).includes(term)).slice(0, 20);
+    // Batch 70: word by word, any order (lib/smartSearch.ts).
+    if (!units || query.trim() === '') return [];
+    return smartSearch(units, query, (u) => `${unitName(u)} ${u.sku}`).slice(0, 20);
   }, [query, units]);
 
   const effectiveRate = currency === 'BDT' ? '1' : rate;

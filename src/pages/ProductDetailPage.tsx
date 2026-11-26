@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type RefObject, type UIEvent } from 'react';
 import { PROTECTED_IMAGE_CLASS, protectedImageProps } from '../lib/protectImage';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useProducts, PRODUCT_SELECT, PRODUCTS_VIEW } from '../contexts/ProductContext';
-import { coverImage, productImages } from '../lib/productImages';
+import { cardImage, coverImage, productImages, smallImageFor } from '../lib/productImages';
 import { formatTaka } from '../lib/format';
 import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
@@ -27,6 +27,8 @@ import { prefersReducedMotion, productHeroName } from '../lib/viewTransition';
 import { isTransitionRunning, setCurrentDetailProductId } from '../lib/heroTransition';
 import { trackAddToCart, trackViewContent } from '../lib/analytics';
 import { setBuyBarState } from '../lib/buyBarState';
+import { afterAdd } from '../lib/sideCart';
+import { flyToCart } from '../lib/flyToCart';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { BackButton } from '../components/shared/BackButton';
 import { ShareButton } from '../components/viewer/ShareButton';
@@ -140,14 +142,6 @@ function PlaceholderIcon() {
 /** Height of the product page's top bar — the part of the screen it covers. */
 const PDP_HEADER_PX = 56;
 
-/** Buy bar scroll behaviour (Batch 28 Part 4): always shown within this many
- *  px of the top or the bottom of the page; hidden after a scroll down of
- *  BUY_BAR_HIDE_AFTER_PX, shown again after a scroll up of BUY_BAR_SHOW_AFTER_PX. */
-const BUY_BAR_TOP_ZONE_PX = 24;
-const BUY_BAR_BOTTOM_ZONE_PX = 8;
-const BUY_BAR_HIDE_AFTER_PX = 12;
-const BUY_BAR_SHOW_AFTER_PX = 10;
-
 function TrustIcon({ kind }: { kind: 'authentic' | 'cod' | 'delivery' }) {
   return (
     <svg
@@ -195,71 +189,76 @@ function StepIcon({ plus }: { plus: boolean }) {
 }
 
 /**
- * The buy bar's scroll behaviour (Batch 28 Part 4): slides away while the
- * shopper scrolls down, comes back on a scroll up of 10 px or more, and is
- * always shown at the top of the page, at the very bottom, and right after
- * a cart change. Tiny jitters (a few px either way) never toggle it, and it
- * never hides while a finger is on it.
+ * Batch 70: the buy bar shows only while the in-page Add to Cart is off
+ * the screen (scrolled up under the top bar, or still below a very short
+ * screen); while that button is on screen the bar stays away. One
+ * IntersectionObserver, no scroll listener.
  */
-function useBuyBarVisibility(cartCount: number): {
-  shown: boolean;
-  onPressStart: () => void;
-} {
-  const [shown, setShown] = useState(true);
-  const pressedRef = useRef(false);
-
+function useBuyBarVisibility(target: RefObject<HTMLElement>): boolean {
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    let lastY = window.scrollY;
-    // Distance travelled in the current direction (+ down, − up); reset
-    // whenever the direction flips, so jitter never adds up to a toggle.
-    let travelled = 0;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const delta = y - lastY;
-      lastY = y;
-      if (delta === 0) return;
-      const atTop = y <= BUY_BAR_TOP_ZONE_PX;
-      const atBottom =
-        window.innerHeight + y >= document.documentElement.scrollHeight - BUY_BAR_BOTTOM_ZONE_PX;
-      if (atTop || atBottom) {
-        travelled = 0;
-        setShown(true);
-        return;
-      }
-      travelled = Math.sign(delta) === Math.sign(travelled) ? travelled + delta : delta;
-      if (travelled >= BUY_BAR_HIDE_AFTER_PX && !pressedRef.current) setShown(false);
-      else if (travelled <= -BUY_BAR_SHOW_AFTER_PX) setShown(true);
-    };
-    const onRelease = () => {
-      pressedRef.current = false;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('pointerup', onRelease);
-    window.addEventListener('pointercancel', onRelease);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('pointerup', onRelease);
-      window.removeEventListener('pointercancel', onRelease);
-    };
-  }, []);
-
-  // Any cart change (this product, an option, a "You may also like" card)
-  // brings the bar back.
-  const firstQuantity = useRef(true);
-  useEffect(() => {
-    if (firstQuantity.current) {
-      firstQuantity.current = false;
-      return;
+    const el = target.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setShown(true);
+      return undefined;
     }
-    setShown(true);
-  }, [cartCount]);
+    const observer = new IntersectionObserver(([entry]) => setShown(!entry.isIntersecting), {
+      rootMargin: `-${PDP_HEADER_PX}px 0px 0px 0px`,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [target]);
+  return shown;
+}
 
-  const onPressStart = useCallback(() => {
-    pressedRef.current = true;
-    setShown(true);
-  }, []);
+/** Batch 70: the space the photo leaves under itself on the first screen
+ *  (the sheet down to the in-page Add to Cart, plus a little air). */
+const FIRST_SCREEN_AIR_PX = 14;
+/** The photo never gets shorter than this. */
+const MIN_PHOTO_PX = 220;
 
-  return { shown, onPressStart };
+/**
+ * Batch 70: "About this product" shows four lines, then "Read more"
+ * (only when the text is longer than that); "Show less" folds it again.
+ */
+function ClampedAbout({ value }: { value: string }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [lineHeight, setLineHeight] = useState<number | null>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const text = box?.firstElementChild;
+    if (!box || !(text instanceof HTMLElement)) return;
+    const style = window.getComputedStyle(text);
+    const lh = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6;
+    setLineHeight(lh);
+    setLong(text.scrollHeight > lh * 4 + 2);
+  }, [value]);
+  const clamped = long && !open && lineHeight !== null;
+  return (
+    <>
+      <div
+        ref={boxRef}
+        className={clamped ? 'b70-about b70-about--clamped' : 'b70-about'}
+        style={clamped ? { maxHeight: `${lineHeight * 4}px` } : undefined}
+        data-testid="pdp-about-box"
+      >
+        <RichTextView value={value} testId="pdp-about" />
+      </div>
+      {long && (
+        <button
+          type="button"
+          className="b70-more"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          data-testid="pdp-read-more"
+        >
+          {open ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </>
+  );
 }
 
 function DetailContent({
@@ -272,7 +271,7 @@ function DetailContent({
   /** Told whether the main picture has scrolled away (the top bar's cue). */
   onHeroOffScreen: (off: boolean) => void;
 }) {
-  const { addItem, updateQuantity, items, itemCount } = useCart();
+  const { addItem, updateQuantity, items } = useCart();
   const { brands, settings } = useProducts();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeImage, setActiveImage] = useState(0);
@@ -405,7 +404,9 @@ function DetailContent({
   const inHand = (hasSelector ? selectedOption.in_hand : product.in_hand) ?? !outOfStock;
   const deliveryText = deliveryLine(settings, { available: !outOfStock, inHand });
   const selectedLabel = hasSelector ? variantOptionLabel(selectedOption, product.name) : null;
-  const { shown: barShown, onPressStart } = useBuyBarVisibility(itemCount);
+  // Batch 70: the in-page Add to Cart; the buy bar shows once it is gone.
+  const buyRef = useRef<HTMLDivElement>(null);
+  const barShown = useBuyBarVisibility(buyRef);
 
   // The floating cart (outside this page) rides just above the bar and moves
   // with it — tell it where the bar is, and that there's no bar once we leave.
@@ -423,6 +424,31 @@ function DetailContent({
     trackViewContent({ id: product.id, name: product.name, price: mainPrice });
   }, [product?.id]);
 
+  // Batch 70: the first screen shows the whole photo AND everything down to
+  // the in-page Add to Cart — the photo gets shorter when they would not
+  // fit (never the text). Measured before paint; again on a resize, and on
+  // an option change while still at the top of the page.
+  const fitPhoto = useCallback(() => {
+    const gallery = galleryRef.current;
+    const buy = buyRef.current;
+    if (!gallery || !buy) return;
+    const overlap = parseFloat(window.getComputedStyle(gallery).paddingBottom) || 0;
+    const below = buy.getBoundingClientRect().bottom - (gallery.getBoundingClientRect().bottom - overlap);
+    const widest = Math.min(document.documentElement.clientWidth, 480);
+    const photo = Math.max(MIN_PHOTO_PX, Math.min(widest, window.innerHeight - below - FIRST_SCREEN_AIR_PX));
+    gallery.style.setProperty('--b70-photo', `${Math.round(photo)}px`);
+  }, []);
+  const fittedOnce = useRef(false);
+  useLayoutEffect(() => {
+    if (fittedOnce.current && window.scrollY > 10) return;
+    fittedOnce.current = true;
+    fitPhoto();
+  }, [fitPhoto, selectedOption.id]);
+  useEffect(() => {
+    window.addEventListener('resize', fitPhoto);
+    return () => window.removeEventListener('resize', fitPhoto);
+  }, [fitPhoto]);
+
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     syncMirror(el.scrollLeft);
@@ -430,7 +456,11 @@ function DetailContent({
     setActiveImage(Math.max(0, Math.min(images.length - 1, index)));
   };
 
-  const handleAddToCart = () => {
+  // Batch 70: what flies into the bubble — the option's own small photo,
+  // else the product's card photo (never the full-size photo).
+  const flyImage = selectedOption.image_url ? smallImageFor(selectedOption.image_url, product, variants) : cardImage(product);
+
+  const handleAddToCart = (e: MouseEvent<HTMLButtonElement>) => {
     if (outOfStock || inCart > 0) return;
     if (limit < 1) {
       setLimitPopup(sell.reasonFor(stockFacts));
@@ -440,17 +470,21 @@ function DetailContent({
       ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
       : null;
     addItem(product.id, mainPrice, variant, 1);
+    // The first add of a visit opens the side cart; later adds fly.
+    if (!afterAdd(product.id, variant?.id ?? null)) flyToCart(e.currentTarget, flyImage);
     trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
     tapHaptic();
   };
 
-  const increase = () => {
+  const increase = (e: MouseEvent<HTMLButtonElement>) => {
     tapHaptic();
     if (inCart >= limit) {
       setLimitPopup(sell.reasonFor(stockFacts));
       return;
     }
     updateQuantity(product.id, inCart + 1, lineVariantId);
+    // + is an add too: it flies (it never re-opens the side cart).
+    if (!afterAdd(product.id, lineVariantId)) flyToCart(e.currentTarget, flyImage);
     trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
   };
 
@@ -533,15 +567,23 @@ function DetailContent({
               {activeImage + 1} / {images.length}
             </span>
           )}
+          {/* Batch 70: the heart, bottom-right of the photo. */}
+          <span className="b70-photo-heart" data-testid="photo-heart">
+            <HeartButton productId={product.id} productName={product.name} />
+          </span>
         </div>
       ) : (
         <div
           ref={galleryRef}
           className="product-detail__gallery product-card__placeholder"
-          aria-hidden="true"
           style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
-          <PlaceholderIcon />
+          <span aria-hidden="true">
+            <PlaceholderIcon />
+          </span>
+          <span className="b70-photo-heart" data-testid="photo-heart">
+            <HeartButton productId={product.id} productName={product.name} />
+          </span>
         </div>
       )}
 
@@ -549,17 +591,6 @@ function DetailContent({
           photo, page-coloured, never part of the morphing picture. */}
       <div className={`pdp-sheet${settleSheet ? ' pdp-sheet--settle' : ''}`} data-testid="pdp-sheet">
         <span className="pdp-sheet__notch" aria-hidden="true" data-testid="pdp-sheet-notch" />
-        {images.length > 1 && (
-          <div className="pdp-sheet__dots" aria-hidden="true" data-testid="pdp-sheet-dots">
-            {images.map((url, index) => (
-              <span
-                key={url}
-                className={`pdp-sheet__dot${index === activeImage ? ' pdp-sheet__dot--active' : ''}`}
-              />
-            ))}
-          </div>
-        )}
-
         <div className="product-detail__info">
           {brand !== '' &&
             (brandSlug ? (
@@ -646,6 +677,58 @@ function DetailContent({
             </div>
           )}
 
+          {/* Batch 70: Add to Cart right on the page, under the options; it
+              runs the buy bar's own handlers. */}
+          <div className="b70-buy" ref={buyRef} data-testid="pdp-buy">
+            {outOfStock ? (
+              <button type="button" className="b70-buy__out" disabled aria-label={`${product.name} is sold out`} data-testid="pdp-buy-out">
+                Sold out
+              </button>
+            ) : inCart > 0 ? (
+              <div className="b70-buy__step" role="group" aria-label={`${product.name} in cart`} data-testid="pdp-buy-stepper">
+                <button
+                  type="button"
+                  onClick={decrease}
+                  aria-label={inCart === 1 ? `Remove ${product.name} from cart` : `One less ${product.name}`}
+                  data-testid="pdp-buy-minus"
+                >
+                  <StepIcon plus={false} />
+                </button>
+                <span className="b70-buy__qty" aria-live="polite" data-testid="pdp-buy-qty">
+                  {inCart} in cart
+                </span>
+                <button
+                  type="button"
+                  className={inCart >= limit ? 'b70-buy__max' : undefined}
+                  onClick={increase}
+                  aria-label={`One more ${product.name}`}
+                  data-testid="pdp-buy-plus"
+                >
+                  <StepIcon plus />
+                </button>
+                {limitPopup && !barShown && (
+                  <LimitPopup
+                    reason={limitPopup}
+                    productName={product.name}
+                    optionLabel={selectedLabel}
+                    onClose={() => setLimitPopup(null)}
+                  />
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="b70-buy__add"
+                onClick={handleAddToCart}
+                aria-label={`Add ${product.name} to cart`}
+                data-testid="add-to-cart"
+              >
+                <CartIcon />
+                Add to Cart
+              </button>
+            )}
+          </div>
+
           <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
 
           <ul className="trust-plate" aria-label="Why buy here" data-sheet-part="trust" data-testid="trust-plate">
@@ -662,7 +745,7 @@ function DetailContent({
           <Accordion>
             {about !== '' && (
               <AccordionItem title="About this product" defaultOpen>
-                <RichTextView value={about} testId="pdp-about" />
+                <ClampedAbout value={about} />
               </AccordionItem>
             )}
             {howToUse !== '' && (
@@ -691,7 +774,7 @@ function DetailContent({
           className={`buy-bar${barShown ? '' : ' buy-bar--hidden'}`}
           data-testid="buy-bar"
           data-shown={barShown}
-          onPointerDown={onPressStart}
+          aria-hidden={!barShown}
         >
           <span className="buy-bar__price" data-testid="buy-bar-price">
             {formatTaka(mainPrice)}
@@ -733,7 +816,7 @@ function DetailContent({
                 >
                   <StepIcon plus />
                 </button>
-                {limitPopup && (
+                {limitPopup && barShown && (
                   <LimitPopup
                     reason={limitPopup}
                     productName={product.name}
@@ -749,7 +832,7 @@ function DetailContent({
                 onClick={handleAddToCart}
                 tabIndex={barShown ? 0 : -1}
                 aria-label={`Add ${product.name} to cart`}
-                data-testid="add-to-cart"
+                data-testid="buy-bar-add"
               >
                 <CartIcon className="buy-bar__add-icon" />
                 Add to Cart
@@ -957,7 +1040,6 @@ export function ProductDetailPage() {
               <ShareButton product={product} variant="header" />
             </span>
           )}
-          {product && <HeartButton productId={product.id} productName={product.name} />}
         </div>
       </header>
 

@@ -122,6 +122,9 @@ function HeroName({ name }: { name: string }) {
 
 const fadeUp = (offset: string): CssVars => ({ '--o': offset });
 
+/** "02" for 2 (Batch 70's arrival dates). */
+const pad = (n: number): string => String(n).padStart(2, '0');
+
 export function OrderSuccessPage() {
   useDocumentTitle("Order Placed | NAEEM'S");
   const { lastOrder, markCelebrated } = useCheckoutState();
@@ -218,20 +221,22 @@ export function OrderSuccessPage() {
     <div className="viewer-shell detail-shell">
       <header className="detail-header b69-head">
         <h1 className="detail-header__title">Order Placed</h1>
-        <button
-          type="button"
-          className="b69-snd"
-          onClick={toggleSound}
-          aria-pressed={soundOn}
-          aria-label={soundOn ? 'Sound on' : 'Sound off'}
-          data-testid="placed-sound"
-        >
-          <SoundIcon on={soundOn} />
-        </button>
       </header>
 
       <main className={`detail-main cf-placed cf-b69${play ? ' cf-play' : ''}`} data-testid="order-placed" data-played={play ? 'yes' : 'no'}>
-        <PlacedScene play={play} />
+        {/* Batch 70: the sound switch sits in the scene's bottom-right corner. */}
+        <PlacedScene play={play}>
+          <button
+            type="button"
+            className="b69-snd"
+            onClick={toggleSound}
+            aria-pressed={soundOn}
+            aria-label={soundOn ? 'Sound on' : 'Sound off'}
+            data-testid="placed-sound"
+          >
+            <SoundIcon on={soundOn} />
+          </button>
+        </PlacedScene>
 
         <p className="cf-thx cf-fu" style={fadeUp('0s')}>
           Thank you,
@@ -243,29 +248,30 @@ export function OrderSuccessPage() {
 
         <div className="cf-sum cf-fu" style={fadeUp('.56s')}>
           {days && arriving && (
-            <div className="b69-eta" data-testid="placed-arriving" aria-label={arriving}>
-              <span className="b69-eta__ic">
-                <VanIcon />
-              </span>
-              <div className="b69-eta__t" aria-hidden="true">
-                <small>{days.to ? 'Arriving between' : 'Arriving on'}</small>
-                <div className="b69-days">
-                  <span className="b69-day">
-                    <i>{days.from.weekday}</i>
-                    <b>{days.from.day}</b>
-                    <em>{days.from.month}</em>
-                  </span>
-                  {days.to && (
-                    <>
-                      <span className="b69-dash" />
-                      <span className="b69-day">
-                        <i>{days.to.weekday}</i>
-                        <b>{days.to.day}</b>
-                        <em>{days.to.month}</em>
-                      </span>
-                    </>
-                  )}
+            <div className="b70-eta" data-testid="placed-arriving" aria-label={arriving}>
+              <span className="b70-eta__lab" aria-hidden="true">{days.to ? 'Arriving between' : 'Arriving on'}</span>
+              <div className="b70-route" aria-hidden="true">
+                <div className="b70-d">
+                  <b>
+                    {pad(days.from.day)} {days.from.month}
+                  </b>
+                  <small>{days.from.weekday}</small>
                 </div>
+                {days.to && (
+                  <>
+                    <div className="b70-line">
+                      <span className="b70-van">
+                        <VanIcon />
+                      </span>
+                    </div>
+                    <div className="b70-d">
+                      <b>
+                        {pad(days.to.day)} {days.to.month}
+                      </b>
+                      <small>{days.to.weekday}</small>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -304,7 +310,8 @@ export function OrderSuccessPage() {
         </p>
 
         <div className="cf-acts cf-fu" style={fadeUp('.68s')}>
-          <div className="b69-row1">
+          {/* Batch 70: four equal buttons, two by two. */}
+          <div className={`b70-acts${helpHref ? '' : ' b70-acts--no-help'}`} data-testid="placed-actions">
             <ActionLink to="/" className="b69-keep" onOpen={() => navigate('/')}>
               <ShopIcon />
               Keep shopping
@@ -312,8 +319,6 @@ export function OrderSuccessPage() {
             <ActionLink to={`/orders/${lastOrder.orderId}`} className="button button--primary button--full" onOpen={() => navigate(`/orders/${lastOrder.orderId}`)}>
               View my order
             </ActionLink>
-          </div>
-          <div className="cf-pair" style={helpHref ? undefined : { gridTemplateColumns: '1fr' }}>
             <button type="button" className="cf-ghost" onClick={() => void handleDownloadInvoice()} disabled={isMakingInvoice}>
               {isMakingInvoice ? <span className="spinner" aria-hidden="true" /> : <DownloadIcon />}
               Invoice

@@ -135,7 +135,10 @@ test.describe('Part 1 — product page', () => {
     await page.getByTestId('add-to-cart').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('4');
 
+    // Batch 70: a tap opens the side cart; View cart goes to the cart.
     await glass.click();
+    await expect(page.getByTestId('side-cart')).toHaveClass(/b70-cart--open/);
+    await page.getByTestId('side-cart-view').click();
     await expect(page).toHaveURL(/\/cart$/);
     await emptyCart(page);
   });
@@ -166,7 +169,8 @@ test.describe('Part 1 — product page', () => {
     await page.getByTestId('add-to-cart').click();
     const value = page.getByTestId('buy-bar-qty');
     await expect(value).toHaveText('1');
-    const plus = page.getByTestId('buy-bar-plus');
+    // Batch 70: the in-page stepper (the same handlers as the buy bar's).
+    const plus = page.getByTestId('pdp-buy-plus');
     for (let i = 1; i < cap + 2; i++) await plus.click();
     await expect(value).toHaveText(String(cap));
     await expect(page.getByTestId('limit-popup-title')).toHaveText(popupText);
@@ -402,7 +406,10 @@ test.describe('Part 2 — glass cart button', () => {
 
     // Tap opens the cart.
     await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
+    // Batch 70: a tap opens the side cart; View cart goes to the cart.
     await glass.click();
+    await expect(page.getByTestId('side-cart')).toHaveClass(/b70-cart--open/);
+    await page.getByTestId('side-cart-view').click();
     await expect(page).toHaveURL(/\/cart$/);
     await emptyCart(page);
   });
@@ -557,7 +564,7 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await cardNamed(page, name).locator('.product-card__image-wrap').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('3');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('3');
-    await page.getByTestId('buy-bar-plus').click();
+    await page.getByTestId('pdp-buy-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('4');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('4');
     await page.getByRole('button', { name: 'Go back' }).click();

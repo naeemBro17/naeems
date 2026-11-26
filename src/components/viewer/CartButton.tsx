@@ -3,6 +3,9 @@ import { useCart } from '../../contexts/CartContext';
 import { useCartLine } from '../../hooks/useCartLine';
 import { LimitPopup } from './LimitPopup';
 import { trackAddToCart } from '../../lib/analytics';
+import { afterAdd } from '../../lib/sideCart';
+import { flyToCart } from '../../lib/flyToCart';
+import { cardImage } from '../../lib/productImages';
 import type { Product, VariantOption } from '../../types';
 
 interface CartButtonProps {
@@ -116,8 +119,9 @@ export function CartButton({
         <button
           type="button"
           className={`cart-stepper__step${line.quantity >= line.limit ? ' cart-stepper__step--max' : ''}`}
-          onClick={() => {
-            line.increment();
+          onClick={(e) => {
+            // Batch 70: + is an add too; it flies (never re-opens the panel).
+            if (line.increment() && !afterAdd(product.id, line.variantId)) flyToCart(e.currentTarget, cardImage(product));
             tapHaptic();
           }}
           aria-label={`One more ${product.name}`}
@@ -146,6 +150,8 @@ export function CartButton({
     }
 
     addItem(product.id, price);
+    // Batch 70: the first add of a visit opens the side cart; later ones fly.
+    if (!afterAdd(product.id, null)) flyToCart(e.currentTarget, cardImage(product));
     trackAddToCart({ id: product.id, name: product.name, price }, 1);
     tapHaptic();
   };

@@ -1,0 +1,281 @@
+/* Batch 70: side cart, cart bubble drag, fly-to-cart, product page and
+   Order Placed tweaks. Transform and opacity only. */
+.b70-cart {
+  --b70-blue: #e7eef6;
+  --b70-blue-ink: #365778;
+  --b70-blue-line: #d3dfec;
+  --b70-good: #1f8a47;
+  --b70-good-soft: #e6f0e8;
+  --b70-scrim: rgba(0, 0, 0, 0.36);
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+:root[data-theme='dark'] .b70-cart {
+  --b70-blue: rgba(130, 165, 210, 0.15);
+  --b70-blue-ink: #afc8e6;
+  --b70-blue-line: rgba(130, 165, 210, 0.28);
+  --b70-good: #5fdc94;
+  --b70-good-soft: rgba(120, 175, 140, 0.16);
+  --b70-scrim: rgba(0, 0, 0, 0.6);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .b70-cart {
+    --b70-blue: rgba(130, 165, 210, 0.15);
+    --b70-blue-ink: #afc8e6;
+    --b70-blue-line: rgba(130, 165, 210, 0.28);
+    --b70-good: #5fdc94;
+    --b70-good-soft: rgba(120, 175, 140, 0.16);
+    --b70-scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+.b70-cart--open { pointer-events: auto; }
+.b70-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--b70-scrim);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.b70-cart--open .b70-scrim { opacity: 1; }
+.b70-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 85%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--color-surface);
+  border-radius: 24px 0 0 24px;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.2);
+  transform: translate3d(105%, 0, 0);
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.25, 1);
+  touch-action: pan-y;
+  will-change: transform;
+}
+.b70-cart--open .b70-panel { transform: none; }
+.b70-panel--drag { transition: none; }
+.b70-panel--nudge { animation: b70-nudge 1s 0.35s cubic-bezier(0.3, 0.6, 0.4, 1); }
+@keyframes b70-nudge {
+  0%, 100% { transform: none; }
+  25% { transform: translate3d(26px, 0, 0); }
+  50% { transform: none; }
+  70% { transform: translate3d(12px, 0, 0); }
+}
+.b70-panel__hd { display: flex; align-items: center; justify-content: space-between; }
+.b70-panel__t { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--color-text-primary); }
+.b70-cnt { font-size: 14px; font-weight: 500; color: var(--color-text-muted); }
+.b70-ok { width: 24px; height: 24px; border-radius: 50%; background: var(--b70-good); display: grid; place-items: center; }
+.b70-ok svg { width: 14px; height: 14px; }
+.b70-x { width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--color-bg-secondary); color: var(--color-text-secondary); display: grid; place-items: center; cursor: pointer; }
+.b70-x svg { width: 14px; height: 14px; }
+.b70-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; margin: 14px -16px 0; padding: 0 16px; }
+/* The list is its own scroll area, so it needs pan-y itself for the
+   sideways swipe to reach the panel (the browser keeps vertical scroll). */
+.b70-list { touch-action: pan-y; }
+.b70-li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+.b70-li--new { margin: 0 -16px; padding: 12px 16px; background: linear-gradient(90deg, var(--b70-good-soft), transparent 70%); }
+.b70-li__img { width: 64px; height: 64px; border-radius: 14px; background: var(--color-bg-secondary); overflow: hidden; display: grid; place-items: center; }
+.b70-li__img img { width: 100%; height: 100%; object-fit: contain; }
+.b70-li__n { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--color-text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.b70-li__v { margin-top: 2px; font-size: 12.5px; color: var(--color-text-secondary); }
+.b70-li__r { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.b70-li__p { font-size: 15.5px; font-weight: 800; color: var(--color-text-primary); }
+.b70-mini { display: flex; align-items: center; height: 32px; border: 1px solid var(--color-border); border-radius: 11px; }
+.b70-mini button { width: 32px; height: 30px; border: 0; background: none; color: var(--color-text-primary); font-size: 17px; font-weight: 600; cursor: pointer; }
+.b70-mini span { min-width: 18px; text-align: center; font-size: 13.5px; font-weight: 700; }
+.b70-rm { margin-top: 6px; padding: 0; border: 0; background: none; font-size: 12.5px; color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.b70-empty { padding: 40px 0; text-align: center; font-size: 14px; color: var(--color-text-secondary); }
+.b70-tot { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 0 12px; font-size: 15px; color: var(--color-text-secondary); }
+.b70-tot b { font-size: 20px; font-weight: 800; color: var(--color-text-primary); }
+.b70-btns { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; }
+.b70-vc,
+.b70-co { height: 52px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; text-decoration: none; }
+.b70-vc { border: 1.5px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); }
+.b70-co { background: var(--color-accent, #ff7a45); color: #fff; font-size: 16px; box-shadow: 0 8px 22px rgba(240, 80, 32, 0.28); }
+.b70-ks { margin-top: 10px; height: 48px; width: 100%; border-radius: 15px; border: 1px solid var(--b70-blue-line); background: var(--b70-blue); color: var(--b70-blue-ink); display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 15px; font-weight: 700; cursor: pointer; }
+.b70-ks svg { width: 18px; height: 18px; }
+
+/* fly-to-cart */
+.b70-fly { position: fixed; left: 0; top: 0; z-index: 1300; width: 44px; height: 44px; border-radius: 12px; background: var(--color-surface); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2); overflow: hidden; pointer-events: none; will-change: transform, opacity; }
+.b70-fly img { width: 100%; height: 100%; object-fit: contain; }
+.b70-badge-pop { animation: b70-pop 0.42s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes b70-pop { 0% { transform: scale(1); } 40% { transform: scale(1.45); } 100% { transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .b70-scrim, .b70-panel { transition: none; }
+  .b70-panel--nudge, .b70-badge-pop { animation: none; }
+}
+
+/* ---------- Adaptations to the real app (see reports/batch-70.txt) ---------- */
+
+/* Focus only parks on the panel itself; its buttons keep their own ring. */
+.b70-panel:focus { outline: none; }
+.b70-mini { position: relative; }
+
+/* While the panel is open, "Removed · Undo" and the limit popup sit above
+   it (the toast just above the panel's total). */
+body.b70-open .undo-toast {
+  z-index: 1250;
+  bottom: calc(190px + env(safe-area-inset-bottom, 0px));
+}
+body.b70-open .limit-pop { z-index: 1250; }
+
+/* Reads the safe-area insets and the tab bar's height for the bubble. */
+.b70-probe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: var(--bottom-nav-height);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---------- Cart bubble: a button now, draggable ---------- */
+
+button.glass-cart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Moved by the shopper: placed by transform from the top-left corner. */
+.glass-cart.glass-cart--placed {
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1);
+  will-change: transform;
+}
+.glass-cart.glass-cart--drag { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .glass-cart.glass-cart--placed { transition: none; }
+}
+
+/* ---------- Product page ---------- */
+
+/* The photo: as tall as fits, so the first screen also shows the brand,
+   name, price, stock, delivery line, options and Add to Cart. Always the
+   whole photo (contain); the blurred copy behind it fills the sides.
+   The page measures what fits and sets --b70-photo on the gallery. */
+.pdp-shell .product-detail__gallery {
+  --b70-photo: min(100vw, 480px);
+}
+.pdp-shell .product-detail__image {
+  aspect-ratio: auto;
+  height: var(--b70-photo);
+}
+.pdp-shell .product-detail__mirror-img {
+  left: 50%;
+  width: var(--b70-photo);
+  margin-left: calc(var(--b70-photo) / -2);
+}
+
+/* The heart, bottom-right of the photo (where "1 / 5" was), and the
+   counter, bottom-left. Same crystal glass as the top bar's buttons. */
+.b70-photo-heart {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--pdp-sheet-overlap) + 8px);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+.b70-photo-heart .wish-heart {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+}
+.pdp-shell .product-detail__counter {
+  left: 16px;
+  right: auto;
+  bottom: calc(var(--pdp-sheet-overlap) + 19px);
+}
+
+/* The in-page Add to Cart, right under the options. */
+.b70-buy { margin-top: 16px; }
+.b70-buy__add,
+.b70-buy__step,
+.b70-buy__out {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.b70-buy__add {
+  gap: 8px;
+  border: 0;
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(240, 80, 32, 0.28);
+  cursor: pointer;
+}
+.b70-buy__add:active { transform: scale(0.98); }
+.b70-buy__add svg { width: 20px; height: 20px; flex-shrink: 0; }
+.b70-buy__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  border: 1.5px solid var(--color-text-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+.b70-buy__step button {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.b70-buy__step button svg { width: 18px; height: 18px; }
+.b70-buy__step button:active svg { transform: scale(0.88); }
+.b70-buy__step .b70-buy__max { opacity: 0.4; }
+.b70-buy__qty {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.b70-buy__out {
+  border: 0;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* "About this product": four lines, then Read more. */
+.b70-about--clamped { overflow: hidden; }
+.b70-more {
+  margin-top: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
