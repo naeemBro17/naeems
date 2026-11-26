@@ -7,7 +7,8 @@ import {
   newProductImagePath,
   LONG_CACHE_SECONDS,
 } from './supabase';
-import { resizeImage, resizeImageCard } from './imageResize';
+import { resizeImageCard, resizeProductPhotoPair } from './imageResize';
+import { withUploadRetry } from './uploadError';
 import type { Product, ProductVariant } from '../types';
 
 /**
@@ -142,23 +143,38 @@ export async function makeSmallCopy(
 
 /**
  * Batch 40: stores a newly chosen product photo as two WebP files with new
- * names, both kept by phones for a year — the large one (1400 px, product
+ * names, both kept by phones for a year: the large one (1400 px, product
  * page and zoom) at products/{id}.webp and the card one (480 px: grids,
  * bento, lists) at products/card/{id}.webp. Throws if the large one can't
  * be stored; a failed card copy falls back to the large photo.
+ * Fix 68.1: the photo is decoded once and the files are made and uploaded
+ * one after the other (two full-size decodes at once ran phones out of
+ * memory), and a dropped connection is tried again. A browser that cannot
+ * make WebP gets JPEG files named .jpg (every path helper reads any name).
  */
 export async function uploadProductPhoto(file: Blob): Promise<{ url: string; cardUrl: string }> {
-  const path = newProductImagePath();
+  const { large, card } = await resizeProductPhotoPair(file);
+  const isJpeg = large.type === 'image/jpeg';
+  const contentType = isJpeg ? 'image/jpeg' : 'image/webp';
+  const webpPath = newProductImagePath();
+  const path = isJpeg ? webpPath.replace(/.webp$/, '.jpg') : webpPath;
   const cardPath = productCardPath(path);
-  const [large, card] = await Promise.all([resizeImage(file), resizeImageCard(file)]);
   const bucket = supabase.storage.from(STORAGE_BUCKET);
-  const [largeUpload, cardUpload] = await Promise.all([
-    bucket.upload(path, large, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
-    bucket.upload(cardPath, card, { contentType: 'image/webp', cacheControl: LONG_CACHE_SECONDS }),
-  ]);
+  const largeUpload = await withUploadRetry((isRetry) =>
+    bucket.upload(path, large, { contentType, cacheControl: LONG_CACHE_SECONDS, upsert: isRetry })
+  );
   if (largeUpload.error) throw largeUpload.error;
   const url = bucket.getPublicUrl(path).data.publicUrl;
-  return { url, cardUrl: cardUpload.error ? url : bucket.getPublicUrl(cardPath).data.publicUrl };
+  let cardFailed = true;
+  try {
+    const cardUpload = await withUploadRetry((isRetry) =>
+      bucket.upload(cardPath, card, { contentType, cacheControl: LONG_CACHE_SECONDS, upsert: isRetry })
+    );
+    cardFailed = cardUpload.error !== null;
+  } catch {
+    cardFailed = true;
+  }
+  return { url, cardUrl: cardFailed ? url : bucket.getPublicUrl(cardPath).data.publicUrl };
 }
 
 /**
