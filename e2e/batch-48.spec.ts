@@ -23,12 +23,14 @@ test.skip(!E2E_ADMIN_EMAIL || !E2E_ADMIN_PASSWORD || !E2E_EMAIL || !E2E_PASSWORD
 test.use({ serviceWorkers: 'block' });
 
 const SHOTS = 'reports/batch-48-screens';
+const SHOTS69 = 'reports/batch-69-screens';
 const WIDTH = 360;
 
 let admin: TestSession;
 
 test.beforeAll(async () => {
   mkdirSync(SHOTS, { recursive: true });
+  mkdirSync(SHOTS69, { recursive: true });
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
 });
 
@@ -352,7 +354,7 @@ test('Task 5 + 6: a Cash on Delivery order at 360 px — Order placed says Pay o
   await page.screenshot({ path: `${SHOTS}/04-order-placed-cod.png`, fullPage: true });
 });
 
-test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, Order placed with You saved, the serum-drop animation (frames) and the buzz at the splash; a reload shows the final state', async ({ page }) => {
+test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, Order placed with You saved, the Batch 69 shop-to-home van scene (frames) and its two buzzes; a reload shows the still picture', async ({ page }) => {
   test.setTimeout(120_000);
   const p = await shopProduct();
   test.skip(!p, 'No product in stock.');
@@ -360,18 +362,18 @@ test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, 
   const calls = await openPaymentStep(page, p, HALF_PERCENT, 'NM-4803');
   await placeAndCheck(page, calls, 'bkash', p, 'NM-4803');
   await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'yes');
+  const scene = page.getByTestId('placed-scene');
+  await expect(scene).toHaveClass(/\bb69--play\b/);
 
   // Exact frames: every CSS animation paused at the same moment.
   const frames: [number, string][] = [
-    [250, '05-anim-0250-pipette'],
-    [900, '06-anim-0900-drop-swells'],
-    [1380, '07-anim-1380-drop-falls'],
-    [1560, '08-anim-1560-splash'],
-    [1900, '09-anim-1900-bloom'],
-    [2300, '10-anim-2300-tick-name'],
-    [3200, '11-anim-3200-final'],
+    [300, '01-anim-0300-shop-and-home'],
+    [700, '02-anim-0700-parcel-out'],
+    [1150, '03-anim-1150-parcel-hop'],
+    [1900, '04-anim-1900-van-leaving'],
+    [2600, '05-anim-2600-window-lit-text'],
+    [3400, '06-anim-3400-driving'],
   ];
-  const burst = page.locator('.cf-burst');
   for (const [ms, name] of frames) {
     await page.evaluate((t) => {
       for (const a of document.getAnimations()) {
@@ -379,7 +381,7 @@ test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, 
         a.currentTime = t;
       }
     }, ms);
-    await page.screenshot({ path: `${SHOTS}/${name}.png`, clip: { x: 0, y: 0, width: WIDTH, height: 520 } });
+    await page.screenshot({ path: `${SHOTS69}/${name}.png`, clip: { x: 0, y: 0, width: WIDTH, height: 520 } });
   }
   // Only transform and opacity are animated.
   const animated = await page.evaluate(() => {
@@ -395,21 +397,104 @@ test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, 
     return [...props];
   });
   expect(animated.filter((prop) => !['transform', 'opacity'].includes(prop))).toEqual([]);
-  await expect(burst).toBeVisible();
+  // The van keeps driving: wheels, lane marks, bob and speed lines loop.
+  const endless = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations === Infinity).length);
+  expect(endless).toBeGreaterThanOrEqual(4);
+  await expect(scene).toBeVisible();
+  // finish() throws on an endless animation, so those are only paused.
   await page.evaluate(() => {
-    for (const a of document.getAnimations()) a.finish();
+    for (const a of document.getAnimations()) {
+      if (a.effect?.getComputedTiming().iterations === Infinity) a.pause();
+      else a.finish();
+    }
   });
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __vibrations: unknown[] }).__vibrations))
-    .toEqual([[12, 70, 18]]);
+    .toEqual([12, [14, 60, 20]]);
 
-  // A reload later: the final state at once, no replay.
+  // A reload later: the still final picture at once, no replay, no loops.
   await page.reload();
   await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'no');
-  await expect(page.locator('.cf-disc')).toBeVisible();
-  await expect(page.locator('.cf-pip')).toBeHidden();
+  await expect(scene).toBeVisible();
+  await expect(scene).not.toHaveClass(/\bb69--play\b/);
+  await expect(page.getByTestId('placed-van')).toBeVisible();
   await expect(page.getByTestId('placed-saved')).toBeVisible();
+  const loops = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations === Infinity).length);
+  expect(loops).toBe(0);
 });
+
+/** NAEEM'S on the van ends before its window; the van stays clear of the home. */
+async function sceneFits(page: Page): Promise<void> {
+  const fit = await page.evaluate(() => {
+    const name = document.querySelector<SVGTextElement>('.b69-vanname');
+    const glass = document.querySelector<SVGPathElement>('.b69-f-glass');
+    const van = document.querySelector('.b69-van__body');
+    const house = document.querySelector('.b69-house');
+    if (!name || !glass || !van || !house) return null;
+    const text = name.getBBox();
+    return {
+      nameEnd: text.x + text.width,
+      glassStart: glass.getBBox().x,
+      vanRight: van.getBoundingClientRect().right,
+      houseLeft: house.getBoundingClientRect().left,
+    };
+  });
+  expect(fit).not.toBeNull();
+  if (!fit) return;
+  expect(fit.nameEnd, 'the van name ends before its window').toBeLessThanOrEqual(fit.glassStart);
+  expect(fit.vanRight, 'the van does not overlap the home').toBeLessThanOrEqual(fit.houseLeft);
+}
+
+/** An order just placed (not yet celebrated), so the scene plays on arrival. */
+const PLACED_SNAPSHOT = {
+  zoneId: 'inside_dhaka',
+  address: ADDRESS,
+  promo: null,
+  lastOrder: {
+    orderId: '00000000-0000-4000-8000-000000006901',
+    orderNumber: 'NM-6901',
+    items: [{ product: { id: 'p', name: 'E2E B69 Serum' }, variantId: null, variantLabel: null, variantImage: null, quantity: 1, unitPrice: 950 }],
+    zone: { id: 'inside_dhaka', label: 'Inside Dhaka', fee: 70 },
+    address: ADDRESS,
+    promo: null,
+    subtotal: 950,
+    discount: 0,
+    total: 1020,
+    paymentMethod: 'cod',
+    bkashTrxId: null,
+    placedAt: new Date().toISOString(),
+    advanceDiscount: 0,
+    advanceRule: null,
+    celebrated: false,
+  },
+};
+
+for (const [width, theme] of [
+  [390, 'light'],
+  [390, 'dark'],
+  [360, 'light'],
+] as const) {
+  test(`Batch 69: Order placed at ${width} px ${theme} — the scene plays and keeps driving, the van name readable, the van clear of the home, no sideways scroll`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript((state) => {
+      if (window.sessionStorage.getItem('e2e-b69-seeded')) return;
+      window.sessionStorage.setItem('e2e-b69-seeded', '1');
+      window.sessionStorage.setItem('nph_checkout_state', state);
+    }, JSON.stringify(PLACED_SNAPSHOT));
+    await page.goto('/checkout/success');
+    await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'yes', { timeout: 20_000 });
+    await expect(page.getByTestId('placed-scene')).toHaveClass(/\bb69--play\b/);
+    await page.waitForTimeout(3600);
+    // Still driving long after the scene: the wheels keep turning.
+    const turning = await page.locator('.b69-wheel').first().evaluate((el) => el.getAnimations().some((a) => a.playState === 'running'));
+    expect(turning).toBe(true);
+    await sceneFits(page);
+    await noSidewaysScroll(page);
+    await page.screenshot({ path: `${SHOTS69}/07-final-${width}-${theme}.png`, fullPage: true });
+  });
+}
 
 test('Task 5 + 6: a Nagad order at 360 px — Nagad (paid in advance), You saved, Total paid', async ({ page }) => {
   test.setTimeout(120_000);
@@ -445,7 +530,7 @@ test('Task 4: offer Off — no badge, no green group, no discount line; bKash an
   await fixed.close();
 });
 
-test('Task 6: reduced motion — Order placed shows the circle and tick at once, no buzz', async ({ page }) => {
+test('Task 6: reduced motion — Order placed shows the still van scene at once, no buzz', async ({ page }) => {
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: WIDTH, height: 780 });
@@ -479,8 +564,10 @@ test('Task 6: reduced motion — Order placed shows the circle and tick at once,
   await page.addInitScript((state) => window.sessionStorage.setItem('nph_checkout_state', state), JSON.stringify(snapshot));
   await page.goto('/checkout/success');
   await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'no', { timeout: 20_000 });
-  await expect(page.locator('.cf-disc')).toBeVisible();
-  await expect(page.locator('.cf-arm--b i')).toBeVisible();
+  // Batch 69: the still picture (van halfway, window lit), nothing plays.
+  await expect(page.getByTestId('placed-scene')).toBeVisible();
+  await expect(page.getByTestId('placed-scene')).not.toHaveClass(/\bb69--play\b/);
+  await expect(page.getByTestId('placed-van')).toBeVisible();
   // A long name (over 16 letters) uses the smaller hero size and wraps.
   const name = page.getByTestId('placed-name');
   expect(await name.evaluate((el) => getComputedStyle(el).fontSize)).toBe('20px');
