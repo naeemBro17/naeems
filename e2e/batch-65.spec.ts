@@ -316,7 +316,7 @@ test('Admin: Note to customer card, empty → typing → Send note → sent → 
 
   await card.getByLabel('Note to customer').fill(NOTE);
   await expect(card).toContainText(`${NOTE.length} / 500`);
-  expect(await orangeCount(page, '[data-testid="note-to-customer"]'), 'one orange button: Send note').toBe(1);
+  expect(await orangeCount(page, '[data-testid="note-to-customer"]'), 'no orange button in the note card').toBe(0);
   await shootCard(page, '2-typing');
 
   await card.getByRole('button', { name: 'Send note' }).click();

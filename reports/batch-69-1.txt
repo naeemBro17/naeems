@@ -1,0 +1,139 @@
+FIX 69.1: Order Placed polish (sun and moon, sound, cleaner details) + neutral "Send note" button
+Branch: fix/batch-69-1-order-placed-polish (from main, after Batch 69 was merged)
+Version: 1.69.1
+
+------------------------------------------------------------
+1. WHAT I DID
+------------------------------------------------------------
+
+Sun and moon. The Order Placed scene now has a sky. In light mode a soft
+sun sits above the road with a gentle glow that slowly breathes. In dark
+mode the sun is replaced by a crescent moon and five small twinkling stars.
+They rise in with the scene on the first arrival; on a reload, or with
+"reduce motion" on, they are simply there and nothing moves.
+
+Sound. When the parcel lands in the van there is now a soft "ting", and as
+the van drives off a short, quiet engine sound. Both sounds are made by the
+phone itself in code (no audio files to download, so no extra data cost).
+A small speaker button at the right of the "Order Placed" title turns the
+sound on or off. The phone remembers that choice for next time. The sound
+never plays on a reload or with "reduce motion". If the customer switches
+it off halfway through the scene, the next sound does not play.
+
+Important about iPhones: Apple only lets a web page make sound after the
+person has tapped something on that page. Our sound plays on its own
+shortly after the page opens, so on an iPhone it will usually stay silent
+unless the customer has tapped the speaker button. Android phones play it.
+Nothing breaks either way; the page just stays quiet.
+
+Cleaner details below the scene (your approved mockup, used exactly):
+- "Your order NM-1234 has been placed." is now one line with the order
+  number in bold. The separate "Order no." chip is gone.
+- The arrival days are now date chips inside the summary card:
+  "Arriving between" above two chips like "FRI 27 Nov" and "SAT 28 Nov"
+  (or "Arriving on" above one chip when it is a single day). Screen readers
+  still hear the full sentence, e.g. "Arriving Fri, 27 to Sat, 28 Nov".
+- For Cash on Delivery orders the "Payment" row is gone, because the total
+  row already says "Pay on delivery". bKash, Nagad and wallet orders still
+  show the Payment row.
+- The note is now just "We will confirm your order soon."
+- "Keep shopping" (soft blue, with a shop icon) now sits beside the orange
+  "View my order" button, instead of being a small grey link at the bottom.
+  "View my order" is still the only orange button on the page.
+- Invoice and Need help? are unchanged.
+At 390 x 844 (a typical phone) the whole page, down to Invoice and Need
+help?, fits on one screen without scrolling.
+
+Admin "Send note" button. On the admin order page, the "Send note" button
+in the "Note to customer" card is now the plain outlined button instead of
+orange. This leaves one orange button on that screen: the main action for
+the order's status. The button works exactly as before (same label, greyed
+out until you type, same spinner). It reads clearly in both light and dark
+admin, so I did not need to change its colour or weight.
+
+Tests: new unit tests for the date chips and the sound switch. The browser
+tests were updated to the new wording and layout, and new checks were
+added: the sound button starts on, a tap turns it off, and it stays off
+after a reload. The sun shows in light mode and the moon and stars in dark
+mode. Everything still animates only "transform" and "opacity". At
+360 px "Keep shopping" and the two date chips each stay on one line, and
+at 390 px the page fits without scrolling. The admin test now expects no
+orange button in the note card.
+
+------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------------------------------
+
+None needed.
+
+------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+------------------------------------------------------------
+
+Nothing in scope was left undone.
+
+As instructed, the full "npm run verify" was NOT run. I ran
+"npm run verify:quick -- e2e/batch-35.spec.ts e2e/batch-48.spec.ts
+e2e/batch-51.spec.ts e2e/batch-65.spec.ts":
+- build OK, unit tests 923 of 923 passed.
+- e2e: 54 passed, 2 failed, 12 skipped. Explanation:
+  a) My new sound/sun/moon test failed because of a mistake in the test
+     itself. It changed the phone's light/dark setting after the page had
+     opened, but the shop only reads that setting once, when the page
+     loads. I fixed the test to switch the theme the way the shop's own
+     theme button does. Then I re-ran e2e/batch-48.spec.ts once in full:
+     13 of 13 passed.
+  b) batch-65 "database: note set / edit / remove ... balance check" failed
+     on "Balance check difference before the test is 0.00 -> 3199.00".
+     This compares the LIVE money totals, which are currently ৳3,199 out
+     of balance before the test does anything. It is not caused by this
+     batch: this batch changes no database code or money code. (There is
+     already an untracked audit note about this same ৳3,199 in
+     reports/audit-3199-nm5008.txt.) Because that file runs in order, its
+     failure skipped the rest of the file, so I ran the other 7 batch-65
+     tests separately (skipping only that database check): 7 of 7 passed,
+     including the Note to customer card.
+- batch-35 Part 3 ("the one main action follows the status") now passes.
+
+------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+------------------------------------------------------------
+
+- The live shop's money balance check is ৳3,199 off (see 3b above). It is
+  worth sorting out separately, because it makes the batch-65 database
+  test fail for every future batch until it is fixed.
+- Your approved mockup makes long customer names (over 16 letters) use a
+  32 px headline instead of the old 20 px. The reduced-motion test checked
+  for 20 px; I updated it to 32 px to match the mockup. Very long names
+  wrap onto two or three lines at this size. That still fits, but it pushes
+  the buttons lower on small phones.
+
+Removed CSS that nothing uses any more (checked src/ and e2e/): the old
+"Order no." chip (.cf-onum), the old arrival line (.cf-arrive) and the old
+"Continue shopping" link style (.cf-link), all in checkoutFinish.css.
+
+------------------------------------------------------------
+5. DESIGN DECISIONS
+------------------------------------------------------------
+
+None of my own: the customer page is your approved mockup, used as given.
+The admin button uses the existing outlined button style. The only small
+judgement was in the tests (switching the theme on the page itself, see
+section 3a).
+
+------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS
+------------------------------------------------------------
+
+1. Order confirmation by SMS (medium). Many first-time buyers in Bangladesh
+   trust an SMS with the order number more than a web page. It would also
+   reduce "did my order go through?" WhatsApp messages.
+2. "Add to home screen" prompt after the first order (small). This is the
+   moment the customer is most pleased, and the app already works as an
+   installable app (PWA). It brings repeat visits back with one tap.
+3. The sound is quiet and switchable, but some shops leave sound off until
+   the customer opts in (small). Watch whether customers turn it off; if
+   many do, make it off by default.
+
+Pull request:
+https://github.com/naeemBro17/naeems/pull/new/fix/batch-69-1-order-placed-polish

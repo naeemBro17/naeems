@@ -14,7 +14,11 @@ import { ActionLink } from '../../components/shared/ActionLink';
 // van drives toward the customer's home (transform and opacity only). It
 // plays once, when the customer arrives from "Place order"; a reload (or
 // reduced motion) shows the still final picture.
-import { useEffect, useState, type CSSProperties } from 'react';
+// Fix 69.1: a sun by day and a moon with stars by night in the scene, a soft
+// "ting" and engine sound with a speaker switch in the header (remembered on
+// this phone), the order number in one line, the arrival days as date chips,
+// and "Keep shopping" beside "View my order".
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatTaka } from '../../lib/format';
@@ -26,7 +30,8 @@ import { placedPaymentLabel, placedTotalLabel } from '../../lib/checkoutCopy';
 import { isWalletMethod } from '../../lib/advanceDiscount';
 import { openExternal, orderHelpWhatsAppUrl } from '../../lib/expertLinks';
 import { useCheckoutState } from './useCheckoutState';
-import { arrivalText } from '../../lib/sellRules';
+import { arrivalRange, arrivalText } from '../../lib/sellRules';
+import { isPlacedSoundOn, playTing, playVroom, setPlacedSoundOn, wakePlacedSound } from '../../lib/placedSound';
 import { PlacedScene } from '../../components/checkout/PlacedScene';
 import '../../styles/checkoutFinish.css';
 import '../../styles/batch69.css';
@@ -46,6 +51,44 @@ function DownloadIcon() {
       <path d="M12 3v12" />
       <path d="M7.5 10.5L12 15l4.5-4.5" />
       <path d="M4 19h16" />
+    </svg>
+  );
+}
+
+function SoundIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      {on ? (
+        <>
+          <path d="M15.5 9a4 4 0 0 1 0 6" />
+          <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+        </>
+      ) : (
+        <path d="M16 9.5l5 5M21 9.5l-5 5" />
+      )}
+    </svg>
+  );
+}
+
+function ShopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 9.5 5 4.5h14l1.5 5" />
+      <path d="M3.5 9.5a2.8 2.8 0 0 0 5.67 0 2.8 2.8 0 0 0 5.66 0 2.8 2.8 0 0 0 5.67 0" />
+      <path d="M5 12.5v7h14v-7" />
+      <path d="M10 19.5v-4h4v4" />
+    </svg>
+  );
+}
+
+function VanIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 6.5h11v9h-11z" />
+      <path d="M13.5 9.5h4l3 3v3h-7z" />
+      <circle cx="6.5" cy="17.5" r="1.6" />
+      <circle cx="17" cy="17.5" r="1.6" />
     </svg>
   );
 }
@@ -88,6 +131,15 @@ export function OrderSuccessPage() {
   const navigate = useNavigate();
   // Decided once, on arrival: play only straight after "Place order".
   const [play] = useState(() => Boolean(lastOrder && !lastOrder.celebrated && !prefersReducedMotion()));
+  const [soundOn, setSoundOn] = useState(isPlacedSoundOn);
+  const soundRef = useRef(soundOn);
+  soundRef.current = soundOn;
+  const toggleSound = () => {
+    const next = !soundRef.current;
+    setPlacedSoundOn(next);
+    setSoundOn(next);
+    if (next) wakePlacedSound();
+  };
 
   // The order number is passed as both trackers' event/transaction id, so
   // even if this effect (or a page refresh landing back here) fires twice,
@@ -102,8 +154,9 @@ export function OrderSuccessPage() {
     if (lastOrder && !lastOrder.celebrated) markCelebrated();
   }, [lastOrder, markCelebrated]);
 
-  // Batch 69: a short buzz when the parcel lands in the van, a double one
-  // as the van drives off. Never with reduced motion (play is off then).
+  // Batch 69 + Fix 69.1: a short buzz and a soft "ting" when the parcel
+  // lands in the van, a double buzz and a soft engine as the van drives off.
+  // Never with reduced motion or on a reload (play is off then).
   useEffect(() => {
     if (!play) return;
     const buzz = (pattern: number | number[]) => {
@@ -113,7 +166,16 @@ export function OrderSuccessPage() {
         // Some browsers refuse vibration outright; the screen is the same.
       }
     };
-    const timers = [window.setTimeout(() => buzz(12), 1300), window.setTimeout(() => buzz([14, 60, 20]), 1650)];
+    const timers = [
+      window.setTimeout(() => {
+        buzz(12);
+        if (soundRef.current) playTing();
+      }, 1300),
+      window.setTimeout(() => {
+        buzz([14, 60, 20]);
+        if (soundRef.current) playVroom();
+      }, 1650),
+    ];
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [play]);
 
@@ -132,6 +194,11 @@ export function OrderSuccessPage() {
   // Batch 51: "Arriving Fri, 20 – Sat, 21 Nov" from the order date, the
   // delivery zone and the slowest item.
   const arriving = arrivalText(lastOrder.placedAt, lastOrder.zone.id, lastOrder.buysLater === true, settings);
+  const days = arrivalRange(lastOrder.placedAt, lastOrder.zone.id, lastOrder.buysLater === true, settings);
+  // Fix 69.1: the Payment row only when it says something the total row does
+  // not (paid in advance, or the wallet). Cash on Delivery is already
+  // "Pay on delivery".
+  const showPayment = paidInAdvance || fromStore > 0;
 
   // Batch 37: the same A4 invoice the shop prints (the customer's copy).
   const handleDownloadInvoice = async () => {
@@ -149,8 +216,18 @@ export function OrderSuccessPage() {
 
   return (
     <div className="viewer-shell detail-shell">
-      <header className="detail-header">
+      <header className="detail-header b69-head">
         <h1 className="detail-header__title">Order Placed</h1>
+        <button
+          type="button"
+          className="b69-snd"
+          onClick={toggleSound}
+          aria-pressed={soundOn}
+          aria-label={soundOn ? 'Sound on' : 'Sound off'}
+          data-testid="placed-sound"
+        >
+          <SoundIcon on={soundOn} />
+        </button>
       </header>
 
       <main className={`detail-main cf-placed cf-b69${play ? ' cf-play' : ''}`} data-testid="order-placed" data-played={play ? 'yes' : 'no'}>
@@ -160,37 +237,50 @@ export function OrderSuccessPage() {
           Thank you,
         </p>
         <HeroName name={lastOrder.address.fullName.trim()} />
-        <p className="cf-placed__text cf-fu" style={fadeUp('.44s')}>
-          Your order has been placed.
+        <p className="cf-placed__text cf-fu" style={fadeUp('.44s')} data-testid="placed-text">
+          Your order <b data-testid="placed-order-number">{lastOrder.orderNumber}</b> has been placed.
         </p>
-        <div className="cf-onum cf-fu" style={fadeUp('.52s')}>
-          <span data-testid="placed-order-number">
-            Order no. <b>{lastOrder.orderNumber}</b>
-          </span>
-        </div>
-        {arriving && (
-          <p className="cf-arrive cf-fu" style={fadeUp('.56s')} data-testid="placed-arriving">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M2.5 6.5h11v9h-11z" />
-              <path d="M13.5 9.5h4l3 3v3h-7z" />
-              <circle cx="6.5" cy="17.5" r="1.6" />
-              <circle cx="17" cy="17.5" r="1.6" />
-            </svg>
-            {arriving}
-          </p>
-        )}
 
-        <div className="cf-sum cf-fu" style={fadeUp('.6s')}>
+        <div className="cf-sum cf-fu" style={fadeUp('.56s')}>
+          {days && arriving && (
+            <div className="b69-eta" data-testid="placed-arriving" aria-label={arriving}>
+              <span className="b69-eta__ic">
+                <VanIcon />
+              </span>
+              <div className="b69-eta__t" aria-hidden="true">
+                <small>{days.to ? 'Arriving between' : 'Arriving on'}</small>
+                <div className="b69-days">
+                  <span className="b69-day">
+                    <i>{days.from.weekday}</i>
+                    <b>{days.from.day}</b>
+                    <em>{days.from.month}</em>
+                  </span>
+                  {days.to && (
+                    <>
+                      <span className="b69-dash" />
+                      <span className="b69-day">
+                        <i>{days.to.weekday}</i>
+                        <b>{days.to.day}</b>
+                        <em>{days.to.month}</em>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="cf-sr">
             <span>Items</span>
             <b>
               {itemCount} item{itemCount === 1 ? '' : 's'}
             </b>
           </div>
-          <div className="cf-sr">
-            <span>Payment</span>
-            <b data-testid="placed-payment">{fromStore > 0 && leftToPay <= 0 ? 'Wallet' : placedPaymentLabel(lastOrder.paymentMethod)}</b>
-          </div>
+          {showPayment && (
+            <div className="cf-sr">
+              <span>Payment</span>
+              <b data-testid="placed-payment">{fromStore > 0 && leftToPay <= 0 ? 'Wallet' : placedPaymentLabel(lastOrder.paymentMethod)}</b>
+            </div>
+          )}
           {fromStore > 0 && (
             <div className="cf-sr" data-testid="placed-store-wallet">
               <span>Paid from wallet</span>
@@ -209,14 +299,20 @@ export function OrderSuccessPage() {
           </div>
         </div>
 
-        <p className="cf-note cf-fu" style={fadeUp('.66s')}>
-          We will confirm your order soon. Any questions? Tap &quot;Need help?&quot; to contact us.
+        <p className="cf-note cf-fu" style={fadeUp('.62s')}>
+          We will confirm your order soon.
         </p>
 
-        <div className="cf-acts cf-fu" style={fadeUp('.72s')}>
-          <ActionLink to={`/orders/${lastOrder.orderId}`} className="button button--primary button--full" onOpen={() => navigate(`/orders/${lastOrder.orderId}`)}>
-            View my order
-          </ActionLink>
+        <div className="cf-acts cf-fu" style={fadeUp('.68s')}>
+          <div className="b69-row1">
+            <ActionLink to="/" className="b69-keep" onOpen={() => navigate('/')}>
+              <ShopIcon />
+              Keep shopping
+            </ActionLink>
+            <ActionLink to={`/orders/${lastOrder.orderId}`} className="button button--primary button--full" onOpen={() => navigate(`/orders/${lastOrder.orderId}`)}>
+              View my order
+            </ActionLink>
+          </div>
           <div className="cf-pair" style={helpHref ? undefined : { gridTemplateColumns: '1fr' }}>
             <button type="button" className="cf-ghost" onClick={() => void handleDownloadInvoice()} disabled={isMakingInvoice}>
               {isMakingInvoice ? <span className="spinner" aria-hidden="true" /> : <DownloadIcon />}
@@ -240,9 +336,6 @@ export function OrderSuccessPage() {
               Could not make the invoice. Check your connection and try again.
             </p>
           )}
-          <ActionLink to="/" className="cf-link" onOpen={() => navigate('/')}>
-            Continue shopping
-          </ActionLink>
         </div>
       </main>
     </div>

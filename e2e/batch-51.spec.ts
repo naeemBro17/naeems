@@ -286,7 +286,9 @@ for (const theme of ['light', 'dark'] as const) {
       );
     }, snapshot);
     await page.goto('/checkout/success');
-    await expect(page.getByTestId('placed-arriving')).toHaveText('Arriving Sun, 22 to Tue, 24 Nov', { timeout: 20_000 });
+    // Fix 69.1: the words are the label; two date chips are shown.
+    await expect(page.getByTestId('placed-arriving')).toHaveAttribute('aria-label', 'Arriving Sun, 22 to Tue, 24 Nov', { timeout: 20_000 });
+    await expect(page.getByTestId('placed-arriving').locator('.b69-day')).toHaveCount(2);
     await page.screenshot({ path: `${SHOTS}/${theme}-07-order-placed-arriving.png` });
     await noSidewaysScroll(page);
   });

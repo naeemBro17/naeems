@@ -24,6 +24,7 @@ test.use({ serviceWorkers: 'block' });
 
 const SHOTS = 'reports/batch-48-screens';
 const SHOTS69 = 'reports/batch-69-screens';
+const SHOTS691 = 'reports/batch-69-1-screens';
 const WIDTH = 360;
 
 let admin: TestSession;
@@ -31,6 +32,7 @@ let admin: TestSession;
 test.beforeAll(async () => {
   mkdirSync(SHOTS, { recursive: true });
   mkdirSync(SHOTS69, { recursive: true });
+  mkdirSync(SHOTS691, { recursive: true });
   admin = await passwordSession(E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD);
 });
 
@@ -321,13 +323,15 @@ async function placeAndCheck(page: Page, calls: PlacedCall[], method: 'cod' | 'b
   await expect(page.getByTestId('checkout-stepper')).toHaveCount(0);
   await expect(page.getByText('Thank you,')).toBeVisible();
   await expect(page.getByTestId('placed-name')).toHaveAttribute('aria-label', `${ADDRESS.fullName}!`);
-  await expect(page.getByText('Your order has been placed.')).toBeVisible();
-  await expect(page.getByTestId('placed-order-number')).toHaveText(`Order no. ${orderNumber}`);
+  // Fix 69.1: the order number inside the one line.
+  await expect(page.getByTestId('placed-text')).toHaveText(`Your order ${orderNumber} has been placed.`);
+  await expect(page.getByTestId('placed-order-number')).toHaveText(orderNumber);
   const subtotal = p.price * 2;
   if (method === 'cod') {
-    await expect(page.getByTestId('placed-payment')).toHaveText('Cash on Delivery');
+    // Fix 69.1: no Payment row; the total row already says Pay on delivery.
+    await expect(page.getByTestId('placed-payment')).toHaveCount(0);
     await expect(page.getByTestId('placed-saved')).toHaveCount(0);
-    await expect(page.getByTestId('placed-total')).toContainText('Pay on delivery');
+    await expect(page.getByTestId('placed-total')).toHaveText(/^Pay on delivery/);
     await expect(page.getByTestId('placed-total')).toContainText(taka(subtotal + insideFee));
   } else {
     const advance = expectedAdvance(p, HALF_PERCENT);
@@ -338,7 +342,9 @@ async function placeAndCheck(page: Page, calls: PlacedCall[], method: 'cod' | 'b
   }
   await expect(page.getByRole('link', { name: 'View my order' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invoice' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Continue shopping' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Keep shopping' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Keep shopping' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'Continue shopping' })).toHaveCount(0);
   await noSidewaysScroll(page);
 }
 
@@ -383,20 +389,8 @@ test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, 
     }, ms);
     await page.screenshot({ path: `${SHOTS69}/${name}.png`, clip: { x: 0, y: 0, width: WIDTH, height: 520 } });
   }
-  // Only transform and opacity are animated.
-  const animated = await page.evaluate(() => {
-    const props = new Set<string>();
-    for (const a of document.getAnimations()) {
-      const effect = a.effect as KeyframeEffect | null;
-      for (const frame of effect?.getKeyframes() ?? []) {
-        for (const key of Object.keys(frame)) {
-          if (!['offset', 'computedOffset', 'easing', 'composite'].includes(key)) props.add(key);
-        }
-      }
-    }
-    return [...props];
-  });
-  expect(animated.filter((prop) => !['transform', 'opacity'].includes(prop))).toEqual([]);
+  // Only transform and opacity are animated (Fix 69.1: the sun too).
+  await onlyTransformAndOpacity(page);
   // The van keeps driving: wheels, lane marks, bob and speed lines loop.
   const endless = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations === Infinity).length);
   expect(endless).toBeGreaterThanOrEqual(4);
@@ -422,6 +416,23 @@ test('Task 5 + 6: a bKash order at 360 px — totals with the advance discount, 
   const loops = await page.evaluate(() => document.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations === Infinity).length);
   expect(loops).toBe(0);
 });
+
+/** Every running animation changes only transform and opacity. */
+async function onlyTransformAndOpacity(page: Page): Promise<void> {
+  const animated = await page.evaluate(() => {
+    const props = new Set<string>();
+    for (const a of document.getAnimations()) {
+      const effect = a.effect as KeyframeEffect | null;
+      for (const frame of effect?.getKeyframes() ?? []) {
+        for (const key of Object.keys(frame)) {
+          if (!['offset', 'computedOffset', 'easing', 'composite'].includes(key)) props.add(key);
+        }
+      }
+    }
+    return [...props];
+  });
+  expect(animated.filter((prop) => !['transform', 'opacity'].includes(prop))).toEqual([]);
+}
 
 /** NAEEM'S on the van ends before its window; the van stays clear of the home. */
 async function sceneFits(page: Page): Promise<void> {
@@ -492,9 +503,90 @@ for (const [width, theme] of [
     expect(turning).toBe(true);
     await sceneFits(page);
     await noSidewaysScroll(page);
+    // Fix 69.1: the sun (light) or the moon and stars (dark) animate only
+    // transform and opacity too.
+    await onlyTransformAndOpacity(page);
+    await expect(page.locator(theme === 'dark' ? '.b69-moon' : '.b69-sun')).toBeVisible();
+    // Fix 69.1: the date chips and the two main buttons.
+    await expect(page.getByTestId('placed-arriving').locator('.b69-day')).toHaveCount(2);
+    const fit = await page.evaluate(() => {
+      const box = (el: Element | null) => (el ? el.getBoundingClientRect() : null);
+      const keep = document.querySelector<HTMLElement>('.b69-keep');
+      const days = [...document.querySelectorAll('.b69-day')].map((el) => el.getBoundingClientRect().top);
+      const invoice = box([...document.querySelectorAll('.cf-ghost')].pop() ?? null);
+      return {
+        keepOneLine: keep ? keep.scrollWidth <= keep.clientWidth && keep.getBoundingClientRect().height <= 56 : false,
+        chipsOneLine: days.length === 2 && Math.abs(days[0] - days[1]) < 1,
+        lastBottom: invoice ? invoice.bottom + window.scrollY : Infinity,
+      };
+    });
+    expect(fit.keepOneLine, 'Keep shopping stays on one line').toBe(true);
+    expect(fit.chipsOneLine, 'the two date chips sit on one line').toBe(true);
+    if (width === 390) expect(fit.lastBottom, 'the whole page fits at 390 x 844 without scrolling').toBeLessThanOrEqual(844);
     await page.screenshot({ path: `${SHOTS69}/07-final-${width}-${theme}.png`, fullPage: true });
+    await page.screenshot({ path: `${SHOTS691}/final-${width}-${theme}.png`, fullPage: true });
   });
 }
+
+test('Fix 69.1: the sound switch (on by default, a tap turns it off, remembered after a reload); the sun by day, the moon and stars by night', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript((state) => {
+    if (window.sessionStorage.getItem('e2e-b691-seeded')) return;
+    window.sessionStorage.setItem('e2e-b691-seeded', '1');
+    window.sessionStorage.setItem('nph_checkout_state', state);
+  }, JSON.stringify(PLACED_SNAPSHOT));
+  await page.goto('/checkout/success');
+  await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'yes', { timeout: 20_000 });
+
+  const sound = page.getByTestId('placed-sound');
+  await expect(sound).toBeVisible();
+  await expect(sound).toHaveAttribute('aria-pressed', 'true');
+  await expect(sound).toHaveAttribute('aria-label', 'Sound on');
+  await expect(sound).toHaveText('');
+  await sound.click();
+  await expect(sound).toHaveAttribute('aria-pressed', 'false');
+  await expect(sound).toHaveAttribute('aria-label', 'Sound off');
+  await page.reload();
+  await expect(page.getByTestId('order-placed')).toHaveAttribute('data-played', 'no', { timeout: 20_000 });
+  await expect(sound).toHaveAttribute('aria-pressed', 'false');
+  await expect(sound).toHaveAttribute('aria-label', 'Sound off');
+
+  // Light: the sun, no moon or stars. (The shop reads the phone's theme
+  // once on load, so the switch is made the way the theme button makes it.)
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+  await expect(page.locator('.b69-sun')).toBeVisible();
+  await expect(page.locator('.b69-moon')).toBeHidden();
+  await expect(page.locator('.b69-star').first()).toBeHidden();
+  // Dark: the moon and stars, no sun.
+  await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+  await expect(page.locator('.b69-moon')).toBeVisible();
+  await expect(page.locator('.b69-star')).toHaveCount(5);
+  for (const star of await page.locator('.b69-star').all()) await expect(star).toBeVisible();
+  await expect(page.locator('.b69-sun')).toBeHidden();
+});
+
+test('Fix 69.1: the scene at 1.9 s in dark (moon and stars)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript((state) => {
+    if (window.sessionStorage.getItem('e2e-b691-dark')) return;
+    window.sessionStorage.setItem('e2e-b691-dark', '1');
+    window.sessionStorage.setItem('nph_checkout_state', state);
+  }, JSON.stringify(PLACED_SNAPSHOT));
+  await page.goto('/checkout/success');
+  await expect(page.getByTestId('placed-scene')).toHaveClass(/\bb69--play\b/, { timeout: 20_000 });
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = 1900;
+    }
+  });
+  await expect(page.locator('.b69-moon')).toBeVisible();
+  await onlyTransformAndOpacity(page);
+  await page.screenshot({ path: `${SHOTS691}/scene-1900-dark.png`, clip: { x: 0, y: 0, width: 390, height: 520 } });
+});
 
 test('Task 5 + 6: a Nagad order at 360 px — Nagad (paid in advance), You saved, Total paid', async ({ page }) => {
   test.setTimeout(120_000);
@@ -570,7 +662,8 @@ test('Task 6: reduced motion — Order placed shows the still van scene at once,
   await expect(page.getByTestId('placed-van')).toBeVisible();
   // A long name (over 16 letters) uses the smaller hero size and wraps.
   const name = page.getByTestId('placed-name');
-  expect(await name.evaluate((el) => getComputedStyle(el).fontSize)).toBe('20px');
+  // Fix 69.1: the approved mockup's long-name size (was 20px).
+  expect(await name.evaluate((el) => getComputedStyle(el).fontSize)).toBe('32px');
   await expect(page.getByTestId('placed-payment')).toHaveText('Nagad (paid in advance)');
   await page.waitForTimeout(1600);
   const buzz = await page.evaluate(() => (window as unknown as { __vibrations: unknown[] }).__vibrations);
