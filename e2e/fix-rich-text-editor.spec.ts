@@ -155,7 +155,7 @@ test('Part 1: Edit from the list shows the saved text without a refresh; another
   expect(await savedDescription(b.id)).toBe(B_TEXT);
 });
 
-test('Parts 2 and 3: a box wraps only the line; Save stays on the Edit page with "Saved ✓"; Remove box', async ({ page }) => {
+test('Parts 2 and 3: a box wraps only the line; Save stays on the Edit page with "Saved"; Remove box', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await useSessionInPage(page, admin);
@@ -174,7 +174,7 @@ test('Parts 2 and 3: a box wraps only the line; Save stays on the Edit page with
   await setTheme(page, 'light');
 
   await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Saved ✓')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page).toHaveURL(new RegExp(`/admin/products/${a.id}/edit$`));
   expect(await savedDescription(a.id)).toBe(
     '<p>Line A1</p><div data-box="warning"><p>Line A2</p></div><p></p><p>Line A3 after a blank line</p>'
@@ -224,7 +224,7 @@ test('Parts 4 and 5: Enter adds no gap, Enter twice keeps one empty line, Justif
   await editor.getByTestId('rt-justify').click();
   await expect(content.locator('p[data-align="justify"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Saved ✓')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 20_000 });
   expect(await savedDescription(a.id)).toBe(
     '<p>First line</p><p data-align="justify">Second line, justified so the words spread out to both edges of the box</p><p></p><p>বাংলা লেখা ১২৩</p>'
   );

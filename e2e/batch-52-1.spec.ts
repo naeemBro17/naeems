@@ -515,7 +515,7 @@ test('Edit product after the redesign: text, select, chips, prices, switches and
     await page.keyboard.type('Batch 52.1 description');
 
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('Saved ✓')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 30_000 });
 
     const row = await select<SavedRow[]>(admin.accessToken, `products_view?id=eq.${id}&select=*`);
     const saved = row.data?.[0];
