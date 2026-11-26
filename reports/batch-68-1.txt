@@ -1,0 +1,147 @@
+FIX 68.1: PRODUCT PHOTO UPLOAD ON PHONES
+Branch: fix/mobile-photo-upload    Version: 1.68.1
+(A small fix after Batch 68. The next numbered batch is still Batch 69.)
+
+==================================================================
+1. WHAT I DID
+==================================================================
+
+The red message now tells you the real reason.
+Before, when a photo failed, the editor threw the real reason away and
+always said "Upload failed. Please try again." Now it still starts with
+"Upload failed." but then adds one short plain line saying what went wrong:
+  - "This phone could not open the photo. Try a smaller photo or a
+    screenshot of it."
+  - "The phone ran out of memory while making the photo smaller. Close
+    other apps and try one photo at a time."
+  - "The connection dropped while uploading. Check the internet and try
+    again."
+  - "Storage said: <Supabase's own message> (<code>)"
+  - "Unexpected error: <the message>" for anything else.
+The full technical error is also written to the browser console, for a
+developer.
+
+The phone now opens each photo only once, and does one step at a time.
+This is the most likely cause of the failure. Before, the site opened the
+full camera photo TWICE AT THE SAME TIME (once for the big 1400 px copy,
+once for the small 480 px card copy). A phone photo is 12 to 50 megapixels.
+Holding two of those in memory at once is a lot for a mid-range Android
+phone, while a PC has plenty of memory. That matches "works on PC, fails on
+the phone". The new way:
+  1. Read only the photo's size first (cheap).
+  2. Open the photo ONCE, asking the phone for the 1400 px size straight
+     away, so it never holds the full camera-size picture.
+  3. Make the big file (WebP, quality 0.85).
+  4. Make the small card copy from that big picture, not from the
+     original (WebP, quality 0.82).
+  5. Free each picture's memory as soon as it is used.
+  6. Upload the big file, then the card file, one after the other.
+Sizes, quality, file names, folders and cache settings are exactly as
+before. Only the product photo upload uses this new code. Every other
+uploader (receipts, bills, expert photo, brand logos, banners, image
+picker) is unchanged.
+
+Uploads are retried when the connection drops.
+If an upload fails because the internet dropped, or Supabase was briefly
+busy (timeout, "too many requests", or a server error), it tries again
+up to two more times, waiting 0.7 seconds and then 1.5 seconds. A refusal
+such as "not allowed" or "file too big" is never retried, because trying
+again would not help.
+
+Phones that hand over a photo with no file type.
+Some phone photo pickers give a normal JPG with an empty "file type". The
+site used to reject those as "not a JPG, PNG, or WebP image". Now a file
+with no type is accepted if its name ends in .jpg, .jpeg, .png or .webp
+(capital letters too), and the site gives it the right type so the
+browser can open it. Files that do have a type are judged exactly as
+before. This rule is shared, so every photo uploader gets it.
+
+Tests: 16 new unit tests (src/lib/fix68-1.upload.test.ts) cover every
+error message, the empty-type rule, the retry rules, and the new photo
+steps (opened once, card drawn from the big picture, the two files made
+one after the other, memory freed, a clear error when a step fails).
+They use small fake pictures. Nothing touches Supabase.
+
+Checks run: `npm run verify:quick` -> build OK, unit tests 916/916 passed,
+no browser test files touched so no browser tests ran.
+I did NOT run the full `npm run verify`, as the task said: this change is
+small, the last full run was in Batch 68, and every browser test run uses
+the live Supabase bandwidth.
+
+==================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+==================================================================
+
+None needed.
+
+==================================================================
+3. WHAT I COULD NOT FINISH
+==================================================================
+
+I cannot test on a real phone here. The change removes the most likely
+cause (decoding the full photo twice at once) and, if the phone still
+fails, the red message now says why.
+
+HOW NAEEM TESTS IT
+After this branch is merged and live: on your phone, in normal mobile mode
+(NOT "Desktop site"), open Admin -> Edit product. Add one photo straight
+from the camera and press "Save changes". Then try again with 3 photos at
+once. If it still fails, copy the full red message under Photos and send
+it. That one line now tells us exactly which step broke.
+
+==================================================================
+4. WHAT I FOUND ALONG THE WAY
+==================================================================
+
+- Some browsers (iPhone Safari is the usual one) cannot make WebP files. Before this fix it
+  quietly made a PNG and stored it with a ".webp" name and a WebP label.
+  That worked, but the files were big. Now such a browser gets a JPEG
+  file with a ".jpg" name and the correct label. I checked the helpers
+  first: newProductImagePath, productCardPath / smallCopyPath and
+  storagePathFromUrl work with any file name, and so do the photo delete,
+  the small-copy check and "Make images light". So this is safe. Android
+  Chrome makes WebP as before.
+- The other uploaders (banners, logos, expert photo, receipts, bills)
+  still open the full photo with the old method. They make only one copy
+  at a time, so they are less at risk, but a very large phone photo could
+  still strain memory there. I left them alone, as the task said.
+- The 10 MB limit per photo still applies. Some new phones take photos
+  bigger than 10 MB; those show "exceeds 10MB", a different message.
+
+==================================================================
+5. DESIGN DECISIONS
+==================================================================
+
+- To know whether a photo needs shrinking, the site first reads its size
+  with a plain image load. That reads only the file header, not all the
+  pixels, so it is cheap. Then the photo is opened once at the right size.
+- Some browsers might resize a photo before turning it upright (phone
+  photos are often stored sideways with a "rotate" note). That would
+  squash the picture. So the site checks that the result has the size it
+  asked for. If not, it throws that result away and uses the plain image
+  route instead. A product photo can never come out squashed.
+- A retry is allowed to overwrite ("upsert"). The first try may have
+  reached Supabase and saved the file before the answer got lost. Without
+  overwrite, the retry would be refused as a "duplicate" and the save
+  would fail. Every photo gets a new random name, so a retry can only
+  ever replace the same photo, never a different one.
+- No layout or colour changes. The message sits in the same red line
+  under Photos.
+
+==================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+==================================================================
+
+1. Upload each photo the moment it is chosen, with a progress bar per
+   photo, instead of everything when you press Save. Today one bad
+   photo out of three stops the whole save, and you wait with no
+   progress shown. Medium.
+2. Use the same "open once, at the right size" method in the other
+   photo uploaders (banners, logos, receipts, bills). Same memory risk,
+   smaller. Small.
+3. Send failed-upload errors to an error log (for example Sentry), so
+   problems on customers' and staff phones show up without anyone
+   having to copy a message. Small to medium.
+
+Pull request:
+https://github.com/naeemBro17/naeems/pull/new/fix/mobile-photo-upload

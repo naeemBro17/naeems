@@ -6,6 +6,7 @@ import { uniqueProductSlug } from '../../lib/slugify';
 import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
 import { productImages, generateCardThumb, isSmallCopy, uploadProductPhoto } from '../../lib/productImages';
+import { describeUploadError } from '../../lib/uploadError';
 import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
@@ -396,8 +397,9 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
     let imageThumbUrls: string[];
     try {
       ({ urls: imageUrls, thumbUrls: imageThumbUrls } = await resolveImageUrls());
-    } catch {
-      setUploadError('Upload failed. Please try again.');
+    } catch (error: unknown) {
+      console.error('Product photo upload failed', error);
+      setUploadError(`Upload failed. ${describeUploadError(error)}`);
       setIsSaving(false);
       return;
     }

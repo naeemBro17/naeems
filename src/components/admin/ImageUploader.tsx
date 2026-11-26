@@ -27,7 +27,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { isAcceptedImageType, MAX_IMAGE_BYTES } from '../../lib/imageResize';
+import { isAcceptedImageType, MAX_IMAGE_BYTES, withImageType } from '../../lib/imageResize';
 import type { FormImage } from '../../types';
 
 interface ImageUploaderProps {
@@ -244,7 +244,7 @@ export function ImageUploader({
       } else if (file.size > MAX_IMAGE_BYTES) {
         rejected.push(`'${file.name}' exceeds 10MB.`);
       } else {
-        accepted.push(file);
+        accepted.push(withImageType(file));
       }
     }
     setFileError(rejected.length > 0 ? rejected.join(' ') : null);
