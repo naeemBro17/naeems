@@ -1,0 +1,123 @@
+BATCH 69: Order Placed animation ("from our shop to your home")
+Branch: feature/batch-69-order-placed (from main, after Fix 68.1 was merged)
+Version: 1.69.0
+
+------------------------------------------------------------
+1. WHAT I DID
+------------------------------------------------------------
+
+The new scene. On the Order Placed page, the old serum-drop animation
+(from Batch 48) is gone. In its place is the small scene you approved: your
+NAEEM'S shop on the left, the customer's home on the right, and the van
+parked in front of the shop. The shop door opens, a parcel with your logo
+comes out and hops into the van, the van dips under the weight, the door
+shuts, and the van drives off toward the home with a puff of dust. The
+home's window then lights up warm, and "Thank you, NAME!" and the rest of
+the page rise in as before. I used your approved code exactly as given, with
+no redesign, recolouring or re-timing. It lives in two new files:
+src/components/checkout/PlacedScene.tsx (the drawing) and
+src/styles/batch69.css (its colours and movement).
+
+The van never stops. While the page stays open after placing the order, the
+wheels keep turning, the road's lane marks keep sliding past and the van
+bobs gently. This only happens on the FIRST arrival straight after "Place
+order". If the customer reloads the page, or their phone is set to "reduce
+motion", they see the still final picture at once: van halfway along the
+road, window lit, nothing moving.
+
+Phone buzz. On Android phones the phone now buzzes twice: a short buzz when
+the parcel lands in the van, and a double buzz as the van drives off. As
+before, this never happens on a reload or with "reduce motion", and a phone
+that refuses vibration just shows the same screen.
+
+Everything else on the page is unchanged: all texts, the summary card, View
+my order, Invoice, Need help?, Continue shopping, the invoice download, the
+purchase tracking, and the "plays only once" rule. There is no new text for
+customers.
+
+Clean-up. I deleted the old drop's code from the page and its styles from
+src/styles/checkoutFinish.css (pipette, drop, splash droplets, rings, green
+circle and tick). Before deleting each piece I searched the whole project to
+make sure nothing else used it.
+
+Tests. The automatic test for this page (e2e/batch-48.spec.ts) used to
+check the drop. It now checks the van scene instead: picture frames at
+0.3s, 0.7s, 1.15s, 1.9s, 2.6s and 3.4s; that only "move" and "fade" are
+animated (the smooth, phone-friendly kind); that the van keeps driving;
+the two buzzes; that a reload shows the still picture with nothing looping;
+and that "reduce motion" shows the still picture. I added three new checks
+that open the finished page at 390 px (light and dark) and 360 px (light),
+and confirm: no sideways scrolling, the name NAEEM'S on the van ends before
+the van's window, and the van does not overlap the home.
+
+Checks run: npm run verify:quick, which is the build, all 916 unit tests,
+and the 11 browser tests in e2e/batch-48.spec.ts. Result: ALL PASSED
+(QUICK GREEN). As instructed, I did NOT run the full "npm run verify" (to
+protect your Supabase bandwidth).
+
+I looked at every picture myself. They are in reports/batch-69-screens/:
+  01 to 06  the scene frame by frame (360 px)
+  07-final-390-light, 07-final-390-dark, 07-final-360-light  the whole page
+
+------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------------------------------
+
+None needed.
+
+------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+------------------------------------------------------------
+
+Nothing left undone. The only thing not run is the full "npm run verify",
+which this batch said not to run.
+
+------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+------------------------------------------------------------
+
+- The colour --cf-good-2 in checkoutFinish.css was only used by the old
+  drop's droplets and is now unused. It does no harm; I left it because it
+  sits in the shared colour list at the top of the file.
+- The old Batch 48 frame pictures (reports/batch-48-screens/05 to 11) show
+  the drop. They are kept as history; the new frames are in
+  reports/batch-69-screens/.
+- package-lock.json still said version 1.68.0 (Fix 68.1 only changed
+  package.json). I set both to 1.69.0 so they agree.
+- Running the tests re-saves older batches' screenshots in reports/. Those
+  changed pictures were already sitting uncommitted on this computer before
+  the batch; I did not include them in this commit.
+
+------------------------------------------------------------
+5. DESIGN DECISIONS
+------------------------------------------------------------
+
+There was no design freedom in this batch: the scene, colours and timings
+are your approved code, unchanged. Two small observations from the
+pictures, for you to judge, not changed:
+- In light mode the van is white on a white page. It is outlined by its
+  shadow, wheels and window, and reads clearly in the pictures, but it is
+  softer than in dark mode.
+- The scene shows your orange logo three times (shop sign, van, parcel) next
+  to the orange "View my order" button. They are the brand mark, not
+  buttons, so "View my order" is still the one orange action.
+
+------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS
+------------------------------------------------------------
+
+1. Order confirmation by SMS (medium). Many shoppers in Bangladesh trust an
+   SMS more than a web page. A short SMS with the order number right after
+   "Place order" is a strong trust signal and cuts "did my order go
+   through?" WhatsApp messages.
+2. Battery and data on slow phones (small). The van keeps animating while
+   the page is open. It only uses the cheapest kind of movement and costs
+   no data, but a later batch could stop the loop when the page is in the
+   background or after a minute, to be kind to older phones' batteries.
+   (You asked for it to never stop, so I did not do this.)
+
+------------------------------------------------------------
+PULL REQUEST
+------------------------------------------------------------
+
+https://github.com/naeemBro17/naeems/pull/new/feature/batch-69-order-placed

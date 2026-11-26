@@ -143,117 +143,6 @@
   width: 100%;
 }
 
-.cf-burst {
-  height: 196px;
-  display: grid;
-  place-items: center;
-  padding-top: 48px;
-}
-
-.cf-burst > * {
-  grid-area: 1 / 1;
-}
-
-.cf-halo {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: var(--cf-good-soft);
-  display: block;
-}
-
-.cf-ring {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  border: 2px solid var(--cf-good);
-  display: block;
-  opacity: 0;
-}
-
-.cf-disc {
-  position: relative;
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  background: var(--cf-good);
-  box-shadow: 0 10px 24px -10px rgba(24, 169, 87, 0.7);
-}
-
-.cf-arm {
-  position: absolute;
-  height: 7px;
-  transform-origin: 3.5px 50%;
-}
-
-.cf-arm--a {
-  left: 22px;
-  top: 40px;
-  width: 23px;
-  transform: rotate(45deg);
-}
-
-.cf-arm--b {
-  left: 33.5px;
-  top: 51.5px;
-  width: 40px;
-  transform: rotate(-47.2deg);
-}
-
-.cf-arm i {
-  display: block;
-  height: 100%;
-  border-radius: 4px;
-  background: #FFFFFF;
-  transform-origin: 0 50%;
-}
-
-.cf-pip {
-  width: 13px;
-  height: 36px;
-  opacity: 0;
-  background: linear-gradient(90deg, var(--color-border), var(--color-surface) 45%, var(--color-border));
-  clip-path: polygon(0 0, 100% 0, 100% 68%, 64% 100%, 36% 100%, 0 68%);
-}
-
-.cf-fallw {
-  opacity: 0;
-}
-
-.cf-drop {
-  width: 22px;
-  height: 29px;
-  transform-origin: 50% 0;
-}
-
-.cf-drop svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.cf-parts {
-  position: relative;
-  width: 0;
-  height: 0;
-}
-
-.cf-pt {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border-radius: 50%;
-  opacity: 0;
-}
-
-.cf-pt--1 {
-  background: var(--cf-good);
-}
-
-.cf-pt--2 {
-  background: var(--cf-good-2);
-}
-
 .cf-thx {
   margin: 6px 0 0;
   text-align: center;
@@ -438,49 +327,10 @@
   text-align: center;
 }
 
-/* The sequence (from the mockup; the one place allowed to be slow). */
+/* The text's timing (Batch 69 moves --t0 to after the van leaves,
+   see batch69.css). */
 .cf-placed {
   --t0: 2.05s;
-}
-
-.cf-play .cf-pip {
-  animation: cf-pip 1.6s ease-in-out both;
-}
-
-.cf-play .cf-fallw {
-  animation: cf-dropfall 1.42s linear both;
-}
-
-.cf-play .cf-drop {
-  animation: cf-swell 1.5s ease-in-out both;
-}
-
-.cf-play .cf-disc {
-  animation: cf-bloom 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) 1.43s both;
-}
-
-.cf-play .cf-halo {
-  animation: cf-pop 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) 1.6s both;
-}
-
-.cf-play .cf-ring--1 {
-  animation: cf-splashring 1s cubic-bezier(0.2, 0.7, 0.3, 1) 1.42s both;
-}
-
-.cf-play .cf-ring--2 {
-  animation: cf-splashring 1s cubic-bezier(0.2, 0.7, 0.3, 1) 1.66s both;
-}
-
-.cf-play .cf-arm--a i {
-  animation: cf-draw 0.2s ease-out 1.9s both;
-}
-
-.cf-play .cf-arm--b i {
-  animation: cf-draw 0.24s ease-out 2.08s both;
-}
-
-.cf-play .cf-pt {
-  animation: cf-splash 0.85s cubic-bezier(0.2, 0.7, 0.4, 1) var(--d) both;
 }
 
 .cf-play .cf-fu {
@@ -489,67 +339,6 @@
 
 .cf-play .cf-name__w span {
   animation: cf-slot 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.15) calc(var(--t0) + 0.1s + var(--i) * 32ms) both;
-}
-
-/* The final state (a reload, or reduced motion): no pipette or drop. */
-.cf-placed:not(.cf-play) .cf-pip,
-.cf-placed:not(.cf-play) .cf-fallw,
-.cf-placed:not(.cf-play) .cf-pt,
-.cf-placed:not(.cf-play) .cf-ring {
-  display: none;
-}
-
-@keyframes cf-pip {
-  0% { opacity: 0; transform: translateY(-104px); }
-  16%, 66% { opacity: 1; transform: translateY(-92px); }
-  86%, 100% { opacity: 0; transform: translateY(-100px); }
-}
-
-@keyframes cf-dropfall {
-  0% { opacity: 0; transform: translateY(-59px); }
-  14% { opacity: 1; transform: translateY(-59px); }
-  66% { opacity: 1; transform: translateY(-59px); animation-timing-function: cubic-bezier(0.5, 0, 1, 0.55); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes cf-swell {
-  0%, 16% { transform: scale(0.12); opacity: 1; }
-  52% { transform: scale(0.96, 1.04); }
-  58% { transform: scale(1.04, 0.97); }
-  63% { transform: scale(0.97, 1.05); }
-  68% { transform: scale(0.94, 1.14); }
-  92% { transform: scale(0.9, 1.18); opacity: 1; }
-  95% { transform: scale(1.6, 0.32); opacity: 0.9; }
-  100% { transform: scale(1.9, 0.14); opacity: 0; }
-}
-
-@keyframes cf-bloom {
-  0% { opacity: 0; transform: scale(0.12); }
-  3% { opacity: 1; }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes cf-pop {
-  from { opacity: 0; transform: scale(0.4); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes cf-splashring {
-  0% { opacity: 0; transform: scale(0.25); }
-  3% { opacity: 0.7; }
-  100% { opacity: 0; transform: scale(2.1); }
-}
-
-@keyframes cf-draw {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-
-@keyframes cf-splash {
-  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  12% { opacity: 1; }
-  50% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); }
-  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.25), calc(var(--dy) + 28px)) scale(0.6); }
 }
 
 @keyframes cf-fu {
@@ -565,13 +354,6 @@
 @media (prefers-reduced-motion: reduce) {
   .cf-play * {
     animation: none !important;
-  }
-
-  .cf-pt,
-  .cf-ring,
-  .cf-fallw,
-  .cf-pip {
-    display: none;
   }
 }
 

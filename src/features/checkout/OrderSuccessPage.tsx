@@ -8,10 +8,12 @@ import { ActionLink } from '../../components/shared/ActionLink';
 // shopping. Promo usage is committed server-side inside place_order().
 //
 // Batch 48: rebuilt to docs/design/batch-48-checkout-mockup.html — no
-// stepper; a serum drop falls from a pipette, splashes and blooms into the
-// green tick (transform and opacity only), then the customer's name rolls
-// up letter by letter. It plays once, when the customer arrives from
-// "Place order"; a reload (or reduced motion) shows the final state.
+// stepper; the customer's name rolls up letter by letter.
+// Batch 69: the serum drop is replaced by the shop-to-home van scene
+// (PlacedScene): a parcel leaves the NAEEM'S shop, hops into the van and the
+// van drives toward the customer's home (transform and opacity only). It
+// plays once, when the customer arrives from "Place order"; a reload (or
+// reduced motion) shows the still final picture.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -25,39 +27,14 @@ import { isWalletMethod } from '../../lib/advanceDiscount';
 import { openExternal, orderHelpWhatsAppUrl } from '../../lib/expertLinks';
 import { useCheckoutState } from './useCheckoutState';
 import { arrivalText } from '../../lib/sellRules';
+import { PlacedScene } from '../../components/checkout/PlacedScene';
 import '../../styles/checkoutFinish.css';
+import '../../styles/batch69.css';
 
-/** When the drop splashes (ms after the sequence starts). */
-const SPLASH_AT_MS = 1420;
 /** Names longer than this use the smaller hero size. */
 const LONG_NAME = 16;
 
 type CssVars = CSSProperties & Record<`--${string}`, string>;
-
-interface Droplet {
-  style: CssVars;
-  tone: 1 | 2;
-}
-
-/** Nine small droplets thrown up and out by the splash. */
-function makeDroplets(): Droplet[] {
-  return Array.from({ length: 9 }, (_, i) => {
-    const angle = Math.PI + (i / 8) * Math.PI + (Math.random() - 0.5) * 0.25;
-    const distance = 34 + Math.random() * 30;
-    const size = 4 + Math.round(Math.random() * 4);
-    return {
-      tone: i % 2 ? 1 : 2,
-      style: {
-        '--dx': `${(Math.cos(angle) * distance).toFixed(1)}px`,
-        '--dy': `${(Math.sin(angle) * distance).toFixed(1)}px`,
-        '--d': `${(1.42 + Math.random() * 0.08).toFixed(2)}s`,
-        width: `${size}px`,
-        height: `${size}px`,
-        margin: `${-size / 2}px 0 0 ${-size / 2}px`,
-      },
-    };
-  });
-}
 
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -111,7 +88,6 @@ export function OrderSuccessPage() {
   const navigate = useNavigate();
   // Decided once, on arrival: play only straight after "Place order".
   const [play] = useState(() => Boolean(lastOrder && !lastOrder.celebrated && !prefersReducedMotion()));
-  const [droplets] = useState(makeDroplets);
 
   // The order number is passed as both trackers' event/transaction id, so
   // even if this effect (or a page refresh landing back here) fires twice,
@@ -126,17 +102,19 @@ export function OrderSuccessPage() {
     if (lastOrder && !lastOrder.celebrated) markCelebrated();
   }, [lastOrder, markCelebrated]);
 
-  // A short buzz on Android as the drop lands. Never with reduced motion.
+  // Batch 69: a short buzz when the parcel lands in the van, a double one
+  // as the van drives off. Never with reduced motion (play is off then).
   useEffect(() => {
     if (!play) return;
-    const timer = window.setTimeout(() => {
+    const buzz = (pattern: number | number[]) => {
       try {
-        if (typeof navigator.vibrate === 'function') navigator.vibrate([12, 70, 18]);
+        if (typeof navigator.vibrate === 'function') navigator.vibrate(pattern);
       } catch {
         // Some browsers refuse vibration outright; the screen is the same.
       }
-    }, SPLASH_AT_MS);
-    return () => window.clearTimeout(timer);
+    };
+    const timers = [window.setTimeout(() => buzz(12), 1300), window.setTimeout(() => buzz([14, 60, 20]), 1650)];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [play]);
 
   if (!lastOrder) {
@@ -175,34 +153,8 @@ export function OrderSuccessPage() {
         <h1 className="detail-header__title">Order Placed</h1>
       </header>
 
-      <main className={`detail-main cf-placed${play ? ' cf-play' : ''}`} data-testid="order-placed" data-played={play ? 'yes' : 'no'}>
-        <div className="cf-burst" aria-hidden="true">
-          <i className="cf-halo" />
-          <i className="cf-ring cf-ring--1" />
-          <i className="cf-ring cf-ring--2" />
-          <div className="cf-disc">
-            <span className="cf-arm cf-arm--a">
-              <i />
-            </span>
-            <span className="cf-arm cf-arm--b">
-              <i />
-            </span>
-          </div>
-          <i className="cf-pip" />
-          <div className="cf-fallw">
-            <div className="cf-drop">
-              <svg viewBox="0 0 26 34">
-                <path d="M13 1C13 1 2 14 2 21.5a11 11 0 0 0 22 0C24 14 13 1 13 1z" fill="var(--cf-good)" />
-                <ellipse cx="9" cy="21" rx="2.2" ry="3.4" fill="#FFFFFF" opacity=".45" />
-              </svg>
-            </div>
-          </div>
-          <div className="cf-parts">
-            {droplets.map((drop, i) => (
-              <i key={i} className={`cf-pt cf-pt--${drop.tone}`} style={drop.style} />
-            ))}
-          </div>
-        </div>
+      <main className={`detail-main cf-placed cf-b69${play ? ' cf-play' : ''}`} data-testid="order-placed" data-played={play ? 'yes' : 'no'}>
+        <PlacedScene play={play} />
 
         <p className="cf-thx cf-fu" style={fadeUp('0s')}>
           Thank you,

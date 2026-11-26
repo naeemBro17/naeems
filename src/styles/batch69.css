@@ -1,0 +1,330 @@
+/* Batch 69: the Order Placed scene. Scoped under .b69-scene; only
+   transform and opacity animate; reduced motion gets the still picture. */
+.b69-scene {
+  --b69-wall: #ffffff;
+  --b69-wall2: #ececef;
+  --b69-ink: #0b0a09;
+  --b69-stripe: #ffffff;
+  --b69-win: #1c1c1e;
+  --b69-warm: #ffd27a;
+  --b69-warm-glow: rgba(255, 190, 90, 0.55);
+  --b69-line: #e5e5ea;
+  --b69-road: rgba(11, 10, 9, 0.16);
+  --b69-body: #ffffff;
+  --b69-shade: #ededf0;
+  --b69-vanline: #dcdce1;
+  --b69-glass: #1c1c1e;
+  --b69-shadow: rgba(0, 0, 0, 0.16);
+  --b69-dust: rgba(11, 10, 9, 0.1);
+  --b69-speed: rgba(11, 10, 9, 0.18);
+  position: relative;
+  height: 184px;
+  margin: 0 -16px;
+  overflow: hidden;
+}
+:root[data-theme='dark'] .b69-scene {
+  --b69-wall: #2c2c2e;
+  --b69-wall2: #3a3a3c;
+  --b69-ink: #e9e9ec;
+  --b69-stripe: #1c1c1e;
+  --b69-win: #0b0a09;
+  --b69-line: #2c2c2e;
+  --b69-road: rgba(255, 255, 255, 0.2);
+  --b69-body: #f4f4f6;
+  --b69-shade: #dadadf;
+  --b69-vanline: #c9c9cf;
+  --b69-glass: #0b0a09;
+  --b69-shadow: rgba(0, 0, 0, 0.6);
+  --b69-dust: rgba(255, 255, 255, 0.14);
+  --b69-speed: rgba(255, 255, 255, 0.24);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .b69-scene {
+    --b69-wall: #2c2c2e;
+    --b69-wall2: #3a3a3c;
+    --b69-ink: #e9e9ec;
+    --b69-stripe: #1c1c1e;
+    --b69-win: #0b0a09;
+    --b69-line: #2c2c2e;
+    --b69-road: rgba(255, 255, 255, 0.2);
+    --b69-body: #f4f4f6;
+    --b69-shade: #dadadf;
+    --b69-vanline: #c9c9cf;
+    --b69-glass: #0b0a09;
+    --b69-shadow: rgba(0, 0, 0, 0.6);
+    --b69-dust: rgba(255, 255, 255, 0.14);
+    --b69-speed: rgba(255, 255, 255, 0.24);
+  }
+}
+
+/* The text starts after the van leaves (it used to follow the drop). */
+.cf-placed.cf-b69 {
+  --t0: 2.3s;
+}
+
+.b69-f-wall { fill: var(--b69-wall); }
+.b69-f-wall2 { fill: var(--b69-wall2); }
+.b69-f-ink { fill: var(--b69-ink); }
+.b69-s-ink { stroke: var(--b69-ink); }
+.b69-f-stripe { fill: var(--b69-stripe); }
+.b69-f-win { fill: var(--b69-win); }
+.b69-f-warm { fill: var(--b69-warm); }
+.b69-s-line { stroke: var(--b69-line); }
+.b69-s-wall { stroke: var(--b69-wall); }
+.b69-f-body { fill: var(--b69-body); }
+.b69-f-shade { fill: var(--b69-shade); }
+.b69-f-glass { fill: var(--b69-glass); }
+.b69-s-van { stroke: var(--b69-vanline); }
+.b69-sign,
+.b69-vanname {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+}
+.b69-sign { font-size: 10px; letter-spacing: 0.8px; }
+.b69-vanname { font-size: 11.5px; letter-spacing: 0.8px; }
+
+.b69-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 36px;
+  height: 1.5px;
+  background: var(--b69-road);
+}
+.b69-lanes {
+  position: absolute;
+  left: 0;
+  bottom: 24px;
+  width: 1200px;
+  height: 2px;
+  opacity: 0.7;
+  background: repeating-linear-gradient(90deg, var(--b69-road) 0 18px, transparent 18px 44px);
+}
+
+/* The drawing is 390 px wide; narrower phones scale it around the road line. */
+.b69-stage {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 390px;
+  height: 184px;
+  margin-left: -195px;
+  transform-origin: 50% calc(100% - 36px);
+}
+@media (max-width: 379px) {
+  .b69-stage { transform: scale(0.92); }
+}
+@media (max-width: 349px) {
+  .b69-stage { transform: scale(0.84); }
+}
+
+.b69-shop {
+  position: absolute;
+  left: 6px;
+  bottom: 36px;
+  width: 104px;
+  height: 116px;
+  transform-origin: 50% 100%;
+}
+.b69-house {
+  position: absolute;
+  right: 8px;
+  bottom: 36px;
+  width: 86px;
+  height: 100px;
+  transform-origin: 50% 100%;
+}
+.b69-shop svg,
+.b69-house svg,
+.b69-parcel svg,
+.b69-van svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.b69-door {
+  transform-box: fill-box;
+  transform-origin: 0 50%;
+}
+.b69-glow {
+  position: absolute;
+  left: 24px;
+  top: 46px;
+  width: 38px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--b69-warm-glow);
+  filter: blur(10px);
+  opacity: 0;
+}
+.b69-lit { opacity: 0; }
+.b69-parcel {
+  position: absolute;
+  left: 14px;
+  bottom: 36px;
+  width: 34px;
+  height: 31px;
+  opacity: 0;
+  transform-origin: 50% 100%;
+}
+.b69-van {
+  position: absolute;
+  left: 78px;
+  bottom: 33px;
+  width: 150px;
+  height: 82px;
+  transform-origin: 50% 100%;
+}
+.b69-van__body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+.b69-wheel {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.b69-vansh {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -2px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--b69-shadow);
+  filter: blur(4px);
+}
+.b69-speed {
+  position: absolute;
+  left: -44px;
+  top: 22px;
+  width: 44px;
+  height: 44px;
+  opacity: 0;
+}
+.b69-speed i {
+  position: absolute;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--b69-speed);
+}
+.b69-speed i:nth-child(1) { top: 4px; width: 30px; }
+.b69-speed i:nth-child(2) { top: 18px; width: 42px; }
+.b69-speed i:nth-child(3) { top: 32px; width: 24px; }
+.b69-dust {
+  position: absolute;
+  left: -4px;
+  bottom: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--b69-dust);
+  opacity: 0;
+}
+
+/* The still final picture: a reload, or reduced motion. */
+.b69-scene:not(.b69--play) .b69-van { transform: translateX(48px); }
+.b69-scene:not(.b69--play) .b69-lit,
+.b69-scene:not(.b69--play) .b69-glow { opacity: 1; }
+
+/* The play (seconds): 0.00 shop and home appear, 0.45 door opens,
+   0.60 parcel comes out, 1.00 parcel hops into the van (buzz 1.30),
+   1.60 van leaves (buzz 1.65) and keeps driving for good,
+   2.20 the window lights up, 2.30 the text rises. */
+.b69--play .b69-shop { animation: b69-pop 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.b69--play .b69-house { animation: b69-pop 0.45s 0.12s cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+@keyframes b69-pop {
+  from { opacity: 0; transform: scale(0.8) translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.b69--play .b69-door {
+  animation: b69-door-open 0.3s 0.45s cubic-bezier(0.3, 0.7, 0.4, 1) forwards,
+    b69-door-shut 0.28s 1.4s cubic-bezier(0.5, 0, 0.7, 0.4) forwards;
+}
+@keyframes b69-door-open { to { transform: scaleX(0.18); } }
+@keyframes b69-door-shut {
+  from { transform: scaleX(0.18); }
+  to { transform: none; }
+}
+.b69--play .b69-parcel {
+  animation: b69-parcel-out 0.42s 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+    b69-parcel-hop 0.38s 1s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+@keyframes b69-parcel-out {
+  0% { opacity: 0; transform: translateX(0) scale(0.7); }
+  40% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(34px) scale(1); }
+}
+@keyframes b69-parcel-hop {
+  0% { opacity: 1; transform: translateX(34px); }
+  55% { opacity: 1; transform: translate(56px, -30px) rotate(10deg) scale(0.9); }
+  100% { opacity: 0; transform: translate(80px, -18px) rotate(16deg) scale(0.6); }
+}
+.b69--play .b69-van { animation: b69-van-go 0.95s 1.6s cubic-bezier(0.45, 0, 0.25, 1) forwards; }
+@keyframes b69-van-go { to { transform: translateX(48px); } }
+.b69--play .b69-van__body {
+  animation: b69-load 0.3s 1.32s ease, b69-lean 0.9s 1.6s cubic-bezier(0.3, 0.6, 0.4, 1),
+    b69-bob 0.62s 2.55s ease-in-out infinite;
+}
+@keyframes b69-load {
+  0% { transform: none; }
+  45% { transform: translateY(3px); }
+  100% { transform: none; }
+}
+@keyframes b69-lean {
+  0% { transform: none; }
+  25% { transform: rotate(-1.8deg) translateY(-1px); }
+  100% { transform: none; }
+}
+@keyframes b69-bob {
+  0%, 100% { transform: none; }
+  50% { transform: translateY(-0.9px); }
+}
+.b69--play .b69-wheel {
+  animation: b69-spin-up 0.95s 1.6s cubic-bezier(0.45, 0, 1, 1), b69-spin 0.42s 2.55s linear infinite;
+}
+@keyframes b69-spin-up {
+  from { transform: none; }
+  to { transform: rotate(540deg); }
+}
+@keyframes b69-spin {
+  from { transform: none; }
+  to { transform: rotate(360deg); }
+}
+.b69--play .b69-lanes {
+  animation: b69-lane-up 0.95s 1.6s cubic-bezier(0.45, 0, 1, 1), b69-lane 0.5s 2.55s linear infinite;
+}
+@keyframes b69-lane-up {
+  from { transform: none; }
+  to { transform: translateX(-44px); }
+}
+@keyframes b69-lane {
+  from { transform: none; }
+  to { transform: translateX(-44px); }
+}
+.b69--play .b69-speed { animation: b69-speed-lines 1.2s 1.75s ease-out infinite; }
+@keyframes b69-speed-lines {
+  0% { opacity: 0; transform: translateX(16px); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-20px); }
+}
+.b69--play .b69-dust { animation: b69-dust 0.7s 1.62s ease-out both; }
+.b69--play .b69-dust:nth-of-type(2) { animation-delay: 1.7s; left: 4px; bottom: 0; }
+.b69--play .b69-dust:nth-of-type(3) { animation-delay: 1.78s; left: -8px; bottom: 8px; }
+@keyframes b69-dust {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-28px, -12px) scale(2.2); }
+}
+.b69--play .b69-lit { animation: b69-on 0.4s 2.2s ease forwards; }
+.b69--play .b69-glow { animation: b69-on 0.7s 2.2s ease forwards; }
+@keyframes b69-on { to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .b69--play *,
+  .b69--play {
+    animation: none !important;
+  }
+}
