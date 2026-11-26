@@ -1,0 +1,356 @@
+FIX 69.2: close the ৳3,199 balance gap (CeraVe refill) + one tick in "Saved"
+Date: 27 Nov 2026. Branch: fix/batch-69-2-balance-gap. Version 1.69.2.
+
+Live data was only READ. I changed NO data in Supabase. The fix below is
+NOT RUN. I tested it twice inside a transaction that was undone on
+purpose. Afterwards I checked that nothing had stuck: the live rows and
+even the balance check's daily log were exactly as before.
+
+Times are Dhaka time.
+Product: "CeraVe Foaming Cleanser Eco-Recharge Refill 473mL"
+(id 53bc91d4-327d-468e-b2af-f9774787a3af, no options/variants).
+
+
+=====================================================================
+1. WHAT I FOUND
+=====================================================================
+
+1.1 Lot rows for this refill (lot_items)
+----------------------------------------
+  L-013 (purchase, Amazon. AU, 17 Nov)   row b737887f-08a0-40da-a57a-957a81dab5e8
+    qty 473, remaining 0, ৳2.663848/ml, value ৳1,260. Added 17 Nov 05:02.
+    Sold whole to NM-3893 (Riba). Fine, not part of the problem.
+
+  L-017 (purchase, Amazon. AU, 23 Nov)   row 5bae8227-2d12-40e8-909a-ac2fc7872ef2
+    qty 200, remaining 100, ৳2.70/ml, value ৳540. Its history:
+      23 Nov 20:45  lot created with 1 ml
+      23 Nov 20:57  edited 1 → 100
+      23 Nov 20:58  NM-3891 (Lamia) took 100 → 0 left
+      26 Nov 00:34  edited 100 → 200 → 100 left   <- the extra 100 is not real
+    It is the only row in L-017. No lot costs, no receipts, no
+    "paid for this lot" money entries.
+
+  L-000 (opening)                         row 06d80f05-d7c6-4829-a0a4-7dc855ba8d50
+    qty 473, remaining 373, ৳2.70/ml, value ৳1,277.10.
+    Added 26 Nov 00:34 by the NM-3321 edit ("Back from an order sold
+    before Inventory mode"). This is the phantom row.
+
+  Two test orders (NM-7564 on 26 Nov 01:45, NM-7676 on 26 Nov 15:57) took
+  this stock and were cancelled straight away. They gave everything back,
+  so they have no effect.
+
+1.2 Lot links (order_item_lots) taking from those rows
+------------------------------------------------------
+  NM-3893  L-013  473 ml, back 0   (link 15db6f4c-...)
+  NM-3891  L-017  100 ml, back 0   (link ed5e926a-73a6-...)  Lamia
+  NM-3321  L-000  100 ml, back 0   (link cfd438cd-bf4f-48c1-b3d0-485591ff339e)
+
+1.3 Lamia's order: NM-3891 ("Lamia Binte Mannaf")
+-------------------------------------------------
+  Placed 16 Nov 16:10, status Confirmed (not delivered yet), total ৳4,240.
+  Line: 100 ml × ৳10 = ৳1,000 (item 8396f44c-0656-4b70-b2a5-9b68d445840f).
+  Takes its 100 ml from L-017 already, correctly.
+  Cost row (order_item_costs): ৳2.70/ml, source "lots".
+  Nothing needs to change on this order.
+
+1.4 NM-3321 ("Afsana")
+----------------------
+  Placed 29 Oct 14:54, Delivered, total ৳3,469.
+  Line now: 100 ml × ৳10 = ৳1,000 (item 4660594f-f475-4a85-ac8a-8f50b33d4019).
+  Takes its 100 ml from the phantom L-000 row (link above).
+  Cost row: ৳2.70/ml, source "lots".
+
+1.5 The product now
+-------------------
+  stock_quantity 1 (shown "in stock"), pack_size 473, stock_unit ml.
+  That 1 pack = 373 ml (L-000) + 100 ml (L-017) = 473 ml.
+  Inventory mode: ON. No month is locked.
+
+1.6 The balance check now (run inside an undone transaction)
+------------------------------------------------------------
+  Difference ৳3,199.00. Still the same gap the audit found.
+
+1.7 What the books think happened, and where it differs from the shelf
+----------------------------------------------------------------------
+  The books' story:
+   1. Before 13 Nov, three whole refill bottles were sold (NM-2851,
+      NM-3313, NM-3321). None was left for the 13 Nov opening.
+   2. 17 Nov: one bottle bought (L-013), sold whole to Riba (NM-3893).
+   3. 23 Nov: 100 ml bought (L-017), sold to Lamia (NM-3891). 0 left.
+   4. 26 Nov 00:34: you changed NM-3321 from "1 bottle" to "100 ml". The
+      app thought a whole bottle had come back, so it made a new 473 ml
+      row in L-000. The 100 ml line then took from that row. 373 ml
+      phantom left.
+   5. Same minute: L-017 raised from 100 to 200. Another 100 ml phantom.
+   So the books now say 473 ml is on the shelf (1 pack).
+
+  The shelf: 0 ml. Two 100 ml sales (NM-3321 and Lamia's NM-3891).
+
+  Where they differ: the 373 ml in L-000 and the extra 100 ml in L-017
+  do not exist. NM-3321 was sold on 29 Oct, before the money start date.
+  So its 100 ml cannot come from any lot. It belongs in "sold before
+  13 Nov", like the order's other lines.
+
+  Does the data fit your shelf facts? Yes. Lamia's 100 ml already comes
+  from L-017's real 100 ml. NM-3321's 100 ml was sold from stock before
+  13 Nov. With the two phantoms removed, 0 ml is left, which is what you
+  counted. So I did not need two options.
+
+
+=====================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE         *** FIX — NOT RUN ***
+=====================================================================
+
+FIX NAEEM CAN RUN
+-----------------
+It does four things:
+  - removes NM-3321's link to the phantom L-000 row
+  - deletes that phantom row
+  - sets L-017 back to 100 ml (0 left, value ৳270)
+  - adds one history line on L-017: "Lot edited: units 200 → 100 ...",
+    the same kind of line the app writes when you edit a lot
+The shop's stock then updates by itself to 0 / out of stock, because
+Inventory mode is ON. Keep Inventory mode ON when you run this.
+
+Step 1. Look first (changes nothing). Paste and run:
+
+  SELECT 'link' AS what, x.id::text AS id, o.order_number AS ref,
+         x.units AS qty, x.units_back AS remaining, NULL::numeric AS value
+  FROM order_item_lots x JOIN orders o ON o.id = x.order_id
+  WHERE x.lot_item_id IN ('06d80f05-d7c6-4829-a0a4-7dc855ba8d50',
+                          '5bae8227-2d12-40e8-909a-ac2fc7872ef2')
+  UNION ALL
+  SELECT 'lot row', li.id::text, l.code, li.qty, li.qty_remaining, li.buy_value_bdt
+  FROM lot_items li JOIN lots l ON l.id = li.lot_id
+  WHERE li.product_id = '53bc91d4-327d-468e-b2af-f9774787a3af'
+  UNION ALL
+  SELECT 'shop stock', id::text, stock_status, stock_quantity, NULL, NULL
+  FROM products WHERE id = '53bc91d4-327d-468e-b2af-f9774787a3af'
+  ORDER BY 1, 3;
+
+  You must see exactly these 6 rows:
+    link       cfd438cd-...  NM-3321   qty 100  remaining 0
+    link       ed5e926a-...  NM-3891   qty 100  remaining 0
+    lot row    06d80f05-...  L-000     qty 473  remaining 373  value 1277.1000
+    lot row    b737887f-...  L-013     qty 473  remaining 0    value 1260.0000
+    lot row    5bae8227-...  L-017     qty 200  remaining 100  value 540.0000
+    shop stock 53bc91d4-...  in_stock  qty 1
+  If you see anything different, STOP and do not run step 2.
+
+Step 2. The change. Paste ALL of it and run it once:
+
+  BEGIN;
+
+  DELETE FROM order_item_lots
+  WHERE id = 'cfd438cd-bf4f-48c1-b3d0-485591ff339e'
+    AND order_item_id = '4660594f-f475-4a85-ac8a-8f50b33d4019'
+    AND lot_item_id = '06d80f05-d7c6-4829-a0a4-7dc855ba8d50'
+    AND units = 100 AND units_back = 0;
+
+  DELETE FROM lot_items
+  WHERE id = '06d80f05-d7c6-4829-a0a4-7dc855ba8d50'
+    AND product_id = '53bc91d4-327d-468e-b2af-f9774787a3af'
+    AND qty = 473 AND qty_remaining = 373;
+
+  UPDATE lot_items
+  SET qty = 100, qty_remaining = 0, buy_value_bdt = 270.0000
+  WHERE id = '5bae8227-2d12-40e8-909a-ac2fc7872ef2'
+    AND product_id = '53bc91d4-327d-468e-b2af-f9774787a3af'
+    AND qty = 200 AND qty_remaining = 100 AND buy_value_bdt = 540.0000;
+
+  INSERT INTO stock_movements (lot_item_id, movement_type, qty, reference, reason, created_by)
+  SELECT '5bae8227-2d12-40e8-909a-ac2fc7872ef2', 'purchase', -100, 'L-017',
+         'Lot edited: units 200 → 100 (Fix 69.2: NM-3321 was sold before 13 Nov)',
+         '13393250-4483-481d-9d50-46786d1b6771'
+  WHERE EXISTS (SELECT 1 FROM lot_items
+                WHERE id = '5bae8227-2d12-40e8-909a-ac2fc7872ef2'
+                  AND qty = 100 AND qty_remaining = 0);
+
+  SELECT set_config('request.jwt.claims',
+    '{"sub":"13393250-4483-481d-9d50-46786d1b6771","role":"authenticated","aal":"aal2"}', true);
+
+  DO $$
+  BEGIN
+    IF abs((money_position() ->> 'difference')::numeric) >= 0.01
+       OR (SELECT stock_quantity FROM products WHERE id = '53bc91d4-327d-468e-b2af-f9774787a3af') <> 0
+       OR EXISTS (SELECT 1 FROM lot_items WHERE product_id = '53bc91d4-327d-468e-b2af-f9774787a3af' AND qty_remaining <> 0)
+       OR EXISTS (SELECT 1 FROM lot_items WHERE id = '06d80f05-d7c6-4829-a0a4-7dc855ba8d50')
+       OR NOT EXISTS (SELECT 1 FROM stock_movements WHERE lot_item_id = '5bae8227-2d12-40e8-909a-ac2fc7872ef2'
+                      AND reason LIKE 'Lot edited: units 200 → 100 (Fix 69.2%') THEN
+      RAISE EXCEPTION 'STOP: the fix did not come out right. Nothing was saved.';
+    END IF;
+  END $$;
+
+  SELECT money_position() ->> 'difference' AS difference_now;
+
+  COMMIT;
+
+  What you will see:
+  - "Success" (Supabase may show difference_now 0.00, or just "no rows",
+    because the last line is COMMIT). The fix is saved.
+  - An error "STOP: the fix did not come out right. Nothing was saved."
+    Nothing was saved. Do not run it again. Tell me what Step 1 shows.
+  - If you ever see difference_now as anything other than 0, change the
+    last line from COMMIT; to ROLLBACK; and run again. (The STOP check
+    should already have caught this, so you should never need to.)
+
+Step 3. Confirm afterwards (changes nothing except the balance check's
+own daily log line, the same as opening the Money page):
+
+  SELECT set_config('request.jwt.claims',
+    '{"sub":"13393250-4483-481d-9d50-46786d1b6771","role":"authenticated","aal":"aal2"}', true);
+  SELECT
+    (SELECT stock_quantity FROM products
+      WHERE id = '53bc91d4-327d-468e-b2af-f9774787a3af') AS shop_stock,
+    (SELECT string_agg(l.code || ' ' || li.qty || '/' || li.qty_remaining, ', ' ORDER BY l.code)
+       FROM lot_items li JOIN lots l ON l.id = li.lot_id
+      WHERE li.product_id = '53bc91d4-327d-468e-b2af-f9774787a3af') AS lot_rows,
+    (SELECT count(*) FROM order_item_lots x JOIN orders o ON o.id = x.order_id
+      WHERE o.order_number = 'NM-3321') AS nm3321_links,
+    money_position() ->> 'difference' AS difference;
+
+  You should see: shop_stock 0, lot_rows "L-013 473/0, L-017 100/0",
+  nm3321_links 0, difference 0.00.
+  In the app: the refill shows Out of stock; Money shows "All figures match".
+
+The numbers before and after
+----------------------------
+These are from the undone test against the live data, not worked out by
+hand:
+
+                                     Before          After
+  Opening stock (13 Nov) ........ ৳111,635.10    ৳110,358.00   (−1,277.10)
+  Opening site orders ........... ৳5,968.00      ৳9,437.00     (+3,469.00)
+  Opening total ................. −৳38,816.90    −৳36,625.00
+  Should be ..................... −৳26,797.10    −৳24,605.20
+  Worth today ................... −৳23,598.10    −৳24,605.20   (−1,007.10)
+  DIFFERENCE .................... ৳3,199.00      ৳0.00
+  Stock left (value of all lots)  ৳116,833.21    ৳115,556.11   (−1,277.10:
+                                    the 373 ml phantom ৳1,007.10 + L-017's
+                                    extra 100 ml ৳270)
+  Refill stock .................. 1 pack (473ml) 0 (out of stock)
+  Owed to suppliers ............. ৳29,466.00     ৳29,196.00    (−270, see 3)
+  Goods on open orders .......... ৳5,658.69      ৳5,658.69     unchanged
+  Customers owe you ............. ৳28,345.00     ৳28,345.00    unchanged
+  Open orders value ............. ৳17,948.00     ৳17,948.00    unchanged
+  Profit since 13 Nov ........... ৳11,019.80     ৳11,019.80    unchanged
+  Cash .......................... ৳26,751       unchanged
+  bKash ......................... ৳30,290       unchanged
+  Bank .......................... ৳5,905        unchanged
+  Nagad ......................... ৳0            unchanged
+  With Steadfast ................ ৳16,184       unchanged
+  (The accounts differ from the audit's 26 Nov figures because of money
+  entries made since then, e.g. the NM-5008 ৳20 fix. Those have nothing
+  to do with this gap.)
+
+Tests I ran (all undone, nothing kept):
+  1. The four changes on their own, inside a block that ends with a
+     deliberate error, so the database undoes everything. Each change hit
+     exactly 1 row. Difference came out 0.00, stock 0, out of stock. Both
+     remaining lot rows were at 0. All accounts were identical before and
+     after.
+  2. The exact Step 2 block above, with only the final SELECT/COMMIT
+     replaced by a deliberate error. The STOP check passed: difference_now
+     0.00, stock 0.
+  After each test I re-read the live rows. The L-000 row, the NM-3321
+  link, L-017 200/100 and stock 1 were all still there. The balance
+  check's daily log still showed its last check from 26 Nov. Nothing
+  stuck.
+  (A first attempt at test 2 had a typo in my test file and stopped on a
+  syntax error before doing anything. I confirmed nothing changed and
+  ran it again.)
+
+
+=====================================================================
+3. WHAT I COULD NOT DO
+=====================================================================
+- I did not run the fix. You run it, as agreed.
+- "Owed to suppliers" (Amazon. AU) drops by ৳270, back to what it was
+  before the 26 Nov edit. Your list said "no money entry changes". No
+  money entry changes, but this owed figure is worked out from lot
+  values, so it must follow L-017. It is right only if L-017 was really
+  100 ml (৳270) of buying. If you actually paid or owe Amazon for 200 ml,
+  tell me before running. The fix would then need a different shape.
+- No e2e tests and no npm run verify, as you asked. The three e2e files
+  I edited (batch-33, batch-52-1, fix-rich-text-editor) have not been
+  run with the new text.
+
+
+=====================================================================
+4. FOUND ALONG THE WAY (not fixed)
+=====================================================================
+- The audit's FIX 1 format had a trap. When it ends with COMMIT, the
+  change is already saved by the time you read difference_now. So
+  "change COMMIT to ROLLBACK and run again" cannot undo it. A second run
+  just matches no rows. I added the STOP check so the block undoes
+  itself if the result is wrong. Use this pattern for future fixes.
+- NM-3321's 100 ml line keeps its cost row (৳2.70/ml, source "lots")
+  even though it will no longer take from a lot. It is before 13 Nov, so
+  it is not in profit, and the opening counts it from the order, not
+  from this row. It does no harm, but it is slightly untidy.
+- The same bug (an edit of an old order putting a whole bottle back into
+  L-000) can happen again on any order from before 13 Nov. The audit's
+  suggestions in its section 6 still apply.
+- Test orders NM-7564 and NM-7676 (from a test login) took this real
+  stock on the live shop and then cancelled. They gave it all back, but
+  tests creating orders against real live stock is a risk.
+- Deleting the phantom L-000 row also deletes its 8 history lines (the
+  "back from order" line, NM-3321's sale and give-back, and the test
+  orders' sale and give-back). They only describe the phantom. The
+  Activity Log entry for your NM-3321 edit stays.
+- UI text with a tick character in src/ (not changed, as asked):
+    src/components/admin/inventory/LotDetailView.tsx:207
+      "Allocated total = lot total ✓"
+  There are no others (no ✔, no escaped ticks).
+
+
+=====================================================================
+5. DECISIONS
+=====================================================================
+- Delete the phantom L-000 row instead of keeping it at 0 remaining.
+  Keeping it is not possible honestly. The database requires qty above 0,
+  and the 13 Nov opening counts every L-000 row by its full qty. A kept
+  row would still add 473 ml (৳1,277.10) to the opening, and the gap
+  would stay. The row never matched anything on the shelf, so removing
+  it is the honest record. The trail of what happened stays in the
+  Activity Log, this report, and the new L-017 history line.
+- L-017 set to 100, not left at 200. With NM-3321 counted as "sold
+  before 13 Nov", only Lamia's 100 ml comes from L-017. L-017's own
+  history shows it held 100 when Lamia bought. The 100 → 200 edit at
+  00:34 on 26 Nov was made to cover NM-3321. So 100 makes it end at 0,
+  matching the shelf.
+- I added the L-017 history line in the app's own wording ("Lot edited:
+  units 200 → 100"), so the lot's history page shows the correction.
+- I did not touch the shop stock directly. With Inventory mode ON, the
+  app's own trigger sets it to 0 / out of stock. That is safer than
+  writing it by hand, and the STOP check confirms it happened.
+- Tick text: changed to plain "Saved", which is what every other admin
+  screen already shows (AdvanceDiscountPanel, CustomerNotes, the edit
+  sheets). The tests now look for the exact text "Saved", so they cannot
+  match a longer text that only contains that word.
+
+Code change (Part 3):
+  src/components/admin/ProductEditorForm.tsx:492  'Saved ✓' → 'Saved'
+  e2e/batch-33.spec.ts, e2e/batch-52-1.spec.ts,
+  e2e/fix-rich-text-editor.spec.ts: expect "Saved" (exact)
+  package.json / package-lock.json: 1.69.2
+  npm run build: PASSED, zero errors.
+  npx vitest run: PASSED, 67 files, 923 tests.
+
+
+=====================================================================
+6. SUGGESTIONS (biggest business impact first)
+=====================================================================
+- Save the 13 Nov opening once, as fixed numbers, instead of working it
+  out again from live tables every time. Then an edit to an old order
+  can never move the balance check again. (medium)
+- When an order from before Inventory mode is edited, put back only
+  what is really returned. Or ask "is this stock really back on the
+  shelf?" before adding it to L-000. That stops phantom stock from
+  being created. (medium)
+- Give fixes like this one a proper "correct a lot" screen with a reason
+  box. Then you would not need SQL, and the history line would be
+  written for you. (medium)
+
+
+https://github.com/naeemBro17/naeems/pull/new/fix/batch-69-2-balance-gap

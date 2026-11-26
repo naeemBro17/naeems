@@ -489,7 +489,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
     setSavedTexts({ description: payload.description, how_to_use: payload.how_to_use, key_ingredients: payload.key_ingredients });
 
     await refetch();
-    showToast(footerVariant === 'page' ? 'Saved ✓' : product ? 'Product updated' : 'Product added');
+    showToast(footerVariant === 'page' ? 'Saved' : product ? 'Product updated' : 'Product added');
     if (savedId) onSaved(savedId);
   };
 
