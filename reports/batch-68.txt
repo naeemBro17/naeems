@@ -1,0 +1,156 @@
+BATCH 68: Login (Intro + Sign in) and Account redesign
+Branch: feature/batch-68-login-account (from main at 1.67.0)
+Version: 1.68.0
+
+1. WHAT I DID
+
+Account tab, not signed in. Opening the Account tab now shows a new
+full-screen Intro: the orange poster with "NAEEM'S", "SKINCARE YOU CAN
+TRUST", the three tick lines, the product picture, the ripple from the top
+right and the glass "Slide to start" bar. Sliding the black knob past 80%
+(or just tapping it) slides in the Sign in screen: cream in light mode,
+near-black in dark mode, with the glass "Continue with Google" button.
+"Back" on Sign in returns to the Intro with the knob reset. The sign-in
+itself is the same code as before (Batch 47): after Google you come back to
+the page you were on, and the login page leaves the history.
+
+Account tab, signed in (customer). New layout: photo or initials,
+"HI SADIA" (first name in capitals, "HI THERE" when there is no name),
+greeting by the phone's own clock (Good Morning 5:00 to 11:59, Good
+Afternoon 12:00 to 16:59, Good Evening otherwise, with a sun or moon; it
+re-checks every minute), "Member since Oct 2026", a Latest order card
+(order number, item count, total, status pill, 4-step bar; tapping it opens
+the order), My Orders and Wishlist tiles with counts, the wallet card, then
+Delivery details / Pre-orders / Need help?, then Log out. Every old action
+still works: the delivery details sheet, the Pre-orders sheet, WhatsApp
+help, the log-out question, the wallet card and its "wallet is open" note.
+
+Staff, admin and wholesaler accounts see exactly what they saw before.
+The checkout sign-in sheet is unchanged.
+
+Fonts. iPhones and Macs show Apple's own SF Pro (built into the phone).
+Everyone else gets Inter, a free font that looks very close. Inter only
+downloads when the Account tab opens; it is not added to the rest of the
+shop. No SF Pro files are in the project (Apple does not allow that).
+
+Picture. public/brand/account-intro.jpg was made from the code you gave
+(its fingerprint matches exactly). You can replace it: Admin -> More ->
+"Banner, Expert page, Texts" -> "Account intro picture". "Change picture"
+uploads and compresses it like other admin photos; "Use default" goes back
+to the built-in one.
+
+Tests. New e2e/batch-68.spec.ts (Intro, slide, snap back, tap, Back,
+vertical drag, short screen, dark mode, reduced motion, Google start, the
+error message, signed-in Account with greeting at 05:00 / 12:00 / 17:00 /
+02:00, latest order, counts, sheets, log-out question, admin field). New
+unit tests src/lib/greeting.test.ts. Older tests that looked at the removed
+Account layout were moved to the new layout with the same checks (batch-47,
+52, 53, 60, 64). The signed-in tests use a made-up name and made-up orders
+inside the test browser only; nothing was written to Supabase, and Log out
+is only opened and cancelled (a real log-out would also end the test
+account's other sessions).
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+
+None needed. The picture is stored as an ordinary app_settings row
+(key account_intro_image), which admins can already write. Until you upload
+one, the row does not exist and the built-in picture shows.
+
+3. WHAT I COULD NOT FINISH
+
+All the batch work is done. Not finished: the last two batch-34 re-runs
+and a closer look at batch-29 (details at the end). I stopped re-running
+tests to stay within the Supabase bandwidth limit.
+
+4. WHAT I FOUND ALONG THE WAY
+
+- Bug in the approved slider code, fixed: a vertical drag that started on
+  the knob still counted as a tap when the finger lifted, so it jumped to
+  Sign in. Now a clearly vertical move is ignored (tap and sideways slide
+  work as designed).
+- Bug in the approved CSS, fixed: the Sign in screen's shadow showed as a
+  dark strip down the right edge of the Intro even while Sign in was off
+  screen. The shadow now appears only while Sign in is shown.
+- If a signed-in customer's profile is still loading, the page shows the
+  loading skeleton with the old header (before, it could show an empty
+  page for a moment).
+- Old CSS for the previous Account look (welcome card, glass list rows,
+  glow) was removed after checking nothing else used it. The colour
+  variables the Pre-orders sheet and the wallet note still use were kept.
+- Facebook / Messenger in-app browser: tapping Google shows the "Google
+  login does not work inside this app" message and the help sheet, same as
+  before.
+- Flaky test seen during the quick run: batch-60 "Add money ... Almost
+  there!" failed once (the bKash number appears a moment after the sheet
+  opens) and passed when re-run alone. Not changed by this batch.
+
+5. DESIGN DECISIONS
+
+- Built as written in the approved mockup code. The only changes are the
+  two bug fixes above, and reading account_intro_image on its own in the
+  settings loader (adding it to the shared text-settings list would have
+  changed a type that the expert edit sheet relies on).
+- The footer under the signed-in Account sits on the page colour, so there
+  is no white band in dark mode (checked in the captures).
+- The admin field is its own small page in Banner & Texts, under a new
+  "ACCOUNT TAB" heading, with a tall orange preview.
+- Captures: reports/batch-68-screens/ (Intro light / dark / mid-drag, Sign
+  in light / dark / error, Account light / dark with a shipped order, no
+  orders at 360 and 390, night greeting with the moon, admin field).
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+
+- (Medium) Every visitor must slide past an Intro before they can sign in.
+  It is a nice brand moment, but it is one more step between a returning
+  customer and their orders. Worth watching: if sign-ins drop, show the
+  Intro only on the first visit and go straight to Sign in after that.
+- (Small) The Latest order card's small product photos are blank squares
+  for older orders whose lines have no saved picture. A neutral product
+  icon there would look less empty.
+- (Small) Google is the only sign-in. Some customers in Bangladesh do not
+  use a Google account on their phone. A phone-number (OTP) option would
+  widen who can order with saved details.
+- (Small) "Member since" uses the profile creation date; for customers who
+  ordered by WhatsApp before making an account, their real first order is
+  older. Could read the first order date instead.
+
+FULL TEST RUN (npm run verify, once, covers Batch 67 and 68)
+
+Build: passed, zero errors. Unit tests (vitest): 900 / 900 passed.
+Browser tests: parallel 265 passed, 7 failed, 135 skipped;
+serial 221 passed, 8 failed, 65 skipped (42 minutes).
+
+Batch 68's own file (batch-68.spec.ts): 3 tests "failed" in the full run
+only because Windows would not let the test save its screenshot (the PNG
+file was locked by something on the PC, e.g. sync or antivirus). Every
+check had already passed. Re-run alone: 18 / 18 passed.
+
+Known live-data failures (listed in Batch 67, not this batch's job):
+- batch-27 (3 tests): a product with only 1 in stock / a product no longer
+  listed, so "+" cannot reach 2.
+- batch-51: the live delivery-time text is "1–2 days", the test expects
+  "1 to 2 days".
+- batch-65 and batch-66 database tests: the live balance check is off by
+  ৳3,199.00 before the test even starts.
+
+Supabase outage during the run: batch-39 and batch-62 database tests got
+"502 Bad gateway" from supabase.com (their server, not the shop's code).
+
+Timing flakes (files this batch did not touch), re-run alone:
+- batch-25 "no emoji in admin": passed 3 of 3 re-runs.
+- batch-29 "a logo that cannot be read": the test passed alone, then the
+  whole file passed twice and had 2 failures on the third run. I could not
+  see which 2 (a later run cleared the details), and I stopped there
+  rather than keep hitting the live shop. Brand pages were not changed in
+  this batch. Worth one more look in the next batch.
+- batch-34 "notify-telegram-order refuses a wrong secret" (timed out at
+  30 s): passed on re-run 1. Re-runs 2 and 3 were not done (I stopped
+  re-running tests to protect the Supabase bandwidth).
+
+NOT a flake, and NOT caused by this batch (please schedule):
+- batch-35 "one main action follows the status" fails every time: the
+  admin order page now has TWO orange buttons when an order is booked.
+  The second is "Send note" in the "Note to customer" card added by
+  Batch 65 (NoteToCustomerCard.tsx, class adm-btn--primary). That breaks
+  the one-orange-per-screen rule. Fix: make "Send note" a neutral button.
+  Small. I did not change it here because it is outside this batch.

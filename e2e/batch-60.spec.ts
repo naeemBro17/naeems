@@ -104,7 +104,7 @@ async function orangeOutsidePrimary(page: Page, root: string): Promise<string[]>
 
 /* ------------------------------------------------------------ Account card */
 
-test('Account page: the My Wallet card right under the header, with a request waiting', async ({ page }) => {
+test('Account page: the My Wallet card under the My Orders / Wishlist tiles, with a request waiting', async ({ page }) => {
   test.setTimeout(90_000);
   await mockRpc(page, 'store_wallet_my', myWallet({
     balance: 3000,
@@ -117,14 +117,14 @@ test('Account page: the My Wallet card right under the header, with a request wa
   await expect(card).toContainText('৳ 3,000');
   await expect(card).toContainText('Your skincare fund');
   await expect(card).toContainText('৳ 2,000 waiting for confirmation');
-  // Right after the header, before Delivery details.
+  // Batch 68: right after the tiles, before the list that starts with Delivery details.
   const order = await page.evaluate(() => {
-    const header = document.querySelector('.account-header');
+    const tiles = document.querySelector('.b68-tiles');
     const wallet = document.querySelector('[data-testid="account-wallet"]');
-    const delivery = document.querySelector('.account-card');
-    return header?.nextElementSibling === wallet && wallet?.nextElementSibling === delivery;
+    const list = document.querySelector('[data-testid="account-list"]');
+    return tiles?.nextElementSibling === wallet && wallet?.nextElementSibling === list && list?.firstElementChild?.getAttribute('data-testid') === 'account-delivery';
   });
-  expect(order, 'header, then the wallet card, then Delivery details').toBe(true);
+  expect(order, 'tiles, then the wallet card, then Delivery details').toBe(true);
   await noSideScroll(page);
   await page.screenshot({ path: `${SHOTS}/account-card-waiting-390.png` });
   await card.click();

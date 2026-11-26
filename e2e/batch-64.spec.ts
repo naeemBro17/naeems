@@ -375,7 +375,7 @@ test.describe('Part 4: "Your wallet is open"', () => {
     await expect(note).toContainText('Your wallet is open');
     await expect(note).toContainText('You can now save with us for the products you love. Add any amount and use it on your next order.');
     // Card order on the page is unchanged (the note is outside it).
-    expect(await page.evaluate(() => document.querySelector('.account-header')?.nextElementSibling?.getAttribute('data-testid'))).toBe('account-wallet');
+    expect(await page.evaluate(() => document.querySelector('.b68-tiles')?.nextElementSibling?.getAttribute('data-testid'))).toBe('account-wallet');
     // One orange element: the main button.
     const main = note.getByRole('button', { name: 'Open my wallet' });
     const later = note.getByRole('button', { name: 'Later' });
