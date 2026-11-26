@@ -3,6 +3,7 @@
 // lights up. While `play` is on (first arrival only) the van keeps driving:
 // wheels, lane marks and a soft bob loop. Without `play` (a reload, reduced
 // motion) it is the still final picture. Only transform and opacity animate.
+// Fix 69.1: a sun by day, and a moon with stars by night (dark theme).
 const LOGO = '/icons/icon-192.png';
 
 export function PlacedScene({ play }: { play: boolean }) {
@@ -11,6 +12,28 @@ export function PlacedScene({ play }: { play: boolean }) {
       <div className="b69-road" />
       <div className="b69-lanes" />
       <div className="b69-stage">
+        <div className="b69-sky">
+          <div className="b69-sun">
+            <b />
+            <i />
+          </div>
+          <div className="b69-moon">
+            <svg viewBox="0 0 34 34">
+              <defs>
+                <mask id="b69-crescent">
+                  <rect width="34" height="34" fill="#fff" />
+                  <circle cx="23" cy="11" r="13" fill="#000" />
+                </mask>
+              </defs>
+              <circle cx="17" cy="17" r="15" fill="#F4E7C5" mask="url(#b69-crescent)" />
+            </svg>
+          </div>
+          <i className="b69-star" />
+          <i className="b69-star" />
+          <i className="b69-star" />
+          <i className="b69-star" />
+          <i className="b69-star" />
+        </div>
         <div className="b69-shop">
           <svg viewBox="0 0 104 116">
             <rect className="b69-f-wall" x="4" y="44" width="96" height="72" />

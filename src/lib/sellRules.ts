@@ -153,3 +153,36 @@ export function arrivalText(
   }
   return `Arriving ${dayLabel(from)} ${MONTH_NAMES[from.getUTCMonth()]} to ${dayLabel(to)} ${MONTH_NAMES[to.getUTCMonth()]}`;
 }
+
+/** One day chip on the Order Placed page: "FRI", 28, "Nov". */
+export interface ArrivalDay {
+  weekday: string;
+  day: number;
+  month: string;
+}
+
+/** The same days as arrivalText, as chips. `to` is null when it is one day. */
+export interface ArrivalRange {
+  from: ArrivalDay;
+  to: ArrivalDay | null;
+}
+
+export function arrivalRange(
+  placedAt: string,
+  zone: string,
+  buysLater: boolean,
+  settings: Partial<SellSettings>
+): ArrivalRange | null {
+  const t = deliveryTimes(settings);
+  const days = parseDays(buysLater ? t.buyAfter : zone === 'inside_dhaka' ? t.dhaka : t.outside);
+  if (!days) return null;
+  const start = dhakaDate(placedAt);
+  const from = addDays(start, days[0]);
+  const to = addDays(start, days[1]);
+  const chip = (date: Date): ArrivalDay => ({
+    weekday: DAY_NAMES[date.getUTCDay()].toUpperCase(),
+    day: date.getUTCDate(),
+    month: MONTH_NAMES[date.getUTCMonth()],
+  });
+  return { from: chip(from), to: from.getTime() === to.getTime() ? null : chip(to) };
+}

@@ -86,7 +86,7 @@ export function NoteToCustomerCard({
               )}
               <button
                 type="button"
-                className="adm-btn adm-btn--primary adm-cnote__send"
+                className="adm-btn adm-btn--ghost adm-cnote__send"
                 disabled={busy || text.trim() === '' || text.trim() === (note ?? '')}
                 onClick={() => void save(text)}
               >
