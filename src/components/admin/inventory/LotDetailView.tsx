@@ -204,7 +204,7 @@ export function LotDetailView({ lotId, onBack, onEdit, onDeleted }: { lotId: str
         {totals.otherBills > 0 &&
           (otherOk ? (
             <p className="inv-ok" data-testid="inv-detail-allocated-ok">
-              Allocated total = lot total ✓
+              Allocated total matches the lot total
             </p>
           ) : (
             <p className="inv-error">Allocated total does not match the lot total — open Edit and save again.</p>

@@ -28,6 +28,17 @@ async function prepareContext(context: BrowserContext): Promise<void> {
   await guardStorage(context);
   await blockAdTrackingInContext(context);
   await mockSteadfastByDefault(context);
+  // Batch 70: the side cart opens by itself on the first add of a visit.
+  // Older specs add to the cart and keep tapping the page, so for them the
+  // visit starts as "panel already shown" (later adds fly into the bubble).
+  // e2e/batch-70.spec.ts marks its visits fresh to test the first add.
+  await context.addInitScript(() => {
+    try {
+      if (!window.sessionStorage.getItem('e2e.b70.fresh')) window.sessionStorage.setItem('naeems.sideCartShown', '1');
+    } catch {
+      // No storage in this page (about:blank): nothing to set.
+    }
+  });
 }
 
 const prepared = new WeakSet<BrowserContext>();

@@ -1,0 +1,294 @@
+BATCH 70: Product page, side cart, draggable cart bubble, fly-to-cart,
+Kaarbar-style search and Order Placed fixes
+Branch: feature/batch-70-product-page-side-cart (from main at 1.69.2)
+Version: 1.70.0 (package.json and package-lock.json)
+
+------------------------------------------------------------
+1. WHAT I DID
+------------------------------------------------------------
+
+The side cart. A panel now slides in from the right side of the screen.
+The FIRST time a customer adds something during a visit, it opens by
+itself with a green tick and "Added to cart"; the product just added sits
+at the top with a soft green highlight, and the panel gives a small
+"nudge" so the eye notices it. After that first time, adds do not open
+the panel again: a little copy of the product photo flies in an arc into
+the floating cart bubble and the bubble's number pops. Tapping the bubble
+opens the same panel titled "Your cart" with "2 items" beside it. In the
+panel each line has its photo, name, option, price, a small "- 1 +"
+stepper and "Remove" (which shows the usual "Removed / Undo" message).
+Below: "Total (3 items)" and the amount, then "View cart", "Checkout"
+(the one orange button) and a soft blue "Keep shopping". It closes with
+Keep shopping, the X, a tap on the dimmed page, the phone's Back button,
+Escape, a swipe to the right, or any page change. I used your approved
+code and CSS exactly; the adaptations are listed in section 5.
+
+Same numbers as the cart page. The panel does not have its own price
+maths. It reads the cart lines, prices (including campaign sale prices),
+stock limits and the total from the same code the cart page uses, so the
+panel total and the cart page total are always the same (a test checks
+this). "+" stops at the same limit with the same limit message. To make
+sure they really share one source, I moved two pieces out of the cart
+page into shared helpers that both now use: the "+ limit" rule
+(src/hooks/useCartLineLimits.ts) and the Checkout button's steps
+(src/features/checkout/useCartCheckout.tsx: record the start of
+checkout, then go to /checkout/delivery if signed in, otherwise show the
+Google sign-in sheet). The cart page works exactly as before. When the
+panel opens it also re-checks live stock once, like the cart page does
+when it opens, so a line that sold out meanwhile is corrected.
+
+Where adds go through the new rule. Every customer "add" now calls the
+same two-line rule (open the panel on the first add, otherwise fly): the
+product page's Add to Cart and its "+", the product cards' cart button
+and their "+" (this covers Home, Search, brand pages and "You may also
+like"), the option picker sheet, and the Wishlist page. Haptic buzz and
+tracking are unchanged. Admin screens do not use it.
+
+The floating cart bubble. A tap now opens the side cart instead of going
+to /cart. You can drag it with your finger: it follows the finger, and
+when you let go it snaps to the nearest side (12 px from the edge,
+inside the phone's safe area), never under the top bar, the Home tab bar
+or the product page's buy bar. Its side and height are remembered on
+the phone, for the next page and the next visit. Until it has been
+moved, it keeps the old product-page behaviour (sits just above the buy
+bar and moves with it); once moved, it stays where it was put and only
+keeps clear of the buy bar. It is now a real button (it was a link).
+
+The product page.
+- The heart moved from the top bar onto the photo, bottom-right (where
+  "1 / 5" used to be), 16 px in from the edge so a photo swipe does not
+  hit it. The "1 / 5" counter moved to the bottom-left. The top bar has
+  only Back and Share. The row of dots under the photo is gone.
+- A full-width orange "Add to Cart" button now sits in the page right
+  after the options (and before the wholesale price). Once the product
+  is in the cart it becomes "-  1 in cart  +" with a near-black border.
+  Sold out shows the same grey "Sold out". It runs exactly the same code
+  as the buy bar.
+- The buy bar at the bottom is hidden while that in-page button is on
+  screen and slides in once it has scrolled away (it no longer reacts to
+  scroll direction). The bubble still knows where the bar is.
+- First screen: on 390 x 844 and 360 x 780 phones, without scrolling,
+  you see the whole photo, brand, name, price, stock, delivery line,
+  options and the in-page Add to Cart. The page measures this itself and
+  only makes the photo shorter if things would not fit (never the text);
+  the photo always stays whole.
+- "About this product" shows 4 lines and then "Read more" ("Show less"
+  folds it again), only when the text is longer than 4 lines. Text stays
+  left-aligned. Everything else on the page is unchanged.
+
+Kaarbar-style search. A new search (src/lib/smartSearch.ts, your exact
+code) splits what you type into words; a product matches when every
+word is the START of a word in the product, in any order. So "cerave 236
+aus f" finds "CeraVe Foaming Cleanser 236ml (AUSTRALIA)" and not the
+Hydrating (UK) one, "aus cerave" works too, and a typo like "cerve"
+still finds CeraVe (close-spelling fallback). It is now used in:
+- the shop search (name, brand, category, and the product's and its
+  options' Region / Size). Recent searches, suggestions, the dropdown,
+  tracking and the category filter are unchanged.
+- Admin > Products list (name, brand, SKU). The list keeps your filters.
+- Admin > New order and Edit order product search (name, option labels,
+  brand, SKU). The same search also serves the campaign editor and the
+  combo editor, which already used it.
+- The lot form's product picker (name and SKU) and the Bento tile
+  product picker (name and brand), which used a plain "contains" search.
+
+Order Placed.
+- The sound button left the header. It now sits in the scene's
+  bottom-right corner just below the road line: a 44 px tap area with a
+  36 px look, muted colour, above the drawing. A test taps it once at its
+  centre and checks it switches, and checks nothing is on top of it.
+- Dates (option C): "Arriving between", then "28 Nov  -van-  29 Nov"
+  with the weekday under each date and a little van on the line between.
+  A one-day delivery shows a single date ("Arriving on") with no line.
+  The words read by screen readers are unchanged.
+- The four buttons are one 2 x 2 grid of equal buttons, 52 px high:
+  Keep shopping (soft blue), View my order (the only orange), Invoice and
+  Need help? (outlined). Without a Need help? link, Invoice spans both
+  columns. At 360 px no text is cut or wrapped.
+- Old CSS no longer used (b69-eta, b69-days, b69-day, b69-dash,
+  b69-row1) was removed after checking nothing else uses it.
+
+Admin tick text. Inventory > lot detail: "Allocated total = lot total"
+with a tick character now reads "Allocated total matches the lot total".
+
+Tests. New unit tests (src/lib/batch70.test.ts, 13 tests): the panel
+opens on the first add only, the bubble opens "Your cart", close works,
+private-mode storage errors do not break it, and every search example
+from your brief (including Bangla text and the admin picker by SKU). New
+browser tests (e2e/batch-70.spec.ts, 19 tests) cover every point you
+listed: first add, second add flies, bubble opens "Your cart", + / - /
+Remove / Undo, panel total equals the cart page total, View cart,
+Checkout (signed out: sign-in sheet; signed in: /checkout/delivery),
+Keep shopping, X, dim-page tap, Escape and Back close it, a 120 px
+sideways finger swipe closes it while a vertical swipe scrolls the list
+(and the page behind does not move), a short swipe springs back,
+vertical page scroll with a finger on the product photo, dragging the
+bubble to the left edge survives a reload, heart / counter / no dots,
+buy bar hidden then shown, Read more / Show less, first screen at both
+sizes, only transform and opacity animate, reduced motion (no fly, no
+nudge, no slide), the "cerave 236 aus f" search, and the Order Placed
+checks. Screenshots: reports/batch-70-screens/ (390 x 844 and 360 x
+780, light and dark: product page first screen, scrolled with the bar,
+panel after the first add, panel from the bubble, bubble on the left,
+Order Placed). I looked at each one.
+
+Older tests updated to the new behaviour (not weakened): the bubble tap
+now opens the panel and then "View cart" (batch-27, batch-28); the heart
+is on the photo, not the header (batch-28); the buy bar rule (batch-28
+Part 4 rewritten for the new rule; batch-28 / batch-29 now scroll past
+the in-page button before checking the bar); taps that used the buy
+bar's + / - while it is now hidden use the in-page stepper, which runs
+the same code (batch-27, 28, 29); the date checks read the new dates
+(batch-48, batch-51); the admin tick text (batch-38). In e2e/fixtures.ts
+every older test starts its visit as "panel already shown", so older
+tests that add and keep tapping are not covered by the panel; the new
+batch-70 tests start fresh to test the first add.
+
+Performance check (Chrome, CPU slowed down 4x, 390 x 844):
+- Dragging the bubble and snapping: 101 frames, none slow, no long task.
+- Swiping the panel closed: 83 frames, none slow, no long task.
+- Opening the panel from the bubble: 46 frames, none slow, no long task.
+- First add (panel opens with the nudge): one slow frame, longest task
+  129 ms. The SAME single task (130 ms) happens on an add with the panel
+  turned off, and a CPU profile shows the shop's own code takes only a
+  few milliseconds of it; the rest is the browser's own style, layout
+  and paint work after the cart changes (plus the test tool's click).
+  So the panel and the fly add no jank. Dropped frames during the new
+  movements: no.
+- No new npm package. Every movement uses only transform and opacity.
+  Finger-follows write the position straight to the element inside
+  requestAnimationFrame; no React re-render per finger move.
+
+Build: npm run build passes with zero errors. Unit tests: all 69 files
+pass.
+
+Full npm run verify (run once, 45 minutes): 538 browser tests passed,
+6 failed, 129 skipped (the usual ones that need data not there today).
+- 2 failures were this batch's: older tests still tapping the buy bar's
+  "+" (now hidden on the first screen) in batch-51, and batch-28
+  measuring the bar while it was still sliding in. Both fixed; both
+  files re-run alone: batch-51 20/20 passed, batch-28 20/20 passed.
+- 4 failures were in files this batch does not touch. Each file was
+  re-run alone 3 times and passed every time, so they were timing
+  flakes: batch-52 (admin combos) 19/19 x3, batch-67 (empty cart)
+  9/9 x3, batch-33 (admin photo placeholder) 11/11 x3, batch-36 (7-day
+  unpaid row on Home) 18/18 x3.
+(My first attempt at the full run was stopped by a 10-minute time limit
+I set by mistake; I stopped it fully and ran the full suite once more.)
+
+------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------------------------------
+
+None needed.
+
+------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+------------------------------------------------------------
+
+Everything asked for is done. One point is a judgment call, see the
+Combo page in section 5.
+
+------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+------------------------------------------------------------
+
+- My mistake, please read: for the performance check I first ran a
+  small measuring script (not part of the test suite) that did NOT block
+  the Facebook Pixel and Google Analytics the way the tests do. Those
+  first runs sent a handful of fake events to your real Pixel and GA:
+  page views, product views and about 3 "Add to cart" events, all from
+  the address "localhost" on 27 Nov 2026. No order and no purchase event
+  was sent. If you want your numbers clean, filter out hostname
+  "localhost" in GA, and in Facebook Events Manager these show with the
+  domain localhost. I blocked tracking for every later run and checked
+  that nothing leaked.
+- Desktop-mouse drag in Chrome's phone emulation sometimes cancels
+  itself at 360 px (the browser fires "pointercancel"). A real finger
+  does not do this (the bubble tells the browser not to scroll from it),
+  and the tests drag with a real touch. If it ever happens, the bubble
+  simply snaps to the side it is nearest, nothing breaks.
+- One older test on Home (batch-29 "a logo that cannot be read still
+  shows") failed once during the batch with "element is not attached"
+  (the page re-drew the brand row while the test scrolled to it). It
+  passed in the full run. This batch does not touch the brand row.
+- "View my order" on Order Placed uses the site's --color-primary
+  (#F05020), a redder orange than the brand orange #FF7A45 that Add to
+  Cart uses. I used the brand
+  orange for the side cart's Checkout (it matches your mockup and Add to
+  Cart). The two oranges side by side are worth unifying one day.
+
+------------------------------------------------------------
+5. DESIGN DECISIONS (adaptations to the real app)
+------------------------------------------------------------
+
+- Where the panel shows: on every page except the cart, checkout,
+  account, orders, wallet and admin (your "never" list). The brief also
+  says "the same pages as the bubble", but the Wishlist page has an Add
+  button and no bubble; with only the bubble's pages, a first add on the
+  Wishlist would have used up the "first add" without showing anything.
+  So it shows on the Wishlist page too.
+- Combo page "Add all to cart": NOT changed. It already takes the
+  customer straight to the cart page, so opening a panel for a moment
+  would only waste the "first add" of the visit. It keeps working as
+  before.
+- Option picker sheet: on the first add the sheet closes and the panel
+  opens (the panel says "Added to cart", so the old "Added to cart:
+  option" toast is skipped then). On later adds the photo flies and the
+  toast still shows. The Wishlist page does the same with its toast.
+- Phone Back: like every sheet in the shop, the open panel adds one
+  same-page history step, so Back closes it. When it opens right after
+  the option sheet closes, it waits for that sheet's own step to finish
+  first, so the two never cross.
+- Checkout when signed out: the panel closes first, then the sign-in
+  sheet opens (the sign-in sheet sits lower than the panel on screen).
+- While the panel is open, "Removed / Undo" and the limit message sit
+  above it (Undo just above the panel's total).
+- Colours: your CSS asked for var(--color-primary, #ff7a45) on Checkout;
+  on this site --color-primary is #F05020, so I used --color-accent
+  (#FF7A45), which is the brand orange the mockup shows. All other
+  tokens (--color-surface, --color-border, --color-text-*) exist as
+  named.
+- Bubble: tap and drag on one element, so it became a <button> instead
+  of a link. "Open in new tab" on the bubble no longer exists (it opens a
+  panel now, not a page).
+- In-page stepper wording: "1 in cart" between - and +, as in your brief.
+- The photo height is measured by the page (the space from the photo's
+  bottom down to the in-page Add to Cart) instead of a fixed CSS guess,
+  so long names or options never push the button off the first screen.
+  It is measured before the page is drawn, so nothing jumps.
+- Buy bar when the in-page button is still BELOW a very short screen:
+  the bar shows (so there is always a way to buy). On normal phones the
+  in-page button is on the first screen, so the bar is hidden there.
+- The shop search still treats a single letter as "no search yet" (as
+  before), so the dropdown does not pop up for one letter.
+- The admin Products list now ranks the best matches first while
+  searching (like Kaarbar); with an empty search it keeps your order.
+
+------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS
+------------------------------------------------------------
+
+1. One orange (small). Two oranges are in use (#FF7A45 and #F05020).
+   Shoppers read colour as brand; two shades side by side look
+   unfinished. Make --color-primary the brand orange or retire it.
+2. Free-delivery nudge in the side cart (medium). The panel is now the
+   place customers look at most after adding. A line such as "Add 350
+   more for free delivery" there is a proven way to raise order size.
+   Only if you offer such a threshold.
+3. "You may also like" inside the side cart (medium). One small row of
+   2-3 related products under the lines turns the moment of adding into
+   a second sale. Keep it light (small photos only).
+4. Show stock warnings in the panel (small). The cart page shows "Get it
+   in 3 to 5 days" for lines bought after the order; the panel does not.
+   Showing it there avoids surprises at checkout.
+5. Search result highlighting (small). Bold the typed word parts in the
+   search suggestions so shoppers see why a product matched.
+6. Pixel and GA safety for scripts (small). The test suite blocks
+   tracking, but any hand-run script can still send events (as happened
+   in this batch). Turning tracking off on "localhost" inside the app
+   itself would make this impossible.
+
+------------------------------------------------------------
+Pull request:
+https://github.com/naeemBro17/naeems/pull/new/feature/batch-70-product-page-side-cart

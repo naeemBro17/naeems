@@ -1,17 +1,21 @@
+import type { ReactNode } from 'react';
+
 // Batch 69: the Order Placed scene. A parcel leaves the NAEEM'S shop, hops
 // into the van, and the van drives toward the customer's home, whose window
 // lights up. While `play` is on (first arrival only) the van keeps driving:
 // wheels, lane marks and a soft bob loop. Without `play` (a reload, reduced
 // motion) it is the still final picture. Only transform and opacity animate.
 // Fix 69.1: a sun by day, and a moon with stars by night (dark theme).
+// Batch 70: `children` (the sound switch) sit in the scene's bottom-right
+// corner, above the drawing; only the drawing is hidden from screen readers.
 const LOGO = '/icons/icon-192.png';
 
-export function PlacedScene({ play }: { play: boolean }) {
+export function PlacedScene({ play, children }: { play: boolean; children?: ReactNode }) {
   return (
-    <div className={`b69-scene${play ? ' b69--play' : ''}`} aria-hidden="true" data-testid="placed-scene">
-      <div className="b69-road" />
-      <div className="b69-lanes" />
-      <div className="b69-stage">
+    <div className={`b69-scene${play ? ' b69--play' : ''}`} data-testid="placed-scene">
+      <div className="b69-road" aria-hidden="true" />
+      <div className="b69-lanes" aria-hidden="true" />
+      <div className="b69-stage" aria-hidden="true">
         <div className="b69-sky">
           <div className="b69-sun">
             <b />
@@ -130,6 +134,7 @@ export function PlacedScene({ play }: { play: boolean }) {
           </div>
         </div>
       </div>
+      {children}
     </div>
   );
 }

@@ -392,7 +392,7 @@ test('Part 3: screens at phone width — lots list, new lot with preview, lot de
   await expect(page.getByTestId('inv-weight-guessed')).toBeVisible();
   await page.getByLabel(`Weight of ${TEST_PREFIX} Toner`).fill('100');
   await expect(page.getByTestId('inv-weight-guessed')).toHaveCount(0);
-  await expect(page.getByTestId('inv-allocated-ok')).toHaveText('Allocated total = lot total ✓');
+  await expect(page.getByTestId('inv-allocated-ok')).toHaveText('Allocated total matches the lot total');
   // 2 × 271 g and 1 × 100 g share ৳500: 542 / 642 → ৳422.12, 100 / 642 → ৳77.88.
   await expect(page.getByTestId('inv-item-calc').first()).toContainText('Buy ৳800.00 + weight ৳211.06 + other ৳0.00 = ৳1,011.06 per piece');
   await expect(page.getByText('Save this weight to the product')).toBeVisible();

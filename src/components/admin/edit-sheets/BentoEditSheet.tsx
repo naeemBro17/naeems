@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase';
 import { useProducts } from '../../../contexts/ProductContext';
 import { useToast } from '../../../hooks/useToast';
 import { useReorder } from '../../../hooks/useReorder';
-import { normalizeText } from '../../../lib/format';
+import { smartSearch } from '../../../lib/smartSearch';
 import {
   applyIdOrder,
   parseIdList,
@@ -89,9 +89,11 @@ function ProductSequenceEditor({
   const reorder = useReorder(sequence, setSequence);
 
   const inSequence = new Set(sequence.map((p) => p.id));
-  const q = normalizeText(search.trim());
-  const candidates = activeProducts.filter(
-    (p) => !inSequence.has(p.id) && (q === '' || normalizeText(p.name).includes(q))
+  // Batch 70: word by word, any order (lib/smartSearch.ts).
+  const candidates = smartSearch(
+    activeProducts.filter((p) => !inSequence.has(p.id)),
+    search,
+    (p) => `${p.name} ${p.brand ?? ''}`
   );
 
   const handleSave = async (e: FormEvent) => {

@@ -14,7 +14,8 @@ export interface CartLineControls {
   optionLabel: string | null;
   /** Most units allowed (Batch 51: the order limit, or the stock). */
   limit: number;
-  increment: () => void;
+  /** One more; true when it was added (false: the limit popup opened). */
+  increment: () => boolean;
   decrement: () => void;
   /** Why + stopped, while the limit popup is open. */
   popup: LimitReason | null;
@@ -59,10 +60,11 @@ export function useCartLine(product: Product, options: VariantOption[]): CartLin
   const increment = useCallback(() => {
     if (quantity >= limit) {
       setPopup(reason);
-      return;
+      return false;
     }
     updateQuantity(product.id, quantity + 1, variantId);
     trackAddToCart({ id: product.id, name: product.name, price: unitPrice }, 1);
+    return true;
   }, [quantity, limit, reason, updateQuantity, product.id, product.name, variantId, unitPrice]);
 
   const decrement = useCallback(() => {

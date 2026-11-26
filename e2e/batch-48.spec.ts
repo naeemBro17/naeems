@@ -507,12 +507,12 @@ for (const [width, theme] of [
     // transform and opacity too.
     await onlyTransformAndOpacity(page);
     await expect(page.locator(theme === 'dark' ? '.b69-moon' : '.b69-sun')).toBeVisible();
-    // Fix 69.1: the date chips and the two main buttons.
-    await expect(page.getByTestId('placed-arriving').locator('.b69-day')).toHaveCount(2);
+    // Batch 70 (option C): two dates on a little route, and the buttons.
+    await expect(page.getByTestId('placed-arriving').locator('.b70-d')).toHaveCount(2);
     const fit = await page.evaluate(() => {
       const box = (el: Element | null) => (el ? el.getBoundingClientRect() : null);
       const keep = document.querySelector<HTMLElement>('.b69-keep');
-      const days = [...document.querySelectorAll('.b69-day')].map((el) => el.getBoundingClientRect().top);
+      const days = [...document.querySelectorAll('.b70-d')].map((el) => el.getBoundingClientRect().top);
       const invoice = box([...document.querySelectorAll('.cf-ghost')].pop() ?? null);
       return {
         keepOneLine: keep ? keep.scrollWidth <= keep.clientWidth && keep.getBoundingClientRect().height <= 56 : false,
@@ -521,7 +521,7 @@ for (const [width, theme] of [
       };
     });
     expect(fit.keepOneLine, 'Keep shopping stays on one line').toBe(true);
-    expect(fit.chipsOneLine, 'the two date chips sit on one line').toBe(true);
+    expect(fit.chipsOneLine, 'the two dates sit on one line').toBe(true);
     if (width === 390) expect(fit.lastBottom, 'the whole page fits at 390 x 844 without scrolling').toBeLessThanOrEqual(844);
     await page.screenshot({ path: `${SHOTS69}/07-final-${width}-${theme}.png`, fullPage: true });
     await page.screenshot({ path: `${SHOTS691}/final-${width}-${theme}.png`, fullPage: true });

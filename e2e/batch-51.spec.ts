@@ -215,8 +215,9 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: `${SHOTS}/${theme}-03-product-saved-toast.png` });
 
     // Limit popup: + past 4 → "Limit 4 per order" + WhatsApp link.
+    // (Batch 70: the in-page stepper, the buy bar's own handlers.)
     await page.getByTestId('add-to-cart').click();
-    for (let i = 0; i < 4; i++) await page.getByTestId('buy-bar-plus').click();
+    for (let i = 0; i < 4; i++) await page.getByTestId('pdp-buy-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('4');
     await expect(page.getByTestId('limit-popup-title')).toHaveText('Limit 4 per order');
     await expect(page.getByTestId('limit-popup-whatsapp')).toHaveText('Need more? Chat with us on WhatsApp');
@@ -231,8 +232,8 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('stock-chip')).toHaveText('Only 2 left, order soon', { timeout: 30_000 });
     await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 1 to 2 days in Dhaka · 2 to 3 days outside Dhaka');
     await page.getByTestId('add-to-cart').click();
-    await page.getByTestId('buy-bar-plus').click();
-    await page.getByTestId('buy-bar-plus').click();
+    await page.getByTestId('pdp-buy-plus').click();
+    await page.getByTestId('pdp-buy-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
     await expect(page.getByTestId('limit-popup-title')).toHaveText("You've got the last 2!");
     await expect(page.getByTestId('limit-popup-whatsapp')).toHaveCount(0);
@@ -286,9 +287,10 @@ for (const theme of ['light', 'dark'] as const) {
       );
     }, snapshot);
     await page.goto('/checkout/success');
-    // Fix 69.1: the words are the label; two date chips are shown.
+    // Batch 70: the words stay the label; two dates are shown (option C).
     await expect(page.getByTestId('placed-arriving')).toHaveAttribute('aria-label', 'Arriving Sun, 22 to Tue, 24 Nov', { timeout: 20_000 });
-    await expect(page.getByTestId('placed-arriving').locator('.b69-day')).toHaveCount(2);
+    await expect(page.getByTestId('placed-arriving').locator('.b70-d')).toHaveCount(2);
+    await expect(page.getByTestId('placed-arriving').locator('.b70-d b').first()).toHaveText('22 Nov');
     await page.screenshot({ path: `${SHOTS}/${theme}-07-order-placed-arriving.png` });
     await noSidewaysScroll(page);
   });

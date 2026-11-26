@@ -58,6 +58,16 @@ async function openFresh(page: Page, path: string, theme: 'light' | 'dark' = 'li
   await page.goto(path);
 }
 
+/** Batch 70: the buy bar shows once the in-page Add to Cart has scrolled
+ *  up under the top bar. */
+async function showBuyBar(page: Page): Promise<void> {
+  const y = await page.getByTestId('pdp-buy').evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
+  await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), y);
+  await expect(page.getByTestId('buy-bar')).toHaveAttribute('data-shown', 'true');
+  // Measured after its 200 ms slide-in has finished.
+  await page.getByTestId('buy-bar').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+}
+
 async function box(el: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
   const b = await el.boundingBox();
   expect(b).not.toBeNull();
@@ -204,8 +214,9 @@ async function scrollToSolidHeader(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 1 — crystal glass header', () => {
-  // Batch 51: ← and Share, plus the wishlist heart; still no cart button.
-  test('only ←, Share and the heart; no cart button in the header', async ({ page }) => {
+  // Batch 51 added the wishlist heart; Batch 70 moved it onto the photo
+  // (bottom-right). Still no cart button.
+  test('only ← and Share; the heart on the photo; no cart button in the header', async ({ page }) => {
     await openFresh(page, PDP);
     await page.evaluate(() =>
       localStorage.setItem(
@@ -217,8 +228,9 @@ test.describe('Part 1 — crystal glass header', () => {
     const header = page.getByTestId('pdp-header');
     await expect(header.getByRole('button', { name: 'Go back' })).toBeVisible();
     await expect(header.getByRole('button', { name: /^Share / })).toBeVisible();
-    await expect(header.getByTestId('wish-heart')).toBeVisible();
-    await expect(header.getByRole('button')).toHaveCount(3);
+    await expect(header.getByTestId('wish-heart')).toHaveCount(0);
+    await expect(page.getByTestId('photo-heart').getByTestId('wish-heart')).toBeVisible();
+    await expect(header.getByRole('button')).toHaveCount(2);
     await expect(header.getByTestId('header-cart')).toHaveCount(0);
     await expect(header.getByRole('button', { name: /cart/i })).toHaveCount(0);
     await emptyCart(page);
@@ -357,11 +369,11 @@ test.describe('Part 2 — rounded info sheet', () => {
     await expect(plate.locator('li')).toHaveCount(3);
     await expect(page.locator('.trust-box')).toHaveCount(0);
 
-    // No buying controls inside the page — only in the buy bar.
+    // Batch 70: one Add to Cart in the page, right under the stock / options
+    // (the buy bar's own comes in once it scrolls away); no old qty box.
     const main = page.locator('.pdp-main');
-    await expect(main.getByText('Add to Cart', { exact: true })).toHaveCount(0);
-    await expect(main.getByTestId('add-to-cart')).toHaveCount(0);
-    await expect(main.getByRole('button', { name: /^Add CeraVe Hydrating Cleanser to cart$/ })).toHaveCount(0);
+    await expect(main.getByTestId('add-to-cart')).toHaveCount(1);
+    await expect(main.getByTestId('pdp-buy')).toHaveCount(1);
     await expect(page.getByTestId('qty-value')).toHaveCount(0);
     await expect(page.getByTestId('sticky-bar')).toHaveCount(0);
   });
@@ -382,12 +394,12 @@ test.describe('Part 2 — rounded info sheet', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 3 — glass buy bar', () => {
-  test('visible on load, real glass, only the price on the left', async ({ page }) => {
+  test('shown past the in-page Add to Cart (Batch 70), real glass, only the price on the left', async ({ page }) => {
     for (const theme of ['light', 'dark'] as const) {
       await openFresh(page, PDP, theme);
       const bar = page.getByTestId('buy-bar');
+      await showBuyBar(page);
       await expect(bar).toBeVisible();
-      await expect(bar).toHaveAttribute('data-shown', 'true');
       const style = await bar.evaluate((el) => {
         const s = getComputedStyle(el);
         return { bg: s.backgroundColor, blur: s.backdropFilter || s.getPropertyValue('-webkit-backdrop-filter') };
@@ -430,7 +442,8 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(add).toHaveCSS('background-color', 'rgb(255, 122, 69)');
     const before = await box(add);
     await add.click();
-    const stepper = page.getByTestId('buy-bar-stepper');
+    // Batch 70: the in-page button turns into the in-page stepper, same box.
+    const stepper = page.getByTestId('pdp-buy-stepper');
     await expect(stepper).toBeVisible();
     // Measured once its short pop-in (scale) has finished.
     await stepper.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
@@ -445,13 +458,14 @@ test.describe('Part 3 — glass buy bar', () => {
     // Batch 51: + stops at the order limit (4) or the stock, whichever is
     // smaller, with the limit popup.
     const cap = Math.min(stock, 4);
-    for (let i = 1; i < cap + 2; i++) await page.getByTestId('buy-bar-plus').click();
+    for (let i = 1; i < cap + 2; i++) await page.getByTestId('pdp-buy-plus').click();
     await expect(qty).toHaveText(String(cap));
     await expect(page.getByTestId('limit-popup')).toBeVisible();
     expect(await cartUnits(page)).toBe(cap);
 
-    for (let i = cap; i > 0; i--) await page.getByTestId('buy-bar-minus').click();
+    for (let i = cap; i > 0; i--) await page.getByTestId('pdp-buy-minus').click();
     await expect(page.getByTestId('add-to-cart')).toBeVisible();
+    await expect(page.getByTestId('pdp-buy-stepper')).toHaveCount(0);
     await expect(page.getByTestId('buy-bar-stepper')).toHaveCount(0);
     expect(await cartUnits(page)).toBe(0);
     const back = await box(page.getByTestId('add-to-cart'));
@@ -464,7 +478,7 @@ test.describe('Part 3 — glass buy bar', () => {
     // Batch 51: the name from the page (the old fixed product was renamed).
     const pname = ((await page.locator('.product-detail__name').textContent()) ?? '').trim();
     await page.getByTestId('add-to-cart').click();
-    await page.getByTestId('buy-bar-plus').click();
+    await page.getByTestId('pdp-buy-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
     await page.waitForTimeout(4000);
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
@@ -522,10 +536,10 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(price).not.toHaveText(basePrice);
     await expect(price).toHaveText(await page.locator('.pdp-sheet .product-detail__price').textContent() ?? '');
 
-    // Batch 51: the extra test option row sits below the fold, so tapping it
-    // scrolled the page and the buy bar hid (by design); back to the top.
+    // Batch 51: the extra test option row sits below the fold; back to the
+    // top, where the in-page Add to Cart is (Batch 70).
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-    await expect(page.getByTestId('buy-bar')).toHaveAttribute('data-shown', 'true');
+    await expect(page.getByTestId('add-to-cart')).toBeVisible();
     await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('1');
     const lines = await cartLines(page);
@@ -544,66 +558,39 @@ test.describe('Part 3 — glass buy bar', () => {
 // PART 4 — scroll behaviour
 // ---------------------------------------------------------------------------
 
-test.describe('Part 4 — buy bar scroll behaviour', () => {
-  test('down hides, up shows, bottom shows, a cart change shows; never covers the last content', async ({ page }) => {
+// Batch 70 replaced the scroll-direction rule: the bar shows only while
+// the in-page Add to Cart (under the options) is off the screen.
+test.describe('Part 4 — buy bar follows the in-page Add to Cart (Batch 70)', () => {
+  test('hidden while the in-page button is on screen, shown once it has scrolled away, hidden again at the top; never covers the last content', async ({ page }) => {
     await openFresh(page, PDP);
     const bar = page.getByTestId('buy-bar');
-    await expect(bar).toHaveAttribute('data-shown', 'true');
     await expect(page.getByTestId('related-products')).toBeVisible();
-
-    await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'instant' }));
-    await page.waitForTimeout(120);
+    await expect(page.getByTestId('add-to-cart')).toBeInViewport();
     await expect(bar).toHaveAttribute('data-shown', 'false');
     await expect(bar).toHaveCSS('opacity', '0');
 
-    // Tiny jitter does nothing.
-    await page.evaluate(() => window.scrollBy({ top: -4, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await page.waitForTimeout(100);
-    await expect(bar).toHaveAttribute('data-shown', 'false');
-
-    await page.evaluate(() => window.scrollBy({ top: -20, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await expect(bar).toHaveAttribute('data-shown', 'true');
+    await showBuyBar(page);
     await expect(bar).toHaveCSS('opacity', '1');
 
-    // Hidden again, then a cart change (a "You may also like" card) brings it back.
+    // Small moves either way do not toggle it while the button stays away.
+    await page.evaluate(() => window.scrollBy({ top: -20, behavior: 'instant' }));
+    await page.waitForTimeout(150);
+    await expect(bar).toHaveAttribute('data-shown', 'true');
     await page.evaluate(() => window.scrollBy({ top: 60, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await expect(bar).toHaveAttribute('data-shown', 'false');
-    await page
-      .getByTestId('related-products')
-      .getByRole('button', { name: /^Add .* to cart$/ })
-      .first()
-      .dispatchEvent('click');
+    await page.waitForTimeout(150);
     await expect(bar).toHaveAttribute('data-shown', 'true');
 
     // The very bottom: shown, and the last content ends above it.
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await expect(bar).toHaveAttribute('data-shown', 'false');
     await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-    await page.waitForTimeout(120);
     await expect(bar).toHaveAttribute('data-shown', 'true');
     await page.waitForTimeout(400);
     const related = await box(page.getByTestId('related-products'));
     const b = await box(bar);
     expect(related.y + related.height).toBeLessThanOrEqual(b.y);
-    await emptyCart(page);
-  });
 
-  test('top of the page: shown', async ({ page }) => {
-    await openFresh(page, PDP);
-    const bar = page.getByTestId('buy-bar');
-    await expect(page.getByTestId('related-products')).toBeVisible();
-    await page.evaluate(() => window.scrollBy({ top: 300, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await expect(bar).toHaveAttribute('data-shown', 'false');
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-    await page.waitForTimeout(120);
-    await expect(bar).toHaveAttribute('data-shown', 'true');
+    await expect(bar).toHaveAttribute('data-shown', 'false');
+    await emptyCart(page);
   });
 });
 
@@ -623,11 +610,11 @@ test.describe('Part 5 — one floating cart', () => {
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('1');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--enter/);
 
-    await page.getByTestId('buy-bar-plus').click();
+    await page.getByTestId('pdp-buy-plus').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('2');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--pulse/);
     // A remove pulses too (on the product page).
-    await page.getByTestId('buy-bar-minus').click();
+    await page.getByTestId('pdp-buy-minus').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('1');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--pulse/);
 
@@ -643,7 +630,10 @@ test.describe('Part 5 — one floating cart', () => {
     expect(b.width).toBeGreaterThanOrEqual(50);
     expect(b.width).toBeLessThanOrEqual(54);
 
+    // Batch 70: a tap opens the side cart; View cart goes to the cart.
     await glass.click();
+    await expect(page.getByTestId('side-cart')).toHaveClass(/b70-cart--open/);
+    await page.getByTestId('side-cart-view').click();
     await expect(page).toHaveURL(/\/cart$/);
     await emptyCart(page);
   });
@@ -658,6 +648,8 @@ test.describe('Part 5 — one floating cart', () => {
       await page.getByTestId('add-to-cart').click();
       const glass = page.getByTestId('glass-cart');
       await expect(glass).toBeVisible();
+      // Batch 70: the bar is on screen once the in-page button has gone.
+      await showBuyBar(page);
       await page.waitForTimeout(600);
       const g = await box(glass);
       const bar = await box(page.getByTestId('buy-bar'));

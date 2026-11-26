@@ -1,27 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import Fuse, { type IFuseOptions } from 'fuse.js';
 import { trackSearch } from '../lib/analytics';
+import { smartSearch } from '../lib/smartSearch';
 import type { Product } from '../types';
 
 /** localStorage key for the recent-search list (newest first, max 5). */
 export const RECENT_SEARCHES_KEY = 'nph_recent_searches';
 const RECENT_LIMIT = 5;
 const SUGGESTION_LIMIT = 5;
-/** Mirrors FUSE_OPTIONS.minMatchCharLength. */
+/** A single character still shows everything (no dropdown for one letter). */
 const MIN_QUERY_LENGTH = 2;
 
-/**
- * Fuse.js tuning per the Session 7 brief. ignoreLocation lets a match sit
- * anywhere in a long product name ("Eco-Recharge Refill 473mL") instead of
- * only near the start.
- */
-const FUSE_OPTIONS: IFuseOptions<Product> = {
-  keys: ['name', 'brand', 'category.name'],
-  threshold: 0.35,
-  includeScore: true,
-  minMatchCharLength: 2,
-  ignoreLocation: true,
-};
+/** Batch 70: what a product is found by — its name, brand, category and its
+ *  own Region / Size, plus anything the page adds (its options' labels). */
+function searchTextOf(product: Product, extra?: (product: Product) => string): string {
+  return [product.name, product.brand, product.category?.name, product.region, product.size, extra?.(product)]
+    .filter((part): part is string => typeof part === 'string' && part !== '')
+    .join(' ');
+}
 
 interface UseSearchOptions {
   /** Every searchable product (already restricted to active ones). */
@@ -35,12 +30,14 @@ interface UseSearchOptions {
   /** Seeds the query on first render — SearchPage restores this from the
    *  ?q= URL param so a deep link or Back lands on the same search. */
   initialQuery?: string;
+  /** Batch 70: more words a product is found by (its options' labels). */
+  extraText?: (product: Product) => string;
 }
 
 export interface SearchState {
   query: string;
   setQuery: (value: string) => void;
-  /** Products for the grid: Fuse-ranked when searching, default order otherwise. */
+  /** Products for the grid: ranked by smartSearch when searching, default order otherwise. */
   results: Product[];
   /** Top matches for the autocomplete dropdown. */
   suggestions: Product[];
@@ -88,10 +85,11 @@ function saveRecent(list: string[]): void {
 }
 
 /**
- * All search state for the homepage bar: the query, Fuse-ranked results,
+ * All search state for the homepage bar: the query, ranked results,
  * autocomplete suggestions, recent-search history and the open/closed state
- * of the two panels. One Fuse index is built per products array and reused
- * across keystrokes.
+ * of the two panels. Batch 70: every word of the query must start a word of
+ * the product's text, in any order (lib/smartSearch.ts); a typo falls back
+ * to close spellings.
  */
 export function useSearch({
   products,
@@ -99,6 +97,7 @@ export function useSearch({
   categoryId,
   onSelectSuggestion,
   initialQuery = '',
+  extraText,
 }: UseSearchOptions): SearchState {
   const [query, setQueryState] = useState(initialQuery);
   const [isFocused, setIsFocused] = useState(false);
@@ -116,18 +115,17 @@ export function useSearch({
     setRecentState(next);
   }, []);
 
-  // Only rebuilt when the products array itself changes, never per keystroke.
-  const fuse = useMemo(() => new Fuse(products, FUSE_OPTIONS), [products]);
+  // Only rebuilt when the products change, never per keystroke.
+  const texts = useMemo(() => new Map(products.map((p) => [p.id, searchTextOf(p, extraText)])), [products, extraText]);
 
   const trimmed = query.trim();
-  // Below Fuse's minMatchCharLength nothing can match, so a single character
-  // is treated like an empty query for the grid rather than showing nothing.
+  // A single character is treated like an empty query for the grid.
   const isSearching = trimmed.length >= MIN_QUERY_LENGTH;
 
   const ranked = useMemo<Product[]>(() => {
     if (!isSearching) return [];
-    return fuse.search(trimmed).map((hit) => hit.item);
-  }, [fuse, trimmed, isSearching]);
+    return smartSearch(products, trimmed, (p) => texts.get(p.id) ?? p.name);
+  }, [products, texts, trimmed, isSearching]);
 
   const results = useMemo<Product[]>(() => {
     const base = isSearching ? ranked : defaultOrdered;
