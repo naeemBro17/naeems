@@ -335,7 +335,7 @@ test('Cart: empty cart, its words and one orange (Browse products)', async ({ pa
   }
   await setTheme(page, 'light');
   await page.getByRole('link', { name: 'Browse products' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/shop$/);
 });
 
 test('Cart: + at the limit shows the limit popup at the stepper', async ({ page }) => {

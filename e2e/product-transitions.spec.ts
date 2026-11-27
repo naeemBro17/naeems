@@ -26,7 +26,7 @@ test.describe('Product open/close transitions', () => {
   test('opening a grid card and going back restores scroll position (scrolled far down)', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     await page.mouse.wheel(0, 1400);
     await page.waitForTimeout(300);
@@ -43,7 +43,7 @@ test.describe('Product open/close transitions', () => {
     }
 
     await page.getByRole('button', { name: 'Go back' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     await page.waitForTimeout(300);
     const scrollAfter = await page.evaluate(() => window.scrollY);
     expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(30);
@@ -52,35 +52,36 @@ test.describe('Product open/close transitions', () => {
   test('opening a fully-visible card near the top and going back stays at the top', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     const scrollBefore = await page.evaluate(() => window.scrollY);
     expect(scrollBefore).toBe(0);
 
-    // The grid itself starts below the fold on this viewport (hero banner +
-    // Browse circles + bento grid + category chips fill it first) — no grid
-    // card is ever fully visible at scroll 0, so "near the top" means a
-    // bento tile, the only kind of product card that actually is.
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await bentoCard.click();
+    // Batch 71: on /shop the grid starts on the first screen (only the
+    // Shop header, search and chips above it), so the first card is fully
+    // visible at scroll 0.
+    const topCard = page.locator('.product-card').first();
+    const box = await topCard.boundingBox();
+    expect(box && box.y + box.height <= (page.viewportSize()?.height ?? 800)).toBe(true);
+    await topCard.click();
     await expect(page).toHaveURL(/\/product\//);
     await page.getByRole('button', { name: 'Go back' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     await page.waitForTimeout(300);
     expect(await page.evaluate(() => window.scrollY)).toBeLessThan(30);
   });
 
-  test('opening a bento card works and the bottom nav never disappears mid-slide', async ({
+  test('opening the top grid card works and the bottom nav never disappears mid-slide', async ({
     page,
   }) => {
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
+    await page.goto('/shop');
+    const topCard = page.locator('.product-card').first();
+    await expect(topCard).toBeVisible();
 
     await assertCleanTransition(
       page,
       async () => {
-        await bentoCard.click();
+        await topCard.click();
       },
       { windowMs: 450 }
     );
@@ -93,13 +94,13 @@ test.describe('Product open/close transitions', () => {
       },
       { windowMs: 450, expectNavVisible: true }
     );
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
   });
 
   test('opening a product from a search result and back returns to the same search', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await page.getByRole('link', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(/\/search/);
     const searchInput = page.getByRole('combobox', { name: 'Search products' });
@@ -119,7 +120,7 @@ test.describe('Product open/close transitions', () => {
   });
 
   test('Home <-> Account crossfades without a black or blank frame', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await assertCleanTransition(page, async () => {
       await page.getByRole('link', { name: 'Account', exact: true }).click();
     });
@@ -128,6 +129,6 @@ test.describe('Product open/close transitions', () => {
     await assertCleanTransition(page, async () => {
       await page.getByRole('button', { name: 'Go back' }).click();
     });
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
   });
 });

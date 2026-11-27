@@ -26,7 +26,7 @@ async function blocked(page: Page, theme: (typeof THEMES)[number]): Promise<void
 for (const theme of THEMES) {
   test(`shop is being updated 360px ${theme}`, async ({ page }) => {
     await blocked(page, theme);
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.getByTestId('shop-down')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${DIR}/shop-down-360-${theme}.png` });

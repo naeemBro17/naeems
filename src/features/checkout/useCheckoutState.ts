@@ -17,6 +17,7 @@ import {
 import { useCart } from '../../contexts/CartContext';
 import { computePromoDiscount } from '../../lib/promoCodes';
 import { smallImageFor } from '../../lib/productImages';
+import { clearDeliveryDraft } from '../../lib/deliveryDraft';
 import { useProducts } from '../../contexts/ProductContext';
 import { useLiveCampaigns } from '../../contexts/CampaignContext';
 import { campaignSavings, normalPrice, promoBase as promoBaseOf, saleFor, type CampaignSavings } from '../../lib/campaigns';
@@ -265,6 +266,8 @@ export function CheckoutStateProvider({ children }: { children: ReactNode }) {
 
   const resetAfterOrder = useCallback(() => {
     clearCart();
+    // Batch 71: the delivery form's unsent text goes with the placed order.
+    clearDeliveryDraft();
     setZoneId(DEFAULT_ZONE_ID);
     setAddress(emptyDeliveryAddress());
     setPromo(null);

@@ -24,6 +24,9 @@ declare global {
     _fbq?: FbQ;
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
+    /** Batch 71: set only by the e2e tests that check the PageView
+     *  counting (their network to Facebook / Google is blocked). */
+    __naeemsTrackingTest?: boolean;
   }
 }
 
@@ -63,6 +66,23 @@ function addScriptWhenIdle(src: string): void {
   };
   if (document.readyState === 'complete') afterLoad();
   else window.addEventListener('load', afterLoad, { once: true });
+}
+
+/**
+ * Batch 71: a test or development machine never loads or sends anything:
+ * localhost, 127.0.0.1, a *.local name, or a browser driven by a test
+ * robot (navigator.webdriver, set by Playwright and Selenium). The e2e
+ * tests of the PageView counting opt in with window.__naeemsTrackingTest
+ * (their tracker network is blocked, so nothing leaves the machine).
+ */
+export function isTestMachine(
+  hostname: string = window.location.hostname,
+  webdriver: boolean = navigator.webdriver === true,
+  optedIn: boolean = window.__naeemsTrackingTest === true
+): boolean {
+  if (optedIn) return false;
+  const host = hostname.toLowerCase();
+  return webdriver || host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
 let fbInitialized = false;
@@ -149,6 +169,7 @@ function initGa(measurementId: string): void {
 /** Called once settings are known (see useAnalyticsInit) — safe to call
  *  repeatedly, each tracker only ever initializes itself once. */
 export function initAnalytics(fbPixelId: string, gaMeasurementId: string): void {
+  if (isTestMachine()) return;
   initFbPixel(fbPixelId);
   initGa(gaMeasurementId);
 }

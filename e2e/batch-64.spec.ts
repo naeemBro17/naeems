@@ -67,7 +67,7 @@ for (const kind of ['phone', 'in-app'] as const) {
   test(`Part 2: Back (${kind}) from a product lands within 1 px of where the grid was, 390 px`, async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').nth(8)).toBeVisible({ timeout: 30_000 });
     const card = page.locator('.product-card').nth(6);
     await card.scrollIntoViewIfNeeded();
@@ -84,7 +84,7 @@ for (const kind of ['phone', 'in-app'] as const) {
     expect(await page.evaluate(() => window.scrollY), 'a product opens at the top').toBe(0);
     if (kind === 'phone') await page.goBack();
     else await page.getByRole('button', { name: 'Go back' }).click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/shop$/);
     await waitForViewTransitionsToFinish(page);
     await page.waitForTimeout(600);
     const after = await page.evaluate(() => ({
@@ -395,7 +395,7 @@ test.describe('Part 4: "Your wallet is open"', () => {
     await expect(page.getByTestId('account-wallet')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(1000);
     await expect(page.getByTestId('wallet-open-note')).toHaveCount(0);
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(800);
     await expect(page.getByTestId('wallet-open-note')).toHaveCount(0);
@@ -413,18 +413,18 @@ test.describe('Part 4: "Your wallet is open"', () => {
     await page.waitForTimeout(800);
     await expect(page.getByTestId('wallet-open-note')).toHaveCount(0);
     const before = calls.length;
-    await page.goto('/');
+    await page.goto('/shop');
     const note = page.getByTestId('wallet-open-note');
     await expect(note).toBeVisible({ timeout: 30_000 });
     expect(calls.length, 'Home asks the database for nothing new').toBe(before);
     const noteBox = await note.boundingBox();
-    const navBox = await page.locator('.bottom-nav').boundingBox();
+    const navBox = await page.locator('.b71-nav').boundingBox();
     expect(noteBox && navBox && noteBox.y + noteBox.height <= navBox.y).toBe(true);
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${SHOTS}/part4-note-dark-390.png` });
     await note.getByRole('button', { name: 'Open my wallet' }).click();
     await expect(page).toHaveURL(/\/wallet$/);
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(800);
     await expect(page.getByTestId('wallet-open-note')).toHaveCount(0);

@@ -16,13 +16,13 @@ async function settledCount(grid: Locator): Promise<number> {
 
 test.describe('Home — categories', () => {
   test('home loads with the product grid and category chips visible', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.getByRole('tab', { name: 'All' })).toBeVisible();
     await expect(page.locator('.product-card').first()).toBeVisible();
   });
 
   test('a category chip filters the grid, and All resets it', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     const grid = page.locator('.product-card');
     await expect(grid.first()).toBeVisible();
     const allCount = await settledCount(grid);
@@ -49,14 +49,19 @@ test.describe('Home — categories', () => {
     await expect(grid).toHaveCount(allCount);
   });
 
+  // Batch 71: the Browse circles are on the new Home and open the Shop
+  // filtered by that category.
   test('a Browse circle filters the same way a chip does', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     const grid = page.locator('.product-card');
     await expect(grid.first()).toBeVisible();
     const allCount = await settledCount(grid);
 
+    await page.goto('/');
     const circle = page.getByRole('link', { name: /^Show .* products$/ }).first();
     await circle.click();
+    await expect(page).toHaveURL(/\/shop\?cat=/);
+    await expect(grid.first()).toBeVisible();
     await page.waitForTimeout(200);
     const filteredCount = await grid.count();
     expect(filteredCount).toBeLessThanOrEqual(allCount);

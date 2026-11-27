@@ -395,7 +395,7 @@ test('Checkout: the address form is exactly as before (field order and labels at
   test.skip(!E2E_EMAIL || !E2E_PASSWORD, 'Needs the customer test account.');
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsTestCustomer(page);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
   await page.goto('/cart');

@@ -241,7 +241,7 @@ test('Part 3: checkout thana search — 4 letters in a row keep the keyboard, th
   await mockSteadfast(page, { policeStations: STATIONS });
   await page.addInitScript(() => window.localStorage.removeItem('steadfast-thanas-v1'));
   await useSessionInPage(page, customer);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
   await page.goto('/cart');
@@ -380,35 +380,33 @@ test('Part 5: WhatsApp and Call use 880… whatever way the phone was typed', as
 
 /* ---------------------------------------------------------------- Part 6 */
 
-test('Part 6: "Price Hub" is gone — title, link previews, manifest, menu', async ({ page }) => {
+test('Part 6: "Price Hub" is gone — title, link previews, manifest, footer', async ({ page }) => {
   test.setTimeout(60_000);
+  // Batch 71: the Home (no hamburger menu any more; its links are in the footer).
   await page.goto('/');
-  await page.waitForSelector('.product-card');
+  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveTitle("NAEEM'S");
   const head = await page.evaluate(() => document.head.innerHTML);
   expect(head).not.toMatch(/price[ -]?hub/i);
   await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', "NAEEM'S | 100% Authentic Skincare"); // Batch 52 wording
   const manifest = await (await page.request.get('/manifest.webmanifest')).text();
   expect(manifest).not.toMatch(/price[ -]?hub/i);
-  await page.getByRole('button', { name: 'Open menu' }).click();
-  const menu = page.locator('.menu-list');
-  await expect(menu.getByText('About Us')).toBeVisible();
+  const menu = page.locator('.site-footer');
+  await expect(menu.getByText('About us')).toBeVisible();
   await expect(menu).not.toContainText(/price[ -]?hub/i);
   await expect(menu.getByText(/^About/)).toHaveCount(1);
   expect(await page.evaluate(() => document.body.innerText)).not.toMatch(/price[ -]?hub/i);
 });
 
+/** Batch 71: the Admin panel link lives on the Account page (staff only). */
 async function menuHasAdminPanel(page: Page): Promise<number> {
-  await page.goto('/');
-  await page.waitForSelector('.product-card');
-  await page.getByRole('button', { name: 'Open menu' }).click();
-  await expect(page.locator('.menu-list').getByText('About Us')).toBeVisible();
+  await page.goto('/account');
   // Give the signed-in profile time to load before counting.
-  await page.waitForTimeout(1500);
-  return page.locator('.menu-list').getByText('Admin Panel').count();
+  await page.waitForTimeout(2500);
+  return page.getByText(/admin panel/i).count();
 }
 
-test('Part 6: Admin Panel in the menu — only for signed-in staff', async ({ browser }) => {
+test('Part 6: Admin panel on the Account page — only for signed-in staff', async ({ browser }) => {
   test.setTimeout(90_000);
   const visitor = await browser.newPage();
   expect(await menuHasAdminPanel(visitor)).toBe(0);
@@ -421,9 +419,8 @@ test('Part 6: Admin Panel in the menu — only for signed-in staff', async ({ br
 
   const staff = await browser.newPage();
   await useSessionInPage(staff, admin);
-  await staff.goto('/');
-  await staff.getByRole('button', { name: 'Open menu' }).click();
-  await expect(staff.locator('.menu-list').getByText('Admin Panel')).toBeVisible({ timeout: 15_000 });
+  await staff.goto('/account');
+  await expect(staff.getByRole('link', { name: 'Open admin panel' })).toBeVisible({ timeout: 15_000 });
   await staff.close();
 });
 
@@ -449,14 +446,14 @@ test('Part 7: manifest, theme colours, the offline helper and the version in Set
   for (const icon of manifest.icons) expect((await page.request.get(icon.src)).ok()).toBe(true);
 
   await page.addInitScript(() => window.localStorage.setItem('theme', 'light'));
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   await expect(page.locator('meta[name="theme-color"][media="(prefers-color-scheme: light)"]')).toHaveCount(1);
   await expect(page.locator('meta[name="theme-color"][media="(prefers-color-scheme: dark)"]')).toHaveCount(1);
   await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute('content', '#FFFFFF');
-  // The status bar follows the app's own Dark Mode switch.
-  await page.getByRole('button', { name: 'Open menu' }).click();
-  await page.getByRole('switch', { name: 'Dark Mode' }).click();
+  // The status bar follows the app's own theme button (Batch 71: on Home).
+  await page.goto('/');
+  await page.getByTestId('home-theme').click();
   await expect(page.locator('meta[name="theme-color"]').first()).toHaveAttribute('content', '#000000');
   await expect(page.locator('meta[name="theme-color"]').last()).toHaveAttribute('content', '#000000');
 

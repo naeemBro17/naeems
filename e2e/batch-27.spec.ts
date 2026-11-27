@@ -217,7 +217,7 @@ test.describe('Part 1 — product page', () => {
       )
     );
     for (const c of colours) expect(c).toBe('rgba(0, 0, 0, 0)');
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible();
     const card = await page.locator('.product-card').first().evaluate((el) =>
       getComputedStyle(el).getPropertyValue('-webkit-tap-highlight-color')
@@ -286,7 +286,7 @@ test.describe('Part 1 — product page', () => {
 
   test('no orange on the product page except the Add to Cart pill and the count badge (light and dark)', async ({ page }) => {
     for (const theme of ['light', 'dark'] as const) {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.evaluate((t) => localStorage.setItem('theme', t), theme);
       await page.evaluate(() =>
         localStorage.setItem(
@@ -367,7 +367,7 @@ test.describe('Part 1 — product page', () => {
 
 test.describe('Part 2 — glass cart button', () => {
   test('hidden when empty, appears after the first add, counts, opens the cart, and goes when emptied', async ({ page }) => {
-    await openFresh(page, '/');
+    await openFresh(page, '/shop');
     await expect(page.locator('.product-card').first()).toBeVisible();
     const glass = page.getByTestId('glass-cart');
     await expect(glass).toHaveCount(0);
@@ -390,7 +390,7 @@ test.describe('Part 2 — glass cart button', () => {
     expect(b.width).toBeLessThanOrEqual(62);
     expect(Math.abs(b.y + b.height / 2 - vh / 2)).toBeLessThanOrEqual(2);
     expect(vw - (b.x + b.width)).toBeLessThanOrEqual(16);
-    const navTop = (await page.locator('.bottom-nav').boundingBox())?.y ?? vh;
+    const navTop = (await page.locator('.b71-nav').boundingBox())?.y ?? vh;
     expect(b.y + b.height).toBeLessThan(navTop);
 
     // A later add pulses and counts.
@@ -415,7 +415,7 @@ test.describe('Part 2 — glass cart button', () => {
   });
 
   test('shown on Search, brand pages and the product page; never on the cart, checkout or admin', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await page.evaluate(() =>
       localStorage.setItem(
         'nph_cart',
@@ -426,6 +426,7 @@ test.describe('Part 2 — glass cart button', () => {
     // Batch 28: the product page joined the pages that show it.
     for (const path of [
       '/',
+      '/shop',
       '/search',
       '/brands',
       '/brand/aveeno',
@@ -452,7 +453,7 @@ test.describe('Part 2 — glass cart button', () => {
 
   test('sits below open sheets: an open option picker covers it', async ({ page }) => {
     const optionName = await seedOption(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.evaluate(() =>
       localStorage.setItem(
         'nph_cart',
@@ -483,7 +484,7 @@ test.describe('Part 2 — glass cart button', () => {
 
 test.describe('Part 3 — card cart button becomes a stepper', () => {
   test('add → stepper; + and − change it; at 0 the button comes back; no brand line on cards', async ({ page }) => {
-    await openFresh(page, '/');
+    await openFresh(page, '/shop');
     const firstAdd = page.getByRole('button', { name: /^Add .* to cart$/ }).first();
     const name = ((await firstAdd.getAttribute('aria-label')) ?? '').replace(/^Add /, '').replace(/ to cart$/, '');
     const card = cardNamed(page, name);
@@ -517,7 +518,7 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await expect(card.locator('.cart-button')).toBeVisible();
     expect(await cartUnits(page)).toBe(0);
     // The stepper taps never opened the product.
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/shop$/);
   });
 
   test('stays in sync with the cart page and the product page', async ({ page }) => {
@@ -528,7 +529,7 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
       'products_view?select=name&is_active=eq.true&or=(stock_quantity.gte.4,stock_quantity.is.null)'
     );
     const roomyNames = new Set((roomy.data ?? []).map((p) => p.name));
-    await openFresh(page, '/');
+    await openFresh(page, '/shop');
     const adds = page.getByRole('button', { name: /^Add .* to cart$/ });
     await expect(adds.first()).toBeVisible();
     let firstAdd = adds.first();
@@ -555,7 +556,7 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await page.getByRole('button', { name: `Increase quantity of ${name}` }).click();
     await expect(row.getByTestId('cart-qty')).toHaveText('3');
 
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(cardNamed(page, name).getByTestId('card-stepper-qty')).toHaveText('3');
 
     // Add 1 more on the product page → the card shows 4 (Batch 51: 4 is the
@@ -596,7 +597,7 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
 
   test('a product with options opens the picker; after adding, the card shows that option\'s quantity', async ({ page }) => {
     const name = await seedOption(page);
-    await openFresh(page, '/');
+    await openFresh(page, '/shop');
     const options = page.getByRole('button', { name: `Choose options for ${name}` });
     await expect(options).toBeVisible();
     await scrollElementTo(options, 160);
@@ -681,7 +682,7 @@ test.describe('Part 4 — You may also like', () => {
 
   test('tapping a card opens it; Back (phone and ←) returns to the previous product at the same scroll position', async ({ page }) => {
     for (const kind of ['phone', 'in-app'] as const) {
-      await page.goto('/');
+      await page.goto('/shop');
       await expect(page.locator('.product-card').first()).toBeVisible();
       await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');
       const row = page.getByTestId('related-products');
@@ -713,7 +714,7 @@ test.describe('Part 5 — card titles use the full card width', () => {
     for (const theme of ['light', 'dark'] as const) {
       test(`${width}px ${theme}: title box = card content width, first line filled before wrapping`, async ({ page }) => {
         await page.setViewportSize({ width, height: 840 });
-        await page.goto('/');
+        await page.goto('/shop');
         await page.evaluate((t) => localStorage.setItem('theme', t), theme);
         await page.goto('/search?q=aveeno');
         await expect(page.locator('.product-card').first()).toBeVisible();

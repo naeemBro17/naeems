@@ -51,7 +51,7 @@ export async function assertCleanTransition(
     let navVisible: boolean | null = null;
     if (options.expectNavVisible) {
       navVisible = await page
-        .locator('.bottom-nav')
+        .locator('.b71-nav:not(.b71-nav--away)')
         .isVisible()
         .catch(() => false);
     }
@@ -305,7 +305,7 @@ export async function assertSingleCleanTransition(
 
   if (options.expectNavVisible) {
     const navIsVisible = await page
-      .locator('.bottom-nav')
+      .locator('.b71-nav:not(.b71-nav--away)')
       .isVisible()
       .catch(() => false);
     if (!navIsVisible) {

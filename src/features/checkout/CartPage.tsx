@@ -109,7 +109,7 @@ export function CartPage() {
             <EmptyBagArt />
             <h2 className="b67-empty__title empty-state__message">Your cart is empty</h2>
             <p className="b67-empty__text">Find something your skin will love.</p>
-            <Link to="/" className="b67-cta">
+            <Link to="/shop" className="b67-cta">
               Browse products
             </Link>
           </div>

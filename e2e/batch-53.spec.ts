@@ -193,7 +193,7 @@ for (const [orderNumber, label, note] of LABELS) {
       // …and when the Payouts page is refreshed in another tab.
       const after = calls;
       const other = await page.context().newPage();
-      await other.goto('/');
+      await other.goto('/shop');
       await other.evaluate(() => {
         const channel = new BroadcastChannel('naeems-courier-costs');
         channel.postMessage('changed');

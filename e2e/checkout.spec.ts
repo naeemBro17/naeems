@@ -24,7 +24,7 @@ test.describe('Logged-in checkout', () => {
   }) => {
     test.setTimeout(60_000);
     await signInAsTestCustomer(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
 
     // Empty the cart from any previous run first, so quantities don't drift.
@@ -46,14 +46,16 @@ test.describe('Logged-in checkout', () => {
       removeGuard += 1;
     }
 
-    await page.goto('/');
+    await page.goto('/shop');
     const addButton = page.getByRole('button', { name: /^Add .* to cart$/ }).first();
     const productName = (await addButton.getAttribute('aria-label'))!
       .replace(/^Add /, '')
       .replace(/ to cart$/, '');
     await addButton.click();
 
-    await page.locator('.bottom-nav__tab').filter({ hasText: 'Cart' }).click();
+    // Batch 71: no Cart tab; the cart bubble opens the side cart.
+    await page.getByTestId('glass-cart').click();
+    await page.getByTestId('side-cart-view').click();
     await expect(page).toHaveURL(/\/cart/);
     await page.getByRole('button', { name: 'Checkout' }).click();
     await expect(page).toHaveURL(/\/checkout\/delivery/);

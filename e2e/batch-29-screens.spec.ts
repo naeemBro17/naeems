@@ -41,7 +41,7 @@ async function liveProduct(): Promise<Live> {
 async function start(page: Page, theme: 'light' | 'dark', cart = '[]'): Promise<void> {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.evaluate((c) => localStorage.setItem('nph_cart', c), cart);
 }
 
@@ -123,6 +123,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`Home "Shop by Brand" row 390px ${theme}`, async ({ page }) => {
     test.setTimeout(90_000);
     await start(page, theme);
+    // Batch 71: the brand row is on the new Home.
     await page.goto('/');
     const row = page.getByTestId('brand-row');
     await expect(row.locator('[data-brand-slug]').first()).toBeVisible({ timeout: 15_000 });

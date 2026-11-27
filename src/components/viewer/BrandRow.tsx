@@ -42,7 +42,7 @@ function ArrowIcon() {
  * sideways scrolling only — no touch handlers, so vertical page scrolling
  * with a finger on the row is the browser's own.
  */
-export function BrandRow({ activeProducts }: { activeProducts: Product[] }) {
+export function BrandRow({ activeProducts, variant = 'row' }: { activeProducts: Product[]; variant?: 'row' | 'home' }) {
   const { brands, isLoading } = useProducts();
   const navigate = useAppNavigate();
   const list = useMemo(() => homeBrands(brands, activeProducts), [brands, activeProducts]);
@@ -62,6 +62,25 @@ export function BrandRow({ activeProducts }: { activeProducts: Product[] }) {
     e.preventDefault();
     navigate('/brands');
   };
+
+  const cards = reserve
+    ? [0, 1, 2, 3].map((i) => <span key={i} className="brand-card brand-card--skeleton skeleton" aria-hidden="true" />)
+    : list.map((brand) => <BrandCard key={brand.id} brand={brand} />);
+
+  // Batch 71: the new Home's "Shop by brand" (circles, see batch71.css).
+  if (variant === 'home') {
+    return (
+      <section className="b71-brands" aria-label="Shop by brand" data-testid="brand-row">
+        <div className="b71-sec">
+          <h2>Shop by brand</h2>
+          <a href="/brands" onClick={seeAll}>
+            All brands
+          </a>
+        </div>
+        <div className="b71-hscroll">{cards}</div>
+      </section>
+    );
+  }
 
   return (
     <section className="brand-row" aria-label="Shop by Brand" data-testid="brand-row">

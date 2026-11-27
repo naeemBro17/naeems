@@ -1,0 +1,242 @@
+BATCH 71: New Home, separate Shop tab, floating bottom bar, Naeem's skin tips
+Branch: feature/batch-71-home-shop (from main at 1.70.0)
+Version: 1.71.0 (package.json and package-lock.json)
+
+------------------------------------------------------------
+1. WHAT I DID
+------------------------------------------------------------
+
+Routes. The address "/" is now the new Home. The product grid moved to
+"/shop" and works exactly as before (search pill, filter sheet, category
+chips with their pinned copy, product grid, admin Edit Mode, campaigns,
+wallet note). Old links still work: a visit to "/" with a grid word in it
+(?cat=, ?brand=, ?skin=, ?q=, ?sort=) jumps to "/shop" with the same words,
+replacing the history step so Back does not bounce. A visit to "/" with only
+other words (for example a Facebook ?fbclid=) stays on Home. The PWA start
+address stays "/". "/shop" was added to the sitemap.
+
+Coming back keeps your place. Back from a product to Shop, Search or Home
+returns to the same scroll spot, the same chip, filters and search text (the
+existing scroll memory already worked per page, so it covers /shop and
+/search with no change; a new test proves it on /shop). The checkout
+delivery form now keeps what the customer typed but has not sent yet (in
+this browser tab only) until the order is placed, so going back to the shop
+and returning never loses it.
+
+Floating bottom bar. A glass pill floats above the bottom of the screen on
+Home, Shop, Search, Brands and a brand page: Home, Shop, Search, Account.
+The tab you are on is a filled near-black pill with its name; the others
+are icons only. It slides away when you scroll down 24 px and comes back
+when you scroll up 12 px or reach the top (instant with reduced motion).
+Tapping Home on Home or Shop on Shop goes back to the top. There is no Cart
+tab: the cart is the bubble and side cart from Batch 70. The bubble keeps
+clear of the bar while it shows. Your exact CSS is used.
+
+The new Home, top to bottom: NAEEM'S wordmark and the theme button; the
+greeting with photo or initials ("Good evening" and the full name, signed-in
+customers only); the skin tip; the search pill (opens Search with the
+keyboard up); live campaigns; the banner as an inset 176 px card with dots
+under it (admin editing kept); Browse circles (now open /shop?cat=...); Shop
+by brand as circles with "All brands"; Shop by skin type and Shop by concern
+(only when switched on); Best sellers with "See all"; Our best combos (only
+when switched on and at least one combo is chosen); Watch and learn (only
+when there are videos); the Talk with Naeem card; the footer. Your exact
+CSS and wording are used.
+
+Best sellers. Your featured products in the shop's featured order, else the
+10 newest. The row drifts slowly left on its own (one animation loop that
+moves the row's scroll position), wraps around seamlessly, stops while the
+row is off screen or the phone tab is hidden, pauses when touched, scrolled
+with a mouse wheel or focused with the keyboard, and starts again 4 seconds
+later. No drift with reduced motion. A tap still opens the product; a drag
+does not. A finger on the row still scrolls the page up and down.
+
+Skin tips. One tip at the top of Home on each visit, never the one this
+phone saw last; your own three ("NAEEM'S RULE") are three times as likely
+as the others ("SKIN TIP"). The orange words are shown in brand orange. A
+tap shows another with a short fade. The 40 default tips are exactly your
+list. The tip waits for the saved list before showing (its space is
+reserved), so a default tip never flashes before your own.
+
+Admin, Banner, Expert page, Texts, HOME PAGE: five new panels.
+- Skin tips: edit text (max 90), the orange words, the "Naeem's rule" and
+  "Show" switches, delete (with confirm), "Add tip", a live preview of the
+  tip you tap, and "Use default list" (with confirm). Save button.
+- Show on Home: three switches (skin type, concern, combos), off by
+  default, each saves at once.
+- Concerns: name (max 24), line (max 28), one of the 5 colours, up and
+  down, delete, add. Starts with your 5 defaults.
+- Best combos: tick combos from your combos list (up to 8), order them.
+- Videos: YouTube link and title (max 70), up and down, delete, add. A
+  Shorts link shows "Shorts"; anything else shows "Paste a YouTube or
+  YouTube Shorts link." and Save stays off.
+Nothing changes for customers until you press Save (or flip a switch).
+
+Shop page. Title "Shop", the filter button, the search pill, the category
+chips, the real product count ("134 products") and a sort menu, then the
+same product cards as before.
+
+Hamburger menu removed. Dark mode is now the theme button on Home and a
+"Dark mode" switch on the Account page (customers and staff). About us,
+Delivery info, Return policy, Terms, Privacy are in the footer and in an
+"About and policies" list on the Account page. Wholesale account: in the
+footer for approved wholesalers only, and the existing "Open wholesaler
+account" row on their Account page. Admin panel: only the existing "Open
+admin panel" row on the staff Account page. The menu's "Settings" only held
+a "Coming Soon" placeholder, so it was dropped. The menu and its slide-out
+drawer (and their CSS) were deleted after a search showed nothing else used
+them.
+
+One brand orange. --color-primary is now #FF7A45, the same as the accent,
+in both themes (one line). White text on orange buttons is now bold (700)
+and 15 px. A test checks that no button, link on Home, Shop, product, cart
+and Order Placed still uses the old #F05020.
+
+No tracking from test machines. Facebook Pixel and Google Analytics never
+load or send anything on localhost, 127.0.0.1, a *.local name, or a browser
+driven by a test robot. One guard in the shared tracking file, with unit
+tests. (There is no separate Conversions API code in the app.) Two older
+tests that check "one PageView per page" switch on a test-only flag so they
+still run; their network to Facebook and Google stays blocked as before.
+
+Tests. A new e2e/batch-71.spec.ts (20 tests) and src/lib/batch71.test.ts
+(18 unit tests). About 40 older test files were updated to open /shop where
+they meant the grid (see section 5 for what changed beyond that).
+
+Links changed from "/" to "/shop":
+- Browse circles on Home (each circle: /shop?cat=...)
+- Best sellers "See all"
+- Order Placed "Keep shopping"
+- Empty cart "Browse products"
+- My Orders, empty: "Start shopping"
+- Ended campaign page: "Browse all products"
+- Combo page, unavailable combo: "Browse the shop"
+- The banner's "scroll to products" button now opens /shop
+- Skin type and concern tiles open /shop?q=<name>
+Kept on "/": the bottom bar's Home tab, Back with no history, admin "View
+site", and the other admin and login fall-backs that mean "the shop's front
+page".
+
+Performance check. Chrome at 4x CPU slowdown on the Home with the Best
+sellers row drifting: 179 frames measured, 0 over 25 ms, worst 16.8 ms.
+Dropped frames: no.
+
+------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------------------------------
+
+None needed. Everything new is stored in the existing app_settings table
+(keys home_tips, home_show_skin_types, home_show_concerns, home_show_combos,
+home_concerns, home_combo_codes, home_videos). Until you save, Home uses the
+defaults and the three optional rows stay off.
+
+------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+------------------------------------------------------------
+
+Everything asked for is done. Test results:
+
+Build: passed with zero errors. Unit tests: 954 of 954 passed (18 new).
+
+Full "npm run verify" (run once): build OK, vitest 954/954, e2e 599
+passed, 130 skipped, 5 failed. What happened to the 5:
+- batch-71 "rows on": a test clean-up race (the test ended while pictures
+  were still loading). Fixed in the test; the file then passed.
+- batch-52 "iPhone inside Facebook": a REAL bug this batch made. The new
+  bar sat on top of pop-up sheets and covered "Copy link". Fixed: the bar
+  now sits above the page but below sheets and dialogs (layer 200, the old
+  bar's layer, instead of the mockup's 900). batch-71 + batch-52 then: 39
+  passed.
+- back-known-good "Expert -> Home": a REAL bug. After Back, putting the
+  scroll spot back looked like a scroll down and the bar slid away by
+  itself. Fixed: scrolls in the first 0.3 s after the bar appears only set
+  its starting point. The file then: 11 passed. Because this touches the
+  bar everywhere, I also re-ran one-transition-system (12 passed),
+  phone-back (5 passed) and product-transitions (5 passed).
+- batch-37 "settings change reflects in the PDF" (not touched by this
+  batch): re-run 3 times: passed, passed, failed once; a 4th run passed.
+  It is a timing flake: the invoice is sometimes made from the shop's
+  saved copy of the settings before the test's own settings arrive. Worth
+  a small fix in that test later.
+- fix-order-actions "Delete" (not touched): re-run 3 times, passed 3 of 3.
+I did not re-run the whole suite again (CLAUDE.md rule).
+
+------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+------------------------------------------------------------
+
+- The bento tiles are no longer shown anywhere. Your approved Home and Shop
+  lists do not include them, so I followed the list. Their admin editor
+  (Admin, Bento) still exists but now changes nothing a customer sees, and
+  the old Home "drag sections to reorder" (banner, Browse, bento, chips) has
+  nothing to reorder, because the new Home has a fixed order. Tests that
+  only tested bento tiles were removed (list in section 5). Decide whether
+  to delete the bento admin or bring the tiles back somewhere.
+- Product cards on Shop still show the price in orange (from an earlier
+  batch). CLAUDE.md says prices should be near-black. Not changed here
+  (the task said the cards stay unchanged).
+- The old bottom-bar CSS (.bottom-nav...) is now unused. Left in place;
+  safe to delete in a clean-up batch.
+- A few shadows still use the old orange tint (rgba 240,80,32). They are
+  soft shadows, not colours you can see as orange, so left as they are.
+- Signed-out visitors see only the full-screen intro on Account, so the
+  Dark mode switch there is for signed-in people; signed-out visitors use
+  the theme button on Home.
+
+------------------------------------------------------------
+5. DESIGN DECISIONS (adaptations to the mockup)
+------------------------------------------------------------
+
+- Prices use the site's usual "৳ 4,190" (with a space), so Home matches
+  every other page. The combo line reads "3 products · ৳ 4,190".
+- There was no sort control on the old grid, so I added a small neutral
+  one (Featured, Price low to high, Price high to low, Newest), kept in the
+  address (?sort=) so it survives Back.
+- Shop reads ?q= (from a skin type or concern tile) and shows "Results for
+  Oily" with a Clear button, until Batch 72 adds real tags.
+- Brands and a brand page show the bar with Shop as the active tab.
+- The tip waits for the saved list (space reserved) so it never changes in
+  front of the customer.
+- Best sellers wrap at the exact distance between the first card and its
+  copy (the same thing as "half the track", without the side padding).
+- Videos open YouTube in a new tab (no player until tapped).
+- The bar's layer is 200, not the mockup's 900: at 900 it covered pop-up
+  sheets (a test caught it). It looks exactly the same.
+- The "Talk with Naeem" Message button opens your WhatsApp link (else
+  /contact); Book a session opens your appointment link (else /contact).
+- Home has no browser tab title of its own (stays "NAEEM'S"); Shop is
+  "Shop | NAEEM'S".
+- Side cart "Keep shopping" still just closes the panel (it is opened while
+  browsing a product or the grid; jumping away to /shop would lose the
+  customer's place). Order Placed "Keep shopping" now goes to /shop.
+- Old tests: grid tests now open /shop; brand-row, banner, Browse and
+  "Talk with" tests now open Home; hamburger tests now check the footer and
+  the Account page; Cart-tab steps now use the cart bubble and side cart.
+  Removed (bento only): batch-23 "bento tile -> product -> back" (2),
+  back-known-good "bento product -> Home" and "bento card", one-transition
+  "bento card" (2), phone-back "bento tile + phone back", "bento flip tile",
+  "bento stack tile"; batch-31-screens "menu 390px" capture. Two bento
+  tests in phone-back and product-transitions were turned into the same
+  checks on the first grid card. batch-26 "about 2.5 brand cards across"
+  now checks the 72 px circle.
+
+------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS
+------------------------------------------------------------
+
+1. Real skin type and concern filters (medium). The tiles search by word
+   today; a product that does not say "Oily" in its name will not appear.
+   Shoppers who tap a concern and see few results leave. Batch 72 plans it.
+2. Product price colour (small). Make card prices near-black as the design
+   rule says; orange prices on every card compete with the one orange
+   button and read cheaper.
+3. Best sellers from real sales (medium). "Featured" is hand-picked; once
+   orders are stored, ranking by units sold in the last 30 days is more
+   honest and keeps the row fresh.
+4. Reviews or star ratings on cards (large). The single strongest trust
+   signal before buying; there is none on Home or Shop today.
+5. Bento clean-up (small). Remove or re-place the bento admin so you do not
+   edit something nobody sees.
+
+------------------------------------------------------------
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-71-home-shop

@@ -12,6 +12,7 @@ import { initialsOf } from '../lib/format';
 import { BottomSheet } from '../components/shared/BottomSheet';
 import { useMyStoreWallet } from '../hooks/useMyStoreWallet';
 import { WalletOpenNote } from '../components/account/WalletOpenNote';
+import { AccountMoreList } from '../components/account/AccountMoreList';
 import { formatTaka } from '../lib/format';
 import '../styles/batch68.css';
 
@@ -120,6 +121,8 @@ function StaffAccountView() {
           <path d="M9 6l6 6-6 6" />
         </svg>
       </Link>
+
+      <AccountMoreList />
 
       <button type="button" className="account-logout" onClick={() => setIsLogoutOpen(true)}>
         Log out

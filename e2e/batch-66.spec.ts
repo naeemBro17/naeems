@@ -197,7 +197,7 @@ test('Home card ticks and opens the campaign page; products in Naeem\'s order wi
   test.setTimeout(120_000);
   await withFakeProducts(page);
   await mockRpc(page, 'live_campaigns', () => [campaignJson()]);
-  await page.goto('/');
+  await page.goto('/shop');
   const card = page.getByTestId('campaign-card');
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText(NAME);
@@ -244,7 +244,7 @@ test('Home card ticks and opens the campaign page; products in Naeem\'s order wi
 
   // Back (inside the hero) goes back to Home.
   await page.getByRole('button', { name: 'Go back' }).first().click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/shop$/);
 });
 
 test('cart tag, summary hint and savings row; the order total is the one place_order_core charges', async ({ page }) => {
@@ -321,7 +321,7 @@ test('every item on sale: the code is not applied, with its own message', async 
   await withFakeProducts(page);
   await mockRpc(page, 'live_campaigns', () => [campaignJson()]);
   await mockPromo(page);
-  await page.goto('/');
+  await page.goto('/shop');
   await setCart(page, [{ id: A.id, qty: 1, price: 800, sale: true }]);
   await setAddress(page);
   await page.goto('/checkout/summary');
@@ -338,7 +338,7 @@ test('a sale that ends: the cart re-prices itself, the page says the sale has en
   const endsAt = new Date(Date.now() + 9000).toISOString();
   let ended = false;
   await mockRpc(page, 'live_campaigns', () => (ended ? [] : [campaignJson({ ends_at: endsAt })]));
-  await page.goto('/');
+  await page.goto('/shop');
   await setCart(page, [{ id: A.id, qty: 1, price: 800, sale: true }]);
   await page.goto('/cart');
   await expect(page.getByTestId('cart-sale-tag')).toBeVisible();
@@ -351,7 +351,7 @@ test('a sale that ends: the cart re-prices itself, the page says the sale has en
   await expect(page.getByRole('heading', { name: 'This sale has ended' })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/campaign-ended-390-light.png` });
   await page.getByRole('link', { name: 'Browse all products' }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/shop$/);
   await expect(page.getByTestId('campaign-card')).toHaveCount(0);
   await expect(page.locator('.product-card', { hasText: A.name }).getByTestId('campaign-tag')).toHaveCount(0);
 });
@@ -360,7 +360,7 @@ test('glitter style: Home and campaign page, the animation, reduced motion turns
   test.setTimeout(90_000);
   await withFakeProducts(page);
   await mockRpc(page, 'live_campaigns', () => [campaignJson({ style: 'glitter', name: '12.12', slug: SLUG })]);
-  await page.goto('/');
+  await page.goto('/shop');
   const card = page.getByTestId('campaign-card');
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText('Mega sale · Limited time');

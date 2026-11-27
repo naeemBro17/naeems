@@ -54,7 +54,7 @@ test.describe('Part 1 — tests download no real Storage files', () => {
     const tally = tallyStorage(context);
     const leaksBefore = storageLeakCount();
 
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await scrollToEnd(page);
     await page.waitForTimeout(1500);
@@ -75,7 +75,7 @@ test.describe('Part 1 — tests download no real Storage files', () => {
     test.setTimeout(60_000);
     const page = await browser.newPage();
     const tally = tallyStorage(page.context());
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(1500);
     expect(tally.placeholders).toBeGreaterThan(0);
@@ -84,7 +84,7 @@ test.describe('Part 1 — tests download no real Storage files', () => {
   });
 
   test('guard: Facebook Pixel and Google Analytics never get a fake visit', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     const reached = await page.evaluate(async () => {
       const urls = ['https://www.google-analytics.com/g/collect?v=2', 'https://connect.facebook.net/en_US/fbevents.js'];
       const results: boolean[] = [];
@@ -127,7 +127,7 @@ async function restrictSupabase(page: Page, blocked: () => boolean = () => true)
 test.describe('Part 3 — if Supabase is blocked or down', () => {
   test('a 402 from Supabase: a calm page with working WhatsApp and Messenger buttons, no broken shop', async ({ page }) => {
     await restrictSupabase(page);
-    await page.goto('/');
+    await page.goto('/shop');
     const down = page.getByTestId('shop-down');
     await expect(down).toBeVisible({ timeout: 10_000 });
     await expect(down.getByRole('heading')).toHaveText('Our online shop is being updated.');
@@ -171,7 +171,7 @@ test.describe('Part 3 — if Supabase is blocked or down', () => {
       await new Promise((resolve) => setTimeout(resolve, 12_000));
       await route.fallback();
     });
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.getByTestId('shop-down')).toBeVisible({ timeout: 11_000 });
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('shop-down')).toHaveCount(0);
@@ -182,7 +182,7 @@ test.describe('Part 3 — if Supabase is blocked or down', () => {
     await page.clock.install();
     let blocked = true;
     const asked = await restrictSupabase(page, () => blocked);
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.getByTestId('shop-down')).toBeVisible({ timeout: 10_000 });
     const before = asked.length;
     // Two minutes of waiting: about four light checks, no tight loop.
@@ -326,7 +326,7 @@ async function withCardCopies(page: Page): Promise<{ slug: string; large: string
     }
     return route.fulfill({ response, json: rows }).catch(() => undefined);
   });
-  await page.goto('/');
+  await page.goto('/shop');
   await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
   expect(first).not.toBeNull();
   return first as unknown as { slug: string; large: string; card: string };
@@ -418,21 +418,21 @@ test.describe('Part 4 — the offline helper keeps photos', () => {
     });
 
     // First visit: the helper installs and takes charge of the page.
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), { timeout: 30_000 }).toBe(true);
     await scrollToEnd(page);
     await page.waitForTimeout(1500);
     // (In tests the browser's own cache is off, so photos shown before the
     // helper took charge are fetched by it once, on this visit.)
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await scrollToEnd(page);
     await page.waitForTimeout(1500);
 
     // The visit being measured.
     counting = true;
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await scrollToEnd(page);
     await page.waitForTimeout(2000);
@@ -451,8 +451,9 @@ test.describe('Part 4 — brand videos', () => {
     page.context().on('request', (request: Request) => {
       if (/\.(mp4|webm)(\?|$)/.test(request.url())) videos.push(request.url());
     });
+    // Batch 71: the brand row is on the new Home.
     await page.goto('/');
-    await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 15_000 });
     const row = page.getByTestId('brand-row');
     if ((await row.count()) > 0) {
       await row.scrollIntoViewIfNeeded();

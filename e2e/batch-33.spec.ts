@@ -412,8 +412,9 @@ test.describe('Part 2 with a mouse', () => {
     if (!clicked.focusVisible) expect(clicked.outline).toBe('none');
 
     // Keyboard on a plain text link with no corners of its own: rounded ring.
+    // Batch 71: Home's "All brands" link.
     await page.goto('/');
-    const link = page.locator('.brand-row__all').first();
+    const link = page.locator('.b71-sec a[href="/brands"]').first();
     if ((await link.count()) > 0) {
       // Batch 34: the ring follows real focus-moving keys (Tab), not Shift.
       await page.keyboard.press('Tab');

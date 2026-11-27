@@ -221,6 +221,14 @@ function rowsToSettings(rows: { key: string; value: string | null }[]): AppSetti
     banner_slides: parseBannerSlides(map.get(BANNER_SLIDES_KEY) ?? ''),
     // Batch 68: optional (string | null), so it is read here, not with the text keys.
     account_intro_image: map.get('account_intro_image') ?? '',
+    // Batch 71: the new Home's lists and switches (missing = defaults).
+    home_tips: map.get('home_tips') ?? '',
+    home_show_skin_types: map.get('home_show_skin_types') ?? '',
+    home_show_concerns: map.get('home_show_concerns') ?? '',
+    home_show_combos: map.get('home_show_combos') ?? '',
+    home_concerns: map.get('home_concerns') ?? '',
+    home_combo_codes: map.get('home_combo_codes') ?? '',
+    home_videos: map.get('home_videos') ?? '',
   };
   for (const key of TEXT_SETTING_KEYS) {
     const value = map.get(key);

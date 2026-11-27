@@ -172,7 +172,7 @@ test('Customer: the card shows once on Home; OK marks it seen; after a reload it
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsTestCustomer(page, { walletNoteSeen: true });
   const { unseen, seen } = await noteFromNaeem(page, new Date().toISOString());
-  await page.goto('/');
+  await page.goto('/shop');
 
   const pop = page.getByTestId('order-note-popup');
   await expect(pop).toBeVisible({ timeout: 15_000 });
@@ -249,11 +249,11 @@ test('Staff and visitors never get the card (no call made)', async ({ page }) =>
   const calls = await mockRpc(page, 'my_unseen_order_note', () => [
     { order_id: order.id, order_number: order.orderNumber, note: NOTE, note_at: new Date().toISOString() },
   ]);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForTimeout(2500);
   await expect(page.getByTestId('order-note-popup')).toHaveCount(0);
   await useSessionInPage(page, admin);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForTimeout(2500);
   await expect(page.getByTestId('order-note-popup')).toHaveCount(0);
   expect(calls.length).toBe(0);

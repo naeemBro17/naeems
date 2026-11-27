@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test.describe('Search flow', () => {
   test('open search, type, open a result, Back, Back returns to Home', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     const startingHistoryLength = await page.evaluate(() => window.history.length);
 
     await page.getByRole('link', { name: 'Search', exact: true }).click();
@@ -26,7 +26,7 @@ test.describe('Search flow', () => {
 
     // Second Back: search -> Home.
     await page.goBack();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
 
     // Never more real history entries than real pages actually visited
     // (Home -> Search -> Product = 2 pushes) — see reports/batch-21.txt

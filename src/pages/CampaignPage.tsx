@@ -62,7 +62,7 @@ export function CampaignPage() {
           </span>
           <h1>This sale has ended</h1>
           <p>Prices are back to normal. Everything is still in the shop.</p>
-          <Link to="/" className="button button--primary">
+          <Link to="/shop" className="button button--primary">
             Browse all products
           </Link>
         </main>

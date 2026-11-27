@@ -4,6 +4,7 @@ import { categoryCircleImage } from '../../lib/smallImages';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
+import { categoryPath } from '../../lib/categoryFilter';
 import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
 import { useProducts } from '../../contexts/ProductContext';
 import { hadContentLastTime, rememberHadContent } from '../../lib/lastSeen';
@@ -244,7 +245,7 @@ export function BrowseCircles({
   // Batch 52: each circle is a real link to Home filtered by it (?cat=).
   const categoryHref = (id: string | null): string => {
     const slug = id === null ? null : categories.find((c) => c.id === id)?.slug ?? null;
-    return slug ? `/?cat=${encodeURIComponent(slug)}` : '/';
+    return categoryPath(slug);
   };
 
   // Saved visibility/order from Edit Mode. Empty → the curated default.

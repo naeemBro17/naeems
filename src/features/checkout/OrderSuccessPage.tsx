@@ -312,7 +312,7 @@ export function OrderSuccessPage() {
         <div className="cf-acts cf-fu" style={fadeUp('.68s')}>
           {/* Batch 70: four equal buttons, two by two. */}
           <div className={`b70-acts${helpHref ? '' : ' b70-acts--no-help'}`} data-testid="placed-actions">
-            <ActionLink to="/" className="b69-keep" onOpen={() => navigate('/')}>
+            <ActionLink to="/shop" className="b69-keep" onOpen={() => navigate('/shop')}>
               <ShopIcon />
               Keep shopping
             </ActionLink>

@@ -27,10 +27,12 @@ test.describe('Phone back button — same transition as the in-app <- button', (
     page,
   }) => {
     const errors = collectPageErrors(page);
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
-    await bentoCard.click();
+    // Batch 71: the first grid card sits on the first screen of /shop (the
+    // old Home's bento tile is gone).
+    await page.goto('/shop');
+    const topCard = page.locator('.product-card').first();
+    await expect(topCard).toBeVisible();
+    await topCard.click();
     await expect(page).toHaveURL(/\/product\//);
 
     await assertCleanTransition(
@@ -40,7 +42,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
       },
       { windowMs: 450, expectNavVisible: true }
     );
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     expect(await page.evaluate(() => window.scrollY)).toBeLessThan(30);
     expect(errors).toEqual([]);
   });
@@ -49,7 +51,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
     page,
   }) => {
     const errors = collectPageErrors(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     await page.mouse.wheel(0, 1400);
     await page.waitForTimeout(300);
@@ -73,7 +75,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
     await assertCleanTransition(page, async () => {
       await page.goBack();
     });
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     await page.waitForTimeout(300);
     const scrollAfter = await page.evaluate(() => window.scrollY);
     expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(30);
@@ -84,7 +86,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
     page,
   }) => {
     const errors = collectPageErrors(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.getByRole('link', { name: 'Search', exact: true }).click();
     await expect(page).toHaveURL(/\/search/);
     const searchInput = page.getByRole('combobox', { name: 'Search products' });
@@ -108,23 +110,23 @@ test.describe('Phone back button — same transition as the in-app <- button', (
 
   test('Account -> Home via phone back: crossfade, no black or blank frame', async ({ page }) => {
     const errors = collectPageErrors(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.getByRole('link', { name: 'Account', exact: true }).click();
     await expect(page).toHaveURL(/\/account/);
 
     await assertCleanTransition(page, async () => {
       await page.goBack();
     });
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     expect(errors).toEqual([]);
   });
 
-  test('bento tile open + back reverses the hero with the in-app <- button', async ({ page }) => {
+  test('top grid card open + back reverses the hero with the in-app <- button', async ({ page }) => {
     const errors = collectPageErrors(page);
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
-    await bentoCard.click();
+    await page.goto('/shop');
+    const topCard = page.locator('.product-card').first();
+    await expect(topCard).toBeVisible();
+    await topCard.click();
     await expect(page).toHaveURL(/\/product\//);
 
     await assertCleanTransition(
@@ -134,86 +136,7 @@ test.describe('Phone back button — same transition as the in-app <- button', (
       },
       { windowMs: 450, expectNavVisible: true }
     );
-    await expect(page).toHaveURL('/');
-    expect(errors).toEqual([]);
-  });
-
-  test('bento tile open + phone back reverses the hero the same way', async ({ page }) => {
-    const errors = collectPageErrors(page);
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
-    await bentoCard.click();
-    await expect(page).toHaveURL(/\/product\//);
-
-    await assertCleanTransition(
-      page,
-      async () => {
-        await page.goBack();
-      },
-      { windowMs: 450, expectNavVisible: true }
-    );
-    await expect(page).toHaveURL('/');
-    expect(errors).toEqual([]);
-  });
-
-  test('bento flip tile: opening the back face and returning (either back) pauses the flip on that exact face', async ({
-    page,
-  }) => {
-    await page.goto('/');
-    const backFace = page.locator('.bento-face--back').first();
-    const hasBackFace = (await backFace.count()) > 0;
-    if (!hasBackFace) {
-      // Fewer than two featured products today — nothing to flip to. Not a
-      // failure, just nothing this test can exercise right now.
-      test.skip(true, 'No back face on the flip tile — fewer than 2 featured products.');
-      return;
-    }
-
-    const errors = collectPageErrors(page);
-    await backFace.click({ force: true });
-    await expect(page).toHaveURL(/\/product\//);
-
-    await page.goBack();
-    await expect(page).toHaveURL('/');
-
-    // The flipper this face belongs to should now be frozen mid-flip, facing
-    // this exact face — not left cycling on whatever the CSS animation
-    // happened to land on by the time React remounted the grid.
-    const flipper = page.locator('.bento-flipper').first();
-    await expect(flipper).toHaveAttribute('style', /rotateX\(180deg\)/);
-    expect(errors).toEqual([]);
-  });
-
-  test('bento stack tile: opening a card that is not the first one and going back restores it into view', async ({
-    page,
-  }) => {
-    await page.goto('/');
-    const slides = page.locator('.bento-stack__slide');
-    const count = await slides.count();
-    if (count < 2) {
-      test.skip(true, 'Fewer than 2 products in the stack tile today — nothing to restore to.');
-      return;
-    }
-
-    const errors = collectPageErrors(page);
-    const tileBoxBefore = await page.locator('.bento-tile--stack').boundingBox();
-    const second = slides.nth(1);
-    await second.click({ force: true });
-    await expect(page).toHaveURL(/\/product\//);
-
-    await page.goBack();
-    await expect(page).toHaveURL('/');
-
-    // Slide index 1 should now be the one sitting in the tile's own visible
-    // area — before the fix, the track always reset to index 0 on remount,
-    // so the reverse-hero name ended up on an element scrolled out of sight.
-    const secondBoxAfter = await slides.nth(1).boundingBox();
-    expect(tileBoxBefore).not.toBeNull();
-    expect(secondBoxAfter).not.toBeNull();
-    if (tileBoxBefore && secondBoxAfter) {
-      expect(Math.abs(secondBoxAfter.y - tileBoxBefore.y)).toBeLessThan(10);
-    }
+    await expect(page).toHaveURL('/shop');
     expect(errors).toEqual([]);
   });
 });

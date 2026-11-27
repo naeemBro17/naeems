@@ -196,20 +196,21 @@ test.afterAll(async () => {
 /* ---------------- Shop ---------------- */
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`Home: "Shop by Brand" sits between the bento and the chips, ${theme} logo (${theme} mode)`, async ({ page }) => {
+  // Batch 71: the row is on the new Home, right under Browse, as circles.
+  test(`Home: "Shop by brand" sits right under Browse, ${theme} logo (${theme} mode)`, async ({ page }) => {
     await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
     await page.goto('/');
     const card = page.locator(`[data-testid="brand-row"] [data-brand-slug="${ALPHA.slug}"]`);
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('[data-testid="brand-row"] .brand-row__title')).toHaveText('Shop by Brand');
-    await expect(page.locator('[data-testid="brand-row"] .brand-row__all')).toContainText('See all');
+    await expect(page.locator('[data-testid="brand-row"] .b71-sec h2')).toHaveText('Shop by brand');
+    await expect(page.locator('[data-testid="brand-row"] .b71-sec a')).toHaveText('All brands');
 
-    const bento = await page.locator('[data-section="bento"]').boundingBox();
+    const browse = await page.getByTestId('home-browse').boundingBox();
     const row = await page.locator('[data-testid="brand-row"]').boundingBox();
-    const chips = await page.locator('[data-section="chips"] .home-chips').boundingBox();
-    expect(bento && row && chips).toBeTruthy();
-    expect(row!.y).toBeGreaterThanOrEqual(bento!.y + bento!.height - 1);
-    expect(chips!.y).toBeGreaterThanOrEqual(row!.y + row!.height - 1);
+    const best = await page.getByTestId('home-best').boundingBox();
+    expect(browse && row && best).toBeTruthy();
+    expect(row!.y).toBeGreaterThanOrEqual(browse!.y + browse!.height - 1);
+    expect(best!.y).toBeGreaterThanOrEqual(row!.y + row!.height - 1);
 
     const img = card.locator('img');
     await expect(img).toHaveAttribute('src', theme === 'dark' ? LOGO_DARK : LOGO_LIGHT);
@@ -220,11 +221,10 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator(`[data-testid="brand-row"] [data-brand-slug="${HIDDEN.slug}"]`)).toHaveCount(0);
     await expect(page.locator(`[data-testid="brand-row"] [data-brand-slug="${EMPTY.slug}"]`)).toHaveCount(0);
 
-    // About 2.5 cards across a phone.
+    // A 72 px circle.
     const cardBox = await card.boundingBox();
-    const viewport = page.viewportSize()!;
-    expect(viewport.width / cardBox!.width).toBeGreaterThan(2.2);
-    expect(viewport.width / cardBox!.width).toBeLessThan(2.9);
+    expect(Math.round(cardBox!.width)).toBe(72);
+    expect(Math.round(cardBox!.height)).toBe(72);
   });
 }
 
@@ -240,7 +240,7 @@ test('dark mode without a white logo: the normal logo on a light card', async ({
 
 test('See all → /brands → a brand → only that brand’s products; unknown brand is friendly', async ({ page }) => {
   await page.goto('/');
-  await page.locator('[data-testid="brand-row"] .brand-row__all').click();
+  await page.locator('[data-testid="brand-row"] .b71-sec a').click();
   await expect(page).toHaveURL(/\/brands$/);
   await expect(page.locator('.detail-header__title')).toHaveText('Brands');
   const item = page.locator('.brands-grid__item', { has: page.locator(`[data-brand-slug="${ALPHA.slug}"]`) });
