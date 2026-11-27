@@ -120,13 +120,4 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: `${DIR}/thana-picker-typing-390-${theme}.png` });
   });
 
-  test(`menu 390px ${theme}`, async ({ page }) => {
-    test.setTimeout(60_000);
-    await start(page, theme, 390, null);
-    await page.goto('/');
-    await page.waitForSelector('.product-card');
-    await page.getByRole('button', { name: 'Open menu' }).click();
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: `${DIR}/menu-390-${theme}.png` });
-  });
 }

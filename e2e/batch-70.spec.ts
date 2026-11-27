@@ -266,7 +266,7 @@ test('Checkout goes to /checkout/delivery the cart page way (sign-in sheet when 
   test.setTimeout(90_000);
   const [main, other] = await liveProducts(2);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/shop');
   await seedCart(page, [
     { productId: main.id, quantity: 1 },
     { productId: other.id, quantity: 1 },
@@ -310,7 +310,7 @@ test('Checkout goes straight to /checkout/delivery when signed in', async ({ pag
   const [main] = await liveProducts(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsTestCustomer(page);
-  await page.goto('/');
+  await page.goto('/shop');
   await seedCart(page, [{ productId: main.id, quantity: 1 }]);
   await openProduct(page, main.slug);
   await page.getByTestId('glass-cart').click();
@@ -323,7 +323,7 @@ test('swipe: a sideways swipe of 120 px closes it; a vertical swipe does not, an
   test.setTimeout(90_000);
   const list = await liveProducts(9);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/shop');
   await seedCart(page, list.map((p) => ({ productId: p.id, quantity: 1 })));
   await openProduct(page, list[0].slug);
   const cdp = await page.context().newCDPSession(page);
@@ -372,7 +372,7 @@ test('dragging the bubble to the left edge keeps it there after a reload', async
   test.setTimeout(60_000);
   const [main] = await liveProducts(1);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/shop');
   await seedCart(page, [{ productId: main.id, quantity: 1 }]);
   await page.reload();
   const bubble = page.getByTestId('glass-cart');
@@ -698,7 +698,7 @@ for (const size of [
       await freshVisit(page);
       await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
       await page.setViewportSize(size);
-      await page.goto('/');
+      await page.goto('/shop');
       await page.evaluate(() => window.localStorage.removeItem('naeems.cartBubble'));
       await openProduct(page, main.slug);
       await setTheme(page, theme);
@@ -725,7 +725,7 @@ for (const size of [
       await page.keyboard.press('Escape');
       await expectClosed(page);
 
-      await page.goto('/');
+      await page.goto('/shop');
       await setTheme(page, theme);
       const bubble = page.getByTestId('glass-cart');
       await expect(bubble).toBeVisible({ timeout: 20_000 });

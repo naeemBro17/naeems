@@ -263,7 +263,7 @@ test('Part 5: without the new function action, the page shows the saved status w
 
 async function openCheckoutAddress(page: Page): Promise<void> {
   await useSessionInPage(page, customer);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   const addButton = page.getByRole('button', { name: /^Add .* to cart$/ }).first();
   await addButton.click();

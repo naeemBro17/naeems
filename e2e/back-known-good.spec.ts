@@ -18,7 +18,7 @@ import {
  *
  * Parts 2/3 — what each kind of Back animates, proven from the browser's own
  * View Transition records (helpers/animations.ts), not from "some animation
- * existed somewhere on the page" (the bento tile's infinite flip made that
+ * existed somewhere on the page" (the old bento tile's infinite flip made that
  * always true on Home, which is how the old tests passed while Naeem's phone
  * showed a hard cut plus a ghost crossfade).
  */
@@ -73,7 +73,7 @@ async function scrollBy(page: Page, dy: number): Promise<void> {
 for (const kind of ['phone', 'in-app'] as const) {
   test.describe(`Back (${kind}) returns you exactly where you were`, () => {
     test('search: a picked category keeps its results, chip, scroll — no keyboard', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.getByRole('link', { name: 'Search', exact: true }).click();
       await expect(page).toHaveURL(/\/search/);
 
@@ -109,7 +109,7 @@ for (const kind of ['phone', 'in-app'] as const) {
     });
 
     test('search: a typed query keeps its results and scroll — no keyboard', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.getByRole('link', { name: 'Search', exact: true }).click();
       const input = page.getByRole('combobox', { name: 'Search products' });
       await input.fill('cerave');
@@ -133,7 +133,7 @@ for (const kind of ['phone', 'in-app'] as const) {
     });
 
     test('home: the selected chip and scroll position survive', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       const homeChips = page.locator('.home-chips [role="tab"]');
       await expect(homeChips.nth(1)).toBeVisible();
@@ -163,7 +163,7 @@ for (const kind of ['phone', 'in-app'] as const) {
 test.describe('Phone back — clean switch, nothing plays afterwards', () => {
   test('grid product -> Home', async ({ page }) => {
     await recordViewTransitions(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     await scrollBy(page, 900);
     const before = await scrollY(page);
@@ -171,7 +171,7 @@ test.describe('Phone back — clean switch, nothing plays afterwards', () => {
     const transitionsBefore = (await readViewTransitions(page)).length;
 
     await page.goBack();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
 
     if (!PHONE_BACK_HERO) {
       // Instant switch: already committed by the time the URL has changed,
@@ -205,25 +205,11 @@ test.describe('Phone back — clean switch, nothing plays afterwards', () => {
     expect(await collectStrayAnimations(page, { delayMs: 0, windowMs: 1500 })).toEqual([]);
   });
 
-  test('bento product -> Home: instant, the same tile is back in place', async ({ page }) => {
-    await recordViewTransitions(page);
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
-    const label = await bentoCard.getAttribute('aria-label');
-    await openCardAndSettle(page, bentoCard);
-
-    await page.goBack();
-    await expect(page).toHaveURL('/');
-    await waitForViewTransitionsToFinish(page);
-    expect(await collectStrayAnimations(page, { delayMs: 0, windowMs: 1500 })).toEqual([]);
-    await expect(page.getByRole('button', { name: label ?? '' }).first()).toBeVisible();
-  });
-
+  // Batch 71: the "Talk with Naeem" card is on the new Home.
   test('Expert -> Home: no slide, nothing afterwards', async ({ page }) => {
     await recordViewTransitions(page);
     await page.goto('/');
-    await page.getByRole('button', { name: /Talk with/ }).click();
+    await page.getByRole('link', { name: /Talk with Naeem/ }).click();
     await expect(page).toHaveURL('/contact');
     await waitForViewTransitionsToFinish(page);
     const transitionsBefore = (await readViewTransitions(page)).length;
@@ -252,31 +238,19 @@ test.describe('In-app back arrow — reverse hero (restored from Batch 21)', () 
 
   test('grid card', async ({ page }) => {
     await recordViewTransitions(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     await scrollBy(page, 900);
     await openCardAndSettle(page, await fullyVisibleCard(page));
     const before = (await readViewTransitions(page)).length;
     await goBack(page, 'in-app');
-    await expect(page).toHaveURL('/');
-    await expectReverseHero(page, before);
-  });
-
-  test('bento card', async ({ page }) => {
-    await recordViewTransitions(page);
-    await page.goto('/');
-    const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-    await expect(bentoCard).toBeVisible();
-    await openCardAndSettle(page, bentoCard);
-    const before = (await readViewTransitions(page)).length;
-    await goBack(page, 'in-app');
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/shop');
     await expectReverseHero(page, before);
   });
 
   test('search result card', async ({ page }) => {
     await recordViewTransitions(page);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.getByRole('link', { name: 'Search', exact: true }).click();
     await page.getByRole('combobox', { name: 'Search products' }).fill('cerave');
     await page.keyboard.press('Enter');
@@ -293,9 +267,10 @@ test.describe('In-app back arrow — reverse hero (restored from Batch 21)', () 
 test.describe('Expert page', () => {
   test('opens at the very top, even from a scrolled Home, and closes with a crossfade', async ({ page }) => {
     await recordViewTransitions(page);
+    // Batch 71: the "Talk with Naeem" card is near the bottom of the new Home.
     await page.goto('/');
-    await page.waitForSelector('.product-card');
-    const expertTile = page.getByRole('button', { name: /Talk with/ });
+    await expect(page.getByTestId('home-page')).toBeVisible();
+    const expertTile = page.getByRole('link', { name: /Talk with Naeem/ });
     await expertTile.scrollIntoViewIfNeeded();
     await scrollBy(page, 120);
     await expertTile.scrollIntoViewIfNeeded();

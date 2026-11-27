@@ -709,7 +709,7 @@ test('Part 5: rows at 0 are hidden; all at 0 → "Nothing needs attention"; To c
 /* ---------------------------------------------------------------- Part 6 */
 
 test('Part 6: manifest — NAEEM\'S, white, a transparent round "any" icon for the splash, a full-bleed maskable one', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/shop');
   const href = await page.locator('link[rel="manifest"]').getAttribute('href');
   const manifest = (await (await page.request.get(href!)).json()) as {
     name: string;

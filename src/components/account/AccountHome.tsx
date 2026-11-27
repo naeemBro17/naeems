@@ -6,6 +6,7 @@ import { useWishlist } from '../../contexts/WishlistContext';
 import { useToast } from '../../hooks/useToast';
 import { Modal } from '../shared/Modal';
 import { EditDeliveryDetailsSheet } from './EditDeliveryDetailsSheet';
+import { AccountMoreList } from './AccountMoreList';
 import { fetchMyOrders, fetchOrderDetail } from '../../lib/orders';
 import { formatTaka, initialsOf } from '../../lib/format';
 import { openExternal, whatsAppUrl } from '../../lib/expertLinks';
@@ -248,6 +249,8 @@ export function AccountHome({
             </button>
           )}
         </div>
+
+        <AccountMoreList />
 
         <button type="button" className="b68-out" onClick={() => setIsLogoutOpen(true)}>
           <LogOutIcon />

@@ -85,7 +85,7 @@ function lineFor(p: LiveProduct, quantity: number): CartLine {
 }
 
 async function openWith(page: Page, path: string, opts: { theme?: 'light' | 'dark'; cart?: CartLine[] } = {}): Promise<void> {
-  await page.goto('/');
+  await page.goto('/shop');
   await page.evaluate(
     ({ theme, cart }) => {
       localStorage.setItem('nph_cart', JSON.stringify(cart));
@@ -286,7 +286,7 @@ test.describe('Part 3 — floating cart on the product page', () => {
     expect(Math.abs(back.y - shown.y)).toBeLessThanOrEqual(1);
   });
 
-  for (const path of ['/', '/search', '/brand/aveeno']) {
+  for (const path of ['/', '/shop', '/search', '/brand/aveeno']) {
     test(`unchanged elsewhere: middle-right on ${path}`, async ({ page }) => {
       const [p] = await plainProducts(1);
       await openWith(page, path, { cart: [lineFor(p, 1)] });
@@ -607,7 +607,7 @@ test.describe('Part 7 — fast Home', () => {
     page.on('request', (req) => {
       if (req.resourceType() === 'script') scripts.push(req.url());
     });
-    await page.goto('/');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => scripts.some((u) => /\/assets\/ProductDetailPage-[^/]+\.js$/.test(u)), { timeout: 15_000 }).toBe(true);
     const admin = scripts.filter((u) => /\/assets\/(AdminPage|[A-Za-z]*EditSheet|ProductEditorForm|SheetChrome)-/.test(u));
@@ -615,10 +615,12 @@ test.describe('Part 7 — fast Home', () => {
   });
 
   test('pictures: the banner is high priority, cards below the first screen are lazy', async ({ page }) => {
+    // Batch 71: the banner is on Home, the grid on Shop.
     await page.goto('/');
     const hero = page.locator('.hero-banner__image').first();
     await expect(hero).toBeVisible({ timeout: 15_000 });
     await expect(hero).toHaveAttribute('fetchpriority', 'high');
+    await page.goto('/shop');
     await expect(page.locator('.product-card').nth(5)).toBeAttached();
     const notLazy = await page
       .locator('.product-card__image')
@@ -633,7 +635,11 @@ test.describe('Part 7 — fast Home', () => {
     );
     const ids = Object.fromEntries((settings.data ?? []).map((r) => [r.key, r.value?.trim() ?? '']));
     test.skip(!ids.fb_pixel_id && !ids.ga_measurement_id, 'no tracker IDs set');
-    await page.goto('/');
+    // Batch 71: tracking is off in a test browser unless a test opts in.
+    await page.addInitScript(() => {
+      (window as unknown as { __naeemsTrackingTest: boolean }).__naeemsTrackingTest = true;
+    });
+    await page.goto('/shop');
     await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 15_000 });
     if (ids.fb_pixel_id) {
       await expect

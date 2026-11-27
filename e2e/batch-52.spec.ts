@@ -223,7 +223,7 @@ for (const theme of ['light', 'dark'] as const) {
     await prepare(page, theme, null);
     await page.goto(`/c/${CODE}`);
     await expect(page.getByTestId('combo-gone')).toContainText("This combo isn't available anymore.", { timeout: 30_000 });
-    await expect(page.getByTestId('combo-browse')).toHaveAttribute('href', '/');
+    await expect(page.getByTestId('combo-browse')).toHaveAttribute('href', '/shop');
     await page.screenshot({ path: `${SHOTS}/${theme}-06-combo-gone.png` });
     // A badly shaped code never even asks the database.
     await page.goto('/c/NOT-A-CODE');
@@ -508,11 +508,13 @@ test('Part 2: menus and rows are real links; Ctrl+click opens a new tab and this
   await expect(page.locator('.adm-tabbar a.adm-tabbar__tab').first()).toHaveAttribute('href', '/admin');
 
   // Shop: bottom bar, product names, side menu, category circles.
-  await page.goto('/');
+  await page.goto('/shop');
   await expect(page.getByRole('link', { name: 'Search', exact: true })).toHaveAttribute('href', '/search', { timeout: 30_000 });
   await expect(page.locator('a.product-card__name-link').first()).toHaveAttribute('href', /^\/product\//);
+  // Batch 71: the category circles are on the new Home and open the Shop.
+  await page.goto('/');
   const circle = page.getByRole('link', { name: /^Show .* products$/ }).first();
-  if ((await circle.count()) > 0) await expect(circle).toHaveAttribute('href', /^\/\?cat=/);
+  if ((await circle.count()) > 0) await expect(circle).toHaveAttribute('href', /^\/shop\?cat=/);
 });
 
 /* -------------------------------- Part 4: Facebook / Messenger / Instagram */
@@ -534,7 +536,7 @@ for (const theme of ['light', 'dark'] as const) {
     test.setTimeout(120_000);
     const page = await inAppPage(browser, IPHONE_FB, theme);
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.goto('/');
+    await page.goto('/shop');
     const bar = page.getByTestId('inapp-bar');
     await expect(bar).toContainText('For Google login and faster checkout, open this page in Safari.', { timeout: 30_000 });
     await expect(page.getByTestId('inapp-how')).toHaveText('How?');
@@ -546,7 +548,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.waitForTimeout(350);
     await page.screenshot({ path: `${SHOTS}/${theme}-09-iphone-sheet.png` });
     await page.getByTestId('inapp-copy').click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/$/);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/shop$/);
     await page.getByRole('button', { name: 'Close' }).last().click();
 
     await page.getByTestId('inapp-close').click();
@@ -587,7 +589,7 @@ test('Android inside Facebook: reopens in Chrome once (no loop); if that fails, 
 
 test('a normal phone browser sees nothing different', async ({ page }) => {
   await prepare(page, 'light', null);
-  await page.goto('/');
+  await page.goto('/shop');
   await expect(page.locator('.product-card').first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('inapp-bar')).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('nph_inapp_chrome_tried'))).toBeNull();

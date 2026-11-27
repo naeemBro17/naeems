@@ -4,6 +4,7 @@ import { CartIcon } from './CartButton';
 import { CartCountBadge, useCartBump } from './CartBadgeButton';
 import { useBuyBarState, type BuyBarState } from '../../lib/buyBarState';
 import { openSideCart } from '../../lib/sideCart';
+import { showsBottomNav, useNavShown } from '../../lib/bottomNav';
 
 /** The product page — where the floating cart is a little smaller. */
 function isProductPage(pathname: string): boolean {
@@ -16,6 +17,7 @@ function isProductPage(pathname: string): boolean {
 export function showsGlassCart(pathname: string): boolean {
   return (
     pathname === '/' ||
+    pathname === '/shop' ||
     pathname === '/search' ||
     pathname === '/brands' ||
     pathname.startsWith('/brand/') ||
@@ -91,9 +93,15 @@ function readInsets(): Insets {
 }
 
 /** The top-left corner (px) for a side and a wanted top, kept clear of the
- *  top bar and of what sits at the bottom (the tab bar on Home, the buy bar
+ *  top bar and of what sits at the bottom (the tab bar while it shows, the buy bar
  *  on the product page while it shows). */
-function placeToPoint(place: BubblePlace, size: number, pathname: string, bar: BuyBarState): { x: number; y: number } {
+function placeToPoint(
+  place: BubblePlace,
+  size: number,
+  pathname: string,
+  bar: BuyBarState,
+  navShown: boolean
+): { x: number; y: number } {
   const insets = readInsets();
   const vw = document.documentElement.clientWidth;
   const vh = window.innerHeight;
@@ -101,7 +109,7 @@ function placeToPoint(place: BubblePlace, size: number, pathname: string, bar: B
   const colRight = colLeft + Math.min(vw, COLUMN_PX);
   const x = place.side === 'left' ? colLeft + EDGE_PX + insets.left : colRight - EDGE_PX - size - insets.right;
   const bottomReserve =
-    pathname === '/'
+    showsBottomNav(pathname) !== null && navShown
       ? insets.bottomNav + EDGE_PX
       : isProductPage(pathname) && bar === 'shown'
         ? 14 + 66 + 11 + insets.bottom
@@ -147,6 +155,8 @@ export function GlassCartButton() {
   const onProductPage = isProductPage(location.pathname);
   const { itemCount, bump, key } = useCartBump(onThisPage, onProductPage);
   const buyBar = useBuyBarState();
+  // Batch 71: the floating tab bar, which hides on a scroll down.
+  const navShown = useNavShown();
   const [place, setPlace] = useState<BubblePlace | null>(readBubblePlace);
   const [dragging, setDragging] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -158,9 +168,9 @@ export function GlassCartButton() {
   const applyPlace = useCallback(() => {
     const el = buttonRef.current;
     if (!el || !place || pressRef.current?.dragging) return;
-    const { x, y } = placeToPoint(place, el.offsetWidth, location.pathname, buyBar);
+    const { x, y } = placeToPoint(place, el.offsetWidth, location.pathname, buyBar, navShown);
     el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-  }, [place, location.pathname, buyBar]);
+  }, [place, location.pathname, buyBar, navShown]);
 
   // A moved bubble: its spot, kept clear of the bars, also after a resize.
   useLayoutEffect(() => {
@@ -252,7 +262,7 @@ export function GlassCartButton() {
     setDragging(false);
     if (el) {
       el.classList.remove('glass-cart--drag');
-      const { x, y } = placeToPoint(next, size, location.pathname, buyBar);
+      const { x, y } = placeToPoint(next, size, location.pathname, buyBar, navShown);
       el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     }
     saveBubblePlace(next);

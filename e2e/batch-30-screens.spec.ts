@@ -191,7 +191,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`checkout thana search 390px ${theme}`, async ({ page }) => {
     test.setTimeout(90_000);
     await start(page, theme, 390, customer);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
     await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
     await page.goto('/cart');

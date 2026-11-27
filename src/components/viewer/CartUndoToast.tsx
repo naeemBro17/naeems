@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
+import { showsBottomNav } from '../../lib/bottomNav';
 
 /** How long "Removed · Undo" stays up. */
 export const UNDO_TOAST_MS = 5000;
@@ -9,7 +10,7 @@ const LEAVE_MS = 200;
 
 /** Where the toast sits, so it never covers the page's bottom controls. */
 function placement(pathname: string): string {
-  if (pathname === '/') return 'undo-toast--above-nav';
+  if (showsBottomNav(pathname) !== null) return 'undo-toast--above-nav';
   if (pathname.startsWith('/product/')) return 'undo-toast--above-buybar';
   if (pathname === '/cart') return 'undo-toast--above-cart-bar';
   return '';

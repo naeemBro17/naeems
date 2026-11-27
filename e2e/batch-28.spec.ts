@@ -50,7 +50,7 @@ async function cartUnits(page: Page): Promise<number> {
 }
 
 async function openFresh(page: Page, path: string, theme: 'light' | 'dark' = 'light'): Promise<void> {
-  await page.goto('/');
+  await page.goto('/shop');
   await page.evaluate((t) => {
     localStorage.setItem('nph_cart', '[]');
     localStorage.setItem('theme', t);
@@ -667,7 +667,7 @@ test.describe('Part 5 — one floating cart', () => {
   }
 
   test('Home: appears after the first add; absent on cart, checkout, account', async ({ page }) => {
-    await openFresh(page, '/');
+    await openFresh(page, '/shop');
     const glass = page.getByTestId('glass-cart');
     const firstAdd = page.getByRole('button', { name: /^Add .* to cart$/ }).first();
     await expect(firstAdd).toBeVisible();
@@ -697,7 +697,7 @@ test.describe('Part 6 — cart page', () => {
     const p = product as LiveProduct;
     // Batch 51: the most is the smaller of the stock and the order limit (4).
     const stock = Math.min(p.stock_quantity as number, 4);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.evaluate(
       ([id, qty]) =>
         localStorage.setItem(

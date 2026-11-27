@@ -21,7 +21,7 @@ for (const theme of ['light', 'dark'] as const) {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 390, height: 844 });
     await useTheme(page, theme);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
     await page.reload();
     const adds = page.getByRole('button', { name: /^Add .* to cart$/ });

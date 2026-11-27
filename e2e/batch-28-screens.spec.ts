@@ -20,7 +20,7 @@ const PDP = '/product/cerave-hydrating-cleanser';
 async function start(page: Page, theme: 'light' | 'dark'): Promise<void> {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
 }
 

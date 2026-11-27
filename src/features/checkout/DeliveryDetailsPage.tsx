@@ -2,7 +2,7 @@
 // customer address. Reads/writes via useCheckoutState. Redirects back to
 // /cart if the cart is empty (nothing to deliver), and routes to
 // OrderSummaryPage on a valid submit.
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { BackButton } from '../../components/shared/BackButton';
 import { formatTaka } from '../../lib/format';
@@ -17,6 +17,7 @@ import {
 import { useCheckoutState } from './useCheckoutState';
 import { CheckoutProgressBar } from './CheckoutProgressBar';
 import { DELIVERY_ZONES, type DeliveryAddress } from './types';
+import { readDeliveryDraft, writeDeliveryDraft } from '../../lib/deliveryDraft';
 
 export function DeliveryDetailsPage() {
   useDocumentTitle("Delivery Details | NAEEM'S");
@@ -24,14 +25,24 @@ export function DeliveryDetailsPage() {
   const { profile, isCustomer, updateOwnProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<DeliveryAddress>(address);
+  // Batch 71: what was typed but not sent yet comes back (sessionStorage,
+  // until the order is placed).
+  const [form, setForm] = useState<DeliveryAddress>(() => readDeliveryDraft() ?? address);
   const [errors, setErrors] = useState<AddressFieldErrors>({});
+  const addressAtMount = useRef(address);
 
   // Keep the local draft in sync if the shared address changes elsewhere
-  // (e.g. the customer went back from Order Summary to edit it).
+  // (e.g. the customer went back from Order Summary to edit it) — but not
+  // on the first render, which would throw the kept draft away.
   useEffect(() => {
+    if (address === addressAtMount.current) return;
+    addressAtMount.current = address;
     setForm(address);
   }, [address]);
+
+  useEffect(() => {
+    writeDeliveryDraft(form);
+  }, [form]);
 
   // A returning, logged-in customer's saved delivery details prefill the
   // form the first time it's empty — first-time customers just see it blank.

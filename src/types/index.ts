@@ -261,6 +261,15 @@ export interface AppSettings {
   /** Batch 68: the picture on the Account tab's Intro (before sign-in).
    *  Empty = the built-in /brand/account-intro.jpg. */
   account_intro_image?: string | null;
+  /** Batch 71: the new Home (all optional, JSON or "1"/"0"; read like
+   *  account_intro_image). See lib/homeContent.ts. */
+  home_tips?: string | null;
+  home_show_skin_types?: string | null;
+  home_show_concerns?: string | null;
+  home_show_combos?: string | null;
+  home_concerns?: string | null;
+  home_combo_codes?: string | null;
+  home_videos?: string | null;
   /** Batch 48: the advance-payment discount (bKash / Nagad). 'true' = On.
    *  The three rows are added by migration-049; until it is run they are
    *  missing, the offer stays off and Nagad is not offered at checkout

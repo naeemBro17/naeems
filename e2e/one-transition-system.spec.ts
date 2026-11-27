@@ -42,7 +42,7 @@ async function fullyVisibleCard(page: Page) {
 test.describe('fix-one-transition-system — exactly one mechanism, no double animation', () => {
   test.describe('grid card', () => {
     test('open (top of the page) is one clean gradual hero morph', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       const card = await fullyVisibleCard(page);
       await assertSingleCleanTransition(page, () => card.click(), { expectGradual: true });
@@ -52,7 +52,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
     test('in-app back reverses the hero cleanly, home already scrolled correctly underneath', async ({
       page,
     }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       await page.mouse.wheel(0, 1400);
       await page.waitForTimeout(300);
@@ -65,11 +65,11 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
         () => page.getByRole('button', { name: 'Go back' }).click(),
         { expectNavVisible: true, expectGradual: true }
       );
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
 
     test('phone back (page.goBack()) settles once — reverse hero when switched on', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       const card = await fullyVisibleCard(page);
       await card.click();
@@ -83,45 +83,13 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
         expectNavVisible: true,
         expectGradual: PHONE_BACK_HERO,
       });
-      await expect(page).toHaveURL('/');
-    });
-  });
-
-  test.describe('bento card', () => {
-    async function openFirstBentoCard(page: Page) {
-      const bentoCard = page.getByRole('button', { name: /^View details for/ }).first();
-      await expect(bentoCard).toBeVisible();
-      await assertSingleCleanTransition(page, () => bentoCard.click(), { expectGradual: true });
-      await expect(page).toHaveURL(/\/product\//);
-    }
-
-    test('in-app back reverses the hero into the bento tile', async ({ page }) => {
-      await page.goto('/');
-      await openFirstBentoCard(page);
-
-      await assertSingleCleanTransition(
-        page,
-        () => page.getByRole('button', { name: 'Go back' }).click(),
-        { expectNavVisible: true, expectGradual: true }
-      );
-      await expect(page).toHaveURL('/');
-    });
-
-    test('phone back into the bento tile settles once — reverse hero when switched on', async ({ page }) => {
-      await page.goto('/');
-      await openFirstBentoCard(page);
-
-      await assertSingleCleanTransition(page, () => page.goBack(), {
-        expectNavVisible: true,
-        expectGradual: PHONE_BACK_HERO,
-      });
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
   });
 
   test.describe('search result', () => {
     async function openSearchResult(page: Page) {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.getByRole('link', { name: 'Search', exact: true }).click();
       await expect(page).toHaveURL(/\/search/);
       const searchInput = page.getByRole('combobox', { name: 'Search products' });
@@ -154,9 +122,10 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
   });
 
   test.describe('Home <-> Expert', () => {
+    // Batch 71: the "Talk with Naeem" card is on the new Home.
     async function openExpert(page: Page) {
       await page.goto('/');
-      await page.getByRole('button', { name: /Talk with/ }).click();
+      await page.getByRole('link', { name: /Talk with Naeem/ }).click();
       await expect(page).toHaveURL('/contact');
     }
 
@@ -183,7 +152,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
 
   test.describe('Home <-> Account', () => {
     test('there and back, both in-app, one clean transition each way', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await assertSingleCleanTransition(page, () => page.getByRole('link', { name: 'Account', exact: true }).click());
       await expect(page).toHaveURL(/\/account/);
 
@@ -192,23 +161,34 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
         () => page.getByRole('button', { name: 'Go back' }).click(),
         { expectNavVisible: true }
       );
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
 
     test('phone back from Account is one clean transition', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.getByRole('link', { name: 'Account', exact: true }).click();
       await expect(page).toHaveURL(/\/account/);
 
       await assertSingleCleanTransition(page, () => page.goBack(), { expectNavVisible: true });
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
   });
 
+  // Batch 71: no Cart tab; the cart bubble opens the side cart, whose
+  // "View cart" goes to the cart page.
+  async function openSideCartWithOne(page: Page) {
+    await page.goto('/shop');
+    await page.waitForSelector('.product-card');
+    await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
+    await page.getByTestId('glass-cart').click();
+    await expect(page.getByTestId('side-cart')).toHaveClass(/b70-cart--open/);
+    await page.waitForTimeout(500);
+  }
+
   test.describe('Home <-> Cart', () => {
     test('there and back, both in-app, one clean transition each way', async ({ page }) => {
-      await page.goto('/');
-      await assertSingleCleanTransition(page, () => page.getByRole('link', { name: 'Cart', exact: true }).click());
+      await openSideCartWithOne(page);
+      await assertSingleCleanTransition(page, () => page.getByTestId('side-cart-view').click());
       await expect(page).toHaveURL(/\/cart/);
 
       await assertSingleCleanTransition(
@@ -216,22 +196,22 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
         () => page.getByRole('button', { name: 'Go back' }).click(),
         { expectNavVisible: true }
       );
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
 
     test('phone back from Cart is one clean transition', async ({ page }) => {
-      await page.goto('/');
-      await page.getByRole('link', { name: 'Cart', exact: true }).click();
+      await openSideCartWithOne(page);
+      await page.getByTestId('side-cart-view').click();
       await expect(page).toHaveURL(/\/cart/);
 
       await assertSingleCleanTransition(page, () => page.goBack(), { expectNavVisible: true });
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
     });
   });
 
   test.describe('Home scrolled far down', () => {
     test('open + in-app back keeps the scrolled position with no second animation', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       await page.mouse.wheel(0, 1400);
       await page.waitForTimeout(300);
@@ -247,7 +227,7 @@ test.describe('fix-one-transition-system — exactly one mechanism, no double an
         () => page.getByRole('button', { name: 'Go back' }).click(),
         { expectNavVisible: true, expectGradual: true }
       );
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
       const scrollAfter = await page.evaluate(() => window.scrollY);
       expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(30);
     });

@@ -1,44 +1,22 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useProducts, sortFeaturedFirst } from '../contexts/ProductContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { useAdminEdit } from '../contexts/AdminEditContext';
 import { useProductFilters } from '../hooks/useProductFilters';
 import { filterByCategory } from '../lib/categoryFilter';
-import { useDragReorder } from '../hooks/useDragReorder';
-import { useToast } from '../hooks/useToast';
 import { useUrlParams } from '../hooks/useUrlParams';
-import { saveSettings, serializeIdList } from '../lib/settingsLists';
-import {
-  DEFAULT_SECTION_ORDER,
-  readOrder,
-  REORDERABLE_SECTIONS,
-  type HomeSectionId,
-} from '../lib/layoutOrder';
-import { SearchEntryBar } from '../components/viewer/SearchEntryBar';
+import { useAppNavigate } from '../hooks/useAppNavigate';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { searchTextOf } from '../hooks/useSearch';
+import { smartSearch } from '../lib/smartSearch';
+import { getDisplayPrice } from '../lib/pricing';
 import { FilterSheet } from '../components/viewer/FilterSheet';
-import { HeroBanner } from '../components/viewer/HeroBanner';
-import { BrowseCircles } from '../components/viewer/BrowseCircles';
-import { BentoGrid } from '../components/viewer/BentoGrid';
 import { CategoryChips } from '../components/viewer/CategoryChips';
-import { BrandRow } from '../components/viewer/BrandRow';
 import { ProductGrid } from '../components/viewer/ProductGrid';
 import { SiteFooter } from '../components/shared/SiteFooter';
 import { HomeWalletOpenNote } from '../components/account/WalletOpenNote';
-import { HamburgerMenu } from '../components/viewer/HamburgerMenu';
 import { HomeCampaigns } from '../components/campaign/HomeCampaigns';
-import { ThemeIcon } from '../components/shared/ThemeToggle';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
 import { ProductEditSheet } from '../components/admin/edit-sheets/deferred';
+import type { Product } from '../types';
 
 function OfflineBanner() {
   return (
@@ -66,58 +44,70 @@ function OfflineBanner() {
   );
 }
 
-type ReorderableSection = (typeof REORDERABLE_SECTIONS)[number];
+/** Batch 71: the grid's order (?sort=), "featured" when missing. */
+export type ShopSort = 'featured' | 'price-low' | 'price-high' | 'newest';
 
-function DragHandleGlyph() {
+const SORT_LABELS: Record<ShopSort, string> = {
+  featured: 'Featured',
+  'price-low': 'Price: low to high',
+  'price-high': 'Price: high to low',
+  newest: 'Newest',
+};
+
+export function readSort(raw: string | null): ShopSort {
+  return raw === 'price-low' || raw === 'price-high' || raw === 'newest' ? raw : 'featured';
+}
+
+export function sortProducts(products: Product[], sort: ShopSort): Product[] {
+  if (sort === 'featured') return products;
+  const price = (p: Product) => getDisplayPrice(p).mainPrice;
+  const copy = [...products];
+  if (sort === 'price-low') return copy.sort((a, b) => price(a) - price(b));
+  if (sort === 'price-high') return copy.sort((a, b) => price(b) - price(a));
+  return copy.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function FilterIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="9" cy="6" r="1.7" />
-      <circle cx="15" cy="6" r="1.7" />
-      <circle cx="9" cy="12" r="1.7" />
-      <circle cx="15" cy="12" r="1.7" />
-      <circle cx="9" cy="18" r="1.7" />
-      <circle cx="15" cy="18" r="1.7" />
+    <svg className="filter-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M7 12h10" />
+      <path d="M10 17h4" />
     </svg>
   );
 }
 
+/**
+ * The Shop tab (/shop, Batch 71). Today's product grid moved here from
+ * Home: the search pill, the filter sheet, the category chips (with their
+ * pinned copy), the grid, admin Edit Mode, campaigns and the wallet note.
+ * The banner, Browse circles and brand row moved to the new Home.
+ */
 export function ViewerPage() {
-  const { theme, toggleTheme } = useTheme();
-  const { isAdmin } = useAuth();
-  const { isEditMode } = useAdminEdit();
-  const { showToast } = useToast();
-  const { products, categories, settings, isLoading, isOffline, loadFailed, refetch } =
-    useProducts();
+  useDocumentTitle("Shop | NAEEM'S");
+  const navigate = useAppNavigate();
+  const { products, categories, isLoading, isOffline, loadFailed, refetch } = useProducts();
 
   // The selected category lives in the URL (?cat=<slug>) so Back from a
   // product returns to the same filtered grid — component state would be
-  // thrown away the moment this page unmounts.
+  // thrown away the moment this page unmounts. Same for ?q= (a Home skin
+  // type / concern tile) and ?sort=.
   const [searchParams, updateParams] = useUrlParams();
   const catSlug = searchParams.get('cat');
+  const query = (searchParams.get('q') ?? '').trim();
+  const sort = readSort(searchParams.get('sort'));
   const selectedCategoryId = categories.find((c) => c.slug === catSlug)?.id ?? null;
   const [isRetrying, setIsRetrying] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const productsRef = useRef<HTMLElement>(null);
   const chipsRowRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(52);
-  // True once the in-flow chip row has scrolled up past the header — a
-  // second, always-pinned copy of the chips then takes over visually (see
-  // .home-chips-pinned in app.css). Plain CSS `position: sticky` on the
-  // in-flow row doesn't work here: each reorderable homepage section (hero/
-  // browse/bento/chips) is wrapped in its own .home-section box sized to
-  // exactly that section's content, so the chip row's sticky "containing
-  // block" is only ever as tall as the chip row itself — there's no room
-  // for it to visibly stick before its own tiny box scrolls past too (see
-  // reports/batch-17.txt Part 1 for how this was found). A fixed duplicate,
-  // toggled by scroll position, sidesteps that entirely.
+  // True once the in-flow chip row has scrolled up off the top — a second,
+  // always-pinned copy of the chips then takes over visually (see
+  // .home-chips-pinned in app.css).
   const [isChipsPinned, setIsChipsPinned] = useState(false);
   // True only for the first frame(s) after this page mounts: the pinned bar
   // then takes its correct initial state with no fade/slide (a Back that
-  // lands deep in the grid must show the bar already there, not animate it
-  // in afterwards — the "chip row pops in a frame later" on the phone).
+  // lands deep in the grid must show the bar already there).
   const [pinnedInstant, setPinnedInstant] = useState(true);
   useEffect(() => {
     let second = 0;
@@ -130,32 +120,9 @@ export function ViewerPage() {
     };
   }, []);
 
-  // Measures the header's real height (used both for the pinned chips'
-  // top offset and the scroll-target math below) and re-measures on resize.
-  useEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-    const setHeight = () => setHeaderHeight(header.getBoundingClientRect().height);
-    setHeight();
-    const observer = new ResizeObserver(setHeight);
-    observer.observe(header);
-    return () => observer.disconnect();
-  }, []);
-
-  // A plain scroll listener rather than IntersectionObserver: simpler to
-  // reason about, and the chip row's own height can change (e.g. its
-  // categories load in after first paint), which would otherwise mean
-  // recreating the observer's rootMargin whenever that height settles.
-  // rAF-throttled so this never runs more than once per frame.
-  //
-  // useLayoutEffect, not useEffect: on a fresh mount that's already scrolled
-  // deep (e.g. Back from a product, restored by PageTransition's
-  // ScrollRestorer — whose layout effect runs before this one, so it's
-  // already applied by the time this reads window.scrollY), the
-  // initial checkPinned() call needs to land before the browser ever paints
-  // this frame — otherwise the fixed pinned-chip bar starts invisible
-  // (isChipsPinned's initial state) and only becomes visible a frame later,
-  // popping in on top of an already-correctly-scrolled page.
+  // useLayoutEffect: on a fresh mount that's already scrolled deep (Back
+  // from a product, restored by PageTransition's ScrollRestorer), the
+  // pinned bar's first state must land before the browser paints.
   useLayoutEffect(() => {
     let ticking = false;
     const checkPinned = () => {
@@ -163,7 +130,7 @@ export function ViewerPage() {
       const el = chipsRowRef.current;
       if (!el) return;
       const chipsDocumentTop = el.getBoundingClientRect().top + window.scrollY;
-      setIsChipsPinned(window.scrollY > chipsDocumentTop - headerHeight);
+      setIsChipsPinned(window.scrollY > chipsDocumentTop);
     };
     const onScroll = () => {
       if (ticking) return;
@@ -173,50 +140,36 @@ export function ViewerPage() {
     checkPinned();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [headerHeight]);
+  }, []);
 
   // Viewers only ever see active products (admin sessions fetch inactive too).
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
-  // Featured-first only in the default "All" view — the first impression every
-  // new visitor gets. Within a specific category, keep the existing sort.
+  // Featured-first only in the default "All" view; within a category, keep
+  // the existing sort.
   const orderedProducts = useMemo(
-    () =>
-      selectedCategoryId === null ? sortFeaturedFirst(activeProducts) : activeProducts,
+    () => (selectedCategoryId === null ? sortFeaturedFirst(activeProducts) : activeProducts),
     [activeProducts, selectedCategoryId]
   );
-  // Category selection — lost when search moved to its own page in Batch 17
-  // (the old useSearch hook applied this filter internally; nothing replaced
-  // it here, so every chip/circle silently did nothing). Restored as its own
-  // step, ahead of the Brand / Skin Type filtering that sits on top of it.
+  const searchedProducts = useMemo(
+    () => (query === '' ? orderedProducts : smartSearch(orderedProducts, query, (p) => searchTextOf(p))),
+    [orderedProducts, query]
+  );
   const categoryFilteredProducts = useMemo(
-    () => filterByCategory(orderedProducts, selectedCategoryId),
-    [orderedProducts, selectedCategoryId]
+    () => filterByCategory(searchedProducts, selectedCategoryId),
+    [searchedProducts, selectedCategoryId]
   );
   const productFilters = useProductFilters(activeProducts);
-  const filteredProducts = productFilters.apply(categoryFilteredProducts);
+  const filteredProducts = sortProducts(productFilters.apply(categoryFilteredProducts), sort);
 
-  const scrollToProducts = useCallback(() => {
-    productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
-
-  // Scrolls so the chip row lands right below the header, with products
-  // visible underneath — never past it, unlike the old scrollToProducts-
-  // based version, which scrolled the chip row itself off-screen above the
-  // header once the filtered grid was tall enough to allow the scroll to go
-  // that far (see reports/batch-17.txt Part 1). Computed manually (current
-  // viewport offset + current scroll - header height) rather than a plain
-  // scrollIntoView, since the chip row isn't actually CSS-sticky (see the
-  // isChipsPinned effect above) — scrollIntoView's block:'start' would
-  // otherwise land it at y=0, under the header, not just below it.
+  // Scrolls so the chip row lands at the top, with products visible under it.
   const scrollToChips = useCallback(() => {
     const el = chipsRowRef.current;
     if (!el) return;
-    const targetY = el.getBoundingClientRect().top + window.scrollY - headerHeight;
+    const targetY = el.getBoundingClientRect().top + window.scrollY;
+    if (window.scrollY <= targetY) return;
     window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
-  }, [headerHeight]);
+  }, []);
 
-  // The Browse circles and the chips write the same filter, so selecting in
-  // either place lights up the other.
   const handleSelectCategory = useCallback(
     (id: string | null) => {
       const slug = id === null ? null : categories.find((c) => c.id === id)?.slug ?? null;
@@ -224,14 +177,7 @@ export function ViewerPage() {
         if (slug === null) next.delete('cat');
         else next.set('cat', slug);
       });
-      // scrollToChips measures chipsRowRef's CURRENT position — calling it
-      // synchronously here measures the layout from before this filter took
-      // effect (the ?cat= URL update re-renders asynchronously), then starts a smooth
-      // scroll toward that stale target just as the grid's real height (very
-      // different depending on how many products the category has) lands
-      // underneath it. Waiting two animation frames lets the browser finish
-      // laying out and painting the filtered grid first, so the scroll
-      // always measures the real, final position.
+      // Two frames: the filtered grid's real height lands first.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           scrollToChips();
@@ -241,45 +187,24 @@ export function ViewerPage() {
     [scrollToChips, categories, updateParams]
   );
 
+  const handleSort = (e: ChangeEvent<HTMLSelectElement>) => {
+    const value = readSort(e.target.value);
+    updateParams((next) => {
+      if (value === 'featured') next.delete('sort');
+      else next.set('sort', value);
+    });
+  };
+
+  const clearQuery = () =>
+    updateParams((next) => {
+      next.delete('q');
+    });
+
   const handleRetry = async () => {
     setIsRetrying(true);
     await refetch();
     setIsRetrying(false);
   };
-
-  // Homepage section order. 'products' is pinned last and never dragged, so
-  // only the four movable sections take part in the drag.
-  const sectionOrder = useMemo(
-    () => readOrder<HomeSectionId>(settings.homepage_section_order, DEFAULT_SECTION_ORDER, 'products'),
-    [settings.homepage_section_order]
-  );
-  const movableSections = useMemo(
-    () => sectionOrder.filter((id): id is ReorderableSection => id !== 'products'),
-    [sectionOrder]
-  );
-
-  const handleSectionReorder = useCallback(
-    async (next: ReorderableSection[]) => {
-      const error = await saveSettings({
-        homepage_section_order: serializeIdList([...next, 'products']),
-      });
-      if (error) {
-        console.error('Section order save failed:', error);
-        showToast('Could not save the section order', 'error');
-        throw error;
-      }
-      await refetch();
-      showToast('Saved');
-    },
-    [refetch, showToast]
-  );
-
-  const sectionDrag = useDragReorder<ReorderableSection>({
-    items: movableSections,
-    onReorder: handleSectionReorder,
-    mode: 'move',
-    enabled: isEditMode,
-  });
 
   if (loadFailed) {
     return (
@@ -318,146 +243,105 @@ export function ViewerPage() {
     );
   }
 
+  const count = filteredProducts.length;
+
   return (
-    <div className="viewer-shell">
-      <header className="app-header" ref={headerRef}>
+    <div className="viewer-shell b71-shop" data-testid="shop-page">
+      <header className="b71-shop__head">
+        <h1 className="b71-shop__title">Shop</h1>
         <button
           type="button"
-          className="app-header__hamburger"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
+          className="filter-button"
+          onClick={() => setFilterOpen(true)}
+          aria-label={
+            productFilters.activeCount > 0
+              ? `Filter products, ${productFilters.activeCount} active`
+              : 'Filter products'
+          }
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M3 6h18M3 12h18M3 18h18" />
-          </svg>
-        </button>
-
-        <h1 className="app-header__wordmark">Naeem&apos;s</h1>
-
-        <button
-          type="button"
-          className="app-header__theme"
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          <ThemeIcon theme={theme} />
+          <FilterIcon />
+          {productFilters.activeCount > 0 && (
+            <span className="filter-button__badge" aria-hidden="true">
+              {productFilters.activeCount}
+            </span>
+          )}
         </button>
       </header>
 
-      {/* Always mounted (so it can animate in/out smoothly, no snap-in),
-          only actually visible once isChipsPinned — see the effect above. */}
+      {/* Always mounted (so it can animate in/out smoothly), only visible
+          once isChipsPinned. */}
       <div
         className={`home-chips-pinned${isChipsPinned ? ' home-chips-pinned--visible' : ''}${
           pinnedInstant ? ' home-chips-pinned--instant' : ''
         }`}
-        style={{ top: headerHeight }}
+        style={{ top: 0 }}
         aria-hidden={!isChipsPinned}
       >
-        <CategoryChips
-          categories={categories}
-          selectedId={selectedCategoryId}
-          onSelect={handleSelectCategory}
-        />
+        <CategoryChips categories={categories} selectedId={selectedCategoryId} onSelect={handleSelectCategory} />
       </div>
 
       {isOffline && <OfflineBanner />}
 
-      <div className="home-search">
-        <SearchEntryBar
-          onOpenFilters={() => setFilterOpen(true)}
-          activeFilterCount={productFilters.activeCount}
-        />
+      <div className="b71-shop__search">
+        <button
+          type="button"
+          className="b71-search"
+          onClick={() => navigate('/search')}
+          aria-label="Search products"
+          data-testid="shop-search-pill"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-4.35-4.35" />
+          </svg>
+          Search products, brands, concerns
+        </button>
       </div>
 
-      {/* Batch 66: live campaigns (at most 2), before the movable sections. */}
+      {/* Batch 66: live campaigns (at most 2), above the grid as before. */}
       <HomeCampaigns />
 
-      {movableSections.map((id, index) => {
-        const content: Record<ReorderableSection, ReactNode> = {
-          hero: (
-            <HeroBanner
-              slides={settings.banner_slides}
-              onScrollToProducts={scrollToProducts}
-            />
-          ),
-          browse: (
-            <BrowseCircles
-              categories={categories}
-              products={activeProducts}
-              selectedId={selectedCategoryId}
-              onSelect={handleSelectCategory}
-            />
-          ),
-          bento: <BentoGrid products={activeProducts} settings={settings} />,
-          // "Shop by Brand" rides with the chips, so it always sits right
-          // above them (below the bento) whatever order the sections are in.
-          chips: (
-            <>
-              <BrandRow activeProducts={activeProducts} />
-              <div className="home-chips" ref={chipsRowRef}>
-                <CategoryChips
-                  categories={categories}
-                  selectedId={selectedCategoryId}
-                  onSelect={handleSelectCategory}
-                />
-              </div>
-            </>
-          ),
-        };
-        const isDragged = sectionDrag.dragIndex === index;
-        const style: CSSProperties = {};
-        if (isDragged) {
-          style.transform = `translateY(${sectionDrag.delta.y}px) scale(1.02)`;
-        } else {
-          const shift = sectionDrag.shiftFor(index);
-          if (shift !== 0) style.transform = `translateY(${shift}px)`;
-        }
-        return (
-          <div
-            key={id}
-            data-section={id}
-            ref={sectionDrag.registerItem(index)}
-            className={`home-section${isEditMode ? ' home-section--editing' : ''}${
-              isDragged ? ' home-section--dragging' : ''
-            }${
-              isDragged && sectionDrag.isDragging ? ' home-section--live' : ''
-            }`}
-            style={style}
-          >
-            {/* Admin-only handle; faded and inert while Edit Mode is off. */}
-            {isAdmin && (
-              <button
-                type="button"
-                ref={sectionDrag.registerHandle(index)}
-                className={`section-handle${isEditMode ? '' : ' section-handle--off'}`}
-                aria-label={`Drag to reorder the ${id} section`}
-                aria-hidden={!isEditMode}
-                tabIndex={-1}
-              >
-                <DragHandleGlyph />
-              </button>
-            )}
-            {content[id]}
-          </div>
-        );
-      })}
+      <div className="home-chips b71-shop__chips" ref={chipsRowRef}>
+        <CategoryChips categories={categories} selectedId={selectedCategoryId} onSelect={handleSelectCategory} />
+      </div>
 
-      <main className="viewer-main" ref={productsRef}>
-        <h2 className="home-section-title">All Products</h2>
+      {query !== '' && (
+        <div className="b71-shop__query" data-testid="shop-query">
+          <span>
+            Results for <b>{query}</b>
+          </span>
+          <button type="button" onClick={clearQuery}>
+            Clear
+          </button>
+        </div>
+      )}
+
+      <div className="b71-shop__bar">
+        <span data-testid="shop-count">
+          {isLoading ? ' ' : `${count} ${count === 1 ? 'product' : 'products'}`}
+        </span>
+        <label className="b71-sort">
+          <span className="visually-hidden">Sort products</span>
+          <select value={sort} onChange={handleSort} data-testid="shop-sort">
+            {(Object.keys(SORT_LABELS) as ShopSort[]).map((key) => (
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
+            ))}
+          </select>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </label>
+      </div>
+
+      <main className="viewer-main">
         <ProductGrid
           products={filteredProducts}
           isLoading={isLoading}
-          searchQuery=""
+          searchQuery={query}
           selectedCategoryId={selectedCategoryId}
-          onClearSearch={() => {}}
+          onClearSearch={clearQuery}
           activeFilterCount={productFilters.activeCount}
           onClearFilters={productFilters.clear}
         />
@@ -467,7 +351,6 @@ export function ViewerPage() {
 
       <HomeWalletOpenNote />
 
-      <HamburgerMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       <FilterSheet
         isOpen={filterOpen}
         onClose={() => setFilterOpen(false)}

@@ -10,3 +10,8 @@ export function filterByCategory(products: Product[], categoryId: string | null)
   if (categoryId === null) return products;
   return products.filter((p) => p.category_id === categoryId);
 }
+
+/** Batch 71: the Shop grid filtered by one category (null = all). */
+export function categoryPath(slug: string | null): string {
+  return slug ? `/shop?cat=${encodeURIComponent(slug)}` : '/shop';
+}

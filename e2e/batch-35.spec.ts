@@ -516,7 +516,7 @@ test('Part 8: the blurred layer follows a swipe to the next photo', async ({ pag
 /* ---------------------------------------------------------------- Part 9 */
 
 test('Part 9: shop photos cannot be dragged or long-press saved; admin photos still drag', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/shop');
   const card = page.locator('.product-card__image').first();
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(card).toHaveAttribute('draggable', 'false');

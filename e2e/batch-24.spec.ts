@@ -272,7 +272,7 @@ test('Activity Log shows who did what, by username', async ({ page }) => {
   await expect(page.locator('.activity-row', { hasText: 'Signed in' }).first()).toBeVisible();
 
   // Back keeps the filter (it lives in the URL).
-  await page.goto('/');
+  await page.goto('/shop');
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`lperson=${MOD_USERNAME.replace('.', '\\.')}`));
 });
@@ -522,7 +522,7 @@ test('The checkout sign-in note can be edited, and reset to default', async ({ p
     });
     const shopper = await context.newPage();
     await blockAdTracking(shopper);
-    await shopper.goto('/');
+    await shopper.goto('/shop');
     await shopper.waitForSelector('.product-card');
     await shopper.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
     await shopper.goto('/cart');

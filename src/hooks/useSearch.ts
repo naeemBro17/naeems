@@ -12,7 +12,7 @@ const MIN_QUERY_LENGTH = 2;
 
 /** Batch 70: what a product is found by — its name, brand, category and its
  *  own Region / Size, plus anything the page adds (its options' labels). */
-function searchTextOf(product: Product, extra?: (product: Product) => string): string {
+export function searchTextOf(product: Product, extra?: (product: Product) => string): string {
   return [product.name, product.brand, product.category?.name, product.region, product.size, extra?.(product)]
     .filter((part): part is string => typeof part === 'string' && part !== '')
     .join(' ');

@@ -343,7 +343,7 @@ async function placeAndCheck(page: Page, calls: PlacedCall[], method: 'cod' | 'b
   await expect(page.getByRole('link', { name: 'View my order' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Invoice' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Keep shopping' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Keep shopping' })).toHaveAttribute('href', '/');
+  await expect(page.getByRole('link', { name: 'Keep shopping' })).toHaveAttribute('href', '/shop');
   await expect(page.getByRole('link', { name: 'Continue shopping' })).toHaveCount(0);
   await noSidewaysScroll(page);
 }

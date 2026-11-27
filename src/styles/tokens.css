@@ -3,7 +3,7 @@
      CLAUDE.md's colour rule), plus transient interaction feedback (focus
      rings, hover/drag states, loading spinners). Everything else — prices,
      badges, active/selected states, nav — uses the neutral scale below. */
-  --color-primary:        #F05020;
+  --color-primary:        #FF7A45; /* Batch 71: the same orange as --color-accent */
   --color-primary-light:  #FF7A50;
   --color-primary-dark:   #C03C10;
   --color-primary-bg:     #FDF0EC;
@@ -147,7 +147,8 @@
   --buybar-shadow:        0 14px 34px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
 
   /* Height of the fixed bottom nav, so pages can pad clear of it. */
-  --bottom-nav-height: calc(58px + max(18px, env(safe-area-inset-bottom)));
+  /* Batch 71: the floating bar (14 px gap + 62 px bar) plus the safe area. */
+  --bottom-nav-height: calc(76px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Dark tokens. Applied when the user explicitly chose dark (data-theme),

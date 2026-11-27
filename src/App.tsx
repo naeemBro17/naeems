@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAppNavigate } from './hooks/useAppNavigate';
 import { BottomNav } from './components/viewer/BottomNav';
 import { GlassCartButton } from './components/viewer/GlassCartButton';
@@ -22,6 +22,8 @@ import { ShopDownGate } from './components/shared/ShopDown';
 import { InAppBrowserBar } from './components/shared/InAppBrowserBar';
 import { PageTransition } from './components/shared/PageTransition';
 import { ViewerPage } from './pages/ViewerPage';
+import { HomePage } from './pages/HomePage';
+import { showsBottomNav, shopRedirectFor, type NavTab } from './lib/bottomNav';
 import {
   SearchPage,
   ProductDetailPage,
@@ -53,6 +55,7 @@ import { rememberShopPage } from './lib/loginReturn';
 import { useToast } from './hooks/useToast';
 import { consumeUpdatedFlag } from './lib/appUpdate';
 import './styles/batch70.css';
+import './styles/batch71.css';
 
 // Admin panel (product editor, CSV import, image editors, banner/bento
 // editors, etc.) is the single biggest chunk of this app's JS — a customer
@@ -94,23 +97,21 @@ function AdminPageFallback() {
  * applied to an ancestor breaks a `position: fixed` descendant's containing
  * block (a standard CSS behaviour), which used to make this bar vanish or
  * jump for the ~350ms a "deeper" slide played (reports/fix-animation-audit.txt
- * "found along the way" #1; reports/batch-21.txt Part 1, point 6). Living
- * outside the animated subtree — and, for any navigation the native View
- * Transition path drives, being just part of a whole-page bitmap snapshot
- * rather than a live positioned element — means there is no transformed
- * ancestor to be broken by in the first place.
+ * "found along the way" #1; reports/batch-21.txt Part 1, point 6).
  *
- * Only shown on Home for now, matching the tab bar's existing scope; a
- * future page that wants it too just needs adding to the path check here.
+ * Batch 71: the floating bar on Home, Shop, Search, Brands and a brand page
+ * (lib/bottomNav.ts). Tapping the tab you are on (Home or Shop) goes back
+ * to the top.
  */
 function GlobalBottomNav() {
   const location = useLocation();
   const navigate = useAppNavigate();
-  if (location.pathname !== '/') return null;
+  const active: NavTab | null = showsBottomNav(location.pathname);
+  if (active === null) return null;
   return (
     <BottomNav
-      activeTab="home"
-      onHome={() => {
+      activeTab={active}
+      onTop={() => {
         // Back to the top, and forget the old spot so nothing (a reload, a
         // later Back) can jump down to it again.
         forgetScroll(location.key);
@@ -119,6 +120,15 @@ function GlobalBottomNav() {
       onAccount={() => navigate('/account', { state: { from: `${location.pathname}${location.search}` } })}
     />
   );
+}
+
+/** Batch 71: an old link to the grid (/?cat=..., /?brand=...) opens /shop
+ *  with the same query, replacing the history entry. */
+function HomeRoute() {
+  const location = useLocation();
+  const target = shopRedirectFor(location.search);
+  if (target !== null) return <Navigate to={target} replace />;
+  return <HomePage />;
 }
 
 /** Batch 47: remembers the last shop page, so logging in from the account
@@ -153,7 +163,9 @@ export default function App() {
                     <PageTransition>
                       <Suspense fallback={<RouteFallback />}>
                         <Routes>
-                          <Route path="/" element={<ViewerPage />} />
+                          <Route path="/" element={<HomeRoute />} />
+                          {/* Batch 71: the product grid (was Home). */}
+                          <Route path="/shop" element={<ViewerPage />} />
                           <Route path="/search" element={<SearchPage />} />
                           {/* Slug-based; the page also resolves a legacy SKU in this slot. */}
                           <Route path="/product/:slug" element={<ProductDetailPage />} />

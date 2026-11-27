@@ -104,7 +104,7 @@ export function OrdersListPage() {
               </svg>
             </div>
             <p className="empty-state__message">No orders yet</p>
-            <Link to="/" className="button button--primary">
+            <Link to="/shop" className="button button--primary">
               Start shopping
             </Link>
           </div>

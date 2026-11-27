@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test.describe('Cart', () => {
   test('add a product, change its quantity, then remove it', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/shop');
     await page.waitForSelector('.product-card');
 
     // A "Choose options" card (has variants) opens a picker sheet instead of
@@ -12,7 +12,9 @@ test.describe('Cart', () => {
     const name = (await addButton.getAttribute('aria-label'))!.replace(/^Add /, '').replace(/ to cart$/, '');
     await addButton.click();
 
-    await page.locator('.bottom-nav__tab').filter({ hasText: 'Cart' }).click();
+    // Batch 71: no Cart tab; the cart bubble opens the side cart.
+    await page.getByTestId('glass-cart').click();
+    await page.getByTestId('side-cart-view').click();
     await expect(page).toHaveURL(/\/cart/);
     await expect(page.getByText(name, { exact: false }).first()).toBeVisible();
 

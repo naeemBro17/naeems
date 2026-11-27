@@ -82,7 +82,7 @@ test.describe('Part 1 — hero morph corners animate, no snap', () => {
   for (const kind of ['in-app', 'phone'] as const) {
     test(`grid card -> product -> ${kind} back`, async ({ page }) => {
       await recordViewTransitions(page);
-      await page.goto('/');
+      await page.goto('/shop');
       await page.waitForSelector('.product-card');
       await page.locator('.product-card').nth(2).scrollIntoViewIfNeeded();
       await (await fullyVisibleCard(page)).click();
@@ -92,25 +92,12 @@ test.describe('Part 1 — hero morph corners animate, no snap', () => {
       expect(open.fromRadius as number).toBeGreaterThan(open.toRadius as number);
 
       await goBack(page, kind);
-      await expect(page).toHaveURL('/');
+      await expect(page).toHaveURL('/shop');
       const back = await lastHero(page);
       expectGradualCorners(back);
       expect(back.toRadius as number).toBeGreaterThan(back.fromRadius as number);
     });
 
-    test(`bento tile -> product -> ${kind} back`, async ({ page }) => {
-      await recordViewTransitions(page);
-      await page.goto('/');
-      const bentoFace = page.locator('.bento-stack__slide').first();
-      await expect(bentoFace).toBeVisible();
-      await bentoFace.click();
-      await expect(page).toHaveURL(/\/product\//);
-      expectGradualCorners(await lastHero(page));
-
-      await goBack(page, kind);
-      await expect(page).toHaveURL('/');
-      expectGradualCorners(await lastHero(page));
-    });
   }
 
   test('search result -> product -> in-app back', async ({ page }) => {
@@ -128,10 +115,10 @@ test.describe('Part 1 — hero morph corners animate, no snap', () => {
 });
 
 test.describe('Part 2 — reload starts at the top; Back restores', () => {
-  for (const path of ['/', '/search'] as const) {
+  for (const path of ['/shop', '/search'] as const) {
     test(`${path}: Back restores the spot, scrolling updates it, a reload starts at the top`, async ({ page }) => {
       await page.goto(path);
-      if (path !== '/') {
+      if (path !== '/shop') {
         await page.locator('.search-quickpicks .chip').filter({ hasText: /face care/i }).first().click();
       }
       await expect(page.locator('.product-card').nth(6)).toBeVisible();
@@ -185,8 +172,9 @@ test.describe('Part 2 — reload starts at the top; Back restores', () => {
     });
   }
 
-  test('Home tab goes to the top and forgets the old spot', async ({ page }) => {
-    await page.goto('/');
+  // Batch 71: the grid is the Shop tab now; tapping it while on it goes to the top.
+  test('Shop tab goes to the top and forgets the old spot', async ({ page }) => {
+    await page.goto('/shop');
     await expect(page.locator('.product-card').nth(6)).toBeVisible();
     await scrollToAndSettle(page, 900);
     await (await fullyVisibleCard(page)).click();
@@ -194,7 +182,7 @@ test.describe('Part 2 — reload starts at the top; Back restores', () => {
     await waitForViewTransitionsToFinish(page);
     await page.goBack();
     await waitForViewTransitionsToFinish(page);
-    await page.locator('.bottom-nav__tab').filter({ hasText: 'Home' }).click();
+    await page.locator('.b71-nav a[data-tab="shop"]').click();
     await page.waitForFunction(() => window.scrollY === 0);
     await page.waitForTimeout(400);
     await page.reload();
@@ -276,7 +264,7 @@ test.describe('Part 4 — every card cart button works', () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    await page.goto('/');
+    await page.goto('/shop');
     await page.evaluate(() => localStorage.setItem('nph_cart', '[]'));
     await page.reload();
     await expect(page.locator('.product-card').first()).toBeVisible();
@@ -326,9 +314,9 @@ test.describe('Part 4 — every card cart button works', () => {
         added += 1;
       }
 
-      if (!page.url().endsWith('/')) {
+      if (!page.url().endsWith('/shop')) {
         failures.push(`${name}: tapping the cart button left the page (${page.url()})`);
-        await page.goto('/');
+        await page.goto('/shop');
         continue;
       }
       await expect

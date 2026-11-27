@@ -1,0 +1,32 @@
+/* Batch 71: Admin → Banner, Expert page, Texts → HOME PAGE panels. */
+
+.b71a-preview { margin: 4px 0 14px; padding: 16px; border-radius: 16px; border: 1px solid var(--color-border); background: var(--color-bg); }
+.b71a-preview .b71-tip__txt { display: block; font-size: 24px; }
+.b71a-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.b71a-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--color-border); background: var(--color-surface); }
+.b71a-item--on { border-color: var(--color-text-primary); }
+.b71a-item--row { flex-direction: row; align-items: center; }
+.b71a-item .form-helper { margin: -4px 0 0; }
+.b71a-switches { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.b71a-switches label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.b71a-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; border-top: 1px solid var(--color-border); font-size: 15px; font-weight: 600; }
+.b71a-switch-row:first-of-type { border-top: 0; }
+.b71a-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.b71a-colours { display: inline-flex; gap: 6px; }
+.b71a-colour { width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent; font-size: 12px; font-weight: 800; }
+.b71a-colour--on { border-color: var(--color-text-primary); }
+.b71a-updown { display: inline-flex; gap: 6px; }
+.b71a-updown .button { min-width: 40px; padding: 0 8px; }
+.b71a-updown svg { width: 18px; height: 18px; }
+.b71a-grow { flex: 1; min-width: 0; font-size: 14px; }
+.b71a-grow small, .b71a-checks small { color: var(--color-text-muted); font-weight: 500; }
+.b71a-checks { list-style: none; margin: 12px 0 0; padding: 0; }
+.b71a-checks label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 600; }
+.b71a-checks input { width: 20px; height: 20px; }
+.b71a-check--off { opacity: 0.5; }
+.b71a-link { display: flex; align-items: center; gap: 8px; }
+.b71a-link .form-input { flex: 1; min-width: 0; }
+.b71a-tag { flex: none; padding: 4px 10px; border-radius: 12px; background: var(--color-bg-secondary); font-size: 12px; font-weight: 800; color: var(--color-text-primary); }
+.b71a-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.b71a-save { margin-top: 14px; }
+.b71a-save .button { width: 100%; }

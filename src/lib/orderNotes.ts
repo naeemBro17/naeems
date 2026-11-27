@@ -112,8 +112,8 @@ export function walletNoteMayShow(g: OrderNoteGate): boolean {
   return g === 'none';
 }
 
-/** Pages the note card may show on: Home (shop grid), Account, My Orders. */
+/** Pages the note card may show on: Home, Shop, Account, My Orders. */
 export function noteCardAllowedOn(pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  return path === '/' || path === '/account' || path === '/orders';
+  return path === '/' || path === '/shop' || path === '/account' || path === '/orders';
 }

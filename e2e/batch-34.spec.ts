@@ -315,6 +315,8 @@ const FAKE_GA = 'G-E2EBATCH34';
  *  (the real scripts are blocked by fixtures.ts anyway). */
 async function stubTrackers(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    // Batch 71: tracking is off in a test browser unless a test opts in.
+    (window as unknown as { __naeemsTrackingTest: boolean }).__naeemsTrackingTest = true;
     const calls: unknown[][] = [];
     (window as unknown as { __fbCalls: unknown[][] }).__fbCalls = calls;
     const fbq = (...args: unknown[]) => {
@@ -360,7 +362,7 @@ test('Part 4: exactly one PageView on first load and one per page change (incl. 
   // Checkout asks a visitor to sign in first — the test customer does.
   await signInAsTestCustomer(page);
   await stubTrackers(page);
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   await expectPageViews(page, 1);
 
@@ -371,7 +373,7 @@ test('Part 4: exactly one PageView on first load and one per page change (incl. 
   await expect.poll(async () => (await trackerCounts(page)).fbOther.includes('ViewContent')).toBe(true);
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/shop$/);
   await expectPageViews(page, 3);
 
   await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
@@ -621,11 +623,11 @@ const CHECKOUT_STATE = {
 test('Part 5: shop — every field and button: tap shows no box, keyboard shows a rounded ring', async ({ page }) => {
   test.setTimeout(180_000);
   await page.addInitScript((state) => window.sessionStorage.setItem('nph_checkout_state', state), JSON.stringify(CHECKOUT_STATE));
-  await page.goto('/');
+  await page.goto('/shop');
   await page.waitForSelector('.product-card');
   await page.getByRole('button', { name: /^Add .* to cart$/ }).first().click();
   const report = await checkControls(page, [
-    { name: 'Shop: Home search', leaves: true, open: goto('/', (p) => p.locator('.search-bar--entry').first()) },
+    { name: 'Shop: Home search', leaves: true, open: goto('/', (p) => p.getByTestId('home-search')) },
     {
       name: 'Shop: category chip (brand page)',
       open: async (p) => {
@@ -638,8 +640,8 @@ test('Part 5: shop — every field and button: tap shows no box, keyboard shows 
         return p.locator('.chip:visible').nth(1);
       },
     },
-    { name: 'Shop: "See all" link', leaves: true, open: goto('/', (p) => p.locator('.brand-row__all').first()) },
-    { name: 'Shop: bottom nav', open: goto('/', (p) => p.locator('.bottom-nav__tab').first()) },
+    { name: 'Shop: "See all" link', leaves: true, open: goto('/', (p) => p.locator('.b71-sec a[href="/brands"]').first()) },
+    { name: 'Shop: bottom nav', open: goto('/', (p) => p.locator('.b71-nav a').first()) },
     { name: 'Shop: Search page field', open: goto('/search', (p) => p.locator('.search-bar__input').first()) },
     { name: 'Shop: cart quantity stepper', open: goto('/cart', (p) => p.getByRole('button', { name: /^Increase quantity of/ }).first()) },
     { name: 'Shop: checkout field', open: goto('/checkout/delivery', (p) => p.locator('.form-input').first()) },

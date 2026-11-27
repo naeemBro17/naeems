@@ -628,7 +628,7 @@ test('Combos: New combo → Add products finds any active product; status, quant
 test('Coming back: the shop shows the last copy at once while the fresh one is on its way', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/shop');
   await expect(page.locator('.product-card__name').first()).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(500);
   // The products answer now takes 6 seconds: the cards still show at once.

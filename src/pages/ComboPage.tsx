@@ -130,7 +130,7 @@ export function ComboPage() {
         ) : load.kind === 'gone' || (combo !== null && lines.length === 0) ? (
           <div className="combo-gone" data-testid="combo-gone">
             <p className="combo-gone__title">This combo isn&apos;t available anymore.</p>
-            <Link to="/" className="button button--primary" data-testid="combo-browse">
+            <Link to="/shop" className="button button--primary" data-testid="combo-browse">
               Browse the shop
             </Link>
           </div>

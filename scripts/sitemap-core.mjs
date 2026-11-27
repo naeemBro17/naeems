@@ -6,7 +6,7 @@
 
 export const SITE_URL = 'https://naeems-all.vercel.app';
 
-export const STATIC_ROUTES = ['/', '/contact', '/brands', '/about', '/delivery', '/return-policy', '/terms', '/privacy'];
+export const STATIC_ROUTES = ['/', '/shop', '/contact', '/brands', '/about', '/delivery', '/return-policy', '/terms', '/privacy'];
 
 /** Throwaway test data the automated tests create (SKU / slug / name start with "e2e"). */
 export function isTestItem(row) {
