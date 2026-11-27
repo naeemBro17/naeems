@@ -3,6 +3,7 @@ import { TextsPanel } from './SettingsExtraPanels';
 import { SubPages, type SubPage } from './ui/SubPages';
 import { AccountIntroPicturePanel } from './AccountIntroPicturePanel';
 import { BestCombosPanel, ConcernsPanel, ShowOnHomePanel, SkinTipsPanel, VideosPanel } from './HomePagePanels';
+import { RoutinePanel } from './RoutinePanel';
 
 /**
  * Admin → Store design → Banner & Texts (Batch 25 Part 1). The home banner,
@@ -19,6 +20,8 @@ export function BannerTextsTab() {
     { id: 'home-concerns', group: 'HOME PAGE', label: 'Concerns', icon: 'design', render: () => <ConcernsPanel /> },
     { id: 'home-combos', group: 'HOME PAGE', label: 'Best combos', icon: 'design', render: () => <BestCombosPanel /> },
     { id: 'home-videos', group: 'HOME PAGE', label: 'Videos', icon: 'design', render: () => <VideosPanel /> },
+    // Batch 72: "Complete your routine" in the side cart and product page.
+    { id: 'routine', group: 'SUGGESTIONS', label: 'Complete your routine', icon: 'design', render: () => <RoutinePanel /> },
     { id: 'account-intro', group: 'ACCOUNT TAB', label: 'Account intro picture', icon: 'profile', render: () => <AccountIntroPicturePanel /> },
     { id: 'texts', group: 'TEXTS', label: 'Site texts (checkout note, trust boxes)', icon: 'design', render: () => <TextsPanel /> },
   ];

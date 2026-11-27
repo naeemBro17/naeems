@@ -42,6 +42,7 @@ import {
   OrdersListPage,
   OrderDetailPage,
   WalletPage,
+  MySkinPage,
   NotFoundPage,
   ReturnPolicyPage,
   DeliveryPolicyPage,
@@ -56,6 +57,7 @@ import { useToast } from './hooks/useToast';
 import { consumeUpdatedFlag } from './lib/appUpdate';
 import './styles/batch70.css';
 import './styles/batch71.css';
+import './styles/batch72.css';
 
 // Admin panel (product editor, CSV import, image editors, banner/bento
 // editors, etc.) is the single biggest chunk of this app's JS — a customer
@@ -191,6 +193,8 @@ export default function App() {
                           <Route path="/orders" element={<OrdersListPage />} />
                           {/* Batch 60: My Wallet (signed-in customers; others go to /account). */}
                           <Route path="/wallet" element={<WalletPage />} />
+                          {/* Batch 72: My skin (signed-in customers; others go to /account). */}
+                          <Route path="/my-skin" element={<MySkinPage />} />
                           <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                           {/* Cart & checkout flow — see src/features/checkout. */}
                           <Route path="/cart" element={<CartPage />} />

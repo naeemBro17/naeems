@@ -22,7 +22,7 @@ describe('admin navigation', () => {
       ['', ['Home', 'Orders', 'Shopping list', 'Combos', 'Steadfast payouts', 'Money', 'Reports', 'Customers']],
       ['CATALOG', ['Products', 'Inventory', 'Categories', 'Brands', 'Import / Export']],
       ['SALES', ['Promo Codes', 'Campaigns', 'Wholesalers', 'Reviews']],
-      ['STORE DESIGN', ['Bento Tiles', 'Banner & Texts']],
+      ['STORE DESIGN', ['Banner & Texts']],
       ['ADMIN', ['Team', 'Activity Log', 'Import from Kaarbar', 'Settings']],
     ]);
   });
@@ -32,7 +32,7 @@ describe('admin navigation', () => {
     const tabs = bottomTabs(items);
     expect(tabs.map((t) => t.label)).toEqual(['Home', 'Orders', 'Products', 'Customers', 'More']);
     expect(moreItems(items, tabs).map((i) => i.id)).toEqual([
-      'shopping', 'combos', 'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'campaigns', 'wholesalers', 'reviews', 'bento', 'design', 'team', 'activity', 'kaarbar', 'settings',
+      'shopping', 'combos', 'payouts', 'money', 'reports', 'inventory', 'categories', 'brands', 'import-export', 'promo-codes', 'campaigns', 'wholesalers', 'reviews', 'design', 'team', 'activity', 'kaarbar', 'settings',
     ]);
   });
 
@@ -64,7 +64,7 @@ describe('admin navigation', () => {
       'edit_brands', 'edit_customer_notes',
     ];
     const ids = visibleNavItems(staffWith(all)).map((i) => i.id);
-    for (const id of ['team', 'activity', 'kaarbar', 'settings', 'import-export', 'promo-codes', 'campaigns', 'reviews', 'bento', 'design']) {
+    for (const id of ['team', 'activity', 'kaarbar', 'settings', 'import-export', 'promo-codes', 'campaigns', 'reviews', 'design']) {
       expect(ids).not.toContain(id);
     }
   });

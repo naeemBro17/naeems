@@ -34,6 +34,10 @@ export const HeartLineIcon = () => (
 export const PinIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" strokeWidth="1.8" {...line} aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
 );
+/** Batch 72: "My skin" — a drop with a small sparkle. */
+export const SkinIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" strokeWidth="1.8" {...line} aria-hidden="true"><path d="M10 3.5S4.5 9.6 4.5 13.5a5.5 5.5 0 0 0 11 0C15.5 9.6 10 3.5 10 3.5z" /><path d="M18.5 3v4M16.5 5h4" /></svg>
+);
 export const ClockIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" strokeWidth="1.8" {...line} aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
 );

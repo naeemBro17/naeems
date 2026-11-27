@@ -8,7 +8,6 @@ import { RegionSizeManager } from '../components/admin/RegionSizeManager';
 import { CSVImport } from '../components/admin/CSVImport';
 import { WholesalerList } from '../components/admin/WholesalerList';
 import { ReviewsTab } from '../components/admin/ReviewsTab';
-import { BentoTilesTab } from '../components/admin/BentoTilesTab';
 import { PromoCodesTab } from '../components/admin/PromoCodesTab';
 import { SettingsTab } from '../components/admin/SettingsTab';
 import { OrdersTab } from '../components/admin/OrdersTab';
@@ -372,7 +371,6 @@ function AdminPageContent({ sub, onBack }: { sub: AdminSubPage | null; onBack: (
         {active === 'reports' && <ReportsTab />}
         {active === 'customers' && <CustomersTab />}
         {active === 'reviews' && <ReviewsTab />}
-        {active === 'bento' && <BentoTilesTab />}
         {active === 'design' && <BannerTextsTab />}
         {active === 'promo-codes' && <PromoCodesTab />}
         {active === 'campaigns' && <CampaignsTab />}

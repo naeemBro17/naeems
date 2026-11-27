@@ -78,6 +78,11 @@ interface AuthContextValue {
     district?: string;
     thana?: string;
     address_line?: string;
+    /** Batch 72: "My skin" (columns from migration-064). */
+    skin_type?: string | null;
+    skin_concerns?: string[];
+    skin_wants?: string[];
+    skin_saved_at?: string;
   }) => Promise<{ error: string | null }>;
 }
 
@@ -409,6 +414,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       district?: string;
       thana?: string;
       address_line?: string;
+      skin_type?: string | null;
+      skin_concerns?: string[];
+      skin_wants?: string[];
+      skin_saved_at?: string;
     }): Promise<{ error: string | null }> => {
       if (!userId) return { error: 'Not signed in.' };
       const { error } = await supabase.from('profiles').update(patch).eq('id', userId);

@@ -18,7 +18,6 @@ const PAGES: { name: string; query: string }[] = [
   { name: 'promo-codes', query: '?tab=promo-codes' },
   { name: 'wholesalers', query: '?tab=wholesalers' },
   { name: 'reviews', query: '?tab=reviews' },
-  { name: 'bento', query: '?tab=bento' },
   { name: 'banner-texts', query: '?tab=design' },
   { name: 'banner-texts-texts', query: '?tab=design&dset=texts' },
   { name: 'team', query: '?tab=team' },

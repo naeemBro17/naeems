@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { trackSearch } from '../lib/analytics';
 import { smartSearch } from '../lib/smartSearch';
 import type { Product } from '../types';
+import { inCategory } from '../lib/categoryFilter';
 
 /** localStorage key for the recent-search list (newest first, max 5). */
 export const RECENT_SEARCHES_KEY = 'nph_recent_searches';
@@ -13,7 +14,17 @@ const MIN_QUERY_LENGTH = 2;
 /** Batch 70: what a product is found by — its name, brand, category and its
  *  own Region / Size, plus anything the page adds (its options' labels). */
 export function searchTextOf(product: Product, extra?: (product: Product) => string): string {
-  return [product.name, product.brand, product.category?.name, product.region, product.size, extra?.(product)]
+  // Batch 72: skin types and concerns too (typing "acne" or "oily" finds tagged products).
+  return [
+    product.name,
+    product.brand,
+    product.category?.name,
+    product.region,
+    product.size,
+    (product.skin_types ?? []).join(' '),
+    (product.skin_conditions ?? []).join(' '),
+    extra?.(product),
+  ]
     .filter((part): part is string => typeof part === 'string' && part !== '')
     .join(' ');
 }
@@ -129,7 +140,7 @@ export function useSearch({
 
   const results = useMemo<Product[]>(() => {
     const base = isSearching ? ranked : defaultOrdered;
-    return categoryId === null ? base : base.filter((p) => p.category_id === categoryId);
+    return categoryId === null ? base : base.filter((p) => inCategory(p, categoryId));
   }, [isSearching, defaultOrdered, ranked, categoryId]);
 
   const suggestions = useMemo(

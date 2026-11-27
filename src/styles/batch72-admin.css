@@ -1,0 +1,41 @@
+/* Batch 72: Edit product, "Where it shows" (Naeem's approved mockup). */
+.b72a-hint { margin: 0 0 10px; font-size: 12.5px; color: var(--color-text-muted); }
+.b72a-hint--gap { margin-top: 14px; }
+.b72a-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.b72a-chip { height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--color-border); background: var(--color-surface); font-weight: 600; font-size: 13px; line-height: 32px; font-family: inherit; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.b72a-chip[aria-pressed='true'] { background: var(--color-text-primary); border-color: var(--color-text-primary); color: var(--color-bg); }
+.b72a-chip__x { opacity: 0.6; }
+.b72a-chip--add { border-style: dashed; color: var(--color-text-primary); }
+.b72a-st4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.b72a-st4 button { height: 38px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); font-weight: 600; font-size: 12.5px; line-height: 1; font-family: inherit; color: var(--color-text-secondary); cursor: pointer; min-width: 0; }
+.b72a-st4 button[aria-pressed='true'] { background: var(--color-text-primary); color: var(--color-bg); border-color: var(--color-text-primary); }
+.b72a-field { position: relative; margin-top: 10px; }
+.b72a-field input { width: 100%; height: 42px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-bg); padding: 0 120px 0 12px; font-size: 14px; color: var(--color-text-primary); }
+.b72a-field em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 12.5px; color: var(--color-text-muted); pointer-events: none; }
+.b72a-sugg { margin-top: 8px; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; }
+.b72a-sugg button { display: block; width: 100%; text-align: left; padding: 10px 12px; font-size: 13.5px; background: var(--color-surface); color: var(--color-text-primary); border: 0; border-bottom: 1px solid var(--color-border); cursor: pointer; font-family: inherit; }
+.b72a-sugg button:last-child { border-bottom: 0; }
+.b72a-sugg .b72a-sugg__new { color: var(--color-accent); font-weight: 700; }
+@media (max-width: 420px) { .b72a-st4 button { font-size: 11px; letter-spacing: -0.2px; } }
+
+/* The two-column Edit product page (1024 px and wider, admin.css): the new
+   card takes the slot the old "For search and filters" section had. */
+@media (min-width: 1024px) {
+  .adm-ppage .pform-grid > .pform__section--where { grid-column: 1; grid-row: 7; }
+}
+
+/* Batch 72: Banner & Texts → Complete your routine (mockup screen 2). */
+.b72a-card { display: block; width: 100%; box-sizing: border-box; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 18px; padding: 14px 14px 16px; margin-top: 12px; }
+.b72a-card h4 { margin: 0 0 2px; font-size: 15px; font-weight: 800; color: var(--color-text-primary); }
+.b72a-rule { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 28px; gap: 8px; align-items: center; margin-top: 10px; }
+.b72a-rule select { height: 40px; min-width: 0; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-bg); padding: 0 10px; font-weight: 600; font-size: 13.5px; line-height: 1; font-family: inherit; color: var(--color-text-primary); }
+.b72a-rule__arr { color: var(--color-text-muted); display: grid; place-items: center; }
+.b72a-rule__arr svg { width: 18px; height: 18px; }
+.b72a-del { width: 28px; height: 28px; border: 0; background: none; color: var(--color-text-muted); font-size: 18px; cursor: pointer; }
+.b72a-addrow { margin-top: 12px; width: 100%; height: 42px; border-radius: 12px; border: 1px dashed var(--color-border); background: none; font-weight: 700; font-size: 13.5px; line-height: 1; font-family: inherit; color: var(--color-text-primary); cursor: pointer; }
+.b72a-sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 14px; color: var(--color-text-primary); }
+.b72a-sw small { display: block; color: var(--color-text-muted); font-size: 12.5px; margin-top: 2px; }
+.b72a-q { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.b72a-q:first-of-type { border-top: 0; padding-top: 0; }
+.b72a-q input, .b72a-q select { width: 100%; height: 42px; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-bg); padding: 0 12px; font-size: 14px; color: var(--color-text-primary); font-family: inherit; }
+.b72a-q__row { display: grid; grid-template-columns: auto minmax(0, 1fr) 28px; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--color-text-secondary); }

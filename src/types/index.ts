@@ -102,6 +102,8 @@ export interface Product {
   keep_selling?: boolean;
   /** Batch 51: at least one in stock (from products_view, never a number). */
   in_hand?: boolean;
+  /** Batch 72: categories besides the main one (category_id). Absent before migration-064. */
+  extra_category_ids?: string[] | null;
 }
 
 export type StockStatus = Product['stock_status'];
@@ -130,6 +132,8 @@ export interface ProductFormData {
   skin_conditions: string[];
   /** Batch 51: "Keep selling when out of stock". */
   keep_selling: boolean;
+  /** Batch 72: categories besides the main one (saved only once migration-064 has run). */
+  extra_category_ids: string[];
 }
 
 export type UserRole = 'customer' | 'wholesaler' | 'admin' | 'moderator';
@@ -152,6 +156,11 @@ export interface Profile {
   district: string | null;
   thana: string | null;
   address_line: string | null;
+  /** Batch 72: the customer's own "My skin" answers. Absent before migration-064. */
+  skin_type?: string | null;
+  skin_concerns?: string[] | null;
+  skin_wants?: string[] | null;
+  skin_saved_at?: string | null;
 }
 
 /** One row of the admin Wholesalers tab (profile joined with auth email). */
@@ -220,20 +229,8 @@ export interface AppSettings {
   expert_stat_3_label: string;
 
   /* --- Inline admin editing (Session 5) --- */
-  /** Second line of the bento expert card ("Skincare Expert"). */
-  bento_expert_subtitle: string;
-  /** JSON array of product ids: slide order of the swipeable left tile. */
-  bento_left_order: string;
-  /** JSON array of product ids: faces of the auto-flip right-top tile. */
-  bento_right_top_order: string;
   /** JSON array of category ids: visible Browse circles, left to right. */
   browse_categories_order: string;
-
-  /* --- Bento & section reorder (Session 6) --- */
-  /** JSON array of bento tile ids: which grid position each tile occupies. */
-  bento_tile_order: string;
-  /** JSON array of homepage section ids, top to bottom; 'products' is always last. */
-  homepage_section_order: string;
 
   /* --- Cart & checkout (Session 11) --- */
   /** Bare phone number or full wa.me link the checkout flow sends orders to. */
@@ -270,6 +267,13 @@ export interface AppSettings {
   home_concerns?: string | null;
   home_combo_codes?: string | null;
   home_videos?: string | null;
+  /** Batch 72: concerns, "Complete your routine" rules, its fallback switch
+   *  and the side cart questions (all optional, JSON text, read like
+   *  home_concerns). See lib/concerns.ts and lib/routine.ts. */
+  concern_list?: string | null;
+  routine_rules?: string | null;
+  routine_fallback?: string | null;
+  routine_questions?: string | null;
   /** Batch 48: the advance-payment discount (bKash / Nagad). 'true' = On.
    *  The three rows are added by migration-049; until it is run they are
    *  missing, the offer stays off and Nagad is not offered at checkout
@@ -395,30 +399,6 @@ export interface VariantFormData {
  */
 export interface VariantOption extends ProductVariant {
   isBase: boolean;
-}
-
-/** One admin-managed card in the homepage bento carousel. */
-export interface BentoTile {
-  id: string;
-  title: string;
-  subtitle: string | null;
-  /** Background image for the card; a neutral ground is used when absent. */
-  image_url: string | null;
-  /** Internal route when it starts with '/', otherwise an external URL. */
-  link_url: string;
-  sort_order: number;
-  is_active: boolean;
-  created_at: string;
-}
-
-/** The bento tile fields an admin edits. */
-export interface BentoTileFormData {
-  title: string;
-  subtitle: string;
-  image_url: string;
-  link_url: string;
-  sort_order: string;
-  is_active: boolean;
 }
 
 /** One client review shown on the expert profile page. */

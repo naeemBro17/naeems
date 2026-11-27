@@ -17,7 +17,21 @@ function reducedMotion(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function Card({ product, hidden, onOpen }: { product: Product; hidden: boolean; onOpen: (e: MouseEvent<HTMLAnchorElement>, p: Product) => void }) {
+/** One Best sellers card. Batch 72: also Home's "Picked for you" cards,
+ *  with the green word that says why it was picked. */
+export function Card({
+  product,
+  hidden,
+  onOpen,
+  why,
+  testId = 'best-seller-card',
+}: {
+  product: Product;
+  hidden: boolean;
+  onOpen: (e: MouseEvent<HTMLAnchorElement>, p: Product) => void;
+  why?: string;
+  testId?: string;
+}) {
   const price = getDisplayPrice(product);
   const image = cardImage(product);
   return (
@@ -26,10 +40,11 @@ function Card({ product, hidden, onOpen }: { product: Product; hidden: boolean; 
       className="b71-pc"
       onClick={(e) => onOpen(e, product)}
       tabIndex={hidden ? -1 : undefined}
-      data-testid={hidden ? undefined : 'best-seller-card'}
+      data-testid={hidden ? undefined : testId}
     >
       <div className="b71-pc__img">{image && <img src={image} alt="" loading="lazy" decoding="async" />}</div>
       <div className="b71-pc__b">
+        {why !== undefined && <span className="b72-why">{why}</span>}
         <div className="b71-pc__n">{product.name}</div>
         <div className="b71-pc__p">
           <b>{formatTaka(price.mainPrice)}</b>

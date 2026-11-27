@@ -1,4 +1,5 @@
 import type { Brand, Category, Product } from '../types';
+import { productCategoryIds } from './categoryFilter';
 
 /* Brands (Batch 26). The brands table is public to read; products point to
    their brand by id (products.brand_id, migration-032) and the database
@@ -93,6 +94,6 @@ export function productCountLabel(count: number): string {
 /** The categories a brand has live products in, in the shop's category
  *  order — the brand page's chips. */
 export function brandCategories(categories: Category[], brandProducts: Product[]): Category[] {
-  const used = new Set(brandProducts.map((p) => p.category_id).filter((id): id is string => id !== null));
+  const used = new Set(brandProducts.flatMap((p) => productCategoryIds(p)));
   return categories.filter((c) => used.has(c.id));
 }

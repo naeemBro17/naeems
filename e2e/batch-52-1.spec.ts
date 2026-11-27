@@ -499,8 +499,10 @@ test('Edit product after the redesign: text, select, chips, prices, switches and
     const newName = `E2E B52.1 save check ${tag} two`;
     await page.locator('#pf-name').fill(newName);
     if (brand) await page.locator('#pf-brand').fill(brand);
-    const category = await page.locator('#pf-category option').nth(1).getAttribute('value');
-    if (category) await page.locator('#pf-category').selectOption(category);
+    // Batch 72: categories are chips in "Where it shows".
+    const chip = page.getByTestId('pf-categories').locator('.b72a-chip[data-id]').first();
+    const category = await chip.getAttribute('data-id');
+    if (category) await chip.click();
     await page.locator('#pf-size').fill('50 ml');
     await page.locator('#pf-note').fill('Batch 52.1 note');
     await page.getByRole('button', { name: 'Oily', exact: true }).click();

@@ -1,0 +1,392 @@
+BATCH 72: Products in several categories, real skin type and concern tags,
+"Complete your routine", "My skin" and "Picked for you"
+Branch: feature/batch-72-routine-skin (from main at 1.71.1)
+Version: 1.72.0 (package.json and package-lock.json)
+
+------------------------------------------------------------
+1. WHAT I DID
+------------------------------------------------------------
+
+>>> Naeem must run the SQL (section 2) BEFORE merging. <<<
+(The shop keeps working without it, see "Before the SQL" below, but the
+new features only switch on once it has run.)
+
+I checked the live database first (read only): products has no
+extra_category_ids yet and profiles has no skin fields yet, so the
+"before the SQL" path is what the shop will run on until you paste the
+SQL. Live tags today: 11 products say "All Skin Types", 3 say "Sensitive"
+(as a skin type), 4 say "Anti-Aging". The SQL moves all of these.
+
+Before the SQL. Everything new is optional. A product with no
+extra_category_ids counts as only its main category. In Edit product you
+can pick one category only, and the hint says "Run the Batch 72 SQL to
+pick more than one category."; extra_category_ids is never sent in a save
+(otherwise the whole save would fail). With no skin fields on the profile,
+the "My skin" row on Account is hidden, /my-skin goes to /account, and
+Home never shows "Picked for you". Editing a product before the SQL also
+reads an old "All Skin Types" as all four types and an old "Sensitive"
+type as the Sensitive concern, the same way the SQL moves them, so a save
+loses nothing.
+
+One list each. Skin types are now exactly Normal, Oily, Combination, Dry.
+Concerns are one shop-wide list (lib/concerns.ts): your old tags plus
+Home's concern cards until you add your own. "Anti-Aging", "anti aging"
+and "Anti aging" count as the same concern everywhere.
+
+More than one category. A product is in a category when it is its main
+one OR one of its extra ones. Customer places changed to that rule:
+  - the Shop grid and brand page category filter (filterByCategory);
+  - the Search page's category pick (useSearch.ts);
+  - the Browse circles' "hot" and "new" badges (BrowseCircles.tsx);
+  - a brand page's category chips (brands.ts brandCategories).
+Left on the ONE main category (on purpose): the SKU (nextSku), the
+product card's category name, the admin product list filter, the
+Categories admin counts, "You may also like" (unchanged, as asked), the
+reports and expenses.
+
+Edit product: "Where it shows". The Category select and the "For search
+and filters" section are gone; one new card sits right after Price:
+category chips (pick many, the first picked is the main one, dashed
+"+ Category" opens the same New category / Save / Cancel row as before and
+adds the new one to the picked list), the four skin type buttons, and
+concerns: dark chips with x, a "Type to find or add" field that lists up
+to 6 matching concerns and, when nothing matches exactly, an orange
+'+ Add "..." as a new concern' row. That saves the name to the shop's
+concern list and adds it to the product; Enter does the first row. Old
+tags not in the list stay on the product and show as chips. On the
+computer two-column layout the card takes the old search section's place.
+
+Admin: Banner & Texts -> SUGGESTIONS -> Complete your routine. Three cards:
+"When the cart has..." rules (from category -> to category, + Add rule,
+Save; a rule with the same category twice is refused with "Pick two
+different categories."), "When no rule fits" (Same concern or brand
+switch, saves at once, on unless you switch it off) and "Sometimes ask a
+question" (text up to 40 letters + the concern to show, + Add question,
+Save; empty rows dropped). With nothing saved the rules start from
+Moisturizer -> Cleanser, Cleanser -> Moisturizer, Sunscreen -> Oil
+cleanser, Serum -> Sunscreen, using categories with those names.
+IMPORTANT: your live categories are Baby Care, Body Care, Eye Care, Face
+Care, Hair Care, Lip Care, Oral Hygiene, Perfume, Sun Block, Supplements,
+so none of those default rules exist in your shop. Until you add rules
+yourself, every suggestion comes from "same concern or brand".
+
+Side cart. Under the cart lines: "Complete your routine" (up to 6 small
+cards in a sideways row: category word, name, price, +) for the line just
+added, or the last line when opened from the bubble, never anything in the
+cart, hidden or out of stock; "for your <category>" when a rule matched.
+"+" on a product with no sizes adds it right there (the same add as the
+Wishlist card) and the panel stays open with the new line highlighted; a
+product with sizes opens its page. Tapping a card opens the product page.
+On every 4th open of the side cart (counted in this phone's storage), one
+of your questions shows under the row with "See what Naeem recommends" and
+"Show me", which opens /shop?concern=<concern>. A question is skipped when
+the customer already told you that concern or a cart product is for it.
+
+Product page. When the routine gives 2 or more products, the bottom row is
+"Complete your routine" with the same cards; otherwise "You may also like"
+exactly as before. Note: because "same concern or brand" is on by default,
+most product pages will now show "Complete your routine" (see section 4).
+
+Shop and search. /shop?concern=Acne and /shop?skin=Oily filter the grid;
+the Filter sheet has a third group, Concern. One skin type or one concern
+from the URL shows the "Results for Oily" line with Clear (like ?q=;
+?q= still wins). Home's "Shop by skin type" tiles now open /shop?skin=...
+and "Shop by concern" cards open /shop?concern=... (the old ?q= helper is
+deleted). Searching "acne" or "oily" now finds products tagged with them.
+
+My skin. A new first row on Account ("My skin", "Get products picked for
+you" or e.g. "Combination · Acne, Hyperpigmentation") opens /my-skin:
+back button, title "My skin", a 3-part progress line and three questions
+(skin type: pick one, tap again to undo; what bothers you most: up to
+three, a 4th tap gently shakes the row; what do you want right now: any).
+"Save my skin" (the one orange thing) is off until something changes; it
+saves to the customer's own profile, says "Saved" and goes back. Signed-in
+customers only; anyone else goes to /account. No bottom bar, no side cart.
+
+Home: Picked for you. A customer who saved "My skin" sees "Picked for
+you" in Best sellers' place: the line "For oily skin and acne", then the
+Best sellers cards (same look, a plain sideways row, no drift) with a
+small green word saying why each was picked (concern, then want, then
+skin type). Fewer than 3 matching products: Best sellers as before.
+
+Clean-ups. (a) Shop card prices are now near-black, not orange (the
+related cards were already black). Nothing else on the card turned
+orange. (b) The Bento admin is removed. Deleted files:
+  src/components/admin/BentoTilesTab.tsx
+  src/components/admin/BentoTileForm.tsx
+  src/components/admin/edit-sheets/BentoEditSheet.tsx
+  src/components/viewer/BentoGrid.tsx
+  src/components/viewer/BentoCustomTile.tsx
+  src/lib/bentoTiles.ts
+  src/lib/bentoHeroReverse.ts and src/lib/bentoHeroReverse.test.ts
+  src/lib/layoutOrder.ts
+Also removed: the "Bento Tiles" admin menu item, the BentoTile types, the
+unused settings keys bento_expert_subtitle, bento_left_order,
+bento_right_top_order, bento_tile_order, homepage_section_order (from the
+app only, the rows stay in the database), and the dead CSS (the whole
+bento grid block, the bento product picker, and the old "Session 6"
+drag-to-reorder section handles). About the "drag sections to reorder"
+control: its screen part was already gone since Batch 71; only its CSS,
+layoutOrder.ts and the homepage_section_order setting were left, and they
+only ordered sections that no longer exist (hero/browse/bento/chips), so
+all of that is removed. The bento_tiles table and its data are NOT
+touched; no SQL for this part.
+
+Checks. Build passes. Unit tests: new src/lib/batch72.test.ts (24 tests)
+plus the existing ones. e2e: new e2e/batch-72.spec.ts (11 tests, all
+passing), every one with nothing written to the live shop (saves are
+caught in the test browser and any other write fails the test). The
+side cart test also checks that a finger resting on the new sideways row
+still scrolls the list up and down (CLAUDE.md touch rule; the row uses
+the browser's own scrolling and is excluded from the swipe-to-close
+gesture, otherwise scrolling the row sideways would have closed the
+cart). Verify results are at the end of this report.
+
+Older tests changed:
+  - e2e/batch-71.spec.ts: the skin type tile link is now /shop?skin=Normal.
+  - e2e/batch-27.spec.ts: the two "You may also like" tests switch the
+    routine fallback off inside their test browser (otherwise the row
+    becomes "Complete your routine" and the order checks don't apply).
+  - e2e/batch-62.spec.ts: the Edit product layout checks use the new
+    "where" card (after Price on a phone; the old search slot on a
+    computer) instead of the removed search section.
+  - e2e/batch-52-1.spec.ts: picks the category by chip instead of the
+    removed select.
+  - e2e/batch-25.spec.ts and batch-25-screens.spec.ts: "Bento Tiles"
+    removed from the admin menu lists.
+  - src/lib/adminNav.test.ts: "Bento Tiles" removed.
+  - Best sellers for a profiled customer: no older test signs in a
+    customer with a skin profile (the live columns don't exist yet), so
+    none needed changing.
+
+------------------------------------------------------------
+2. SQL NAEEM MUST RUN IN SUPABASE
+------------------------------------------------------------
+
+File: supabase/migration-064-batch72.sql. Paste all of it into the SQL
+Editor and Run. The last line should show one row with ok = true.
+
+-- Batch 72: more than one category per product, skin types cleaned up to
+-- Normal / Oily / Combination / Dry, and the customer's "My skin" answers.
+-- Safe to run more than once. Runs as one transaction: if any check at the
+-- end fails, NOTHING is changed.
+
+BEGIN;
+
+-- A. Extra categories (the main one stays in products.category_id)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_category_ids uuid[] NOT NULL DEFAULT '{}';
+
+-- B. Skin types: "All Skin Types" becomes all four; "Sensitive" moves to concerns
+UPDATE products p SET
+  skin_conditions = CASE
+    WHEN 'Sensitive' = ANY (p.skin_types)
+         AND NOT ('Sensitive' = ANY (COALESCE(p.skin_conditions, '{}'::text[])))
+      THEN COALESCE(p.skin_conditions, '{}'::text[]) || ARRAY['Sensitive']::text[]
+    ELSE p.skin_conditions
+  END,
+  skin_types = CASE
+    WHEN 'All Skin Types' = ANY (p.skin_types) THEN ARRAY['Normal', 'Oily', 'Combination', 'Dry']::text[]
+    ELSE array_remove(p.skin_types, 'Sensitive')
+  END
+WHERE p.skin_types && ARRAY['Sensitive', 'All Skin Types']::text[];
+
+-- C. One spelling for anti aging (Home's concern card says "Anti aging")
+UPDATE products
+SET skin_conditions = array_replace(skin_conditions, 'Anti-Aging', 'Anti aging')
+WHERE 'Anti-Aging' = ANY (skin_conditions);
+
+-- D. The shop's read view: same columns as migration-052, plus the new one at the end
+CREATE OR REPLACE VIEW products_view AS
+SELECT p.id,
+    p.sku,
+    p.slug,
+    p.name,
+    p.brand,
+    p.category_id,
+    p.retail_price,
+    p.offer_price,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN 'in_stock'::text ELSE p.stock_status END AS stock_status,
+    CASE WHEN p.keep_selling AND NOT (SELECT is_staff()) THEN NULL::integer ELSE p.stock_quantity END AS stock_quantity,
+    p.note,
+    p.description,
+    p.how_to_use,
+    p.key_ingredients,
+    p.youtube_url,
+    p.skin_types,
+    p.skin_conditions,
+    p.region,
+    p.size,
+    p.image_url,
+    p.image_urls,
+    p.image_urls_thumb,
+    p.is_active,
+    p.is_featured,
+    p.created_at,
+    p.updated_at,
+    p.combined_from_product_id,
+    CASE WHEN is_wholesaler_or_admin() THEN p.wholesale_price ELSE NULL::numeric END AS wholesale_price,
+    (p.wholesale_price IS NOT NULL) AS has_wholesale,
+    p.brand_id,
+    p.keep_selling,
+    (CASE WHEN p.stock_quantity IS NOT NULL THEN p.stock_quantity > 0
+          ELSE p.stock_status <> 'out_of_stock' END) AS in_hand,
+    p.extra_category_ids
+FROM products p;
+
+GRANT SELECT ON products_view TO anon, authenticated;
+
+-- E. The customer's own "My skin" answers (she saves them herself; the
+--    existing profiles_self_update policy already lets her update her row)
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS skin_type text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS skin_concerns text[] NOT NULL DEFAULT '{}';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS skin_wants text[] NOT NULL DEFAULT '{}';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS skin_saved_at timestamptz;
+
+-- F. Checks: stop and undo everything if something is wrong
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'products_view' AND column_name = 'extra_category_ids') THEN
+    RAISE EXCEPTION 'STOP: products_view has no extra_category_ids';
+  END IF;
+  IF EXISTS (SELECT 1 FROM products WHERE skin_types && ARRAY['Sensitive', 'All Skin Types']::text[]) THEN
+    RAISE EXCEPTION 'STOP: old skin types are still on some products';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'profiles' AND column_name = 'skin_wants') THEN
+    RAISE EXCEPTION 'STOP: profiles has no skin_wants';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- After it runs, this should show one row with ok = true:
+SELECT (SELECT count(*) FROM information_schema.columns
+        WHERE table_name = 'products_view' AND column_name = 'extra_category_ids') = 1
+   AND (SELECT count(*) FROM information_schema.columns
+        WHERE table_name = 'profiles' AND column_name IN ('skin_type', 'skin_concerns', 'skin_wants', 'skin_saved_at')) = 4
+   AS ok;
+
+What I checked before writing it:
+  - products_view: migration-052 is the LAST file in the repo that
+    defines it (no file 053-063 touches it), so the SQL starts from 052's
+    column list and adds extra_category_ids at the end (a view may only
+    gain columns at the end, which is what this does).
+  - prevent_profile_self_escalation (migration-020) is not redefined by
+    any later file and still only blocks role, status, approved_at and
+    business_name, so a customer can save her own skin fields.
+  - I did NOT run it on the live database (that needs your go-ahead), not
+    even as a test with ROLLBACK.
+
+------------------------------------------------------------
+3. WHAT I COULD NOT FINISH
+------------------------------------------------------------
+
+Nothing from the brief is left out. Two limits:
+  - The four mockup screens are not in the repo, so I compared the
+    captures with the brief's description and CSS, not with the pictures.
+  - The new features were tested with the SQL "simulated" inside the test
+    browser (the live columns don't exist yet). After you run the SQL,
+    open Edit product once and pick two categories, and save "My skin"
+    once with a customer account, to see it for real.
+
+------------------------------------------------------------
+4. WHAT I FOUND ALONG THE WAY
+------------------------------------------------------------
+
+  - Product pages will nearly all switch from "You may also like" to
+    "Complete your routine" right away: the fallback is on by default and
+    most products share a brand with 2+ others. That is what the brief
+    asked for, but it is a visible change on every product page. If you
+    prefer the old row until you have written rules, switch "Same concern
+    or brand" off (the side cart row then hides too until rules exist).
+  - The default rules use category names your shop doesn't have (see
+    section 1). Rules like Face Care -> Sun Block may suit your
+    categories better; add them in the new panel.
+  - Before the SQL, /shop?skin=Oily misses the 11 products tagged "All
+    Skin Types" (they only become "Oily" when the SQL runs).
+  - The Featured switch in Edit product still says "Shown in the bento
+    grid on Home"; there is no bento grid any more (it now feeds Best
+    sellers). I left it because the brief said not to touch the rest of
+    the editor. One-line fix whenever you like.
+  - heroTransition.ts still has the type names 'bento-stack' and
+    'bento-flip' (types only, harmless).
+  - The brief's CSS used "font: 600 13px/32px inherit". That is not
+    valid CSS ("inherit" is not allowed inside the font shorthand), so
+    browsers drop the whole line and the buttons fell back to the
+    browser's default font size and weight (the first captures showed
+    "Save my skin" thin and "Baby Car" cut off in the rule pickers). I
+    wrote each one as font-weight / font-size / line-height with the same
+    numbers, which is what was meant.
+  - The skin type buttons had no padding rule, so the browser's default
+    padding clipped "Combination". I gave them 2 px side padding (and an
+    ellipsis as a last resort), and in the admin card the font goes to
+    11px on phones up to 420px wide (the brief had 11.5px under 360px),
+    because the admin card has more padding than the My skin page.
+  - The "When no rule fits" card was narrower than the other two; the
+    cards are now full width.
+
+------------------------------------------------------------
+5. DESIGN DECISIONS
+------------------------------------------------------------
+
+  - After "+" in the side cart, the new line becomes the highlighted one,
+    so the routine row then suggests for THAT product ("like any other
+    add"). Cart items are never suggested.
+  - "Show me" and tapping a routine card close the side cart first and
+    then open the page (the same way the panel's Checkout sign-in waits
+    for the panel's own Back step), so the phone's Back never goes
+    wrong, even when the target is the Shop page you are already on.
+  - The Results-for line shows for exactly one skin type OR exactly one
+    concern in the URL; with two or more it doesn't (it would not say
+    which).
+  - A rule can stay saved with a category that was later deleted; the
+    admin picker then shows "Deleted category" for it until you change
+    it, instead of silently changing the rule.
+  - "My skin" keeps a saved concern that is no longer in your list as a
+    chip, so a customer can still remove it.
+  - The side cart is not shown on /my-skin (it's an account page, like
+    /wallet).
+  - The My skin row's icon is 20 px like the other icons in that list
+    (the brief said 24; the viewBox is 24, the drawn size matches its
+    neighbours).
+
+Frame captures (reports/batch-72-screens/, 390 px, light and dark):
+edit-product-where, admin-routine, side-cart-routine-question, my-skin,
+home-picked, shop-cards. Compared with the brief: all match the described
+layout and colours. Differences: the fixed font and padding notes in
+section 4. The admin capture has toasts on top (they come from the test's
+own saves). Shop cards measure 175 px wide at 390 px with the price in
+near-black (white in dark mode).
+
+------------------------------------------------------------
+6. INDUSTRY-LEVEL SUGGESTIONS
+------------------------------------------------------------
+
+1. Measure the suggestions (medium). Nothing records whether "Complete
+   your routine" or the question leads to adds or orders. A shop
+   normally tracks "added from routine" so it can tell which rules sell.
+   Without it you can't tell good rules from bad ones.
+2. Tag coverage (small, your time). Only about 10-20 products have any
+   concern tag today. The concern filters, search, "Picked for you" and
+   the routine fallback are only as good as the tags. A one-evening pass
+   through the catalogue would make all of this much stronger.
+3. Category structure (medium). Your categories are by body area (Face
+   Care, Body Care...). Routines think in steps (cleanser, serum,
+   moisturizer, sunscreen). With extra categories now possible, adding
+   step categories as EXTRA categories (keeping the main ones) would make
+   the rules precise without changing the shop menu.
+4. Let guests answer "My skin" too (medium). Today only signed-in
+   customers can. Most shoppers browse signed out; saving answers in the
+   browser and moving them to the account at sign-in would reach far
+   more people.
+5. Explain "Picked for you" (small). A short "Change" link next to the
+   line under the title would let customers fix their answers right from
+   Home.
+
+------------------------------------------------------------
+VERIFY RESULTS
+------------------------------------------------------------
+(filled in below)
+
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-72-routine-skin

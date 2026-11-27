@@ -200,6 +200,23 @@ export function ViewerPage() {
       next.delete('q');
     });
 
+  // Batch 72: one skin type or one concern from the URL (a Home tile, the
+  // side cart's "Show me") gets the same "Results for" line; ?q= wins.
+  const skinParams = searchParams.getAll('skin');
+  const concernParams = searchParams.getAll('concern');
+  const tagParam =
+    skinParams.length + concernParams.length !== 1
+      ? null
+      : skinParams.length === 1
+        ? { key: 'skin', value: skinParams[0] }
+        : { key: 'concern', value: concernParams[0] };
+  const clearTagParam = () => {
+    if (!tagParam) return;
+    updateParams((next) => {
+      next.delete(tagParam.key);
+    });
+  };
+
   const handleRetry = async () => {
     setIsRetrying(true);
     await refetch();
@@ -311,6 +328,16 @@ export function ViewerPage() {
             Results for <b>{query}</b>
           </span>
           <button type="button" onClick={clearQuery}>
+            Clear
+          </button>
+        </div>
+      )}
+      {query === '' && tagParam && (
+        <div className="b71-shop__query" data-testid="shop-query">
+          <span>
+            Results for <b>{tagParam.value}</b>
+          </span>
+          <button type="button" onClick={clearTagParam}>
             Clear
           </button>
         </div>

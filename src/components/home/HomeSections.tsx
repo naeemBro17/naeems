@@ -7,6 +7,7 @@ import { openExternal, whatsAppUrl } from '../../lib/expertLinks';
 import { youtubeThumbnailUrl } from '../../lib/youtube';
 import { CONCERN_COLOURS, readVideoLink, type HomeConcern, type HomeVideo } from '../../lib/homeContent';
 import type { AppSettings } from '../../types';
+import { concernPath } from '../../lib/categoryFilter';
 
 /** A real link; a plain tap navigates in the app. */
 function useOpen() {
@@ -91,9 +92,9 @@ const SKIN_TYPES: { name: string; icon: JSX.Element }[] = [
   },
 ];
 
-/** Until Batch 72 adds real skin-type filters: a search on /shop. */
-export function searchPath(words: string): string {
-  return `/shop?q=${encodeURIComponent(words)}`;
+/** Batch 72: the Shop grid filtered by one skin type. */
+function skinPath(name: string): string {
+  return `/shop?skin=${encodeURIComponent(name)}`;
 }
 
 export function SkinTypes() {
@@ -103,7 +104,7 @@ export function SkinTypes() {
       <SectionHead title="Shop by skin type" />
       <div className="b71-sts">
         {SKIN_TYPES.map((t) => (
-          <a key={t.name} href={searchPath(t.name)} className="b71-st" onClick={open(searchPath(t.name))}>
+          <a key={t.name} href={skinPath(t.name)} className="b71-st" onClick={open(skinPath(t.name))}>
             <span>{t.icon}</span>
             {t.name}
           </a>
@@ -126,7 +127,7 @@ export function Concerns({ concerns }: { concerns: HomeConcern[] }) {
           const colour = CONCERN_COLOURS[c.colour];
           const style = { '--cc-bg': colour.bg, '--cc-ink': colour.ink } as CSSProperties;
           return (
-            <a key={c.name} href={searchPath(c.name)} className="b71-cc" style={style} onClick={open(searchPath(c.name))}>
+            <a key={c.name} href={concernPath(c.name)} className="b71-cc" style={style} onClick={open(concernPath(c.name))}>
               <b>{c.name}</b>
               {c.line !== '' && <span>{c.line}</span>}
             </a>

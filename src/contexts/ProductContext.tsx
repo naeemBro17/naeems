@@ -103,13 +103,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   expert_stat_3_value: '',
   expert_stat_3_label: '',
 
-  bento_expert_subtitle: '',
-  bento_left_order: '',
-  bento_right_top_order: '',
   browse_categories_order: '',
-
-  bento_tile_order: '',
-  homepage_section_order: '',
 
   shop_whatsapp_number: '',
 
@@ -174,12 +168,7 @@ const TEXT_SETTING_KEYS = [
   'expert_stat_2_label',
   'expert_stat_3_value',
   'expert_stat_3_label',
-  'bento_expert_subtitle',
-  'bento_left_order',
-  'bento_right_top_order',
   'browse_categories_order',
-  'bento_tile_order',
-  'homepage_section_order',
   'shop_whatsapp_number',
   'delivery_fee_inside_dhaka',
   'delivery_fee_outside_dhaka',
@@ -229,6 +218,11 @@ function rowsToSettings(rows: { key: string; value: string | null }[]): AppSetti
     home_concerns: map.get('home_concerns') ?? '',
     home_combo_codes: map.get('home_combo_codes') ?? '',
     home_videos: map.get('home_videos') ?? '',
+    // Batch 72: concerns and "Complete your routine" (missing = defaults).
+    concern_list: map.get('concern_list') ?? '',
+    routine_rules: map.get('routine_rules') ?? '',
+    routine_fallback: map.get('routine_fallback') ?? '',
+    routine_questions: map.get('routine_questions') ?? '',
   };
   for (const key of TEXT_SETTING_KEYS) {
     const value = map.get(key);

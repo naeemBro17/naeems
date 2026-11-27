@@ -468,9 +468,10 @@ test('Edit product on a computer (1440 px): two columns, most-used on top; phone
   expect(s.details.y).toBeGreaterThan(s.variants.y);
   expect(s.details.w).toBeGreaterThan(s.basics.w * 1.8);
   expect(s.more.y).toBeGreaterThan(s.details.y);
-  expect(s.search.y).toBeGreaterThan(s.more.y);
-  expect(s.reference.y).toBe(s.search.y);
-  expect(s.reference.x).toBeGreaterThan(s.search.x + 100);
+  // Batch 72: "Where it shows" takes the old "For search and filters" slot.
+  expect(s.where.y).toBeGreaterThan(s.more.y);
+  expect(s.reference.y).toBe(s.where.y);
+  expect(s.reference.x).toBeGreaterThan(s.where.x + 100);
   // Shop holds the three switches; Keep selling is no longer in Stock.
   const shop = page.getByTestId('pf-section-shop');
   for (const name of ['Active', 'Keep selling when out of stock', 'Featured']) await expect(shop.getByRole('switch', { name })).toBeVisible();
@@ -500,7 +501,8 @@ test('Edit product on a phone (390 px): Product, Photos, Price, Shop, Variants, 
   const product = await productWithSizes();
   await openEditProduct(page, product.id, 390);
   const s = await sectionBoxes(page);
-  const order = ['basics', 'photos', 'price', 'shop', 'variants', 'stock', 'details', 'more', 'search', 'reference'];
+  // Batch 72: "Where it shows" right after Price; the old search section is gone.
+  const order = ['basics', 'photos', 'price', 'where', 'shop', 'variants', 'stock', 'details', 'more', 'reference'];
   const ys = order.map((k) => s[k].y);
   expect(ys).toEqual([...ys].sort((a, b) => a - b));
   const tops = await Promise.all(['#pf-retail', '#pf-offer', '#pf-wholesale'].map(async (sel) => Math.round((await page.locator(sel).boundingBox())?.y ?? -1)));
