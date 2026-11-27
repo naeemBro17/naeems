@@ -166,13 +166,17 @@ test.describe('Part 1 — product page', () => {
     const popupText = stock >= 4 ? 'Limit 4 per order' : stock === 1 ? "You've got the last one!" : `You've got the last ${stock}!`;
 
     await openFresh(page, `/product/${p.slug}`);
-    await page.getByTestId('add-to-cart').click();
+    const add = page.getByTestId('add-to-cart');
+    await add.click();
     const value = page.getByTestId('buy-bar-qty');
     await expect(value).toHaveText('1');
-    // Batch 70: the in-page stepper (the same handlers as the buy bar's).
-    const plus = page.getByTestId('pdp-buy-plus');
-    for (let i = 1; i < cap + 2; i++) await plus.click();
+    // Fix 72.1: the quantity picker's + stops at what may still be added;
+    // Add to Cart adds that many, and once more shows the limit popup.
+    const plus = page.getByTestId('pdp-qty-plus');
+    for (let i = 0; i < cap + 1; i++) if (await plus.isEnabled()) await plus.click();
+    if (cap > 1) await add.click();
     await expect(value).toHaveText(String(cap));
+    await add.click();
     await expect(page.getByTestId('limit-popup-title')).toHaveText(popupText);
     await expect.poll(() => cartUnits(page)).toBe(cap);
     await expect(page.getByTestId('glass-cart-badge')).toHaveText(String(cap));
@@ -565,7 +569,8 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
     await cardNamed(page, name).locator('.product-card__image-wrap').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('3');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('3');
-    await page.getByTestId('pdp-buy-plus').click();
+    // Fix 72.1: Add to Cart adds one more on top.
+    await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('4');
     await expect(page.getByTestId('glass-cart-badge')).toHaveText('4');
     await page.getByRole('button', { name: 'Go back' }).click();

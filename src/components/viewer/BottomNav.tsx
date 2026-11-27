@@ -15,6 +15,12 @@ interface BottomNavProps {
 
 /** Scrolls this soon after the bar appears are the page restoring its spot. */
 const SETTLE_MS = 300;
+/** Fix 72.1: the bar hides only for a scroll this soon after the shopper's
+ *  own touch, wheel or key. A scroll nobody made (a Back putting the page
+ *  back while it is still loading, the browser keeping the content in place
+ *  as photos above load) only moves the starting point. */
+const INPUT_MS = 1200;
+const INPUT_EVENTS = ['touchstart', 'touchmove', 'wheel', 'keydown'] as const;
 
 function HomeIcon() {
   return (
@@ -124,6 +130,10 @@ export function BottomNav({ activeTab, onTop, onAccount }: BottomNavProps) {
     // The first scroll after the bar appears is the page putting back its
     // remembered spot (a Back), not the shopper: it only sets the start.
     const mountedAt = performance.now();
+    let inputAt = -Infinity;
+    const onInput = () => {
+      inputAt = performance.now();
+    };
     const check = () => {
       frame = 0;
       if (performance.now() - mountedAt < SETTLE_MS) {
@@ -131,6 +141,10 @@ export function BottomNav({ activeTab, onTop, onAccount }: BottomNavProps) {
         return;
       }
       const next = navAfterScroll(stateRef.current, window.scrollY);
+      if (!next.visible && performance.now() - inputAt > INPUT_MS) {
+        stateRef.current = { visible: stateRef.current.visible, anchor: window.scrollY };
+        return;
+      }
       if (next.visible !== stateRef.current.visible) {
         setVisible(next.visible);
         setNavShown(next.visible);
@@ -141,8 +155,10 @@ export function BottomNav({ activeTab, onTop, onAccount }: BottomNavProps) {
       if (frame === 0) frame = window.requestAnimationFrame(check);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
+    for (const name of INPUT_EVENTS) window.addEventListener(name, onInput, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
+      for (const name of INPUT_EVENTS) window.removeEventListener(name, onInput);
       window.cancelAnimationFrame(frame);
       setNavShown(true);
     };

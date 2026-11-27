@@ -186,3 +186,23 @@ export function arrivalRange(
   });
   return { from: chip(from), to: from.getTime() === to.getTime() ? null : chip(to) };
 }
+
+/**
+ * Fix 72.1: the product page's "Arrives by <day>": the LAST day of the same
+ * range the Order Placed page shows, for the slower zone (outside Dhaka)
+ * when it is in hand, else the buy-after time, so the promise holds
+ * wherever the customer lives. "Wed, 2 Dec". Null when not for sale or the
+ * delivery times cannot be read.
+ */
+export function arrivesByDay(
+  settings: Partial<SellSettings>,
+  option: { available: boolean; inHand: boolean },
+  nowIso: string
+): string | null {
+  if (!option.available) return null;
+  const range = arrivalRange(nowIso, 'outside_dhaka', !option.inHand, settings);
+  if (!range) return null;
+  const last = range.to ?? range.from;
+  const weekday = last.weekday.charAt(0) + last.weekday.slice(1).toLowerCase();
+  return `${weekday}, ${last.day} ${last.month}`;
+}

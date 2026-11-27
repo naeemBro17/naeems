@@ -880,53 +880,22 @@ html[data-input='keyboard'] .focus-host :focus-visible {
   position: relative;
   margin: 0 calc(-1 * var(--space-4)) 0 calc(-1 * var(--space-4));
   overflow: hidden;
-  /* Batch 35 Part 8: the page colour (dark in dark mode), never white;
-     the blurred photo below covers it as soon as the photo is there. */
+  /* Batch 35 Part 8: the page colour (dark in dark mode), never white. */
   background: var(--pdp-bg);
 }
 
 /* Batch 35 Part 8: the photo area is the full square plus the sheet's
    overlap (24 px), so the rounded sheet only ever covers that extra strip
-   and the whole square photo stays visible. Behind it, a blurred, slightly
-   zoomed copy of the photo on screen fills the strip and shows behind the
-   sheet's rounded corners (light and dark). It follows a swipe with a
-   crossfade (instant with reduced motion). */
+   and the whole square photo stays visible. */
 .product-detail__gallery:not(.product-card__placeholder) {
   padding-bottom: var(--pdp-sheet-overlap);
-}
-
-.product-detail__backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(24px);
-  transform: scale(1.15);
-  opacity: 0;
-  transition: opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.product-detail__backdrop--on {
-  opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .product-detail__backdrop {
-    transition: none;
-  }
 }
 
 /* Batch 36 Part 4: the 24 px strip under the photo (and so the sheet's
    rounded corners) shows the photo's own bottom edge mirrored — a sharp
    copy, with a softly blurred one over it (no zoom) — so the colour on
    both sides of the photo's bottom edge is the same and no band appears.
-   The blurred backdrop above stays only as the base colour behind
-   transparent photos. The strip slides with the photos (transform set
+   The strip slides with the photos (transform set
    from the carousel's scroll), so it always mirrors the photo on screen. */
 .product-detail__mirror {
   position: absolute;
@@ -971,10 +940,6 @@ html[data-input='keyboard'] .focus-host :focus-visible {
 .product-detail__gallery > .product-detail__carousel {
   position: relative;
   z-index: 1;
-}
-
-.product-detail__gallery > .product-detail__counter {
-  z-index: 2;
 }
 
 /* Batch 35 Part 9: shop product photos — no long-press "Save image" menu,
@@ -8398,27 +8363,6 @@ html.vt-fade::view-transition-new(root) {
   padding-top: 72px;
 }
 
-/* "1 / 3" pill: raised so the sheet's overlap never covers it. */
-.product-detail__counter {
-  position: absolute;
-  right: 12px;
-  bottom: calc(var(--pdp-sheet-overlap) + 10px);
-  z-index: 2;
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  /* Same pure crystal glass as the ← and Share buttons (Batch 29). */
-  background: var(--crystal-photo-bg);
-  border: 1px solid var(--crystal-photo-border);
-  box-shadow: inset 0 1px 0 var(--crystal-photo-highlight);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
-  backdrop-filter: blur(12px) saturate(150%);
-  color: #FFFFFF;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-
 /* The page behind the sheet is the sheet's own colour (warm off-white in
    light mode, deep black in dark mode), so the sheet reads as one surface. */
 .pdp-shell {
@@ -8556,31 +8500,6 @@ html.vt-fade::view-transition-new(root) {
   color: var(--pdp-save-fg);
 }
 
-/* "● In stock" capsule + the product's note as one quiet group (Batch 29):
-   price row → capsule 18px, capsule → note 8px, note → trust plate 24px. */
-.pdp-stock {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--pdp-gap-price-stock);
-}
-
-.pdp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--color-text-primary);
-}
-
 /* The note reads like a caption: no box, no border, no background — a small
    line info icon, then the full text in secondary grey. */
 .pdp-note {
@@ -8600,27 +8519,6 @@ html.vt-fade::view-transition-new(root) {
   height: 14px;
   /* Centres the 14px icon on the first 18px line of text. */
   margin-top: 2px;
-}
-
-.pdp-stock + .trust-plate {
-  margin-top: var(--space-6);
-}
-
-.pdp-chip__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.pdp-chip__dot--in {
-  background: var(--color-stock-in);
-  box-shadow: 0 0 0 3.5px rgba(34, 197, 94, 0.2);
-}
-
-.pdp-chip__dot--out {
-  background: var(--color-stock-out);
-  box-shadow: 0 0 0 3.5px rgba(239, 68, 68, 0.2);
 }
 
 .pdp-main .product-detail__variant-label {
@@ -8649,47 +8547,6 @@ html.vt-fade::view-transition-new(root) {
 
 .pdp-main .wholesale-row {
   margin-top: var(--space-3);
-}
-
-/* The three trust items in ONE rounded plate with thin dividers. */
-.trust-plate {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: var(--space-5);
-  padding: 12px 0;
-  border-radius: 18px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-}
-
-.trust-plate__item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 2px 6px;
-  text-align: center;
-}
-
-.trust-plate__item + .trust-plate__item {
-  border-left: 1px solid var(--color-border);
-}
-
-.trust-plate__icon {
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-primary);
-}
-
-.trust-plate__text {
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--color-text-primary);
-  overflow-wrap: break-word;
 }
 
 .pdp-sheet .accordion {

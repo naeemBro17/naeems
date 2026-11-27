@@ -124,11 +124,12 @@ function parseRgba(value: string): [number, number, number, number] {
 
 test.describe('Part 1 — crystal glass photo buttons', () => {
   for (const theme of ['light', 'dark'] as const) {
-    test(`←, Share and the photo counter: white ≤ 15%, blur, border, no dark shadow (${theme})`, async ({ page }) => {
+    test(`← and Share: white ≤ 15%, blur, border, no dark shadow (${theme})`, async ({ page }) => {
       const product = await multiPhotoProduct();
       await openWith(page, `/product/${product.slug}`, { theme });
       const header = page.getByTestId('pdp-header');
-      await expect(page.getByTestId('image-counter')).toBeVisible({ timeout: 15_000 });
+      // Fix 72.1: the "1 / N" pill is gone (dots, or a quiet text).
+      await expect(page.locator('[data-testid="image-dots"], [data-testid="image-counter"]').first()).toBeVisible({ timeout: 15_000 });
       // Over the photo (not the loading / scrolled bar), after the buttons'
       // 260 ms colour transition has finished.
       await expect(header).not.toHaveClass(/pdp-header--(plain|solid)/);
@@ -136,7 +137,6 @@ test.describe('Part 1 — crystal glass photo buttons', () => {
       const targets = [
         header.getByRole('button', { name: 'Go back' }),
         header.getByRole('button', { name: /^Share / }),
-        page.getByTestId('image-counter'),
       ];
       for (const target of targets) {
         const s = await target.evaluate((el) => {
@@ -178,7 +178,7 @@ test.describe('Part 1 — crystal glass photo buttons', () => {
 test.describe('Part 2 — stock and note', () => {
   const NOTE = 'Packaging may vary slightly depending on the market of origin.';
 
-  test('small capsule; note is a caption (no box) with an info icon; 18 / 8 / 24 px; shown once', async ({ page }) => {
+  test('stock in the info block; note is a caption (no box) with an info icon, under the block; shown once', async ({ page }) => {
     const product = await multiPhotoProduct();
     await patchNote(page, product.id, NOTE);
     await openWith(page, `/product/${product.slug}`);
@@ -186,9 +186,8 @@ test.describe('Part 2 — stock and note', () => {
     const note = page.getByTestId('product-note');
     await expect(note).toBeVisible({ timeout: 15_000 });
 
-    const chipBox = await box(chip);
-    expect(chipBox.height).toBeGreaterThanOrEqual(24);
-    expect(chipBox.height).toBeLessThanOrEqual(28);
+    // Fix 72.1: the stock line is the info block's first cell.
+    await expect(page.getByTestId('pdp-info').getByTestId('stock-chip')).toHaveCount(1);
 
     const style = await note.evaluate((el) => {
       const cs = getComputedStyle(el);
@@ -198,27 +197,12 @@ test.describe('Part 2 — stock and note', () => {
     expect(parseRgba(style.bg)[3]).toBe(0);
     expect(style.icon).toBe(true);
 
-    const priceBox = await box(page.locator('.pdp-sheet [data-sheet-part="price"]'));
+    // Fix 72.1: buy row, 14 px, the 2 x 2 info block, 10 px, the note.
     const noteBox = await box(note);
-    const trustBox = await box(page.getByTestId('trust-plate'));
-    expect(Math.abs(chipBox.y - (priceBox.y + priceBox.height) - 18)).toBeLessThanOrEqual(2);
-    // Batch 51: the delivery line sits between the chip and the note, the
-    // same 8 px apart.
-    const eta = page.getByTestId('pdp-delivery');
-    if ((await eta.count()) > 0) {
-      const etaBox = await box(eta);
-      expect(Math.abs(etaBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
-      expect(Math.abs(noteBox.y - (etaBox.y + etaBox.height) - 8)).toBeLessThanOrEqual(2);
-    } else {
-      expect(Math.abs(noteBox.y - (chipBox.y + chipBox.height) - 8)).toBeLessThanOrEqual(2);
-    }
-    // Batch 70: the in-page Add to Cart now sits between the note and the
-    // trust plate.
     const buyBox = await box(page.getByTestId('pdp-buy'));
-    expect(buyBox.y - (noteBox.y + noteBox.height)).toBeGreaterThanOrEqual(12);
-    expect(buyBox.y - (noteBox.y + noteBox.height)).toBeLessThanOrEqual(26);
-    expect(trustBox.y - (buyBox.y + buyBox.height)).toBeGreaterThanOrEqual(12);
-    expect(trustBox.y - (buyBox.y + buyBox.height)).toBeLessThanOrEqual(26);
+    const infoBox = await box(page.getByTestId('pdp-info'));
+    expect(Math.abs(infoBox.y - (buyBox.y + buyBox.height) - 14)).toBeLessThanOrEqual(2);
+    expect(Math.abs(noteBox.y - (infoBox.y + infoBox.height) - 10)).toBeLessThanOrEqual(2);
 
     const occurrences = await page.evaluate((text) => document.body.innerText.split(text).length - 1, NOTE);
     expect(occurrences).toBe(1);
@@ -238,7 +222,10 @@ test.describe('Part 2 — stock and note', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Part 3 — floating cart on the product page', () => {
-  test('bottom-right above the bar; moves down and back up with it; never overlaps', async ({ page }) => {
+  // Fix 72.1: never moved, it starts at the right edge just under Share
+  // (over the photo, not over the options) and stays there with or without
+  // the bar; it never overlaps the bar or the top buttons.
+  test('right edge under Share; stays put while the bar comes and goes; never overlaps', async ({ page }) => {
     const product = await multiPhotoProduct();
     await openWith(page, `/product/${product.slug}`);
     await page.getByTestId('add-to-cart').click();
@@ -251,10 +238,11 @@ test.describe('Part 3 — floating cart on the product page', () => {
       const g = await box(glass);
       const b = await box(bar);
       expect(Math.abs(g.x + g.width - (b.x + b.width))).toBeLessThanOrEqual(2);
-      const gap = b.y - (g.y + g.height);
-      expect(gap).toBeGreaterThanOrEqual(8);
-      expect(gap).toBeLessThanOrEqual(14);
+      expect(overlaps(g, b)).toBe(false);
       const header = page.getByTestId('pdp-header');
+      const share = await box(header.getByRole('button', { name: /^Share / }));
+      expect(g.y).toBeGreaterThan(share.y + share.height);
+      expect(g.y).toBeLessThan(share.y + share.height + 80);
       for (const name of ['Go back', /^Share /] as const) {
         expect(overlaps(g, await box(header.getByRole('button', { name })))).toBe(false);
       }
@@ -268,15 +256,12 @@ test.describe('Part 3 — floating cart on the product page', () => {
     await page.waitForTimeout(500);
     const shown = await check();
 
-    // Back to the top: the bar slides away and the cart takes its place.
+    // Back to the top: the bar slides away; the cart stays where it is.
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await expect(bar).toHaveAttribute('data-shown', 'false');
     await page.waitForTimeout(500);
-    const vh = page.viewportSize()?.height ?? 844;
-    const away = await box(glass);
-    expect(away.y).toBeGreaterThan(shown.y + 40);
-    expect(away.y + away.height).toBeLessThanOrEqual(vh);
-    expect(overlaps(away, await box(bar))).toBe(false);
+    const away = await check();
+    expect(Math.abs(away.y - shown.y)).toBeLessThanOrEqual(1);
 
     // Past the in-page button again: both come back.
     await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), buyBottom);
@@ -351,8 +336,10 @@ test.describe('Part 4 — Removed · Undo', () => {
     const product = await multiPhotoProduct();
     await openWith(page, `/product/${product.slug}`, { cart: [lineFor(product, 1)] });
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('1', { timeout: 15_000 });
-    // Batch 70: the in-page stepper (the buy bar's own handlers).
-    await page.getByTestId('pdp-buy-minus').click();
+    // Fix 72.1: the in-page stepper is gone; the buy bar's own −.
+    await page.getByTestId('pdp-buy').evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().bottom + window.scrollY - 40));
+    await expect(page.getByTestId('buy-bar')).toHaveAttribute('data-shown', 'true');
+    await page.getByTestId('buy-bar-minus').click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const toast = page.getByTestId('undo-toast');
     await expect(toast).toBeVisible();

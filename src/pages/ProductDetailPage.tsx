@@ -12,8 +12,9 @@ import { getDisplayPrice } from '../lib/pricing';
 import { isOutOfStock } from '../lib/stockStatus';
 import { siteText } from '../lib/editableTexts';
 import { useSellLimit } from '../hooks/useSellLimit';
-import { deliveryLine, lowStockText, type LimitReason } from '../lib/sellRules';
+import { arrivesByDay, deliveryLine, lowStockText, type LimitReason } from '../lib/sellRules';
 import { LimitPopup } from '../components/viewer/LimitPopup';
+import { PriceRoll } from '../components/viewer/PriceRoll';
 import {
   isVariantInStock,
   optionGalleryImages,
@@ -110,10 +111,10 @@ function removeProductJsonLd(): void {
   document.getElementById(JSON_LD_ID)?.remove();
 }
 
-/** Batch 51: the small delivery truck beside "Get it in …". */
+/** Batch 51: the small delivery truck; Fix 72.1: beside "Arrives by …". */
 function TruckIcon() {
   return (
-    <svg className="pdp-eta__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M2.5 6.5h11v9h-11z" />
       <path d="M13.5 9.5h4l3 3v3h-7z" />
       <circle cx="6.5" cy="17.5" r="1.6" />
@@ -142,10 +143,9 @@ function PlaceholderIcon() {
 /** Height of the product page's top bar — the part of the screen it covers. */
 const PDP_HEADER_PX = 56;
 
-function TrustIcon({ kind }: { kind: 'authentic' | 'cod' | 'delivery' }) {
+function TrustIcon({ kind }: { kind: 'authentic' | 'cod' }) {
   return (
     <svg
-      className="trust-plate__icon"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -167,14 +167,6 @@ function TrustIcon({ kind }: { kind: 'authentic' | 'cod' | 'delivery' }) {
           <path d="M6 9.5v5M18 9.5v5" />
         </>
       )}
-      {kind === 'delivery' && (
-        <>
-          <path d="M2.5 6.5h11v9h-11z" />
-          <path d="M13.5 9.5h4l3 3v3h-7" />
-          <circle cx="7" cy="17.5" r="1.8" />
-          <circle cx="17" cy="17.5" r="1.8" />
-        </>
-      )}
     </svg>
   );
 }
@@ -184,6 +176,15 @@ function StepIcon({ plus }: { plus: boolean }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
       <path d="M6 12h12" />
       {plus && <path d="M12 6v12" />}
+    </svg>
+  );
+}
+
+/** Fix 72.1: the tick on "Added". */
+function TickIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   );
 }
@@ -210,12 +211,6 @@ function useBuyBarVisibility(target: RefObject<HTMLElement>): boolean {
   }, [target]);
   return shown;
 }
-
-/** Batch 70: the space the photo leaves under itself on the first screen
- *  (the sheet down to the in-page Add to Cart, plus a little air). */
-const FIRST_SCREEN_AIR_PX = 14;
-/** The photo never gets shorter than this. */
-const MIN_PHOTO_PX = 220;
 
 /**
  * Batch 70: "About this product" shows four lines, then "Read more"
@@ -322,15 +317,6 @@ function DetailContent({
   // product's own — the same photo its card showed), then every other photo
   // once. See optionGalleryImages for the one rule the whole site follows.
   const images = optionGalleryImages(productImages(product), selectedOption, variants);
-  // Batch 35 Part 8: the blurred copy behind the photo follows the photo on
-  // screen. Only photos already shown get a copy (the same file the slide
-  // already loaded — nothing extra is downloaded), so they can crossfade.
-  const currentImage = images[activeImage] ?? images[0] ?? null;
-  const [blurredShown, setBlurredShown] = useState<string[]>([]);
-  useEffect(() => {
-    if (!currentImage) return;
-    setBlurredShown((shown) => (shown.includes(currentImage) ? shown : [...shown, currentImage]));
-  }, [currentImage]);
   const firstImage = images[0] ?? null;
 
   // The carousel keeps its own scroll position across re-renders — without
@@ -403,6 +389,7 @@ function DetailContent({
   const lowText = outOfStock ? null : lowStockText(stockFacts, sell.limit);
   const inHand = (hasSelector ? selectedOption.in_hand : product.in_hand) ?? !outOfStock;
   const deliveryText = deliveryLine(settings, { available: !outOfStock, inHand });
+  const arrivesBy = arrivesByDay(settings, { available: !outOfStock, inHand }, new Date().toISOString());
   const selectedLabel = hasSelector ? variantOptionLabel(selectedOption, product.name) : null;
   // Batch 70: the in-page Add to Cart; the buy bar shows once it is gone.
   const buyRef = useRef<HTMLDivElement>(null);
@@ -424,31 +411,6 @@ function DetailContent({
     trackViewContent({ id: product.id, name: product.name, price: mainPrice });
   }, [product?.id]);
 
-  // Batch 70: the first screen shows the whole photo AND everything down to
-  // the in-page Add to Cart — the photo gets shorter when they would not
-  // fit (never the text). Measured before paint; again on a resize, and on
-  // an option change while still at the top of the page.
-  const fitPhoto = useCallback(() => {
-    const gallery = galleryRef.current;
-    const buy = buyRef.current;
-    if (!gallery || !buy) return;
-    const overlap = parseFloat(window.getComputedStyle(gallery).paddingBottom) || 0;
-    const below = buy.getBoundingClientRect().bottom - (gallery.getBoundingClientRect().bottom - overlap);
-    const widest = Math.min(document.documentElement.clientWidth, 480);
-    const photo = Math.max(MIN_PHOTO_PX, Math.min(widest, window.innerHeight - below - FIRST_SCREEN_AIR_PX));
-    gallery.style.setProperty('--b70-photo', `${Math.round(photo)}px`);
-  }, []);
-  const fittedOnce = useRef(false);
-  useLayoutEffect(() => {
-    if (fittedOnce.current && window.scrollY > 10) return;
-    fittedOnce.current = true;
-    fitPhoto();
-  }, [fitPhoto, selectedOption.id]);
-  useEffect(() => {
-    window.addEventListener('resize', fitPhoto);
-    return () => window.removeEventListener('resize', fitPhoto);
-  }, [fitPhoto]);
-
   const handleCarouselScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     syncMirror(el.scrollLeft);
@@ -460,20 +422,34 @@ function DetailContent({
   // else the product's card photo (never the full-size photo).
   const flyImage = selectedOption.image_url ? smallImageFor(selectedOption.image_url, product, variants) : cardImage(product);
 
+  // Fix 72.1: the in-page quantity picker; Add to Cart adds that many.
+  const [pickQty, setPickQty] = useState(1);
+  const [justAdded, setJustAdded] = useState(false);
+  const addedTimer = useRef<number | null>(null);
+  const room = Math.max(1, limit - inCart);
+  useEffect(() => setPickQty(1), [selectedOption.id]);
+  useEffect(() => () => {
+    if (addedTimer.current !== null) window.clearTimeout(addedTimer.current);
+  }, []);
+
   const handleAddToCart = (e: MouseEvent<HTMLButtonElement>) => {
-    if (outOfStock || inCart > 0) return;
-    if (limit < 1) {
+    if (outOfStock) return;
+    if (limit < 1 || inCart >= limit) {
       setLimitPopup(sell.reasonFor(stockFacts));
       return;
     }
-    const variant = hasSelector
-      ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) }
-      : null;
-    addItem(product.id, mainPrice, variant, 1);
+    const qty = Math.min(pickQty, limit - inCart);
+    const variant = hasSelector ? { id: selectedOption.id, label: variantOptionLabel(selectedOption, product.name) } : null;
+    // addItem adds on top of a line already in the cart (CartContext).
+    addItem(product.id, mainPrice, variant, qty);
     // The first add of a visit opens the side cart; later adds fly.
     if (!afterAdd(product.id, variant?.id ?? null)) flyToCart(e.currentTarget, flyImage);
-    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, 1);
+    trackAddToCart({ id: product.id, name: product.name, price: mainPrice }, qty);
     tapHaptic();
+    setPickQty(1);
+    setJustAdded(true);
+    if (addedTimer.current !== null) window.clearTimeout(addedTimer.current);
+    addedTimer.current = window.setTimeout(() => setJustAdded(false), 1300);
   };
 
   const increase = (e: MouseEvent<HTMLButtonElement>) => {
@@ -494,12 +470,6 @@ function DetailContent({
     updateQuantity(product.id, inCart - 1, lineVariantId);
   };
 
-  const trustTexts = [
-    { kind: 'authentic' as const, text: siteText(settings, 'text_trust_authentic') },
-    { kind: 'cod' as const, text: siteText(settings, 'text_trust_cod') },
-    { kind: 'delivery' as const, text: siteText(settings, 'text_trust_delivery') },
-  ];
-
   return (
     <div className="product-detail">
       {images.length > 0 ? (
@@ -510,19 +480,6 @@ function DetailContent({
           }`}
           style={{ viewTransitionName: productHeroName(product.id) } as CSSProperties}
         >
-          {blurredShown
-            .filter((url) => images.includes(url))
-            .map((url) => (
-              <img
-                key={`blur-${url}`}
-                src={url}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-                className={`product-detail__backdrop${url === currentImage ? ' product-detail__backdrop--on' : ''}`}
-                data-testid="photo-backdrop"
-              />
-            ))}
           {/* Batch 36 Part 4: under the photo, its own bottom edge mirrored
               (a sharp copy with a softly blurred one over it), so the colour
               where photo and strip meet is the same and the sheet's rounded
@@ -562,11 +519,19 @@ function DetailContent({
               />
             ))}
           </div>
-          {images.length > 1 && (
-            <span className="product-detail__counter" aria-hidden="true" data-testid="image-counter">
-              {activeImage + 1} / {images.length}
-            </span>
-          )}
+          {/* Fix 72.1: dots for 2 to 7 photos, a quiet "3 / 20" for more. */}
+          {images.length > 1 &&
+            (images.length <= 7 ? (
+              <span className="f721-dots" aria-hidden="true" data-testid="image-dots">
+                {images.map((url, i) => (
+                  <i key={url} className={i === activeImage ? 'is-on' : undefined} />
+                ))}
+              </span>
+            ) : (
+              <span className="f721-count" aria-hidden="true" data-testid="image-counter">
+                {activeImage + 1} / {images.length}
+              </span>
+            ))}
           {/* Batch 70: the heart, bottom-right of the photo. */}
           <span className="b70-photo-heart" data-testid="photo-heart">
             <HeartButton productId={product.id} productName={product.name} />
@@ -618,49 +583,12 @@ function DetailContent({
           <h1 className="product-detail__name" data-sheet-part="name">{product.name}</h1>
 
           <div className={`price-block${outOfStock ? ' price-block--out' : ''}`} data-sheet-part="price">
-            <span className="product-detail__price">{formatTaka(mainPrice)}</span>
+            <PriceRoll text={formatTaka(mainPrice)} className="product-detail__price" />
             {strikePrice !== null && (
               <span className="price-block__strike">{formatTaka(strikePrice)}</span>
             )}
             {strikePrice !== null && savePercent !== null && !outOfStock && (
               <span className="save-badge pdp-save">Save {savePercent}%</span>
-            )}
-          </div>
-
-          {/* The stock capsule and the note are one quiet group (Batch 29):
-              the note is a plain caption with a small info icon, never a box. */}
-          <div className="pdp-stock" data-sheet-part="chips">
-            <span className="pdp-chip" data-testid="stock-chip">
-              <span
-                className={`pdp-chip__dot ${outOfStock ? 'pdp-chip__dot--out' : lowText ? 'pdp-chip__dot--low' : 'pdp-chip__dot--in'}`}
-                aria-hidden="true"
-              />
-              {outOfStock ? 'Sold out' : lowText ?? 'In stock'}
-            </span>
-            {deliveryText && (
-              <p className="pdp-eta" data-testid="pdp-delivery">
-                <TruckIcon />
-                <span>{deliveryText}</span>
-              </p>
-            )}
-            {noteText !== '' && (
-              <p className="pdp-note" data-testid="product-note">
-                <svg
-                  className="pdp-note__icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 11v5" />
-                  <path d="M12 7.6v.1" />
-                </svg>
-                <span className="pdp-note__text">{noteText}</span>
-              </p>
             )}
           </div>
 
@@ -677,34 +605,47 @@ function DetailContent({
             </div>
           )}
 
-          {/* Batch 70: Add to Cart right on the page, under the options; it
-              runs the buy bar's own handlers. */}
+          {/* Batch 70: Add to Cart right on the page, under the options.
+              Fix 72.1: a quantity picker beside it; "Added" for a moment. */}
           <div className="b70-buy" ref={buyRef} data-testid="pdp-buy">
             {outOfStock ? (
               <button type="button" className="b70-buy__out" disabled aria-label={`${product.name} is sold out`} data-testid="pdp-buy-out">
                 Sold out
               </button>
-            ) : inCart > 0 ? (
-              <div className="b70-buy__step" role="group" aria-label={`${product.name} in cart`} data-testid="pdp-buy-stepper">
+            ) : (
+              <div className="f721-buy">
+                <div className="f721-qty" role="group" aria-label="Quantity" data-testid="pdp-qty">
+                  <button
+                    type="button"
+                    onClick={() => setPickQty((n) => Math.max(1, n - 1))}
+                    disabled={pickQty <= 1}
+                    aria-label="One less"
+                    data-testid="pdp-qty-minus"
+                  >
+                    <StepIcon plus={false} />
+                  </button>
+                  <span aria-live="polite" data-testid="pdp-qty-value">{pickQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPickQty((n) => Math.min(room, n + 1))}
+                    disabled={pickQty >= room}
+                    aria-label="One more"
+                    data-testid="pdp-qty-plus"
+                  >
+                    <StepIcon plus />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={decrease}
-                  aria-label={inCart === 1 ? `Remove ${product.name} from cart` : `One less ${product.name}`}
-                  data-testid="pdp-buy-minus"
+                  className="b70-buy__add f721-add"
+                  onClick={handleAddToCart}
+                  aria-label={`Add ${product.name} to cart`}
+                  data-testid="add-to-cart"
                 >
-                  <StepIcon plus={false} />
-                </button>
-                <span className="b70-buy__qty" aria-live="polite" data-testid="pdp-buy-qty">
-                  {inCart} in cart
-                </span>
-                <button
-                  type="button"
-                  className={inCart >= limit ? 'b70-buy__max' : undefined}
-                  onClick={increase}
-                  aria-label={`One more ${product.name}`}
-                  data-testid="pdp-buy-plus"
-                >
-                  <StepIcon plus />
+                  <span key={justAdded ? 'added' : 'add'} className="f721-add__in">
+                    {justAdded ? <TickIcon /> : <CartIcon />}
+                    {justAdded ? 'Added' : 'Add to Cart'}
+                  </span>
                 </button>
                 {limitPopup && !barShown && (
                   <LimitPopup
@@ -715,30 +656,57 @@ function DetailContent({
                   />
                 )}
               </div>
-            ) : (
-              <button
-                type="button"
-                className="b70-buy__add"
-                onClick={handleAddToCart}
-                aria-label={`Add ${product.name} to cart`}
-                data-testid="add-to-cart"
-              >
-                <CartIcon />
-                Add to Cart
-              </button>
             )}
           </div>
 
-          <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
-
-          <ul className="trust-plate" aria-label="Why buy here" data-sheet-part="trust" data-testid="trust-plate">
-            {trustTexts.map((t) => (
-              <li key={t.kind} className="trust-plate__item" data-testid={`trust-${t.kind}`}>
-                <TrustIcon kind={t.kind} />
-                <span className="trust-plate__text">{t.text}</span>
+          {/* Fix 72.1: stock, delivery and the two trust lines in one 2 x 2
+              block (replaces the stock capsule row and the trust plate). */}
+          <ul className="f721-info" aria-label="Stock and delivery" data-sheet-part="trust" data-testid="pdp-info">
+            <li data-testid="stock-chip">
+              <i className={`f721-dot${outOfStock ? ' f721-dot--out' : lowText ? ' f721-dot--low' : ''}`} aria-hidden="true" />
+              <b>{outOfStock ? 'Sold out' : lowText ?? 'In stock'}</b>
+            </li>
+            {arrivesBy !== null ? (
+              <li data-testid="pdp-delivery">
+                <TruckIcon />
+                <span>Arrives by <b>{arrivesBy}</b></span>
               </li>
-            ))}
+            ) : deliveryText ? (
+              <li data-testid="pdp-delivery">
+                <TruckIcon />
+                <span>{deliveryText}</span>
+              </li>
+            ) : null}
+            <li data-testid="trust-authentic">
+              <TrustIcon kind="authentic" />
+              <span>{siteText(settings, 'text_trust_authentic')}</span>
+            </li>
+            <li data-testid="trust-cod">
+              <TrustIcon kind="cod" />
+              <span>{siteText(settings, 'text_trust_cod')}</span>
+            </li>
           </ul>
+          {noteText !== '' && (
+            <p className="pdp-note f721-note" data-testid="product-note">
+              <svg
+                className="pdp-note__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v5" />
+                <path d="M12 7.6v.1" />
+              </svg>
+              <span className="pdp-note__text">{noteText}</span>
+            </p>
+          )}
+
+          <WholesaleReveal hasWholesale={hasWholesale} price={wholesalePrice} />
         </div>
 
         {hasSections && (

@@ -4,6 +4,12 @@ import { test, expect } from './fixtures';
 import { E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_EMAIL, E2E_PASSWORD } from './helpers/env';
 import { passwordSession, select, useSessionInPage, type TestSession } from './helpers/api';
 import { rowResult, runSql, sqlError, supabaseCli } from './helpers/sqlRunner';
+import { arrivesByDay } from '../src/lib/sellRules';
+
+/** Fix 72.1: the product page's "Arrives by <day>" with the shop's delivery
+ *  times (1 to 2 / 2 to 3 / 3 to 5 days). */
+const DELIVERY = { delivery_time_dhaka: '1 to 2 days', delivery_time_outside: '2 to 3 days', delivery_time_buy_after: '3 to 5 days' };
+const arrivesBy = (inHand: boolean) => `Arrives by ${arrivesByDay(DELIVERY, { available: true, inHand }, new Date().toISOString())}`;
 
 // Batch 51: keep selling when out of stock, the order limit, delivery
 // times, the Shopping list, the Wishlist, the admin glass clock and the
@@ -194,10 +200,10 @@ for (const theme of ['light', 'dark'] as const) {
     await card.screenshot({ path: `${SHOTS}/${theme}-01-card-stock0-keep-selling.png` });
     await noSidewaysScroll(page);
 
-    // Product page (keep selling, none at home): "Get it in 3–5 days".
+    // Product page (keep selling, none at home): the buy-after day.
     await page.goto(`/product/${picks.on.slug}`);
     await expect(page.getByTestId('stock-chip')).toHaveText('In stock', { timeout: 30_000 });
-    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 3 to 5 days');
+    await expect(page.getByTestId('pdp-delivery')).toHaveText(arrivesBy(false));
     // First screen: name, price, stock, delivery line above the buy bar.
     const bar = (await page.getByTestId('buy-bar').boundingBox()) ?? { y: 844 };
     const line = (await page.getByTestId('pdp-delivery').boundingBox()) ?? { y: 9999, height: 0 };
@@ -215,9 +221,11 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: `${SHOTS}/${theme}-03-product-saved-toast.png` });
 
     // Limit popup: + past 4 → "Limit 4 per order" + WhatsApp link.
-    // (Batch 70: the in-page stepper, the buy bar's own handlers.)
+    // (Fix 72.1: quantity 4 + Add to Cart, then Add to Cart once more.)
+    for (let i = 0; i < 3; i++) await page.getByTestId('pdp-qty-plus').click();
     await page.getByTestId('add-to-cart').click();
-    for (let i = 0; i < 4; i++) await page.getByTestId('pdp-buy-plus').click();
+    await expect(page.getByTestId('add-to-cart')).toHaveText('Add to Cart', { timeout: 3000 });
+    await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('4');
     await expect(page.getByTestId('limit-popup-title')).toHaveText('Limit 4 per order');
     await expect(page.getByTestId('limit-popup-whatsapp')).toHaveText('Need more? Chat with us on WhatsApp');
@@ -230,10 +238,13 @@ for (const theme of ['light', 'dark'] as const) {
     // Sells only from stock with 2 left: amber line, the in-stock delivery line, "the last 2".
     await page.goto(`/product/${picks.low.slug}`);
     await expect(page.getByTestId('stock-chip')).toHaveText('Only 2 left, order soon', { timeout: 30_000 });
-    await expect(page.getByTestId('pdp-delivery')).toHaveText('Get it in 1 to 2 days in Dhaka · 2 to 3 days outside Dhaka');
+    await expect(page.getByTestId('pdp-delivery')).toHaveText(arrivesBy(true));
+    // Fix 72.1: + stops at the 2 left; Add, then Add once more.
+    for (let i = 0; i < 3; i++) if (await page.getByTestId('pdp-qty-plus').isEnabled()) await page.getByTestId('pdp-qty-plus').click();
+    await expect(page.getByTestId('pdp-qty-value')).toHaveText('2');
     await page.getByTestId('add-to-cart').click();
-    await page.getByTestId('pdp-buy-plus').click();
-    await page.getByTestId('pdp-buy-plus').click();
+    await expect(page.getByTestId('add-to-cart')).toHaveText('Add to Cart', { timeout: 3000 });
+    await page.getByTestId('add-to-cart').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
     await expect(page.getByTestId('limit-popup-title')).toHaveText("You've got the last 2!");
     await expect(page.getByTestId('limit-popup-whatsapp')).toHaveCount(0);
@@ -478,8 +489,10 @@ test('admin Settings: "Order limit and delivery times" shows the four fields (no
   const panel = page.getByTestId('order-limit-panel');
   await expect(panel).toBeVisible({ timeout: 30_000 });
   await expect(panel.getByLabel('Most of one item per order')).toHaveValue('4');
-  await expect(panel.getByLabel('Delivery in Dhaka')).toHaveValue('1 to 2 days');
-  await expect(panel.getByLabel('Delivery outside Dhaka')).toHaveValue('2 to 3 days');
-  await expect(panel.getByLabel('Items we buy after the order')).toHaveValue('3 to 5 days');
+  // The live value may be saved with a dash ("1–2 days"); the shop shows
+  // " to " either way (Batch 64).
+  await expect(panel.getByLabel('Delivery in Dhaka')).toHaveValue(/^1( to |\s*[–-]\s*)2 days$/);
+  await expect(panel.getByLabel('Delivery outside Dhaka')).toHaveValue(/^2( to |\s*[–-]\s*)3 days$/);
+  await expect(panel.getByLabel('Items we buy after the order')).toHaveValue(/^3( to |\s*[–-]\s*)5 days$/);
   await page.screenshot({ path: `${SHOTS}/light-16-settings-order-limit.png` });
 });
