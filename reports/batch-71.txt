@@ -237,3 +237,6 @@ I did not re-run the whole suite again (CLAUDE.md rule).
    signal before buying; there is none on Home or Shop today.
 5. Bento clean-up (small). Remove or re-place the bento admin so you do not
    edit something nobody sees.
+
+------------------------------------------------------------
+Pull request: https://github.com/naeemBro17/naeems/pull/new/feature/batch-71-home-shop
