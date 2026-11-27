@@ -90,7 +90,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.screenshot({ path: `${DIR}/product-white-photo-390-${theme}.png` });
 
     const price = await page.locator('.pdp-sheet [data-sheet-part="price"]').boundingBox();
-    const trust = await page.getByTestId('trust-plate').boundingBox();
+    const trust = await page.getByTestId('product-note').boundingBox();
     if (price && trust) {
       await page.screenshot({
         path: `${DIR}/stock-note-390-${theme}.png`,

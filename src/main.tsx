@@ -17,6 +17,8 @@ import './styles/batch60.css';
 import './styles/batch64.css';
 import './styles/batch65.css';
 import './styles/batch66.css';
+// Fix 72.1: last, after app.css (App.tsx's own stylesheets load before it).
+import './styles/fix72-1.css';
 
 // Batch 52 Part 4: opened inside Facebook / Messenger / Instagram on
 // Android → reopen this same address in Chrome, once, before anything is

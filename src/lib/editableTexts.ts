@@ -59,7 +59,7 @@ export const EDITABLE_TEXT_GROUPS: EditableTextGroup[] = [
     fields: [
       { key: 'text_trust_authentic', label: 'Box 1', defaultText: '100% authentic', multiline: false },
       { key: 'text_trust_cod', label: 'Box 2', defaultText: 'Cash on delivery', multiline: false },
-      { key: 'text_trust_delivery', label: 'Box 3', defaultText: 'Fast delivery', multiline: false },
+      { key: 'text_trust_delivery', label: 'Box 3 (not shown since Fix 72.1)', defaultText: 'Fast delivery', multiline: false },
     ],
   },
 ];

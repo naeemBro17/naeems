@@ -191,30 +191,10 @@
   }
 }
 
-/* ---------- Product page: amber dot and delivery line ---------- */
+/* ---------- Amber stock dot ---------- */
 
-.pdp-chip__dot--low,
 .stock-dot--low {
   background: var(--color-stock-low);
   box-shadow: 0 0 0 3.5px rgba(245, 158, 11, 0.2);
-}
-
-.pdp-eta {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.45;
-  color: var(--color-text-secondary);
-}
-
-.pdp-eta__icon {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  margin-top: 1px;
-  color: var(--color-text-primary);
 }
 

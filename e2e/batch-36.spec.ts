@@ -16,6 +16,16 @@ import {
 } from './helpers/api';
 import { CORS, DAY, OLD_PLAIN, mockPayouts, restAnswer, withRichProduct } from './helpers/batch36';
 
+/** Fix 72.1: which photo is on screen (1-based), from the dots (2 to 7
+ *  photos) or the quiet "2 / 9" text. */
+function activePhoto(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dots = Array.from(document.querySelectorAll('[data-testid="image-dots"] i'));
+    if (dots.length > 0) return dots.findIndex((d) => d.classList.contains('is-on')) + 1;
+    return Number.parseInt(document.querySelector('[data-testid="image-counter"]')?.textContent ?? '0', 10);
+  });
+}
+
 // Batch 36: Steadfast payouts, rich product text, Smart paste on New order,
 // and the product photo's corner seam. Steadfast is ALWAYS mocked, and so
 // is every payout number on screen (nothing is read from the real
@@ -549,7 +559,7 @@ for (const width of [360, 390, 430, 1280]) {
       // The strip follows the carousel exactly (transform only).
       if (photoCount >= 2) {
         await page.locator('.product-detail__carousel').evaluate((el) => el.scrollTo({ left: el.clientWidth, behavior: 'instant' as ScrollBehavior }));
-        await expect(page.getByTestId('image-counter')).toHaveText(/^2 \//);
+        await expect.poll(() => activePhoto(page)).toBe(2);
         const clientWidth = await page.locator('.product-detail__carousel').evaluate((el) => el.clientWidth);
         await expect
           .poll(() => page.locator('.product-detail__mirror-track').evaluate((el) => (el as HTMLElement).style.transform))

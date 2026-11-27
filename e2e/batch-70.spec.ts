@@ -219,7 +219,9 @@ test('first add opens "Added to cart" with the line on top; a second add flies; 
 
   await page.getByTestId('side-cart-keep').click();
   await expectClosed(page);
-  await expect(page.getByTestId('pdp-buy-stepper')).toBeVisible();
+  // Fix 72.1: the in-page button stays Add to Cart (no in-page stepper).
+  await expect(page.getByTestId('add-to-cart')).toHaveText(/Add to Cart|Added/);
+  await expect(page.getByTestId('pdp-buy-stepper')).toHaveCount(0);
 
   // Second add, from "You may also like": no panel, it flies, the badge grows.
   const badge = page.getByTestId('glass-cart-badge');
@@ -410,7 +412,7 @@ test('dragging the bubble to the left edge keeps it there after a reload', async
 
 /* ------------------------------------------------------------ product page */
 
-test('product page: heart bottom-right of the photo, counter bottom-left, no dots, buy bar hidden on the first screen and shown past the in-page button; Read more / Show less', async ({ page }) => {
+test('product page: heart bottom-right of the photo, photo dots centred at the bottom (Fix 72.1), buy bar hidden on the first screen and shown past the in-page button; Read more / Show less', async ({ page }) => {
   test.setTimeout(90_000);
   const [main] = await liveProducts(1);
   await patchCatalogue(page, main.id);
@@ -419,15 +421,16 @@ test('product page: heart bottom-right of the photo, counter bottom-left, no dot
 
   const gallery = await box(page.locator('.product-detail__gallery'));
   const heart = await box(page.getByTestId('photo-heart'));
-  const counter = await box(page.getByTestId('image-counter'));
+  const count = (main.image_urls ?? []).length;
+  const counter = await box(page.getByTestId(count <= 7 ? 'image-dots' : 'image-counter'));
   const overlap = 24;
   const photoBottom = gallery.y + gallery.height - overlap;
   expect(heart.x + heart.width).toBeLessThanOrEqual(gallery.x + gallery.width - 15.5);
   expect(heart.y + heart.height).toBeLessThanOrEqual(photoBottom);
   expect(heart.y + heart.height).toBeGreaterThan(photoBottom - 30);
   expect(heart.width).toBeGreaterThanOrEqual(44);
-  expect(counter.x).toBeGreaterThanOrEqual(15.5);
-  expect(counter.x).toBeLessThan(gallery.width / 2);
+  if (count <= 7) expect(Math.abs(counter.x + counter.width / 2 - gallery.width / 2)).toBeLessThan(1.5);
+  else expect(counter.x).toBeGreaterThanOrEqual(15.5);
   expect(counter.y + counter.height).toBeGreaterThan(photoBottom - 40);
   await expect(page.getByTestId('pdp-header').getByTestId('wish-heart')).toHaveCount(0);
   await expect(page.getByTestId('pdp-sheet-dots')).toHaveCount(0);

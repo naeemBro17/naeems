@@ -16,6 +16,16 @@ import {
 } from './helpers/api';
 import { STEADFAST_FUNCTION, mockSteadfast, type MockTracking } from './helpers/steadfastMock';
 
+/** Fix 72.1: which photo is on screen (1-based), from the dots (2 to 7
+ *  photos) or the quiet "2 / 9" text. */
+function activePhoto(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dots = Array.from(document.querySelectorAll('[data-testid="image-dots"] i'));
+    if (dots.length > 0) return dots.findIndex((d) => d.classList.contains('is-on')) + 1;
+    return Number.parseInt(document.querySelector('[data-testid="image-counter"]')?.textContent ?? '0', 10);
+  });
+}
+
 // Batch 35: order tracking for the customer, the order as a page and
 // lighter lists for the admin, one set of status names, and the small
 // fixes (greeting, ৳ in money fields, product photo, image saving).
@@ -454,7 +464,6 @@ async function openProductPage(page: Page, width: number, theme: 'light' | 'dark
   // Batch 61: a real product with a photo (only looked at).
   await page.goto(`/product/${await shopProductSlug()}`);
   await expect(page.locator('.product-detail__image').first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('.product-detail__backdrop--on')).toHaveCount(1, { timeout: 15_000 });
   await page.waitForTimeout(900);
 }
 
@@ -502,15 +511,15 @@ for (const width of [360, 390, 430, 1280]) {
   }
 }
 
-test('Part 8: the blurred layer follows a swipe to the next photo', async ({ page }) => {
+// Fix 72.1: the blurred layer is gone; the photo position (dots, or the
+// quiet "2 / 9" text) follows the swipe.
+test('Part 8: the photo position follows a swipe to the next photo', async ({ page }) => {
   await openProductPage(page, 390, 'light');
   const slides = page.locator('.product-detail__image');
   test.skip((await slides.count()) < 2, 'This test product has one photo.');
-  const second = await slides.nth(1).getAttribute('src');
   await page.locator('.product-detail__carousel').evaluate((el) => el.scrollTo({ left: el.clientWidth, behavior: 'instant' as ScrollBehavior }));
-  await expect(page.getByTestId('image-counter')).toHaveText(/^2 \//);
-  await expect(page.locator('.product-detail__backdrop--on')).toHaveAttribute('src', second ?? '');
-  await expect(page.locator('.product-detail__backdrop--on')).toHaveCount(1);
+  await expect.poll(() => activePhoto(page)).toBe(2);
+  await expect(page.locator('.product-detail__backdrop')).toHaveCount(0);
 });
 
 /* ---------------------------------------------------------------- Part 9 */

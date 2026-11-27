@@ -1,0 +1,212 @@
+/* Fix 72.1: the product page as Naeem approved it. */
+:root {
+  --f721-muted: #ECE8E2;
+  --f721-save-bg: #E3F1E7;
+  --f721-save: #1E7A43;
+}
+:root[data-theme='dark'] {
+  --f721-muted: #232326;
+  --f721-save-bg: rgba(74, 222, 128, 0.14);
+  --f721-save: #6EE7A0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --f721-muted: #232326;
+    --f721-save-bg: rgba(74, 222, 128, 0.14);
+    --f721-save: #6EE7A0;
+  }
+}
+
+/* The sheet's side padding (.pdp-sheet + .product-detail__info), so the
+   option lines can run to the screen edges while the first chip lines up
+   with the name. */
+.pdp-main {
+  --f721-gutter: calc(var(--space-4) + 4px);
+}
+
+/* Photo dots (2 to 7 photos) and the quiet counter (more than 7). */
+.f721-dots {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--pdp-sheet-overlap) + 10px);
+  z-index: 2;
+  display: flex;
+  gap: 5px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.f721-dots i { width: 5px; height: 5px; border-radius: 3px; background: rgba(11, 10, 9, 0.25); }
+.f721-dots i.is-on { width: 16px; background: rgba(11, 10, 9, 0.7); }
+.f721-count {
+  position: absolute;
+  left: 16px;
+  bottom: calc(var(--pdp-sheet-overlap) + 12px);
+  z-index: 2;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Brand: a soft muted capsule. */
+.pdp-main .product-detail__brand {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 8px 0 11px;
+  border-radius: 13px;
+  background: var(--f721-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-secondary);
+}
+.pdp-main .product-detail__brand-chevron { width: 13px; height: 13px; opacity: 0.7; }
+
+/* Name and price: bold. */
+.pdp-main .product-detail__name {
+  margin-top: 10px;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.28;
+  letter-spacing: -0.3px;
+  text-wrap: pretty;
+}
+.pdp-main .price-block { margin-top: 8px; }
+.pdp-main .product-detail__price { font-size: 28px; font-weight: 800; }
+
+/* The rolling price. */
+.f721-roll { display: inline-grid; overflow: hidden; vertical-align: bottom; }
+.f721-roll > span { grid-area: 1 / 1; white-space: nowrap; }
+.f721-roll__in { animation: f721-roll-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.f721-roll__out { animation: f721-roll-out 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes f721-roll-in { from { transform: translateY(70%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes f721-roll-out { from { transform: none; opacity: 1; } to { transform: translateY(-70%); opacity: 0; } }
+
+/* Save: a soft green pill. */
+.pdp-main .save-badge.pdp-save {
+  background: var(--f721-save-bg);
+  color: var(--f721-save);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* A thin line between "what it is" and "your choice". */
+.pdp-main .price-block + * { margin-top: 0; }
+/* No options: the buy row keeps its own space under the price. */
+.pdp-main .price-block + .b70-buy { margin-top: 16px; }
+.pdp-main [data-sheet-part='options'] { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+
+/* Options: label above, one sideways line of soft rectangles. */
+.pdp-main .variant-selector { margin-top: 0; gap: 0; }
+.pdp-main .variant-row { display: block; }
+.pdp-main .variant-row + .variant-row { margin-top: 14px; }
+.pdp-main .variant-row__label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.pdp-main .variant-row__chips {
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+  margin-inline: calc(-1 * var(--f721-gutter, 20px));
+  padding-inline: var(--f721-gutter, 20px);
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+.pdp-main .variant-row__chips::-webkit-scrollbar { display: none; }
+.pdp-main .chip-select {
+  flex: none;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.pdp-main .chip-select--on {
+  border: 1.5px solid var(--color-text-primary);
+  padding: 0 11.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+/* Buy row: quantity + Add to Cart. */
+.f721-buy { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+.f721-qty {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+.f721-qty button {
+  width: 40px;
+  height: 48px;
+  border: 0;
+  background: none;
+  color: var(--color-text-primary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.f721-qty button:disabled { color: var(--color-text-muted); cursor: default; }
+.f721-qty button svg { width: 18px; height: 18px; }
+.f721-qty span { min-width: 22px; text-align: center; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+.b70-buy__add.f721-add { height: 50px; border-radius: 14px; font-size: 16px; font-weight: 700; box-shadow: none; }
+.f721-add__in { display: inline-flex; align-items: center; gap: 8px; animation: f721-fade 0.25s ease both; }
+.f721-add__in svg { width: 18px; height: 18px; }
+@keyframes f721-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* The 2 x 2 info block under the buy row. */
+.f721-info {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+.f721-info li { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
+.f721-info li > span { overflow: hidden; text-overflow: ellipsis; }
+.f721-info b { color: var(--color-text-primary); font-weight: 600; }
+.f721-info svg { width: 15px; height: 15px; flex: none; }
+.f721-dot { width: 7px; height: 7px; margin: 0 4px; border-radius: 50%; background: var(--color-stock-in, #1F9D55); flex: none; }
+.f721-dot--low { background: var(--color-stock-low, #E0A100); }
+.f721-dot--out { background: var(--color-stock-out); }
+.f721-note { margin-top: 10px; }
+
+/* The cart bubble's first place on a product page (never moved yet):
+   the right edge, just under the Share button, over the photo. */
+.glass-cart.glass-cart--pdp.glass-cart--pdp-start:not(.glass-cart--placed) {
+  top: calc(env(safe-area-inset-top, 0px) + 110px);
+  bottom: auto;
+  margin-top: 0;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f721-roll__in, .f721-roll__out, .f721-add__in { animation: none; }
+  .f721-roll__out { display: none; }
+}

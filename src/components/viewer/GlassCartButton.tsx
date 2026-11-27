@@ -292,6 +292,8 @@ export function GlassCartButton() {
   const className = [
     'glass-cart',
     onProductPage ? 'glass-cart--pdp' : '',
+    // Fix 72.1: never moved yet: starts under the Share button, over the photo.
+    onProductPage && !placed ? 'glass-cart--pdp-start' : '',
     onProductPage && !placed && buyBar !== 'shown' ? 'glass-cart--bar-away' : '',
     placed ? 'glass-cart--placed' : '',
     dragging ? 'glass-cart--drag' : '',

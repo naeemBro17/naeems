@@ -340,16 +340,17 @@ test.describe('Part 2 — rounded info sheet', () => {
     expect(found).toEqual([]);
   });
 
-  test('order: brand → name → price → chips → (options) → trust plate; one plate with 3 items; no Add to Cart in the page', async ({ page }) => {
+  test('order: brand → name → price → (options) → info block; no Add to Cart in the page', async ({ page }) => {
     await openFresh(page, PDP);
-    await expect(page.getByTestId('trust-plate')).toBeVisible();
+    await expect(page.getByTestId('pdp-info')).toBeVisible();
     const parts = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLElement>('.pdp-sheet [data-sheet-part]')).map((el) => ({
         part: el.dataset.sheetPart,
         top: el.getBoundingClientRect().top,
       }))
     );
-    expect(parts.map((p) => p.part)).toEqual(['brand', 'name', 'price', 'chips', 'trust']);
+    // Fix 72.1: the stock row ("chips") moved into the info block ("trust").
+    expect(parts.map((p) => p.part)).toEqual(['brand', 'name', 'price', 'trust']);
     for (let i = 1; i < parts.length; i++) expect(parts[i].top).toBeGreaterThan(parts[i - 1].top);
 
     // The price row: big price, struck-through old price and a soft pill.
@@ -357,16 +358,20 @@ test.describe('Part 2 — rounded info sheet', () => {
     await expect(price.locator('.product-detail__price')).toBeVisible();
     const save = price.locator('.pdp-save');
     if ((await save.count()) > 0) {
+      // Fix 72.1: a soft green pill (a pale solid colour in light mode).
       const bg = await save.evaluate((el) => getComputedStyle(el).backgroundColor);
-      const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(bg)?.[1] ?? '1');
-      expect(alpha, bg).toBeLessThan(0.3);
+      const [r, g, b] = (/rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(bg) ?? []).slice(1).map(Number);
+      expect(Math.min(r, g, b), bg).toBeGreaterThan(200);
+      expect(g, bg).toBeGreaterThan(r);
     }
     await expect(page.getByTestId('stock-chip')).toHaveText(/In stock|Sold out|left, order soon/);
 
-    // Trust plate: one element, three items, texts from Site texts.
-    const plate = page.getByTestId('trust-plate');
+    // Fix 72.1: one 2 x 2 info block (stock, delivery, authentic, COD);
+    // the trust plate's third box is gone.
+    const plate = page.getByTestId('pdp-info');
     await expect(plate).toHaveCount(1);
-    await expect(plate.locator('li')).toHaveCount(3);
+    await expect(plate.locator('li')).toHaveCount(4);
+    await expect(page.getByTestId('trust-delivery')).toHaveCount(0);
     await expect(page.locator('.trust-box')).toHaveCount(0);
 
     // Batch 70: one Add to Cart in the page, right under the stock / options
@@ -378,14 +383,14 @@ test.describe('Part 2 — rounded info sheet', () => {
     await expect(page.getByTestId('sticky-bar')).toHaveCount(0);
   });
 
-  test('options sit between the chips and the trust plate (with 2+ options)', async ({ page }) => {
+  test('options sit between the price and the info block (with 2+ options)', async ({ page }) => {
     const seeded = await seedOption(page);
     await openFresh(page, `/product/${seeded.slug}`);
     await expect(page.locator('.pdp-sheet [data-sheet-part="options"]')).toBeVisible();
     const parts = await page.evaluate(() =>
       Array.from(document.querySelectorAll<HTMLElement>('.pdp-sheet [data-sheet-part]')).map((el) => el.dataset.sheetPart)
     );
-    expect(parts.slice(-3)).toEqual(['chips', 'options', 'trust']);
+    expect(parts.slice(-3)).toEqual(['price', 'options', 'trust']);
   });
 });
 
@@ -442,34 +447,30 @@ test.describe('Part 3 — glass buy bar', () => {
     await expect(add).toHaveCSS('background-color', 'rgb(255, 122, 69)');
     const before = await box(add);
     await add.click();
-    // Batch 70: the in-page button turns into the in-page stepper, same box.
-    const stepper = page.getByTestId('pdp-buy-stepper');
-    await expect(stepper).toBeVisible();
-    // Measured once its short pop-in (scale) has finished.
-    await stepper.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
-    const after = await box(stepper);
+    // Fix 72.1: the in-page button stays (it says "Added" for a moment), same box.
+    await expect(add).toHaveText('Added');
+    const after = await box(add);
     for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[k] - before[k])).toBeLessThanOrEqual(1);
-    // Not orange: a dark pill in light mode.
-    expect(await stepper.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe('rgb(255, 122, 69)');
+    await expect(page.getByTestId('pdp-buy-stepper')).toHaveCount(0);
 
     const qty = page.getByTestId('buy-bar-qty');
     await expect(qty).toHaveText('1');
     expect(await cartUnits(page)).toBe(1);
-    // Batch 51: + stops at the order limit (4) or the stock, whichever is
-    // smaller, with the limit popup.
+    // Batch 51: the most is the order limit (4) or the stock, whichever is
+    // smaller. Fix 72.1: the picker's + stops at what may still be added.
     const cap = Math.min(stock, 4);
-    for (let i = 1; i < cap + 2; i++) await page.getByTestId('pdp-buy-plus').click();
+    const plus = page.getByTestId('pdp-qty-plus');
+    for (let i = 0; i < cap + 1; i++) if (await plus.isEnabled()) await plus.click();
+    await expect(page.getByTestId('pdp-qty-value')).toHaveText(String(Math.max(1, cap - 1)));
+    if (cap > 1) await add.click();
     await expect(qty).toHaveText(String(cap));
+    expect(await cartUnits(page)).toBe(cap);
+    // One more: the limit popup, nothing added.
+    await expect(add).toHaveText('Add to Cart', { timeout: 3000 });
+    await add.click();
     await expect(page.getByTestId('limit-popup')).toBeVisible();
     expect(await cartUnits(page)).toBe(cap);
-
-    for (let i = cap; i > 0; i--) await page.getByTestId('pdp-buy-minus').click();
-    await expect(page.getByTestId('add-to-cart')).toBeVisible();
-    await expect(page.getByTestId('pdp-buy-stepper')).toHaveCount(0);
-    await expect(page.getByTestId('buy-bar-stepper')).toHaveCount(0);
-    expect(await cartUnits(page)).toBe(0);
-    const back = await box(page.getByTestId('add-to-cart'));
-    for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(back[k] - before[k])).toBeLessThanOrEqual(1);
+    await emptyCart(page);
   });
 
   test('stays after a reload, never flips back by itself, and matches the cart page and the cards', async ({ page }) => {
@@ -477,12 +478,13 @@ test.describe('Part 3 — glass buy bar', () => {
     await openFresh(page, PDP);
     // Batch 51: the name from the page (the old fixed product was renamed).
     const pname = ((await page.locator('.product-detail__name').textContent()) ?? '').trim();
+    // Fix 72.1: quantity 2, then Add to Cart.
+    await page.getByTestId('pdp-qty-plus').click();
     await page.getByTestId('add-to-cart').click();
-    await page.getByTestId('pdp-buy-plus').click();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
     await page.waitForTimeout(4000);
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
-    await expect(page.getByTestId('add-to-cart')).toHaveCount(0);
+    await expect(page.getByTestId('add-to-cart')).toHaveText('Add to Cart');
 
     await page.reload();
     await expect(page.getByTestId('buy-bar-qty')).toHaveText('2');
@@ -534,7 +536,10 @@ test.describe('Part 3 — glass buy bar', () => {
     if ((await region.count()) > 0) await region.click();
     await page.locator('.pdp-sheet .chip-select', { hasText: '999ml' }).first().click();
     await expect(price).not.toHaveText(basePrice);
-    await expect(price).toHaveText(await page.locator('.pdp-sheet .product-detail__price').textContent() ?? '');
+    // Fix 72.1: the price rolls; the new number is the last span (the old
+    // one leaves within 0.34 s).
+    await expect(page.locator('.pdp-sheet .f721-roll__out')).toHaveCount(0);
+    await expect(price).toHaveText(await page.locator('.pdp-sheet .product-detail__price > span').last().textContent() ?? '');
 
     // Batch 51: the extra test option row sits below the fold; back to the
     // top, where the in-page Add to Cart is (Batch 70).
@@ -610,11 +615,13 @@ test.describe('Part 5 — one floating cart', () => {
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('1');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--enter/);
 
-    await page.getByTestId('pdp-buy-plus').click();
+    // Fix 72.1: Add to Cart again adds on top.
+    await page.getByTestId('add-to-cart').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('2');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--pulse/);
-    // A remove pulses too (on the product page).
-    await page.getByTestId('pdp-buy-minus').click();
+    // A remove pulses too (on the product page): the buy bar's own −.
+    await showBuyBar(page);
+    await page.getByTestId('buy-bar-minus').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('1');
     await expect(glass.locator('.glass-cart__inner')).toHaveClass(/cart-bump--pulse/);
 
@@ -658,10 +665,12 @@ test.describe('Part 5 — one floating cart', () => {
       for (const name of ['Go back', /^Share /] as const) {
         expect(overlaps(g, await box(header.getByRole('button', { name })))).toBe(false);
       }
-      // Batch 29: bottom-right, just above the buy bar (right edges aligned).
+      // Fix 72.1: never moved, it starts at the right edge just under the
+      // Share button (right edges aligned with the bar's), not over the options.
       expect(Math.abs(g.x + g.width - (bar.x + bar.width))).toBeLessThanOrEqual(2);
-      expect(bar.y - (g.y + g.height)).toBeGreaterThanOrEqual(8);
-      expect(bar.y - (g.y + g.height)).toBeLessThanOrEqual(14);
+      const share = await box(header.getByRole('button', { name: /^Share / }));
+      expect(g.y).toBeGreaterThan(share.y + share.height);
+      expect(g.y).toBeLessThan(share.y + share.height + 80);
       await emptyCart(page);
     });
   }

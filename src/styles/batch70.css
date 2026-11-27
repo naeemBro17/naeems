@@ -169,10 +169,7 @@ button.glass-cart {
 
 /* ---------- Product page ---------- */
 
-/* The photo: as tall as fits, so the first screen also shows the brand,
-   name, price, stock, delivery line, options and Add to Cart. Always the
-   whole photo (contain); the blurred copy behind it fills the sides.
-   The page measures what fits and sets --b70-photo on the gallery. */
+/* Fix 72.1: the photo is always the full width, a square, never shrunk. */
 .pdp-shell .product-detail__gallery {
   --b70-photo: min(100vw, 480px);
 }
@@ -186,8 +183,8 @@ button.glass-cart {
   margin-left: calc(var(--b70-photo) / -2);
 }
 
-/* The heart, bottom-right of the photo (where "1 / 5" was), and the
-   counter, bottom-left. Same crystal glass as the top bar's buttons. */
+/* The heart, bottom-right of the photo. Same crystal glass as the top
+   bar's buttons. */
 .b70-photo-heart {
   position: absolute;
   right: 16px;
@@ -203,16 +200,10 @@ button.glass-cart {
   height: 42px;
   min-width: 42px;
 }
-.pdp-shell .product-detail__counter {
-  left: 16px;
-  right: auto;
-  bottom: calc(var(--pdp-sheet-overlap) + 19px);
-}
 
 /* The in-page Add to Cart, right under the options. */
 .b70-buy { margin-top: 16px; }
 .b70-buy__add,
-.b70-buy__step,
 .b70-buy__out {
   display: flex;
   align-items: center;
@@ -234,32 +225,6 @@ button.glass-cart {
 }
 .b70-buy__add:active { transform: scale(0.98); }
 .b70-buy__add svg { width: 20px; height: 20px; flex-shrink: 0; }
-.b70-buy__step {
-  position: relative;
-  display: grid;
-  grid-template-columns: 54px 1fr 54px;
-  border: 1.5px solid var(--color-text-primary);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-}
-.b70-buy__step button {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-}
-.b70-buy__step button svg { width: 18px; height: 18px; }
-.b70-buy__step button:active svg { transform: scale(0.88); }
-.b70-buy__step .b70-buy__max { opacity: 0.4; }
-.b70-buy__qty {
-  text-align: center;
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 .b70-buy__out {
   border: 0;
   background: var(--color-bg-tertiary);

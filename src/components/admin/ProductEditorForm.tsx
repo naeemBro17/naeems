@@ -949,7 +949,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
         <div className="pform-switch">
           <span className="pform-switch__text">
             <span className="toggle-label">Featured</span>
-            <span className="form-helper">Shown in the bento grid on Home</span>
+            <span className="form-helper">Shown in Best sellers on Home</span>
           </span>
           <Toggle checked={form.is_featured} onChange={(is_featured) => setField('is_featured', is_featured)} label="Featured" />
         </div>

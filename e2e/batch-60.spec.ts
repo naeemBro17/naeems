@@ -122,7 +122,10 @@ test('Account page: the My Wallet card under the My Orders / Wishlist tiles, wit
     const tiles = document.querySelector('.b68-tiles');
     const wallet = document.querySelector('[data-testid="account-wallet"]');
     const list = document.querySelector('[data-testid="account-list"]');
-    return tiles?.nextElementSibling === wallet && wallet?.nextElementSibling === list && list?.firstElementChild?.getAttribute('data-testid') === 'account-delivery';
+    // Batch 72 puts "My skin" first in the list (once its fields exist).
+    let first = list?.firstElementChild ?? null;
+    if (first?.getAttribute('data-testid') === 'account-my-skin') first = first.nextElementSibling;
+    return tiles?.nextElementSibling === wallet && wallet?.nextElementSibling === list && first?.getAttribute('data-testid') === 'account-delivery';
   });
   expect(order, 'tiles, then the wallet card, then Delivery details').toBe(true);
   await noSideScroll(page);

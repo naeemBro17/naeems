@@ -1,0 +1,243 @@
+FIX 72.1 — THE PRODUCT PAGE, AS NAEEM APPROVED IT
+Branch: fix/batch-72-1-product-page (from main, which has Batch 72)
+Version: 1.72.1
+
+==========================================================================
+1. WHAT I DID
+==========================================================================
+
+Photo. The page no longer measures the screen and shrinks the photo. The
+photo is always the full width of the phone and square (390 px wide = 390
+px tall on a 390 px phone, never more than 480). The blurred copy of the
+photo that filled the sides is gone, together with everything that fed
+it. Back, Share and the heart are where they were.
+
+Photo position. Small dots, centred at the bottom of the photo, replace
+the "1 / 20" pill: one dot per photo, the one on screen is a short bar.
+A product with more than 7 photos shows a quiet white "3 / 20" text
+instead (no pill), bottom-left.
+
+Brand, name, price. The brand is a soft grey capsule (tap still opens the
+brand page). The name is bigger and bold. The price is bigger and bold;
+when you pick another size, the old price slides up and fades while the
+new one rises in (instant for people who turn off animations). The Save
+pill is now soft green instead of orange, so Add to Cart is the only
+orange thing on the first screen.
+
+Options. A thin line separates "what it is" from "your choice". Each
+group (Region, Size) has a small uppercase label above it and is ONE line
+of soft rectangles that scrolls sideways; nothing wraps any more. The
+line runs to the screen edges, with its first rectangle lined up with the
+name, and fades out on the right so you can see there is more. Only the
+product page changed: the card's quick-add sheet looks exactly as before.
+
+Buy row. A quantity picker (− 1 +) sits left of Add to Cart. − is off at
+1; + stops at what can still be added (the order limit or the stock,
+minus what is already in the cart). Add to Cart adds that many, shows a
+tick and "Added" for 1.3 s, then goes back; the picker goes back to 1
+(also when you pick another option). The first add of a visit opens the
+side cart; later adds fly to the bubble, as before. If the cart already
+holds the limit, the usual limit message shows and nothing is added. The
+old in-page "N in cart" stepper is gone; the bottom buy bar and its
+stepper are unchanged.
+
+2 x 2 info block (under the buy row). In stock (green dot; amber "Only 2
+left" or red "Sold out" as before) | Arrives by <day> | 100% authentic |
+Cash on delivery. "Arrives by" is the LAST day of the same range the
+Order Placed page shows, for an outside-Dhaka order (or the "buy after"
+time when the item is not in hand), so the promise holds wherever the
+customer lives. The stock capsule row, the "Get it in ..." line and the
+3-box trust plate are gone; "Fast delivery" is dropped. The product's
+note stays, as a quiet caption under the block. In Admin → Site texts,
+the third trust box is now labelled "Box 3 (not shown since Fix 72.1)".
+
+Cart bubble. On a product page, a bubble you have never moved now starts
+at the right edge just under the Share button, over the photo, so it no
+longer covers the options. A bubble you moved stays where you put it.
+
+Small things from the Batch 72 report.
+- Product editor: the Featured helper text now says "Shown in Best
+  sellers on Home".
+- The failing "phone back from Expert to Home" test. It was a real app
+  bug, not a test that checked too early. I measured it: after Back,
+  Home was put back at 449 px, then about 0.4 s later the browser moved
+  it to 480 px by itself (Chrome keeps what you were looking at in place
+  while photos above it load). The bottom bar took that 31 px as you
+  scrolling down and hid, and it stayed hidden. The test checks about
+  1.5 s after the page settles, long after the bar's 0.3 s settle, so
+  waiting longer would not have helped. Fix: the bar now hides only for
+  a scroll that comes within 1.2 s of your own touch, wheel or key.
+  Scrolls nobody made (a Back restoring the page, the browser keeping
+  content in place) only move its starting point. Showing the bar again
+  works for any scroll, as before. That file alone: 3 of 3 runs passed
+  (12/12 each time).
+
+Checks (frame captures in reports/fix-72-1-screens/).
+- Nivea Men Body Wash (Region row with 4 options + Size row), 390 x 844
+  and 360 x 780, light and dark (options-390/360-light/dark.png): Add to
+  Cart fully on the first screen in all four.
+- Longest name in the shop (102 characters, The Ordinary NMF +
+  PhytoCeramides, no options) at 360 x 780 (long-name-360-light.png):
+  Add to Cart fully on the first screen. The test also proves the other
+  case: whenever the in-page button is not fully on screen, the buy bar
+  must already be showing.
+- No options (no-options-390-light.png): Add to Cart on the first screen.
+- Photo at 360, 390 and 430 px: exactly the full width, square, starts
+  at the left edge, no blurred copies in the page.
+- Dots: 3 photos show 3 dots centred at the bottom; the bar moves after
+  a swipe (dots-390-light.png). 8 or 20 photos show the quiet "1 / 8".
+- Options never wrap (every chip in a line has the same top), the line
+  runs edge to edge, the first chip lines up with the name. A real finger
+  (touch events) moving up on the options scrolls the page; moving
+  sideways scrolls only the options (options-scrolled-360-light.png).
+- Quantity 2 + Add = 2 in the cart; "Added" shows and returns after about
+  1.3 s; the picker goes back to 1. First add of a visit opens the side
+  cart (added-side-cart-390-light.png); a later add flies. Adding on top
+  works up to the limit (4), then the limit message shows and nothing is
+  added (limit-390-light.png).
+- Changing option rolls the price (only transform and opacity animate)
+  and updates Save %; the Save pill is green.
+- Arrives by, with the clock at Fri 27 Nov 2026, 10:00 Dhaka and the
+  shop's own delivery times: the test product is not in hand, so it uses
+  the buy-after time: "Arrives by Wed, 2 Dec", the same last day the
+  Order Placed page shows. Unit tests: in hand -> Mon, 30 Nov (outside
+  Dhaka, 2 to 3 days); not in hand -> Wed, 2 Dec; sold out -> nothing;
+  times with no number -> nothing.
+- Card quick-add sheet: still round pills, 32 px, wrapping
+  (quick-add-sheet-390-light.png).
+- Cart bubble at 360, 390, 430 px: under Share, above the heart, over the
+  photo, touching neither (bubble-*-light.png).
+
+Old tests changed to match the approved page.
+- batch-27: the in-page + loop -> quantity picker + Add, then Add again
+  for the limit popup; "+ on the product page" -> Add to Cart. Screens:
+  scrolls to the info block instead of the trust plate.
+- batch-28: sheet order is brand, name, price, (options), info; the
+  info block has 4 items and no "Fast delivery"; the in-page stepper test
+  now uses the picker and Add (same box, "Added", limit popup); reload
+  test adds 2 with the picker; the bubble test checks its new place under
+  Share; the Save pill check accepts the pale solid green; the option
+  price is read after the roll finishes.
+- batch-29: the photo-button glass test no longer includes the counter
+  (it is no longer a pill); the stock/note test checks stock inside the
+  info block and the note 10 px under it; the buy-bar Undo test uses the
+  bar's own -; the bubble test checks it stays under Share whether or
+  not the bar shows. Screens: the clip ends at the note.
+- batch-35: no longer waits for the blurred backdrop; "the blurred layer
+  follows a swipe" became "the photo position follows a swipe".
+- batch-36: the counter check reads the dots (or the quiet counter).
+- batch-51: the in-page + -> picker + Add; "Get it in ..." -> "Arrives
+  by <day>"; the admin delivery fields accept "1–2 days" as well as "1 to
+  2 days" (the live setting is saved with a dash).
+- batch-60: the Account list may start with Batch 72's "My skin" before
+  Delivery details (this test was out of date since Batch 72).
+- batch-70: the first add no longer turns into a stepper; the counter
+  check reads the centred dots.
+
+Test results.
+- npm run build: passed, no errors. Unit tests: 979 of 979 passed.
+- Full npm run verify (once, 51 min): 618 passed, 142 skipped, 5 failed:
+  - batch-51 admin settings: live value "1–2 days" vs the test's "1 to 2
+    days" (not a flake; test fixed as above, file re-run: 20/20 passed).
+  - batch-60 Account order: 0/3 alone, out of date since Batch 72 (test
+    fixed as above, then 10/10 passed).
+  - batch-71 search pill ("Route is already handled"): alone 3/3 passed.
+  - batch-33 admin photo placeholder: alone 3/3 passed.
+  - batch-34 bottom-nav tap: alone 3/3 passed.
+  So the last three are timing flakes in files this fix did not touch.
+- batch-28 (changed tests) alone after the fix: 20/20 passed.
+- one-transition-system alone: 3 of 3 runs passed (12/12 each).
+
+==========================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+==========================================================================
+
+None needed.
+
+==========================================================================
+3. WHAT I COULD NOT FINISH (AND WHERE I HAD TO DIFFER FROM THE BRIEF)
+==========================================================================
+
+Everything in the brief is done. Three places could not be done exactly
+as written, so I changed the smallest thing possible and say why:
+
+a) "Import fix72-1.css right after batch70.css." batch70.css is
+   imported in App.tsx, and main.tsx imports App.tsx BEFORE app.css. So
+   everything imported in App.tsx comes before app.css and loses every
+   tie with it. Imported there, the Save pill stayed orange and the option
+   chips stayed as before (I saw this in the first test run). I import
+   fix72-1.css at the end of main.tsx's stylesheet list instead, so it
+   comes after everything. The CSS itself is as written.
+
+b) The cart bubble. The brief said to add the class glass-cart--pdp when
+   the bubble has never been moved. That class already exists: it is
+   always on the bubble on a product page and keeps it just above the
+   buy bar. So I added a new class, glass-cart--pdp-start, with the
+   brief's top position. It also clears the old bottom position and the
+   slide-down for when the bar is hidden; otherwise the bubble would jump
+   about 80 px as the bar came and went.
+
+c) Two small CSS additions, both needed to show the approved look:
+   - ".pdp-main .variant-selector { gap: 0 }": the selector already put
+     12 px between the rows, so with the brief's 14 px margin the gap
+     would have been 26 px.
+   - ".pdp-main .price-block + .b70-buy { margin-top: 16px }": the
+     brief's ".price-block + * { margin-top: 0 }" also removed the buy
+     row's space on a product with NO options, so Add to Cart sat right
+     against the price (seen in the long-name screenshot).
+
+==========================================================================
+4. WHAT I FOUND ALONG THE WAY
+==========================================================================
+
+- The mirror (product-detail__mirror). It has nothing to do with the
+  hero transition. It is the 24 px strip under the photo, where the
+  sheet's rounded top corners sit: it shows the photo's own bottom edge
+  flipped, so no coloured band shows behind the corners. It is still
+  needed with the full-width photo, so I kept it.
+- "Region · Pink" text after a label: nothing in the current code shows
+  it (it was only in the mockup), so there was nothing to remove.
+- Adding more to a line already in the cart: addItem already adds on top
+  of an existing line (CartContext), so I use addItem in both cases.
+  updateQuantity(inCart + qty) would give the same result.
+- The buy bar's own "Add to Cart" (shown only once the in-page button
+  has scrolled away and the cart has none of this item) uses the same
+  handler, so it also adds the number in the quantity picker.
+- CSS deleted because nothing uses it any more:
+  app.css: .product-detail__backdrop, .product-detail__backdrop--on and
+  its reduced-motion rule; .product-detail__counter (and its gallery
+  z-index rule); .pdp-stock; .pdp-chip; .pdp-chip__dot, --in, --out;
+  .pdp-stock + .trust-plate; .trust-plate, __item, __item + __item,
+  __icon, __text.
+  batch51.css: .pdp-chip__dot--low (.stock-dot--low, used elsewhere,
+  stays); .pdp-eta; .pdp-eta__icon.
+  batch70.css: .pdp-shell .product-detail__counter; the in-page stepper
+  (.b70-buy__step and its buttons, .b70-buy__qty, .b70-buy__max).
+  .pdp-note stays (the note still uses it).
+- Stock colours: --color-stock-in (tokens.css) and --color-stock-low
+  (batch51.css) both exist, so the dots use them.
+
+==========================================================================
+5. DESIGN DECISIONS
+==========================================================================
+
+None beyond the approved design and the three changes in section 3.
+
+==========================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS (NOT DONE)
+==========================================================================
+
+1. "Arrives by" on the product page is always the outside-Dhaka (slower)
+   day. A Dhaka shopper sees a later day than they will really get.
+   Showing the Dhaka day once the shop knows the customer's area (saved
+   address or a one-tap "Delivering to Dhaka / Outside" switch) would
+   promise the faster day and win more sales. Medium.
+2. With the old "N in cart" stepper gone, the first screen no longer
+   says how many of this item are already in the cart (only the bubble
+   badge and the side cart do). A small
+   "2 in cart" caption under the buy row would stop people from adding
+   twice by mistake. Small.
+3. The test photos are placeholders (tests never download real Storage
+   files), so the screenshots cannot show how real photos with white
+   backgrounds look next to the dark mode sheet. Worth one look on a real
+   phone in dark mode. Small.
