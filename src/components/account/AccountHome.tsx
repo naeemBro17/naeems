@@ -14,8 +14,15 @@ import { navigateBack } from '../../lib/viewTransition';
 import { greetingFor, greetingName, memberSince } from '../../lib/greeting';
 import type { Order, OrderItem, OrderStatus } from '../../types';
 import {
-  BackIcon, ChevronIcon, ClockIcon, HeartLineIcon, HelpIcon, LogOutIcon, MoonIcon, OrdersIcon, PinIcon, StarIcon, SunIcon,
+  BackIcon, ChevronIcon, ClockIcon, HeartLineIcon, HelpIcon, LogOutIcon, MoonIcon, OrdersIcon, PinIcon, SkinIcon, StarIcon, SunIcon,
 } from './b68Icons';
+import { skinProfileOf, type SkinProfile } from '../../lib/routine';
+
+/** Batch 72: "Combination · Acne, Hyperpigmentation" (a missing part skipped). */
+export function skinSummary(skin: SkinProfile): string {
+  const concerns = skin.concerns.slice(0, 2).join(', ');
+  return [skin.skinType ?? '', concerns].filter((part) => part !== '').join(' · ') || 'Get products picked for you';
+}
 
 // The pill on the Latest order card, and how far along the 4-step bar is.
 const PILL: Record<OrderStatus, string> = {
@@ -42,7 +49,7 @@ export function AccountHome({
   preordersOpen: boolean;
   onOpenPreorders: () => void;
 }) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isCustomer } = useAuth();
   const { settings, products } = useProducts();
   const { ids: wishIds, ready: wishReady } = useWishlist();
   const { showToast } = useToast();
@@ -88,6 +95,7 @@ export function AccountHome({
   const latest = orders && orders.length > 0 ? orders[0] : null;
   const pieces = latestItems.reduce((sum, item) => sum + item.quantity, 0);
   const area = areaLine(profile.phone, profile.thana, profile.district);
+  const skin = skinProfileOf(profile);
   const waLink = whatsAppUrl(settings.expert_whatsapp_url);
   const step = latest ? STEP[latest.status] : 0;
 
@@ -213,6 +221,21 @@ export function AccountHome({
         {wallet}
 
         <div className="b68-card b68-list" data-testid="account-list">
+          {/* Batch 72: only once migration-064 has added the skin fields. */}
+          {isCustomer && 'skin_type' in profile && (
+            <Link to="/my-skin" className="b68-li" data-testid="account-my-skin">
+              <span className="b68-ic">
+                <SkinIcon />
+              </span>
+              <span>
+                <b>My skin</b>
+                <small>{skin ? skinSummary(skin) : 'Get products picked for you'}</small>
+              </span>
+              <span className="b68-chv">
+                <ChevronIcon size={18} />
+              </span>
+            </Link>
+          )}
           <button type="button" className="b68-li" onClick={() => setIsEditOpen(true)} data-testid="account-delivery">
             <span className="b68-ic">
               <PinIcon />

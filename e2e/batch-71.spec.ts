@@ -131,7 +131,7 @@ test('Home: with the rows on, skin types, concerns, combos and videos sit in the
   await openHome(page);
   const skin = page.getByTestId('home-skin-types');
   await expect(skin.locator('.b71-st')).toHaveText(['Normal', 'Oily', 'Combination', 'Dry']);
-  await expect(skin.locator('.b71-st').first()).toHaveAttribute('href', '/shop?q=Normal');
+  await expect(skin.locator('.b71-st').first()).toHaveAttribute('href', '/shop?skin=Normal');
   await expect(page.getByTestId('home-concerns').locator('.b71-cc b')).toHaveText(['Acne', 'Hyperpigmentation', 'Anti aging', 'Sensitive', 'Dehydrated']);
   const combo = page.getByTestId('home-combo-card');
   await expect(combo).toContainText('Glow starter');
@@ -145,9 +145,9 @@ test('Home: with the rows on, skin types, concerns, combos and videos sit in the
     expect(y, `${id} below the one before`).toBeGreaterThan(last);
     last = y;
   }
-  // A skin type tile searches the shop.
+  // A skin type tile filters the shop (Batch 72: ?skin=, was a ?q= search).
   await skin.locator('.b71-st').nth(1).click();
-  await expect(page).toHaveURL(/\/shop\?q=Oily$/);
+  await expect(page).toHaveURL(/\/shop\?skin=Oily$/);
   await expect(page.getByTestId('shop-query')).toContainText('Results for Oily');
   // Let the Shop's pictures settle before the test (and its routes) ends.
   await page.waitForLoadState('networkidle');

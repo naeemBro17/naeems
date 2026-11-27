@@ -4,6 +4,7 @@ import { BottomSheet } from '../shared/BottomSheet';
 import { ChipGroup } from '../shared/ChipGroup';
 import { applyProductFilters, type ProductFilterState } from '../../hooks/useProductFilters';
 import type { Product } from '../../types';
+import { useRoutineSettings } from '../../hooks/useRoutineSettings';
 
 interface FilterSheetProps {
   isOpen: boolean;
@@ -32,13 +33,14 @@ export function FilterSheet({
   baseProducts,
 }: FilterSheetProps) {
   const [draft, setDraft] = useState(filters);
+  const { concernList } = useRoutineSettings();
 
   // Start every open from whatever is actually applied right now.
   useEffect(() => {
     if (isOpen) setDraft(filters);
   }, [isOpen, filters]);
 
-  const draftCount = draft.brands.length + draft.skinTypes.length;
+  const draftCount = draft.brands.length + draft.skinTypes.length + draft.concerns.length;
   const resultCount = useMemo(
     () => applyProductFilters(baseProducts, draft).length,
     [baseProducts, draft]
@@ -49,7 +51,7 @@ export function FilterSheet({
     onClose();
   };
 
-  const handleClear = () => setDraft({ brands: [], skinTypes: [] });
+  const handleClear = () => setDraft({ brands: [], skinTypes: [], concerns: [] });
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Filters">
@@ -68,6 +70,13 @@ export function FilterSheet({
           options={SKIN_TYPES}
           selected={draft.skinTypes}
           onChange={(skinTypes) => setDraft((d) => ({ ...d, skinTypes }))}
+        />
+
+        <ChipGroup
+          label="Concern"
+          options={concernList}
+          selected={draft.concerns}
+          onChange={(concerns) => setDraft((d) => ({ ...d, concerns }))}
         />
 
         <div className="filter-sheet__footer">

@@ -15,6 +15,8 @@ import { BrandRow } from '../components/viewer/BrandRow';
 import { HomeCampaigns } from '../components/campaign/HomeCampaigns';
 import { HomeTip } from '../components/home/HomeTip';
 import { BestSellers } from '../components/home/BestSellers';
+import { PickedForYou } from '../components/home/PickedForYou';
+import { pickedForYou, pickedForYouLine, skinProfileOf } from '../lib/routine';
 import { BestCombos, Concerns, ExpertCard, SectionHead, SkinTypes, Videos } from '../components/home/HomeSections';
 import { EditModeToggle } from '../components/admin/EditModeToggle';
 import type { Product } from '../types';
@@ -73,6 +75,14 @@ export function HomePage() {
   const concerns = useMemo(() => parseConcerns(settings.home_concerns), [settings.home_concerns]);
   const comboCodes = useMemo(() => parseComboCodes(settings.home_combo_codes), [settings.home_combo_codes]);
   const videos = useMemo(() => parseVideos(settings.home_videos), [settings.home_videos]);
+  // Batch 72: a customer who saved "My skin" sees "Picked for you" in Best
+  // sellers' place (Best sellers again when fewer than 3 products fit).
+  const { profile, isCustomer } = useAuth();
+  const skin = useMemo(() => (isCustomer ? skinProfileOf(profile) : null), [isCustomer, profile]);
+  const picked = useMemo(
+    () => (skin ? pickedForYou(activeProducts, skin, categories) : []),
+    [skin, activeProducts, categories]
+  );
 
   const openCategory = (id: string | null) => {
     const slug = id === null ? null : categories.find((c) => c.id === id)?.slug ?? null;
@@ -127,11 +137,15 @@ export function HomePage() {
       {isOn(settings.home_show_skin_types) && <SkinTypes />}
       {isOn(settings.home_show_concerns) && <Concerns concerns={concerns} />}
 
-      {bestSellers.length > 0 && (
+      {skin && picked.length > 0 ? (
+        <PickedForYou picked={picked} line={pickedForYouLine(skin)} />
+      ) : (
+        bestSellers.length > 0 && (
         <section aria-label="Best sellers" data-testid="home-best">
           <SectionHead title="Best sellers" link={{ label: 'See all', to: '/shop' }} />
           <BestSellers products={bestSellers} />
         </section>
+        )
       )}
 
       {isOn(settings.home_show_combos) && comboCodes.length > 0 && <BestCombos codes={comboCodes} />}

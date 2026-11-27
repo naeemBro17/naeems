@@ -11,6 +11,7 @@ import { cardImage } from '../../lib/productImages';
 import { formatTaka } from '../../lib/format';
 import { countPieces } from '../../lib/cartTotals';
 import { closeSideCart, lineKey, useSideCart } from '../../lib/sideCart';
+import { SideCartRoutine, countCartOpen } from './SideCartRoutine';
 import type { LimitReason } from '../../lib/sellRules';
 import type { CartItem } from '../../features/checkout/types';
 
@@ -23,6 +24,7 @@ export function showsSideCart(pathname: string): boolean {
     pathname === '/account' ||
     pathname.startsWith('/orders') ||
     pathname === '/wallet' ||
+    pathname === '/my-skin' ||
     pathname.startsWith('/admin') ||
     pathname === '/wholesaler-access'
   );
@@ -126,6 +128,12 @@ function SideCartPanel({ pathname }: { pathname: string }) {
   const afterCloseRef = useRef<(() => void) | null>(null);
 
   const count = countPieces(items);
+  // Batch 72: this browser's side-cart opens (the question shows on every
+  // 4th). Counted before the first paint of an open; 0 while closed.
+  const [openCount, setOpenCount] = useState(0);
+  useLayoutEffect(() => {
+    setOpenCount(open ? countCartOpen() : 0);
+  }, [open]);
 
   // Any page change closes it.
   const firstPath = useRef(true);
@@ -286,7 +294,8 @@ function SideCartPanel({ pathname }: { pathname: string }) {
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     if (!open || (e.pointerType === 'mouse' && e.button !== 0)) return;
     const target = e.target as Element;
-    if (target.closest('button, a, .b70-mini')) return;
+    // Batch 72: the routine row scrolls sideways by itself, never a swipe.
+    if (target.closest('button, a, .b70-mini, .b72-rcards')) return;
     dragRef.current = {
       pointerId: e.pointerId,
       x: e.clientX,
@@ -396,7 +405,8 @@ function SideCartPanel({ pathname }: { pathname: string }) {
             {lines.length === 0 ? (
               <p className="b70-empty">Your cart is empty.</p>
             ) : (
-              lines.map((item) => {
+              <>
+              {lines.map((item) => {
                 const key = lineKey(item.product.id, item.variantId);
                 const isHighlighted = mode === 'added' && key === highlightKey;
                 const image = item.variantImage ?? cardImage(item.product);
@@ -466,7 +476,17 @@ function SideCartPanel({ pathname }: { pathname: string }) {
                     </div>
                   </div>
                 );
-              })
+              })}
+              <SideCartRoutine
+                lines={lines}
+                anchorKey={mode === 'added' ? highlightKey : null}
+                openCount={openCount}
+                onLeave={(path) => {
+                  afterCloseRef.current = () => navigate(path);
+                  closeSideCart();
+                }}
+              />
+              </>
             )}
           </div>
 

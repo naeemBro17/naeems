@@ -1,0 +1,54 @@
+/* Batch 72: side cart routine + question, My skin, Picked for you (approved mockup). */
+:root { --b72-good: #1F8A47; --b72-good-soft: #E6F0E8; --b72-ask: #FFF1EA; }
+:root[data-theme='dark'] { --b72-good: #5FDC94; --b72-good-soft: rgba(120, 175, 140, 0.16); --b72-ask: rgba(255, 122, 69, 0.14); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { --b72-good: #5FDC94; --b72-good-soft: rgba(120, 175, 140, 0.16); --b72-ask: rgba(255, 122, 69, 0.14); }
+}
+
+.b72-rt { margin-top: 14px; }
+.b72-rt h5 { margin: 0 0 8px; font-size: 14px; font-weight: 800; color: var(--color-text-primary); display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.b72-rt h5 small { font-size: 12px; color: var(--color-text-muted); font-weight: 600; white-space: nowrap; }
+.b72-rcards { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; touch-action: pan-x pan-y; }
+.b72-rcards::-webkit-scrollbar { display: none; }
+.b72-rc { flex: none; width: 160px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.b72-rc__img { width: 44px; height: 44px; border-radius: 10px; background: var(--color-bg-secondary); display: grid; place-items: center; overflow: hidden; }
+.b72-rc__img img { width: 100%; height: 100%; object-fit: contain; }
+.b72-rc p { margin: 0; min-width: 0; font-size: 11.5px; font-weight: 600; line-height: 1.25; color: var(--color-text-primary); }
+.b72-rc em { display: block; font-style: normal; font-size: 10.5px; color: var(--color-text-muted); margin-bottom: 2px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b72-rc__n { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: inherit; text-decoration: none; }
+.b72-rc b { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 13px; margin-top: 3px; white-space: nowrap; }
+.b72-rc__add { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); display: grid; place-items: center; font-size: 16px; line-height: 1; cursor: pointer; }
+.b72-rc__add:active { transform: scale(0.92); }
+
+.b72-ask { margin-top: 14px; border-radius: 16px; padding: 12px 14px; background: var(--b72-ask); display: flex; align-items: center; justify-content: space-between; gap: 10px; animation: b72-fade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.b72-ask p { margin: 0; font-size: 13.5px; font-weight: 700; line-height: 1.3; color: var(--color-text-primary); min-width: 0; }
+.b72-ask small { display: block; font-weight: 500; color: var(--color-text-secondary); font-size: 12px; margin-top: 2px; }
+.b72-ask__go { flex: none; height: 32px; padding: 0 12px; border-radius: 16px; background: var(--color-text-primary); color: var(--color-bg); font-weight: 700; font-size: 12.5px; line-height: 32px; text-decoration: none; white-space: nowrap; }
+@keyframes b72-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .b72-ask { animation: none; } }
+
+/* My skin (mockup screen 4, top part). */
+.b72-skin { padding: 0 16px calc(40px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
+.b72-prog { display: flex; gap: 6px; margin-top: 4px; }
+.b72-prog i { flex: 1; height: 4px; border-radius: 2px; background: var(--color-border); transition: background-color 0.25s ease; }
+.b72-prog i.is-on { background: var(--color-text-primary); }
+.b72-q { margin-top: 18px; }
+.b72-q h2 { margin: 0 0 4px; font-size: 15px; font-weight: 800; color: var(--color-text-primary); }
+.b72-q p { margin: 0 0 10px; font-size: 12.5px; color: var(--color-text-muted); }
+.b72-st4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.b72-st4 button { height: 40px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 12px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-weight: 600; font-size: 12.5px; line-height: 1; font-family: inherit; cursor: pointer; min-width: 0; }
+.b72-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.b72-chips button { height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-weight: 600; font-size: 13px; line-height: 34px; font-family: inherit; cursor: pointer; }
+.b72-st4 button[aria-pressed='true'], .b72-chips button[aria-pressed='true'] { background: var(--color-text-primary); border-color: var(--color-text-primary); color: var(--color-bg); }
+.b72-chips.is-full { animation: b72-shake 0.3s ease both; }
+@keyframes b72-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.b72-save { margin-top: 24px; width: 100%; height: 52px; border: 0; border-radius: 16px; background: var(--color-accent); color: #fff; font-weight: 700; font-size: 16px; line-height: 1; font-family: inherit; cursor: pointer; }
+.b72-save:disabled { opacity: 0.45; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .b72-chips.is-full { animation: none; } .b72-prog i { transition: none; } }
+@media (max-width: 360px) { .b72-st4 button { font-size: 11.5px; } }
+
+/* Home: Picked for you (mockup screen 4, bottom part). */
+.b72-pf-line { margin: -6px 0 10px; font-size: 12.5px; color: var(--color-text-muted); }
+.b72-why { display: inline-block; max-width: 100%; font-size: 10.5px; font-weight: 700; color: var(--b72-good); background: var(--b72-good-soft); padding: 2px 7px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Every Picked card has a badge, so the names stay level across the row. */
+.b72-why + .b71-pc__n { margin-top: 5px; }

@@ -622,6 +622,19 @@ test.describe('Part 3 — card cart button becomes a stepper', () => {
 
 type Row = Record<string, unknown> & { id: string; name: string; slug: string };
 
+/** Batch 72: routine_fallback '0' and no routine rules, in this test browser only. */
+async function routineFallbackOff(page: Page): Promise<void> {
+  await page.route(/\/rest\/v1\/app_settings\?/, async (route: Route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const res = await route.fetch();
+    const rows = ((await res.json()) as { key: string; value: string }[]).filter(
+      (r) => r.key !== 'routine_fallback' && r.key !== 'routine_rules'
+    );
+    rows.push({ key: 'routine_fallback', value: '0' }, { key: 'routine_rules', value: '[]' });
+    await route.fulfill({ response: res, json: rows });
+  });
+}
+
 /** Serves the real catalogue with a few products rewritten into a known
  *  arrangement, so the order rules can be checked exactly. */
 async function seedCatalogue(page: Page): Promise<{ current: Row; expected: string[]; excluded: string[] }> {
@@ -657,6 +670,10 @@ async function seedCatalogue(page: Page): Promise<{ current: Row; expected: stri
     );
     await route.fulfill({ response, json: patched });
   });
+  // Batch 72: with "same concern or brand" on, this row becomes "Complete
+  // your routine". These tests are about "You may also like", so the
+  // fallback is off (inside this test browser only).
+  await routineFallbackOff(page);
 
   return {
     current,
@@ -682,6 +699,7 @@ test.describe('Part 4 — You may also like', () => {
 
   test('tapping a card opens it; Back (phone and ←) returns to the previous product at the same scroll position', async ({ page }) => {
     for (const kind of ['phone', 'in-app'] as const) {
+      await routineFallbackOff(page);
       await page.goto('/shop');
       await expect(page.locator('.product-card').first()).toBeVisible();
       await page.goto('/product/aveeno-baby-daily-moisture-lightly-scented-wash-shampoo-236ml');

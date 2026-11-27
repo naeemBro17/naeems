@@ -66,6 +66,7 @@ export const AccountPage = routePage(() => import('../pages/AccountPage'), (m) =
 export const ComboPage = routePage(() => import('../pages/ComboPage'), (m) => m.ComboPage);
 export const WishlistPage = routePage(() => import('../pages/WishlistPage'), (m) => m.WishlistPage);
 export const WalletPage = routePage(() => import('../pages/WalletPage'), (m) => m.WalletPage);
+export const MySkinPage = routePage(() => import('../pages/MySkinPage'), (m) => m.MySkinPage);
 export const OrdersListPage = routePage(() => import('../pages/OrdersListPage'), (m) => m.OrdersListPage);
 export const OrderDetailPage = routePage(() => import('../pages/OrderDetailPage'), (m) => m.OrderDetailPage);
 export const NotFoundPage = routePage(() => import('../pages/NotFoundPage'), (m) => m.NotFoundPage);
@@ -99,6 +100,7 @@ export function pageForPath(pathname: string): RoutePage | null {
     '/wishlist': WishlistPage,
     '/orders': OrdersListPage,
     '/wallet': WalletPage,
+    '/my-skin': MySkinPage,
     '/return-policy': ReturnPolicyPage,
     '/delivery': DeliveryPolicyPage,
     '/terms': TermsPage,

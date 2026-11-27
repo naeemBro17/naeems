@@ -4,7 +4,7 @@ import { categoryCircleImage } from '../../lib/smallImages';
 import { useAppNavigate as useNavigate } from '../../hooks/useAppNavigate';
 import type { Category, Product } from '../../types';
 import { normalizeText } from '../../lib/format';
-import { categoryPath } from '../../lib/categoryFilter';
+import { categoryPath, productCategoryIds } from '../../lib/categoryFilter';
 import { applyIdOrder, parseIdList } from '../../lib/settingsLists';
 import { useProducts } from '../../contexts/ProductContext';
 import { hadContentLastTime, rememberHadContent } from '../../lib/lastSeen';
@@ -259,11 +259,11 @@ export function BrowseCircles({
     const freshCategoryIds = new Set<string>();
     const newestCutoff = Date.now() - NEW_WINDOW_MS;
 
+    // Batch 72: a product counts for its main and its extra categories.
     for (const product of products) {
-      if (product.category_id === null) continue;
-      if (product.is_featured) featuredCategoryIds.add(product.category_id);
-      if (Date.parse(product.created_at) >= newestCutoff) {
-        freshCategoryIds.add(product.category_id);
+      for (const id of productCategoryIds(product)) {
+        if (product.is_featured) featuredCategoryIds.add(id);
+        if (Date.parse(product.created_at) >= newestCutoff) freshCategoryIds.add(id);
       }
     }
 

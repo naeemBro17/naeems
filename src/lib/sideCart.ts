@@ -56,6 +56,13 @@ export function afterAdd(productId: string, variantId: string | null | undefined
   return true;
 }
 
+/** Batch 72: an add from inside the open panel ("Complete your routine"):
+ *  it stays open and shows the new line highlighted, like any other add. */
+export function showAddedInPanel(productId: string, variantId: string | null | undefined): void {
+  markShown();
+  set({ ...state, open: true, mode: 'added', highlightKey: lineKey(productId, variantId) });
+}
+
 export function openSideCart(): void {
   set({ ...state, open: true, mode: 'cart', highlightKey: null });
 }

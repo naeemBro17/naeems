@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { MoneyInput } from '../shared/MoneyInput';
 import { supabase, STORAGE_BUCKET, storagePathFromUrl, productCardPath, smallCopyPath } from '../../lib/supabase';
 import { slugify } from '../../lib/format';
@@ -7,7 +7,11 @@ import { nextSku } from '../../lib/sku';
 import { statusFromQuantity } from '../../lib/stockStatus';
 import { productImages, generateCardThumb, isSmallCopy, uploadProductPhoto } from '../../lib/productImages';
 import { describeUploadError } from '../../lib/uploadError';
-import { sanitizeSkinValues, SKIN_CONDITIONS, SKIN_TYPES } from '../../lib/skinFields';
+import { sanitizeSkinValues, SKIN_TYPES } from '../../lib/skinFields';
+import { CONCERN_MAX, matchConcerns, sameConcern, withConcern } from '../../lib/concerns';
+import { saveSettings } from '../../lib/settingsLists';
+import { useRoutineSettings } from '../../hooks/useRoutineSettings';
+import '../../styles/batch72-admin.css';
 import { useProducts } from '../../contexts/ProductContext';
 import { useToast } from '../../hooks/useToast';
 import { distinctRegions } from '../../lib/variants';
@@ -15,7 +19,7 @@ import { ImageUploader } from './ImageUploader';
 import { RichTextField } from './RichTextField';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { LONG_TEXTS, cleanLongText, emptiedLongTexts } from '../../lib/richText';
-import { ChipGroup, GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
+import { GuidedField, SheetFooter, Toggle } from './edit-sheets/SheetChrome';
 import { VariantEditor } from './edit-sheets/VariantEditor';
 import { RemoveStockPanel } from './money/RemoveStockPanel';
 import { PackSizePanel } from './inventory/PackSizePanel';
@@ -58,7 +62,6 @@ export interface ProductFormState {
 export const LOADING_TEXT_LABEL = 'Loading text…';
 
 const NOTE_MAX_LENGTH = 200;
-const CREATE_CATEGORY_VALUE = '__create__';
 /** Retries when a concurrent insert claims the generated SKU first. */
 const SKU_ATTEMPTS = 5;
 /** Postgres unique_violation. */
@@ -95,6 +98,7 @@ function emptyForm(): ProductFormData {
     skin_types: [],
     skin_conditions: [],
     keep_selling: true,
+    extra_category_ids: [],
   };
 }
 
@@ -133,10 +137,26 @@ function formFromProduct(product: Product): ProductFormData {
     size: product.size ?? '',
     is_featured: product.is_featured,
     is_active: product.is_active,
-    skin_types: sanitizeSkinValues(product.skin_types, SKIN_TYPES),
-    skin_conditions: sanitizeSkinValues(product.skin_conditions, SKIN_CONDITIONS),
+    ...skinFieldsOf(product),
     keep_selling: product.keep_selling !== false,
+    extra_category_ids: product.extra_category_ids ?? [],
   };
+}
+
+/**
+ * Batch 72: the four skin types, and every concern tag the product has
+ * (never dropped). Until migration-064 has moved them, an old "All Skin
+ * Types" reads as all four and an old "Sensitive" type as the concern, the
+ * same way the SQL moves them, so a save before the SQL loses nothing.
+ */
+function skinFieldsOf(product: Product): Pick<ProductFormData, 'skin_types' | 'skin_conditions'> {
+  const oldTypes = product.skin_types ?? [];
+  const skin_types = oldTypes.includes('All Skin Types') ? [...SKIN_TYPES] : sanitizeSkinValues(oldTypes, SKIN_TYPES);
+  const skin_conditions = [...(product.skin_conditions ?? [])];
+  if (oldTypes.includes('Sensitive') && !skin_conditions.some((c) => sameConcern(c, 'Sensitive'))) {
+    skin_conditions.push('Sensitive');
+  }
+  return { skin_types, skin_conditions };
 }
 
 function validate(form: ProductFormData): FieldErrors {
@@ -206,6 +226,10 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  // Batch 72: "Where it shows" — the concern being typed.
+  const { concernList } = useRoutineSettings();
+  const [concernText, setConcernText] = useState('');
+  const [isSavingConcern, setIsSavingConcern] = useState(false);
   // Fix (rich-text editor) Part 1: Save waits until every long-text editor
   // shows the product's text, and asks before wiping one.
   const [readyTexts, setReadyTexts] = useState<ReadonlySet<string>>(() => new Set());
@@ -236,11 +260,15 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
     setUploadError(null);
     setShowNewCategory(false);
     setNewCategoryName('');
+    setConcernText('');
   }, [product]);
 
   // Batch 51: the switch shows (and is saved) once migration-052 has
   // added products.keep_selling — products_view then returns it.
   const keepSellingReady = products.some((p) => p.keep_selling !== undefined);
+  // Batch 72: more than one category once migration-064 has added
+  // products.extra_category_ids (products_view then returns it).
+  const extraCategoriesReady = products.some((p) => p.extra_category_ids !== undefined);
 
   const errors = validate(form);
   const hasBlockingErrors = Object.keys(errors).length > 0;
@@ -264,12 +292,76 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
   const fieldError = (field: FieldName): string | null =>
     touched[field] && errors[field] ? errors[field] ?? null : null;
 
-  const handleCategoryChange = (value: string) => {
-    if (value === CREATE_CATEGORY_VALUE) {
-      setShowNewCategory(true);
+  // Batch 72: the picked categories, the main one (category_id) first.
+  const pickedCategories = form.category_id
+    ? [form.category_id, ...form.extra_category_ids.filter((id) => id !== form.category_id)]
+    : form.extra_category_ids;
+
+  const setPickedCategories = (ids: string[]) =>
+    setForm((prev) => ({ ...prev, category_id: ids[0] ?? '', extra_category_ids: ids.slice(1) }));
+
+  /** Adds a category to the end of the picked list (before the SQL has
+   *  run: replaces the one picked). */
+  const addPickedCategory = (id: string) => {
+    if (pickedCategories.includes(id)) return;
+    setPickedCategories(extraCategoriesReady ? [...pickedCategories, id] : [id]);
+  };
+
+  const toggleCategory = (id: string) => {
+    if (pickedCategories.includes(id)) setPickedCategories(pickedCategories.filter((c) => c !== id));
+    else addPickedCategory(id);
+  };
+
+  const toggleSkinType = (type: string) =>
+    setField(
+      'skin_types',
+      form.skin_types.includes(type) ? form.skin_types.filter((t) => t !== type) : [...form.skin_types, type]
+    );
+
+  const typedConcern = concernText.trim().slice(0, CONCERN_MAX);
+  const concernMatches =
+    typedConcern === ''
+      ? []
+      : matchConcerns(concernList, typedConcern)
+          .filter((name) => !form.skin_conditions.some((c) => sameConcern(c, name)))
+          .slice(0, 6);
+  const canAddNewConcern = typedConcern !== '' && !concernList.some((name) => sameConcern(name, typedConcern));
+
+  const addConcern = (name: string) => {
+    setForm((prev) =>
+      prev.skin_conditions.some((c) => sameConcern(c, name))
+        ? prev
+        : { ...prev, skin_conditions: [...prev.skin_conditions, name] }
+    );
+    setConcernText('');
+  };
+
+  const removeConcern = (name: string) =>
+    setField('skin_conditions', form.skin_conditions.filter((c) => c !== name));
+
+  /** "+ Add … as a new concern": into the shop's concern list, then this product. */
+  const addNewConcern = async () => {
+    if (!canAddNewConcern || isSavingConcern) return;
+    const name = typedConcern;
+    setIsSavingConcern(true);
+    const error = await saveSettings({ concern_list: JSON.stringify(withConcern(concernList, name)) });
+    if (error) {
+      setIsSavingConcern(false);
+      console.error('Saving concern_list failed:', error);
+      showToast('Could not save. Please try again.', 'error');
       return;
     }
-    setField('category_id', value);
+    await refetch();
+    setIsSavingConcern(false);
+    addConcern(name);
+  };
+
+  const handleConcernKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    // Never submits the whole form from here.
+    e.preventDefault();
+    if (concernMatches.length > 0) addConcern(concernMatches[0]);
+    else if (canAddNewConcern) void addNewConcern();
   };
 
   const handleSaveNewCategory = async () => {
@@ -287,7 +379,7 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       return;
     }
     await refetch();
-    setField('category_id', data.id as string);
+    addPickedCategory(data.id as string);
     setShowNewCategory(false);
     setNewCategoryName('');
     showToast(`Category '${name}' created`);
@@ -446,6 +538,8 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       is_active: form.is_active,
       // Batch 51: only once migration-052 has added the column.
       ...(keepSellingReady ? { keep_selling: form.keep_selling } : {}),
+      // Batch 72: only once migration-064 has added the column.
+      ...(extraCategoriesReady ? { extra_category_ids: form.category_id === '' ? [] : form.extra_category_ids } : {}),
     };
 
     let result: { error: { code?: string } | null };
@@ -573,56 +667,6 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
               Pick a brand from the list. A new name makes a new brand (set its logo in Brands).
             </p>
           </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor="pf-category">
-              Category
-            </label>
-            <select
-              id="pf-category"
-              className="form-input form-select"
-              value={form.category_id}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-            >
-              <option value="">No category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-              <option value={CREATE_CATEGORY_VALUE}>+ Create new category</option>
-            </select>
-            {showNewCategory && (
-              <div className="inline-mini-form">
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="New category name"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  aria-label="New category name"
-                />
-                <button
-                  type="button"
-                  className="button button--primary button--small"
-                  onClick={handleSaveNewCategory}
-                  disabled={isSavingCategory || newCategoryName.trim() === ''}
-                >
-                  {isSavingCategory ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  className="button button--secondary button--small"
-                  onClick={() => {
-                    setShowNewCategory(false);
-                    setNewCategoryName('');
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
         {product && (
@@ -741,6 +785,136 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
               {fieldError(field)}
             </p>
           ) : null
+        )}
+      </FormSection>
+
+      {/* Batch 72: categories (pick many), skin type and concerns, in one
+          card (Naeem's approved mockup, screen 1). */}
+      <FormSection id="where" title="Where it shows">
+        <p className="b72a-hint" data-testid="pf-categories-hint">
+          {extraCategoriesReady
+            ? 'Pick every category it belongs to. The first one is the main category.'
+            : 'Run the Batch 72 SQL to pick more than one category.'}
+        </p>
+        <div className="b72a-chips" data-testid="pf-categories">
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="b72a-chip"
+              data-id={c.id}
+              aria-pressed={pickedCategories.includes(c.id)}
+              onClick={() => toggleCategory(c.id)}
+            >
+              {c.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="b72a-chip b72a-chip--add"
+            aria-pressed={showNewCategory}
+            onClick={() => setShowNewCategory((open) => !open)}
+          >
+            + Category
+          </button>
+        </div>
+        {showNewCategory && (
+          <div className="inline-mini-form">
+            <input
+              type="text"
+              className="form-input"
+              placeholder="New category name"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              aria-label="New category name"
+            />
+            <button
+              type="button"
+              className="button button--primary button--small"
+              onClick={handleSaveNewCategory}
+              disabled={isSavingCategory || newCategoryName.trim() === ''}
+            >
+              {isSavingCategory ? <span className="spinner" aria-hidden="true" /> : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => {
+                setShowNewCategory(false);
+                setNewCategoryName('');
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        <p className="b72a-hint b72a-hint--gap">Skin type</p>
+        <div className="b72a-st4" data-testid="pf-skin-types">
+          {SKIN_TYPES.map((type) => (
+            <button
+              key={type}
+              type="button"
+              aria-pressed={form.skin_types.includes(type)}
+              onClick={() => toggleSkinType(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        <p className="b72a-hint b72a-hint--gap">Concerns (shoppers find it by these)</p>
+        {form.skin_conditions.length > 0 && (
+          <div className="b72a-chips" data-testid="pf-concerns">
+            {form.skin_conditions.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="b72a-chip"
+                aria-pressed="true"
+                onClick={() => removeConcern(name)}
+                aria-label={`Remove ${name}`}
+              >
+                {name}
+                <span className="b72a-chip__x" aria-hidden="true">
+                  ×
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="b72a-field">
+          <input
+            type="text"
+            value={concernText}
+            maxLength={CONCERN_MAX}
+            placeholder="Type to find or add"
+            onChange={(e) => setConcernText(e.target.value)}
+            onKeyDown={handleConcernKey}
+            aria-label="Concern"
+            data-testid="pf-concern-input"
+          />
+          <em aria-hidden="true">type to find or add</em>
+        </div>
+        {(concernMatches.length > 0 || canAddNewConcern) && (
+          <div className="b72a-sugg" data-testid="pf-concern-suggestions">
+            {concernMatches.map((name) => (
+              <button key={name} type="button" onClick={() => addConcern(name)}>
+                {name}
+              </button>
+            ))}
+            {canAddNewConcern && (
+              <button
+                type="button"
+                className="b72a-sugg__new"
+                onClick={() => void addNewConcern()}
+                disabled={isSavingConcern}
+                data-testid="pf-concern-new"
+              >
+                + Add "{typedConcern}" as a new concern
+              </button>
+            )}
+          </div>
         )}
       </FormSection>
 
@@ -953,22 +1127,6 @@ export function ProductEditorForm({ product, onSaved, onCancel, footerVariant, f
       <div className="pform-more" role="separator" aria-label="More details">
         MORE DETAILS
       </div>
-
-      <FormSection id="search" title="For search and filters">
-        <ChipGroup
-          label="Skin Type (optional)"
-          options={SKIN_TYPES}
-          selected={form.skin_types}
-          onChange={(skin_types) => setField('skin_types', skin_types)}
-        />
-
-        <ChipGroup
-          label="Skin Condition (optional)"
-          options={SKIN_CONDITIONS}
-          selected={form.skin_conditions}
-          onChange={(skin_conditions) => setField('skin_conditions', skin_conditions)}
-        />
-      </FormSection>
 
       <FormSection id="reference" title="Note and reference">
         <div className="form-field">

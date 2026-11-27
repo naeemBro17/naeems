@@ -24,7 +24,6 @@ export type AdminSection =
   | 'campaigns'
   | 'wholesalers'
   | 'reviews'
-  | 'bento'
   | 'design'
   | 'team'
   | 'activity'
@@ -120,7 +119,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'campaigns', label: 'Campaigns', icon: 'campaigns', group: 'sales' },
   { id: 'wholesalers', label: 'Wholesalers', icon: 'wholesalers', group: 'sales' },
   { id: 'reviews', label: 'Reviews', icon: 'reviews', group: 'sales' },
-  { id: 'bento', label: 'Bento Tiles', icon: 'bento', group: 'design' },
   { id: 'design', label: 'Banner & Texts', moreLabel: 'Banner, Expert page, Texts', icon: 'design', group: 'design' },
   { id: 'team', label: 'Team', icon: 'team', group: 'admin', superAdminOnly: true },
   { id: 'activity', label: 'Activity Log', icon: 'activity', group: 'admin', superAdminOnly: true },

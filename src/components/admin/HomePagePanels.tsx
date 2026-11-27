@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useProducts } from '../../contexts/ProductContext';
-import { useToast } from '../../hooks/useToast';
-import { saveSettings } from '../../lib/settingsLists';
 import { listCombos, type ComboRow } from '../../lib/combos';
 import {
   CONCERN_COLOURS,
@@ -23,31 +21,12 @@ import {
   type HomeVideo,
   type SkinTip,
 } from '../../lib/homeContent';
-import type { AppSettings } from '../../types';
 import '../../styles/batch71-admin.css';
 import { Switch } from '../shared/Switch';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { SaveRow, useSaveKey } from './useSaveKey';
 import { TipText, tipLabel } from '../home/HomeTip';
 
-type HomeKey = 'home_tips' | 'home_show_skin_types' | 'home_show_concerns' | 'home_show_combos' | 'home_concerns' | 'home_combo_codes' | 'home_videos';
-
-/** Saves one app_settings row, reloads the shop's settings, says so. */
-function useSaveKey() {
-  const { refetch } = useProducts();
-  const { showToast } = useToast();
-  return async (key: HomeKey, value: string): Promise<boolean> => {
-    const values: Partial<Record<keyof AppSettings, string>> = { [key]: value };
-    const error = await saveSettings(values);
-    if (error) {
-      console.error(`Saving ${key} failed:`, error);
-      showToast('Could not save. Please try again.', 'error');
-      return false;
-    }
-    await refetch();
-    showToast('Saved');
-    return true;
-  };
-}
 
 function move<T>(list: T[], index: number, by: -1 | 1): T[] {
   const to = index + by;
@@ -72,16 +51,6 @@ function UpDown({ index, count, onMove, label }: { index: number; count: number;
         </svg>
       </button>
     </span>
-  );
-}
-
-function SaveRow({ busy, dirty, onSave }: { busy: boolean; dirty: boolean; onSave: () => void }) {
-  return (
-    <div className="b71a-save">
-      <button type="button" className="button button--primary" onClick={onSave} disabled={busy || !dirty}>
-        {busy ? <span className="spinner" aria-hidden="true" /> : 'Save'}
-      </button>
-    </div>
   );
 }
 
