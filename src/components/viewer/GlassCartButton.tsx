@@ -34,7 +34,7 @@ export interface BubblePlace {
 
 export const BUBBLE_KEY = 'naeems.cartBubble';
 /** A press that moves this far (px) is a drag, not a tap. */
-const DRAG_START_PX = 6;
+const DRAG_START_PX = 10;
 /** Gap to the screen edge after the snap. */
 const EDGE_PX = 12;
 /** The product page's top bar. */
@@ -108,12 +108,18 @@ function placeToPoint(
   const colLeft = Math.max(0, (vw - COLUMN_PX) / 2);
   const colRight = colLeft + Math.min(vw, COLUMN_PX);
   const x = place.side === 'left' ? colLeft + EDGE_PX + insets.left : colRight - EDGE_PX - size - insets.right;
+  const nav = showsBottomNav(pathname) !== null && navShown
+    ? document.querySelector<HTMLElement>('[data-testid="bottom-nav"]')
+    : null;
+  const navReserve = nav ? nav.offsetHeight + (parseFloat(window.getComputedStyle(nav).bottom) || 0) + EDGE_PX : null;
   const bottomReserve =
-    showsBottomNav(pathname) !== null && navShown
-      ? insets.bottomNav + EDGE_PX
-      : isProductPage(pathname) && bar === 'shown'
-        ? 14 + 66 + 11 + insets.bottom
-        : EDGE_PX + insets.bottom;
+    navReserve !== null
+      ? navReserve
+      : showsBottomNav(pathname) !== null && navShown
+        ? insets.bottomNav + EDGE_PX
+        : isProductPage(pathname) && bar === 'shown'
+          ? 14 + 66 + 11 + insets.bottom
+          : EDGE_PX + insets.bottom;
   const minY = HEADER_PX + 8 + insets.top;
   const maxY = Math.max(minY, vh - bottomReserve - size);
   return { x, y: Math.min(maxY, Math.max(minY, place.y * vh)) };
@@ -147,7 +153,7 @@ interface Press {
  *
  * Rendered next to the bottom nav, outside the page's animated subtree, so
  * its fixed position is never thrown off by a transform (see App.tsx). It
- * sits above the page but below the bottom nav, sheets and dialogs.
+ * sits above the page and the bottom nav (Fix 71.1), below sheets and dialogs.
  */
 export function GlassCartButton() {
   const location = useLocation();
@@ -250,6 +256,11 @@ export function GlassCartButton() {
     pressRef.current = null;
     if (!press.dragging) return;
     suppressClickRef.current = true;
+    // Fix 71.1: if no click follows the drag (usual after a long move), forget
+    // the flag, or the shopper's next real tap would be swallowed.
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 350);
     window.cancelAnimationFrame(frameRef.current);
     const size = e.currentTarget.offsetWidth;
     const vw = document.documentElement.clientWidth;

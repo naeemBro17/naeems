@@ -1,7 +1,7 @@
 /* Batch 71: the new Home, the Shop header and the floating bottom bar.
    The blocks marked "exact" are Naeem's approved mockup, unchanged. */
 
-/* ---------- Floating bottom bar (exact) ---------- */
+/* ---------- Floating bottom bar (Fix 71.1: liquid glass pill) ---------- */
 
 .b71-nav {
   position: fixed;
@@ -15,17 +15,34 @@
   border-radius: 30px;
   background: var(--b71-glass);
   border: 1px solid var(--b71-glass-line);
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
   transform: translate3d(-50%, 0, 0);
   transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.3s ease;
 }
 .b71-nav--away { transform: translate3d(-50%, 120px, 0); opacity: 0; pointer-events: none; }
-.b71-nav a {
+/* The glass pill behind the active tab; moved by transform only. */
+.b71-nav__pill {
+  position: absolute;
+  top: 6px;
+  left: 0;
   height: 48px;
-  min-width: 48px;
-  padding: 0 14px;
+  border-radius: 24px;
+  background: var(--b71-pill);
+  border: 1px solid var(--b71-pill-line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14), inset 0 1px 1.5px rgba(255, 255, 255, 0.75);
+  transform-origin: 0 50%;
+  will-change: transform;
+  pointer-events: none;
+  z-index: 0;
+}
+.b71-nav a {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 52px;
+  height: 48px;
+  padding: 0;
   border-radius: 24px;
   display: flex;
   align-items: center;
@@ -34,16 +51,35 @@
   color: var(--color-text-secondary);
   font-size: 14px;
   font-weight: 700;
+  white-space: nowrap;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease;
 }
-.b71-nav a svg { width: 21px; height: 21px; }
-.b71-nav a[aria-current='page'] { background: var(--color-text-primary); color: var(--color-bg); }
-:root { --b71-glass: rgba(255, 255, 255, 0.72); --b71-glass-line: rgba(255, 255, 255, 0.9); }
-:root[data-theme='dark'] { --b71-glass: rgba(36, 36, 40, 0.72); --b71-glass-line: rgba(255, 255, 255, 0.12); }
+.b71-nav a:active { transform: scale(0.95); }
+.b71-nav a svg { width: 21px; height: 21px; flex: none; transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.b71-nav a[aria-current='page'] { flex-basis: 120px; padding: 0 14px; color: var(--b71-pill-ink); }
+.b71-nav a[aria-current='page'] svg { transform: scale(1.08); }
+.b71-nav a[aria-current='page'] span { animation: b71-label-in 0.22s 0.12s ease-out both; }
+@keyframes b71-label-in { from { opacity: 0; } to { opacity: 1; } }
+:root {
+  --b71-glass: rgba(242, 242, 245, 0.78); --b71-glass-line: rgba(255, 255, 255, 0.9);
+  --b71-pill: #ffffff; --b71-pill-line: rgba(0, 0, 0, 0.06); --b71-pill-ink: var(--color-text-primary);
+}
+:root[data-theme='dark'] {
+  --b71-glass: rgba(36, 36, 40, 0.72); --b71-glass-line: rgba(255, 255, 255, 0.12);
+  --b71-pill: rgba(255, 255, 255, 0.2); --b71-pill-line: rgba(255, 255, 255, 0.38); --b71-pill-ink: #ffffff;
+}
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) { --b71-glass: rgba(36, 36, 40, 0.72); --b71-glass-line: rgba(255, 255, 255, 0.12); }
+  :root:not([data-theme='light']) {
+    --b71-glass: rgba(36, 36, 40, 0.72); --b71-glass-line: rgba(255, 255, 255, 0.12);
+    --b71-pill: rgba(255, 255, 255, 0.2); --b71-pill-line: rgba(255, 255, 255, 0.38); --b71-pill-ink: #ffffff;
+  }
 }
-@media (prefers-reduced-motion: reduce) { .b71-nav { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .b71-nav, .b71-nav a, .b71-nav a svg { transition: none; }
+  .b71-nav a[aria-current='page'] span { animation: none; }
+}
 
 /* ---------- Home (exact) ---------- */
 
@@ -51,6 +87,13 @@
 .b71-top { display: flex; align-items: center; justify-content: space-between; height: 52px; }
 .b71-mark { font-size: 15px; font-weight: 800; letter-spacing: 0.32em; color: var(--color-text-primary); }
 .b71-icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--color-border); background: var(--color-surface); display: grid; place-items: center; color: var(--color-text-primary); }
+.b71-icon-btn svg { width: 19px; height: 19px; stroke-width: 1.8; }
+.b71-theme-spin svg { animation: b71-theme-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes b71-theme-in {
+  from { opacity: 0; transform: rotate(-60deg) scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .b71-theme-spin svg { animation: none; } }
 .b71-hello { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 .b71-hello__av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--color-bg-secondary); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
 .b71-hello small { display: block; font-size: 12.5px; color: var(--color-text-muted); }
@@ -203,3 +246,14 @@ span.b71-expert__av { display: block; }
 .b71-row:first-child { border-top: 0; }
 .b71-row svg { width: 18px; height: 18px; color: var(--color-text-muted); flex: none; }
 .b71-card { border-radius: 18px; border: 1px solid var(--color-border); background: var(--color-surface); overflow: hidden; }
+
+/* Fix 71.1: tab change. The bar stays put and live (its pill slides); the
+   pages crossfade softly. Opacity only. */
+html.vt-tab .b71-nav { view-transition-name: b71-nav; }
+html.vt-tab::view-transition-old(root) { animation: 0.2s cubic-bezier(0.4, 0, 1, 1) both b71-vt-out; }
+html.vt-tab::view-transition-new(root) { animation: 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both b71-vt-in; }
+html.vt-tab::view-transition-group(b71-nav) { animation: none; }
+html.vt-tab::view-transition-old(b71-nav) { display: none; }
+html.vt-tab::view-transition-new(b71-nav) { animation: none; opacity: 1; }
+@keyframes b71-vt-out { to { opacity: 0; } }
+@keyframes b71-vt-in { from { opacity: 0; } }

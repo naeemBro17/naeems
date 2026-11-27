@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActionLink } from '../shared/ActionLink';
-import { useAppNavigate } from '../../hooks/useAppNavigate';
-import { navAfterScroll, setNavShown, type NavTab } from '../../lib/bottomNav';
+import { useTabNavigate } from '../../hooks/useAppNavigate';
+import { navAfterScroll, pillKeyframes, PILL_EASING, PILL_MS, setNavShown, type NavTab } from '../../lib/bottomNav';
+import { prefersReducedMotion } from '../../lib/viewTransition';
 
 export type { NavTab } from '../../lib/bottomNav';
 
@@ -55,15 +56,65 @@ function AccountIcon() {
 
 /**
  * Batch 71: the floating glass tab bar (Home, Shop, Search, Account). The
- * active tab is a filled near-black pill with its label; the others are
- * icons only. It slides away on a scroll down of 24 px and comes back on a
+ * active tab carries its label over one glass pill that slides between tabs
+ * (Fix 71.1); the others are icons only. It slides away on a scroll down of 24 px and comes back on a
  * scroll up of 12 px or at the top (transform and opacity only; instant
  * with reduced motion, see batch71.css).
  */
 export function BottomNav({ activeTab, onTop, onAccount }: BottomNavProps) {
-  const navigate = useAppNavigate();
+  const navigate = useTabNavigate();
   const [visible, setVisible] = useState(true);
   const stateRef = useRef({ visible: true, anchor: 0 });
+  const navRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  /** Where the pill and each tab were last time (for the slide and FLIP). */
+  const lastRef = useRef<{ left: number; width: number; tabs: Map<string, number> } | null>(null);
+
+  const placePill = useCallback((animate: boolean) => {
+    const nav = navRef.current;
+    const pill = pillRef.current;
+    if (!nav || !pill) return;
+    const active = nav.querySelector<HTMLElement>('a[aria-current="page"]');
+    if (!active) return;
+    const left = active.offsetLeft;
+    const width = active.offsetWidth;
+    const links = Array.from(nav.querySelectorAll<HTMLElement>('a[data-tab]'));
+    const tabs = new Map(links.map((link) => [link.dataset.tab ?? '', link.offsetLeft]));
+    pill.style.width = `${width}px`;
+    pill.style.transform = `translate3d(${left}px, 0, 0)`;
+    const last = lastRef.current;
+    lastRef.current = { left, width, tabs };
+    if (!animate || !last || prefersReducedMotion()) return;
+    if (last.left === left && last.width === width) return;
+    pill.animate(pillKeyframes({ left: last.left, width: last.width }, { left, width }), {
+      duration: PILL_MS,
+      easing: PILL_EASING,
+    });
+    for (const link of links) {
+      const before = last.tabs.get(link.dataset.tab ?? '');
+      const dx = before === undefined ? 0 : before - link.offsetLeft;
+      if (dx === 0) continue;
+      link.animate([{ transform: `translate3d(${dx}px, 0, 0)` }, { transform: 'translate3d(0, 0, 0)' }], {
+        duration: PILL_MS,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      });
+    }
+  }, []);
+
+  // The tab changed: the pill slides there (the bar stays mounted across Home,
+  // Shop and Search, see App.tsx GlobalBottomNav).
+  useLayoutEffect(() => {
+    placePill(true);
+  }, [activeTab, placePill]);
+
+  // Fonts loading or a resize: put the pill back under its tab, no slide.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => placePill(false));
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [placePill]);
 
   useEffect(() => {
     let frame = 0;
@@ -105,7 +156,8 @@ export function BottomNav({ activeTab, onTop, onAccount }: BottomNavProps) {
   ];
 
   return (
-    <nav className={`b71-nav${visible ? '' : ' b71-nav--away'}`} aria-label="Main" data-testid="bottom-nav">
+    <nav className={`b71-nav${visible ? '' : ' b71-nav--away'}`} aria-label="Main" data-testid="bottom-nav" ref={navRef}>
+      <span ref={pillRef} className="b71-nav__pill" aria-hidden="true" data-testid="bottom-nav-pill" />
       {tabs.map((tab) => {
         const active = tab.id === activeTab;
         return (

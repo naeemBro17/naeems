@@ -140,6 +140,8 @@ body.b70-open .limit-pop { z-index: 1250; }
 /* ---------- Cart bubble: a button now, draggable ---------- */
 
 button.glass-cart {
+  /* Fix 71.1: above the bottom bar (200), still below sheets (300). */
+  z-index: 210;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -20,7 +20,7 @@ export function SearchEntryBar({ onOpenFilters, activeFilterCount }: SearchEntry
       <button
         type="button"
         className="search-bar search-bar--entry"
-        onClick={() => navigate('/search')}
+        onClick={() => navigate('/search', { state: { focusSearch: true } })}
         aria-label="Search products"
       >
         <svg

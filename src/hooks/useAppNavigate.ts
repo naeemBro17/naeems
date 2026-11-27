@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useNavigate as useRouterNavigate, type NavigateOptions, type To } from 'react-router-dom';
-import { navigateWithTransition } from '../lib/viewTransition';
+import { navigateTabWithTransition, navigateWithTransition } from '../lib/viewTransition';
 import { whenRouteReady } from '../lib/routePages';
 
 /**
@@ -25,6 +25,17 @@ export function useAppNavigate() {
       // the transition never captures a loading placeholder.
       const path = typeof to === 'string' ? to : to.pathname ?? '';
       whenRouteReady(path, () => navigateWithTransition(navigate, to, options));
+    },
+    [navigate]
+  );
+}
+
+/** Fix 71.1: the bottom bar's own navigate (vt-tab, see lib/viewTransition.ts). */
+export function useTabNavigate() {
+  const navigate = useRouterNavigate();
+  return useCallback(
+    (to: string) => {
+      whenRouteReady(to, () => navigateTabWithTransition(navigate, to));
     },
     [navigate]
   );

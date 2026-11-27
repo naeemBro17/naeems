@@ -110,6 +110,15 @@ export function navigateWithTransition(
 }
 
 /**
+ * Fix 71.1: a tap on the bottom bar (Home, Shop, Search). A softer crossfade
+ * than vt-fade, and the bar keeps its own place in the transition (see
+ * html.vt-tab in batch71.css) so its pill visibly slides to the new tab.
+ */
+export function navigateTabWithTransition(navigate: NavigateFunction, to: To, options?: NavigateOptions): void {
+  runWithViewTransition(() => flushSync(() => navigate(to, options)), 'vt-tab');
+}
+
+/**
  * The in-app "<-" button — the Batch 21 approach restored (it did a clean
  * reverse hero on Naeem's real phone; fix-one-transition-system replaced it
  * with a plain navigate(-1) and that broke it on the device): the click
