@@ -7,7 +7,7 @@
 // in-app — returns to the same results, same scroll position (restored by
 // PageTransition), without re-opening the keyboard.
 import { useCallback, useEffect, useRef } from 'react';
-import { NavigationType, useNavigate as useRouterNavigate, useNavigationType } from 'react-router-dom';
+import { NavigationType, useLocation, useNavigate as useRouterNavigate, useNavigationType } from 'react-router-dom';
 import { useAppNavigate } from '../hooks/useAppNavigate';
 import { useUrlParams } from '../hooks/useUrlParams';
 import { useProducts } from '../contexts/ProductContext';
@@ -62,8 +62,14 @@ export function SearchPage() {
   // a Back (the page being returned to already shows what the shopper was
   // looking at), and never when there's already a query or category to show.
   // That was the "keyboard pops up and the results are gone" bug.
+  // Fix 71.1: and only when the shopper tapped a search box (not the bottom bar's Search tab).
+  const location = useLocation();
+  const askedToFocus =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    (location.state as { focusSearch?: unknown }).focusSearch === true;
   const shouldAutoFocus = useRef(
-    navigationType !== NavigationType.Pop && urlQuery === '' && catSlug === null
+    navigationType !== NavigationType.Pop && urlQuery === '' && catSlug === null && askedToFocus
   ).current;
 
   const openProduct = useCallback(

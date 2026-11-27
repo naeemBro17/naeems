@@ -74,3 +74,32 @@ function navSnapshot(): boolean {
 export function useNavShown(): boolean {
   return useSyncExternalStore(subscribeNav, navSnapshot, navSnapshot);
 }
+
+/** Fix 71.1: where the bottom bar's pill is (px from the bar's padding edge). */
+export interface PillBox {
+  left: number;
+  width: number;
+}
+
+/**
+ * The liquid slide of the bottom bar's pill from one tab to the next, as
+ * transform keyframes for a pill that is already sized and placed at `to`.
+ * The longer the trip, the more it stretches (up to 1.3x), and it squashes a
+ * little in the middle; transform only.
+ */
+export function pillKeyframes(from: PillBox, to: PillBox): Keyframe[] {
+  const travel = Math.abs(to.left - from.left);
+  const stretch = Math.min(1.3, 1 + travel / 500);
+  const meanWidth = (from.width + to.width) / 2;
+  const midWidth = meanWidth * stretch;
+  const midLeft = (from.left + to.left) / 2 - (midWidth - meanWidth) / 2;
+  return [
+    { transform: `translate3d(${from.left}px, 0, 0) scale(${from.width / to.width}, 1)` },
+    { transform: `translate3d(${midLeft}px, 0, 0) scale(${midWidth / to.width}, 0.88)`, offset: 0.45 },
+    { transform: `translate3d(${to.left}px, 0, 0) scale(1, 1)` },
+  ];
+}
+
+/** Fix 71.1: the pill's slide (ms) and its springy settle. */
+export const PILL_MS = 350;
+export const PILL_EASING = 'cubic-bezier(0.22, 1.35, 0.36, 1)';

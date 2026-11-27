@@ -1,0 +1,85 @@
+FIX 71.1 - theme button, liquid bottom bar, smooth tab change, Search keyboard, cart bubble taps
+Branch: fix/batch-71-1-nav-polish   Version: 1.71.1
+
+1. WHAT I DID
+
+Theme button (Home, top right): the sun/moon icon is now 19 px with a thin
+line instead of filling the whole circle. When tapped, the new icon turns in
+softly (only on a tap, never when the page opens).
+
+Bottom bar: every tab now has a fixed width (52 px, or 120 px for the active
+one), so the bar never changes width or shifts sideways. One glass pill sits
+behind the tabs and slides to the new tab like liquid: it stretches on the
+way, squashes a little and settles with a small spring. The other icons glide
+to their new places, the label fades in after the pill, and a tap gives a
+small press. The light bar is now slightly grey so the white pill shows on it.
+
+Tab change: Home / Shop / Search taps now use their own softer crossfade
+(old page out in 0.2 s, new page in over 0.28 s). The bar keeps its own place
+during the change, so the pill's slide is seen instead of a blink.
+
+Search keyboard: the bottom bar's Search tab opens the Search page with the
+keyboard down. The search pills on Home and Shop (and the old search entry
+bar) still open it with the keyboard up, because the shopper tapped a box.
+
+Cart bubble: it now sits above the bottom bar (it used to be under it, so
+taps where they overlap went to the bar). A tap with a slightly moving thumb
+(up to 10 px) counts as a tap, not a drag. After a drag, the next tap is no
+longer swallowed. When moved low, it stops above the real bar and moves back
+above it when the bar returns.
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+
+None needed.
+
+3. WHAT I COULD NOT FINISH
+
+Nothing left out. As Naeem asked, the full "npm run verify" was SKIPPED for
+this patch. What ran:
+- npm run verify:quick -- e2e/fix-71-1.spec.ts e2e/batch-71.spec.ts
+  e2e/batch-70.spec.ts e2e/one-transition-system.spec.ts e2e/phone-back.spec.ts
+  -> build OK, e2e 62 passed. One unit test failed: my own new test had a
+  wrong expected number (a 180 px trip is already at the 1.3 stretch cap).
+  I fixed the test.
+- After small test fixes: e2e/fix-71-1.spec.ts alone, 6/6 passed; build OK;
+  all unit tests 958/958 passed.
+
+4. WHAT I FOUND ALONG THE WAY
+
+- On Chromium (desktop test browser, dark mode), while any page crossfade
+  runs, a faint hard-edged rectangle shows around the rounded bar for about
+  0.3 s. It is the bar's frosted (blurred) background, drawn without its
+  rounded corners. It shows both with and without the bar's own transition
+  name, so it comes from the page crossfade itself, not from this fix. I did
+  not check whether Batch 71's old crossfade had it too. Please watch for it
+  on the phone. If it bothers you on the real device, a small follow-up can
+  turn the bar's blur off only during the change.
+
+5. DESIGN DECISIONS
+
+- Kept the bar's own view-transition name (the main plan in the brief). I
+  tried the fallback (dropping the four b71-nav lines): it did not remove the
+  rectangle above, and it lost the "bar stays still" benefit, so I put the
+  main plan back.
+- Frame checks (pictures in reports/fix-71-1-screens/):
+  - theme-button-dark-before.png: a small thin moon, well inside the circle.
+    theme-button-after-tap.png: the new icon after its turn.
+  - The pill's place was recorded on every frame for 400 ms after a
+    Home -> Shop tap, in dark and in light. It was seen in at least 3 places
+    between the two tabs, and the bar's blur was set on every frame.
+    pill-dark-step1..4.png and pill-light-step1..4.png show the slide back to
+    Home with animations slowed 10x for the pictures. Step 1 shows the pill
+    stretched between Home and Shop, the icons gliding, and the bar still
+    frosted.
+  - bubble-above-bar.png: the bubble dragged to the bottom-left stops above
+    the bar. The test also checks that it goes lower when the bar hides and
+    moves back above it when the bar returns.
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+
+- (Small) The cart bubble and the bar now share the bottom of the screen. A
+  professional app usually puts the cart in the bar itself (a badge on a Cart
+  tab), so nothing floats over the tabs. That is worth a look once the new
+  bar has settled.
+
+Pull request: https://github.com/naeemBro17/naeems/pull/new/fix/batch-71-1-nav-polish

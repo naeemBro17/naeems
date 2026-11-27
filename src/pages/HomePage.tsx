@@ -65,6 +65,7 @@ function Greeting() {
  */
 export function HomePage() {
   const { theme, toggleTheme } = useTheme();
+  const [themeTurns, setThemeTurns] = useState(0);
   const navigate = useAppNavigate();
   const { products, categories, settings } = useProducts();
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
@@ -85,18 +86,23 @@ export function HomePage() {
         <button
           type="button"
           className="b71-icon-btn"
-          onClick={toggleTheme}
+          onClick={() => {
+            toggleTheme();
+            setThemeTurns((n) => n + 1);
+          }}
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           data-testid="home-theme"
         >
-          <ThemeIcon theme={theme} />
+          <span key={themeTurns} className={themeTurns > 0 ? 'b71-theme-spin' : undefined} style={{ display: 'grid', placeItems: 'center' }}>
+            <ThemeIcon theme={theme} />
+          </span>
         </button>
       </header>
 
       <Greeting />
       <HomeTip />
 
-      <button type="button" className="b71-search" onClick={() => navigate('/search')} data-testid="home-search">
+      <button type="button" className="b71-search" onClick={() => navigate('/search', { state: { focusSearch: true } })} data-testid="home-search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7" />
           <path d="M20 20l-4.35-4.35" />

@@ -286,7 +286,7 @@ export function ViewerPage() {
         <button
           type="button"
           className="b71-search"
-          onClick={() => navigate('/search')}
+          onClick={() => navigate('/search', { state: { focusSearch: true } })}
           aria-label="Search products"
           data-testid="shop-search-pill"
         >
