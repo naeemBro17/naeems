@@ -16,14 +16,10 @@ import {
 } from './helpers/api';
 import { STEADFAST_FUNCTION, mockSteadfast, type MockTracking } from './helpers/steadfastMock';
 
-/** Fix 72.1: which photo is on screen (1-based), from the dots (2 to 7
- *  photos) or the quiet "2 / 9" text. */
+/** Fix 72.2: which photo is on screen (1-based), from the "2 / 9" glass
+ *  pill (shown whenever there is more than one photo). */
 function activePhoto(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const dots = Array.from(document.querySelectorAll('[data-testid="image-dots"] i'));
-    if (dots.length > 0) return dots.findIndex((d) => d.classList.contains('is-on')) + 1;
-    return Number.parseInt(document.querySelector('[data-testid="image-counter"]')?.textContent ?? '0', 10);
-  });
+  return page.evaluate(() => Number.parseInt(document.querySelector('[data-testid="image-counter"]')?.textContent ?? '0', 10));
 }
 
 // Batch 35: order tracking for the customer, the order as a page and

@@ -9,7 +9,12 @@ import { GoogleSignInButton } from '../shared/GoogleSignInButton';
 /** How long "Saved to your wishlist" / "Removed … Undo" stays up. */
 const WISH_TOAST_MS = 4000;
 
-export function HeartIcon({ filled, className }: { filled: boolean; className?: string }) {
+const HEART_PATH = 'M12 20.3s-7.6-4.5-9.3-9.4C1.6 7.6 3.6 4.4 6.9 4.2c2-.1 3.6 1 5.1 2.9 1.5-1.9 3.1-3 5.1-2.9 3.3.2 5.3 3.4 4.2 6.7-1.7 4.9-9.3 9.4-9.3 9.4z';
+/** Fix 72.2: the rounder, wider heart, used only on the product photo. */
+const ROUND_HEART_PATH =
+  'M12 20.3C5.4 15.6 3.2 12.4 3.2 9.4 3.2 7 5 5.2 7.3 5.2c1.9 0 3.6 1 4.7 2.7 1.1-1.7 2.8-2.7 4.7-2.7 2.3 0 4.1 1.8 4.1 4.2 0 3-2.2 6.2-8.8 10.9z';
+
+export function HeartIcon({ filled, className, round = false }: { filled: boolean; className?: string; round?: boolean }) {
   return (
     <svg
       className={className}
@@ -21,7 +26,7 @@ export function HeartIcon({ filled, className }: { filled: boolean; className?: 
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 20.3s-7.6-4.5-9.3-9.4C1.6 7.6 3.6 4.4 6.9 4.2c2-.1 3.6 1 5.1 2.9 1.5-1.9 3.1-3 5.1-2.9 3.3.2 5.3 3.4 4.2 6.7-1.7 4.9-9.3 9.4-9.3 9.4z" />
+      <path d={round ? ROUND_HEART_PATH : HEART_PATH} />
     </svg>
   );
 }
@@ -47,7 +52,7 @@ export function HeartButton({ productId, productName }: { productId: string; pro
       aria-label={saved ? `Remove ${productName} from your wishlist` : `Save ${productName} to your wishlist`}
       data-testid="wish-heart"
     >
-      <HeartIcon filled={saved} className="wish-heart__icon" />
+      <HeartIcon filled={saved} className="wish-heart__icon" round />
     </button>
   );
 }

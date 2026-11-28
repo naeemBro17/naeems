@@ -128,8 +128,8 @@ test.describe('Part 1 — crystal glass photo buttons', () => {
       const product = await multiPhotoProduct();
       await openWith(page, `/product/${product.slug}`, { theme });
       const header = page.getByTestId('pdp-header');
-      // Fix 72.1: the "1 / N" pill is gone (dots, or a quiet text).
-      await expect(page.locator('[data-testid="image-dots"], [data-testid="image-counter"]').first()).toBeVisible({ timeout: 15_000 });
+      // Fix 72.2: the "1 / N" glass pill is back for every multi-photo product.
+      await expect(page.getByTestId('image-counter')).toBeVisible({ timeout: 15_000 });
       // Over the photo (not the loading / scrolled bar), after the buttons'
       // 260 ms colour transition has finished.
       await expect(header).not.toHaveClass(/pdp-header--(plain|solid)/);

@@ -130,7 +130,10 @@ test.describe('Part 1 — product page', () => {
     const header = page.getByTestId('pdp-header');
     const glass = page.getByTestId('glass-cart');
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('3');
-    await expect(header.getByRole('button', { name: /theme|dark|light/i })).toHaveCount(0);
+    // Fix 72.2: the toggle's own labels ("Switch to dark mode" / "light
+    // mode"), so a product name such as "Lightly scented" in the Share
+    // button's label does not count as a theme toggle.
+    await expect(header.getByRole('button', { name: /theme|(dark|light) mode/i })).toHaveCount(0);
 
     await page.getByTestId('add-to-cart').click();
     await expect(glass.getByTestId('glass-cart-badge')).toHaveText('4');
