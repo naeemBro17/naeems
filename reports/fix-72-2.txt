@@ -1,0 +1,152 @@
+FIX 72.2 — PRODUCT PAGE PHOTO COUNTER (GLASS PILL) AND HEART SHAPE
+Branch: fix/batch-72-2-photo-counter (from fix/batch-72-1-product-page)
+Version: 1.72.2
+
+RESULT IN ONE LOOK
+  Build (npm run build): PASS, zero errors.
+  Tests (quick verify): PASS after one test fix (see section 7).
+  Full verify: NOT COMPLETED. Claude Code stopped it because the PC
+  ran low on memory. Please run "npm run verify" once (see section 3).
+
+==========================================================================
+1. WHAT I DID
+==========================================================================
+
+Photo counter. Every product with more than one photo now shows the
+same dark glass pill with "current / total" (1 / 2, 1 / 5, 1 / 11 ...),
+bottom-left of the photo. A product with one photo shows nothing. The
+dots and the plain white "3 / 20" text from Fix 72.1 are gone, together
+with their CSS. The number follows the photo on screen as you swipe
+(it reads the same "which photo is showing" value the dots used; there
+is no second copy of it). The pill cannot be tapped and never takes a
+swipe away from the photo. Screen readers hear "Photo 2 of 5" when they
+reach it, but it does not announce itself on every swipe.
+
+The pill is dark glass in light mode and dark mode alike, because it
+sits on the photo, not on the page.
+
+Heart. The heart on the product photo is now the rounder, wider shape
+you sent. Same button, same size (42 px glass circle, icon size
+unchanged), same place, same outline when not saved and filled when
+saved, same tap behaviour.
+
+The heart drawing is shared with two other places (the "Saved to your
+wishlist" message at the bottom of the screen and the Wishlist page).
+Those keep the old shape: I added a "round" switch to the heart drawing
+and only the product photo's heart turns it on.
+
+Tests. The old tests that looked for dots or the plain text now check
+the new rule (pill when more than one photo, nothing for one photo).
+No test was deleted. A new test file (e2e/fix-72-2.spec.ts) checks
+1, 2, 5 and 11 photos, a real finger swipe (1 / 5 becomes 2 / 5), a
+pure white photo and a pure black photo in light and dark mode, a
+320 px phone (pill and heart apart), the heart's new shape, and that a
+finger on the photo still scrolls the page up and down.
+
+==========================================================================
+2. SQL NAEEM MUST RUN IN SUPABASE
+==========================================================================
+
+None needed.
+
+==========================================================================
+3. WHAT I COULD NOT FINISH
+==========================================================================
+
+The full "npm run verify" at the end did not finish. Claude Code
+stopped it partway because the computer was low on memory (this is not
+a test failure). Before it stopped: the build passed and 978 of 979 unit
+tests passed. The 1 was a 5-second timeout in an invoice test
+(src/lib/batch47.test.ts) that has nothing to do with this fix. I ran
+that file alone 3 times: 14/14 passed each time. The browser tests had
+not started reporting yet. Please run "npm run verify" once when the PC
+has free memory (close Chrome tabs first).
+
+==========================================================================
+4. WHAT I FOUND ALONG THE WAY
+==========================================================================
+
+- Position: the fix text said "bottom: 12px". The rounded white sheet
+  under the photo overlaps the photo's bottom by 24 px, so a plain
+  12px would have put the pill half under the sheet. I used
+  "24 px + 12 px", which puts it exactly 12 px above the photo's
+  visible bottom edge, as you asked (the test measures it: 12 px).
+- On a pure white photo the pill turns mid-grey and the white numbers
+  are readable but low in contrast (roughly 2 to 1). On normal product
+  photos and dark photos it reads well. If you want it stronger on
+  white photos, raising the glass darkness from 0.30 to about 0.45 fixes
+  it; I kept your exact values.
+- Same white-photo problem, older and not touched here: the Back, Share
+  and heart glass circles almost disappear on a pure white photo
+  (screens: after-bright-photo-360-light.png).
+- Dead CSS removed: besides the Fix 72.1 dot and text rules, app.css
+  still had ".product-detail__dots / __dot" rules from an early batch
+  that nothing used any more. Deleted. The small dots on product CARDS
+  (a different thing, "--card-dots-...") are untouched.
+- Nothing else used the photo dots.
+- A test bug, not a page bug: batch-27's "no theme button in the
+  header" test looked for any header button whose label has "light" or
+  "dark" in it. The Share button's label includes the product name, and
+  the test product is "Aveeno ... Lightly Scented ...", so it failed. I
+  changed the test to look for the toggle's real labels ("... dark
+  mode" / "... light mode" / "theme"). It passes. The page is unchanged.
+
+==========================================================================
+5. DESIGN DECISIONS
+==========================================================================
+
+- I used your exact pill JSX and CSS, with one change (the bottom
+  distance, see section 4) and one addition: data-testid="image-counter"
+  so the existing tests that read the photo number keep working.
+- Heart: kept the old shape for the toast and Wishlist page instead of
+  changing everywhere, because you asked for the photo heart only.
+
+==========================================================================
+6. INDUSTRY-LEVEL SUGGESTIONS
+==========================================================================
+
+1. Glass buttons on very light photos (medium impact, small): many
+   skincare photos have white backgrounds. A faint dark edge or slightly
+   darker glass on Back / Share / heart when the photo is light would
+   keep them findable. Customers who cannot find Back feel lost.
+2. Tap the pill to see all photos as a grid (low impact, medium): big
+   shops let you jump straight to photo 8 of 11 instead of swiping
+   seven times.
+
+==========================================================================
+7. VERIFY RESULTS AND THE PROTECT LIST
+==========================================================================
+
+Screens: reports/fix-72-2-screens/ (360 px wide, device scale 2).
+  before-N-top-360 / after-N-top-360: the whole first screen before and
+  after, for 1, 2, 5 and 11 photos. Only the counter and the heart
+  shape differ.
+  after-1/2/5/11-photos-360: nothing / 1 / 2 / 1 / 5 / 1 / 11.
+  after-5-photos-swiped-360: 2 / 5 after a finger swipe.
+  after-bright / after-dark photo, light and dark mode: readable on both
+  (weaker on pure white, see section 4).
+  after-11-photos-320 and after-heart-closeup-320: 320 px phone, pill
+  and heart well apart; the round heart.
+
+Quick verify (npm run verify:quick):
+  build OK, unit tests 979/979, browser tests 179 passed, 16 skipped,
+  1 failed (batch-27 test bug above). After the test fix, that test
+  passed on its own (1/1). e2e/fix-72-2.spec.ts: 8/8 passed.
+Full verify: stopped by Claude Code for low memory (section 3). Build
+  passed, unit tests 978/979 (the 1 timeout passed 3 of 3 on re-run).
+
+Protect list (each checked on the before/after captures and by tests):
+  Back and Share glass circles: unchanged (same captures; batch-29
+    glass test passed).
+  Photo full width, 1:1, no blurred backdrop, mirror strip: unchanged
+    (fix-72-1 photo tests passed at 360, 390, 430).
+  Swipe; vertical scroll with a finger on the photo: works (new test:
+    page scrolls 260 px with a finger on the photo; swipe moves photos).
+  Brand capsule, name, rolling price, green Save pill: unchanged.
+  Option rows, quantity picker, Add to Cart and "Added": unchanged
+    (fix-72-1 tests passed).
+  2 x 2 info block: unchanged.
+  Floating cart bubble, bottom bar, wholesale row, About: unchanged
+    (batch-70 and fix-72-1 tests passed).
+  Other pages and product cards: not touched. The heart on the
+    Wishlist page and in the "Saved" message keeps its old shape.

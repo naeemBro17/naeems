@@ -519,19 +519,18 @@ function DetailContent({
               />
             ))}
           </div>
-          {/* Fix 72.1: dots for 2 to 7 photos, a quiet "3 / 20" for more. */}
-          {images.length > 1 &&
-            (images.length <= 7 ? (
-              <span className="f721-dots" aria-hidden="true" data-testid="image-dots">
-                {images.map((url, i) => (
-                  <i key={url} className={i === activeImage ? 'is-on' : undefined} />
-                ))}
-              </span>
-            ) : (
-              <span className="f721-count" aria-hidden="true" data-testid="image-counter">
-                {activeImage + 1} / {images.length}
-              </span>
-            ))}
+          {/* Fix 72.2: "2 / 5" in a dark glass pill whenever there is more
+              than one photo; nothing for a single photo. */}
+          {images.length > 1 && (
+            <div
+              className="pdp-count"
+              role="img"
+              aria-label={`Photo ${activeImage + 1} of ${images.length}`}
+              data-testid="image-counter"
+            >
+              {activeImage + 1} / {images.length}
+            </div>
+          )}
           {/* Batch 70: the heart, bottom-right of the photo. */}
           <span className="b70-photo-heart" data-testid="photo-heart">
             <HeartButton productId={product.id} productName={product.name} />

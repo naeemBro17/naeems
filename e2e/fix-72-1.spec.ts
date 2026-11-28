@@ -5,7 +5,8 @@ import { select } from './helpers/api';
 import { arrivalRange, orderLimit } from '../src/lib/sellRules';
 
 // Fix 72.1: the product page's first screen as Naeem approved it: the
-// photo always full width (no blurred side bands), dots instead of "1 / N",
+// photo always full width (no blurred side bands), the "1 / N" photo
+// counter (a glass pill since Fix 72.2; e2e/fix-72-2.spec.ts),
 // the brand capsule, the rolling price, one sideways line of options per
 // group, quantity + Add to Cart with "Added", the 2 x 2 info block, and
 // the cart bubble's first place under the Share button.
@@ -204,7 +205,7 @@ test('screens: the longest name at 360 x 780, and a product with no options', as
 /* ------------------------------------------------------------------ photo */
 
 for (const width of [360, 390, 430]) {
-  test(`photo at ${width} px: full width, a square, no side bands; dots; the bubble clear of Share and the heart`, async ({ page }) => {
+  test(`photo at ${width} px: full width, a square, no side bands; the 1 / N pill; the bubble clear of Share and the heart`, async ({ page }) => {
     test.setTimeout(60_000);
     const plain = await plainProduct();
     // One line in the cart, so the bubble shows (it hides when empty).
@@ -224,20 +225,14 @@ for (const width of [360, 390, 430]) {
     // The page no longer sets a measured photo height on the gallery.
     expect(await page.locator('.product-detail__gallery').evaluate((el) => (el as HTMLElement).style.getPropertyValue('--b70-photo'))).toBe('');
 
-    // 2 to 7 photos: dots, centred at the bottom of the photo; no "1 / N".
+    // Fix 72.2: 2+ photos: the "1 / N" pill, bottom-left of the photo.
     const count = (plain.image_urls ?? []).length;
-    if (count <= 7) {
-      const dots = page.getByTestId('image-dots');
-      await expect(dots.locator('i')).toHaveCount(count);
-      await expect(dots.locator('i.is-on')).toHaveCount(1);
-      const d = await box(dots);
-      expect(Math.abs(d.x + d.width / 2 - width / 2)).toBeLessThan(1.5);
-      expect(d.y + d.height).toBeLessThanOrEqual(img.y + img.height);
-      expect(d.y + d.height).toBeGreaterThan(img.y + img.height - 30);
-      await expect(page.getByTestId('image-counter')).toHaveCount(0);
-    } else {
-      await expect(page.getByTestId('image-counter')).toHaveText(`1 / ${count}`);
-    }
+    const pill = page.getByTestId('image-counter');
+    await expect(pill).toHaveText(`1 / ${count}`);
+    const d = await box(pill);
+    expect(Math.round(d.x)).toBe(12);
+    expect(d.y + d.height).toBeLessThanOrEqual(img.y + img.height);
+    expect(d.y + d.height).toBeGreaterThan(img.y + img.height - 50);
 
     // The bubble (never moved): right edge, under Share, over the photo,
     // touching neither Share nor the heart.
@@ -252,7 +247,7 @@ for (const width of [360, 390, 430]) {
   });
 }
 
-test('3 photos: three dots centred at the bottom, the bar moves with a swipe', async ({ page }) => {
+test('3 photos: the pill says 1 / 3, then 2 / 3 after a swipe (Fix 72.2)', async ({ page }) => {
   test.setTimeout(60_000);
   const plain = await plainProduct();
   // This product with only its first 3 photos, inside this test browser only.
@@ -274,20 +269,15 @@ test('3 photos: three dots centred at the bottom, the bar moves with a swipe', a
   test.skip((plain.image_urls ?? []).length < 3, 'this product has fewer than 3 photos');
   await page.setViewportSize({ width: 390, height: 844 });
   await openProduct(page, plain.slug);
-  const dots = page.getByTestId('image-dots');
-  await expect(dots.locator('i')).toHaveCount(3);
-  await expect(page.getByTestId('image-counter')).toHaveCount(0);
-  const d = await box(dots);
-  expect(Math.abs(d.x + d.width / 2 - 195)).toBeLessThan(1.5);
-  await expect(dots.locator('i').nth(0)).toHaveClass('is-on');
-  expect(Math.round((await box(dots.locator('i').nth(0))).width)).toBe(16);
+  const pill = page.getByTestId('image-counter');
+  await expect(pill).toHaveText('1 / 3');
+  await expect(page.locator('.f721-dots, [data-testid="image-dots"]')).toHaveCount(0);
   await page.locator('.product-detail__carousel').evaluate((el) => el.scrollTo({ left: el.clientWidth, behavior: 'instant' as ScrollBehavior }));
-  await expect(dots.locator('i').nth(1)).toHaveClass('is-on');
-  await expect(dots.locator('i.is-on')).toHaveCount(1);
-  await page.screenshot({ path: `${SHOTS}/dots-390-light.png` });
+  await expect(pill).toHaveText('2 / 3');
+  await expect(pill).toHaveAttribute('aria-label', 'Photo 2 of 3');
 });
 
-test('a 9-photo product shows the quiet "1 / 9" text, not dots', async ({ page }) => {
+test('a product with more than 7 photos shows the same "1 / N" glass pill (Fix 72.2)', async ({ page }) => {
   test.setTimeout(60_000);
   const { products } = await catalogue();
   const many = products.find((p) => (p.image_urls ?? []).length > 7);
@@ -297,14 +287,14 @@ test('a 9-photo product shows the quiet "1 / 9" text, not dots', async ({ page }
   await openProduct(page, product.slug);
   const counter = page.getByTestId('image-counter');
   await expect(counter).toHaveText(`1 / ${(product.image_urls ?? []).length}`);
-  await expect(page.getByTestId('image-dots')).toHaveCount(0);
-  // No pill: no background, no border.
+  await expect(page.locator('.f721-dots, [data-testid="image-dots"]')).toHaveCount(0);
+  // Fix 72.2: a pill: dark glass background and a 1px border.
   const look = await counter.evaluate((el) => {
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, border: s.borderTopWidth };
   });
-  expect(look.bg).toBe('rgba(0, 0, 0, 0)');
-  expect(look.border).toBe('0px');
+  expect(look.bg).toBe('rgba(20, 16, 16, 0.3)');
+  expect(look.border).toBe('1px');
 });
 
 /* ---------------------------------------------------------------- options */

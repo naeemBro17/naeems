@@ -24,32 +24,6 @@
   --f721-gutter: calc(var(--space-4) + 4px);
 }
 
-/* Photo dots (2 to 7 photos) and the quiet counter (more than 7). */
-.f721-dots {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--pdp-sheet-overlap) + 10px);
-  z-index: 2;
-  display: flex;
-  gap: 5px;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-.f721-dots i { width: 5px; height: 5px; border-radius: 3px; background: rgba(11, 10, 9, 0.25); }
-.f721-dots i.is-on { width: 16px; background: rgba(11, 10, 9, 0.7); }
-.f721-count {
-  position: absolute;
-  left: 16px;
-  bottom: calc(var(--pdp-sheet-overlap) + 12px);
-  z-index: 2;
-  font-size: 12px;
-  font-weight: 700;
-  color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-
 /* Brand: a soft muted capsule. */
 .pdp-main .product-detail__brand {
   align-self: flex-start;
@@ -209,4 +183,32 @@
 @media (prefers-reduced-motion: reduce) {
   .f721-roll__in, .f721-roll__out, .f721-add__in { animation: none; }
   .f721-roll__out { display: none; }
+}
+
+/* Fix 72.2: photo counter, dark glass pill. Dark in both themes (it sits
+   on the photo). 12px above the photo's visible bottom edge, which is
+   where the rounded sheet starts (the sheet overlaps the photo). */
+.pdp-count {
+  position: absolute;
+  left: 12px;
+  bottom: calc(var(--pdp-sheet-overlap) + 12px);
+  z-index: 3;
+  height: 30px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(20, 16, 16, 0.30);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  user-select: none;
 }
