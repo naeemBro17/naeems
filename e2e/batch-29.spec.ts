@@ -124,7 +124,7 @@ function parseRgba(value: string): [number, number, number, number] {
 
 test.describe('Part 1 — crystal glass photo buttons', () => {
   for (const theme of ['light', 'dark'] as const) {
-    test(`← and Share: white ≤ 15%, blur, border, no dark shadow (${theme})`, async ({ page }) => {
+    test(`← and Share: dark glass, blur, border (${theme})`, async ({ page }) => {
       const product = await multiPhotoProduct();
       await openWith(page, `/product/${product.slug}`, { theme });
       const header = page.getByTestId('pdp-header');
@@ -151,20 +151,12 @@ test.describe('Part 1 — crystal glass photo buttons', () => {
             iconFilter: icon ? getComputedStyle(icon).filter : 'none',
           };
         });
-        const [r, g, b, a] = parseRgba(s.bg);
-        expect([r, g, b], s.bg).toEqual([255, 255, 255]);
-        expect(a, s.bg).toBeLessThanOrEqual(0.15);
-        expect(s.blur).toContain('blur(12px)');
-        expect(parseFloat(s.borderWidth)).toBeGreaterThanOrEqual(1);
-        const border = parseRgba(s.borderColor);
-        expect(border.slice(0, 3)).toEqual([255, 255, 255]);
-        // Only inset (inner highlight) shadows, and none of them dark.
-        const shadows = s.shadow === 'none' ? [] : s.shadow.split(/,(?![^(]*\))/);
-        for (const shadow of shadows) {
-          expect(shadow, 'only an inner highlight').toContain('inset');
-          const [sr, sg, sb] = parseRgba(shadow);
-          expect(Math.min(sr, sg, sb), `no dark shadow: ${shadow}`).toBeGreaterThanOrEqual(200);
-        }
+        // Fix 72.3: one dark glass for every photo button, both themes.
+        expect(s.bg).toBe('rgba(20, 16, 16, 0.45)');
+        expect(s.blur).toContain('blur(14px) saturate(1.5)');
+        expect(parseFloat(s.borderWidth)).toBe(1);
+        expect(s.borderColor).toBe('rgba(255, 255, 255, 0.28)');
+        expect(s.shadow).toContain('inset');
         expect(s.iconFilter, 'no drop shadow on the icon').toBe('none');
       }
     });

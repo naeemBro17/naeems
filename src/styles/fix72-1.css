@@ -212,3 +212,26 @@
   pointer-events: none;
   user-select: none;
 }
+
+/* Fix 72.3: one dark glass for every product photo button (Back, Share,
+   heart, counter). Same in light and dark mode, since they sit on the
+   photo. Back and Share only while over the photo: once the scrolled or
+   loading bar is behind them they keep the bar's own look. */
+.pdp-header:not(.pdp-header--solid):not(.pdp-header--plain) .detail-header__back,
+.pdp-header:not(.pdp-header--solid):not(.pdp-header--plain) .detail-header__back:hover,
+.pdp-header:not(.pdp-header--solid):not(.pdp-header--plain) .share-button--header,
+.b70-photo-heart .wish-heart,
+.pdp-count {
+  background: rgba(20, 16, 16, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+}
+
+/* Fix 72.3: saved heart on the product photo */
+.b70-photo-heart .wish-heart--saved svg path {
+  fill: #E5484D;
+  stroke: #E5484D;
+}
