@@ -1,0 +1,44 @@
+FIX 72.3 — One dark glass for all photo buttons, red saved heart
+Branch: fix/batch-72-3-glass-buttons (from main, which already has Fix 72.2)
+Version: 1.72.3
+
+1. WHAT I DID
+- The four buttons on the product photo (Back, Share, heart, "2 / 5"
+  counter) now all use the same dark glass: dark tint at 45%, thin white
+  border, 14px blur, soft shadow, white icons. Same in light and dark mode.
+  Sizes, positions, press effect and taps are unchanged.
+- The heart on the product photo is filled red (#E5484D) when saved, white
+  outline when not saved. The Wishlist page heart and the "Saved to your
+  wishlist" message are not changed.
+- Real selectors used (added at the end of src/styles/fix72-1.css):
+    Back:    .pdp-header:not(.pdp-header--solid):not(.pdp-header--plain) .detail-header__back (and :hover)
+    Share:   .pdp-header:not(.pdp-header--solid):not(.pdp-header--plain) .share-button--header
+    Heart:   .b70-photo-heart .wish-heart
+    Counter: .pdp-count
+    Saved:   .b70-photo-heart .wish-heart--saved svg path
+- Build: npm run build PASSED, zero errors.
+- Tests skipped on Naeem's instruction. Not run: no verify, no
+  verify:quick, no Playwright, no vitest.
+- I updated the old expected glass values in these tests but did not run
+  them: e2e/batch-28.spec.ts (Back/Share glass), e2e/batch-29.spec.ts
+  (Back/Share glass), e2e/fix-72-1.spec.ts and e2e/fix-72-2.spec.ts
+  (counter 0.30 -> 0.45).
+
+2. SQL NAEEM MUST RUN IN SUPABASE
+None needed.
+
+3. WHAT I COULD NOT FINISH
+Nothing. I did not check the new look in a browser, because this fix said
+not to run any tests.
+
+4. WHAT I FOUND ALONG THE WAY
+- When you scroll down, Back and Share move onto the plain top bar. I left
+  them with the bar's look there, because dark glass on a white bar would
+  look out of place. Only the look over the photo changed.
+
+5. DESIGN DECISIONS
+- The counter's tint went from 30% to 45% so all four match exactly, as
+  the fix asked.
+
+6. INDUSTRY-LEVEL SUGGESTIONS
+None new for this small fix.

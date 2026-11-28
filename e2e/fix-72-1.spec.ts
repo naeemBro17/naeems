@@ -293,7 +293,7 @@ test('a product with more than 7 photos shows the same "1 / N" glass pill (Fix 7
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, border: s.borderTopWidth };
   });
-  expect(look.bg).toBe('rgba(20, 16, 16, 0.3)');
+  expect(look.bg).toBe('rgba(20, 16, 16, 0.45)');
   expect(look.border).toBe('1px');
 });
 

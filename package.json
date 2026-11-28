@@ -1,7 +1,7 @@
 {
   "name": "naeem-price-hub",
   "private": true,
-  "version": "1.72.2",
+  "version": "1.72.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

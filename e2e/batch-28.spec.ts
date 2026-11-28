@@ -246,9 +246,9 @@ test.describe('Part 1 — crystal glass header', () => {
           const s = getComputedStyle(el);
           return { bg: s.backgroundColor, blur: s.backdropFilter || s.getPropertyValue('-webkit-backdrop-filter') };
         });
-      const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(style.bg)?.[1] ?? '1');
-      expect(alpha, style.bg).toBeLessThanOrEqual(0.3);
-      expect(style.blur).toContain('blur(12px)');
+      // Fix 72.3: the same dark glass as the photo counter and heart.
+      expect(style.bg).toBe('rgba(20, 16, 16, 0.45)');
+      expect(style.blur).toContain('blur(14px)');
     }
   });
 

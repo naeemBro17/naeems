@@ -193,7 +193,7 @@ for (const kind of ['bright', 'dark'] as const) {
       );
       await shootPhoto(page, `after-${kind}-photo-360-${scheme}`);
     }
-    expect(looks[0]).toBe('rgb(255, 255, 255)|rgba(20, 16, 16, 0.3)|blur(14px) saturate(1.5)');
+    expect(looks[0]).toBe('rgb(255, 255, 255)|rgba(20, 16, 16, 0.45)|blur(14px) saturate(1.5)');
     expect(looks[1]).toBe(looks[0]);
   });
 }
